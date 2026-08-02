@@ -14,6 +14,7 @@ import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { Template } from '../model/template.js';
 import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
+import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Segment, Structure } from '../structure/segment.js';
 import {
   chapterTemplates,
@@ -85,6 +86,15 @@ export interface GenerateOptions {
   yearEvents?: Readonly<Record<number, readonly string[]>>;
   /** Steuert die Auswahl unter gleichwertigen Templates. */
   seed?: number;
+  /**
+   * Ob jeder Jahrgang eine eigene Hintergrundfarbe bekommt.
+   *
+   * Die Farbe wechselt dort, wo auch inhaltlich ein Schnitt ist; benachbarte
+   * Jahre sind nie gleich. Zufall je Doppelseite wurde verworfen – über achtzig
+   * Doppelseiten wirkt er beliebig, und harte Farbsprünge zwischen zwei
+   * aufgeschlagenen Seiten fallen auf.
+   */
+  chapterColors?: boolean;
 }
 
 export interface GenerateResult {
@@ -662,12 +672,27 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const spreadsPerYear = budgetByYear(budgets);
   const segments = segmentsById(structure);
 
+  // Farbe je Jahrgang. Auf den Doppelseiten gesetzt und nicht erst beim
+  // Rendern aufgelöst: So steht sie im Layout-Dokument, lässt sich dort ändern
+  // und eine von Hand gewählte Farbe unterscheidet sich nicht von einer
+  // erzeugten.
+  const jahresFarbe =
+    (opts.chapterColors ?? true)
+      ? chapterBackgrounds(
+          structure.chapters.map((c) => c.year),
+          opts.seed ?? 1,
+        )
+      : new Map<number, string>();
+
   const spreads: Spread[] = [];
   const placed = new Set<PhotoId>();
   const recentTemplates: string[] = [];
   let chapterOpenerCount = 0;
 
   for (const chapter of structure.chapters) {
+    const farbe = jahresFarbe.get(chapter.year);
+    const abHier = spreads.length;
+
     if (useOpeners) {
       const { spread, usedPhotoIds } = buildChapterOpener(
         `spread-${spreads.length}`,
@@ -775,6 +800,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       if (recentTemplates.length > 4) recentTemplates.shift();
     }
 
+    // Alle Doppelseiten dieses Jahrgangs tragen dessen Farbe.
+    if (farbe !== undefined) {
+      for (let i = abHier; i < spreads.length; i++) spreads[i]!.background = farbe;
+    }
+
     // Nachlese: Auftakte, die in der Schleife nicht zum Zuge kamen, weil die
     // Gruppe im Fluss dieses Jahres gar nicht mehr vorkommt – etwa eine Gruppe
     // aus einem einzigen Foto, das als Hauptbild reserviert wurde. Sie stehen
@@ -792,6 +822,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         profile,
       );
       if (!opener) continue;
+      if (farbe !== undefined) opener.background = farbe;
       spreads.push(opener);
       groupOpenerCount++;
       placed.add(coverId);

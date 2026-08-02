@@ -67,6 +67,8 @@ export interface LayoutSpreadEntry {
    * Vorgabe abweicht – ein Dokument voller `timeline: true` wäre nur Rauschen.
    */
   timeline?: boolean;
+  /** Hintergrundfarbe als Hexwert, sofern eine gesetzt ist. */
+  background?: string;
   photos: LayoutPhotoEntry[];
 }
 
@@ -228,6 +230,7 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
       ...(text ? { text } : {}),
       ...(group ? { group } : {}),
       ...(spread.timeline !== undefined ? { timeline: spread.timeline } : {}),
+      ...(spread.background !== undefined ? { background: spread.background } : {}),
       photos: photoEntries,
     };
   });
@@ -274,7 +277,13 @@ export interface LayoutIssue {
 
 export interface ParsedLayout {
   /** Je Doppelseite die Fotokennungen in der gewünschten Reihenfolge. */
-  spreads: { photoIds: PhotoId[]; templateId?: string; text?: string; timeline?: boolean }[];
+  spreads: {
+    photoIds: PhotoId[];
+    templateId?: string;
+    text?: string;
+    timeline?: boolean;
+    background?: string;
+  }[];
   settings?: {
     targetPages?: number;
     chapterOpeners?: boolean;
@@ -406,6 +415,7 @@ export function parseLayout(raw: unknown, photos: ReadonlyMap<PhotoId, Photo>): 
       ...(templateId ? { templateId } : {}),
       ...(entry.text ? { text: entry.text } : {}),
       ...(typeof entry.timeline === 'boolean' ? { timeline: entry.timeline } : {}),
+      ...(entry.background ? { background: entry.background } : {}),
     });
   });
 

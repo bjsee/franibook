@@ -39,6 +39,7 @@ interface ProjectInfo {
     groupOpeners: boolean | 'auto';
     timeline: boolean;
     background: string;
+    chapterColors: boolean;
     seed: number;
     birthDate?: string;
   };
@@ -423,6 +424,14 @@ export function App() {
                     onChange={(e) => void regenerate({ chapterOpeners: e.target.checked })}
                   />
                   Jahresauftakte
+                </label>
+                <label style={S.check} title="Jeder Jahrgang bekommt eine eigene Hintergrundfarbe">
+                  <input
+                    type="checkbox"
+                    checked={info.settings.chapterColors}
+                    onChange={(e) => void regenerate({ chapterColors: e.target.checked })}
+                  />
+                  Jahresfarben
                 </label>
                 <label style={S.check}>
                   <input

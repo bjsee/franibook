@@ -6,6 +6,7 @@ import {
   BACKGROUND_COLORS,
   BACKGROUND_MIN_DPI,
   backgroundFit,
+  chapterBackgrounds,
   luminance,
   textColorOn,
 } from './background.js';
@@ -67,5 +68,38 @@ describe('Textfarbe auf dem Hintergrund', () => {
 
   it('wiegt Grün stärker als Blau, wie das Auge', () => {
     expect(luminance('#00ff00')).toBeGreaterThan(luminance('#0000ff'));
+  });
+});
+
+describe('Farbe je Jahrgang', () => {
+  const jahre = Array.from({ length: 19 }, (_, i) => 2008 + i);
+
+  it('gibt benachbarten Jahren nie denselben Ton', () => {
+    for (const seed of [1, 2, 3, 7, 42]) {
+      const farben = chapterBackgrounds(jahre, seed);
+      for (let i = 1; i < jahre.length; i++) {
+        expect(farben.get(jahre[i]!)).not.toBe(farben.get(jahre[i - 1]!));
+      }
+    }
+  });
+
+  it('nutzt jeden Ton der Kapitelpalette', () => {
+    const farben = new Set(chapterBackgrounds(jahre, 1).values());
+    expect(farben.size).toBe(6);
+    // Weiß und die dunklen Töne gehören nicht dazu.
+    expect(farben.has('#ffffff')).toBe(false);
+    expect(farben.has('#1c1917')).toBe(false);
+  });
+
+  it('liefert bei gleichem Seed dasselbe Ergebnis', () => {
+    const a = chapterBackgrounds(jahre, 5);
+    const b = chapterBackgrounds([...jahre].reverse(), 5);
+    for (const jahr of jahre) expect(a.get(jahr)).toBe(b.get(jahr));
+  });
+
+  it('verschiebt die Folge mit dem Seed', () => {
+    const a = chapterBackgrounds(jahre, 1);
+    const b = chapterBackgrounds(jahre, 2);
+    expect(a.get(2008)).not.toBe(b.get(2008));
   });
 });

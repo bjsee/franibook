@@ -84,6 +84,49 @@ export function backgroundFit(photo: Photo, profile: PrintProfile): BackgroundFi
 }
 
 /**
+ * Hintergrundfarben, die als Kapitelfarbe taugen.
+ *
+ * Weiß fehlt hier, sonst wären einzelne Jahrgänge weiß und der Wechsel wirkte
+ * wie ein Versehen. Die beiden dunklen fehlen ebenfalls: Über einen ganzen
+ * Jahrgang getragen kippt Anthrazit von „ruhig" nach „Trauerband", und die
+ * Fotos stehen darauf schwerer. Sie bleiben für die Handauswahl je Doppelseite.
+ */
+const CHAPTER_TONES: readonly string[] = ['creme', 'papier', 'sand', 'salbei', 'nebel', 'taupe']
+  .map((id) => BACKGROUND_COLORS.find((c) => c.id === id)?.hex)
+  .filter((hex): hex is string => hex !== undefined);
+
+/**
+ * Weist jedem Jahrgang eine Hintergrundfarbe zu.
+ *
+ * Zwei Zusagen: Benachbarte Jahre haben nie denselben Ton – sonst wäre der
+ * Kapitelwechsel farblich unsichtbar und die Abwechslung wäre keine. Und das
+ * Ergebnis hängt allein von Jahren und Seed ab, nicht von der Reihenfolge des
+ * Aufrufs; dasselbe Buch bekommt zweimal dieselben Farben (Regel 4).
+ *
+ * Der Seed verschiebt die Folge, damit „Buch neu anordnen" auch farblich etwas
+ * ändert. Verworfen: je Jahr unabhängig zu würfeln – dann liegen irgendwann zwei
+ * gleiche nebeneinander, und genau das soll nicht passieren.
+ */
+export function chapterBackgrounds(years: readonly number[], seed = 1): Map<number, string> {
+  const sortiert = [...years].sort((a, b) => a - b);
+  const map = new Map<number, string>();
+  const n = CHAPTER_TONES.length;
+  if (n === 0) return map;
+
+  // Schrittweite teilerfremd zur Palettengröße: Die Folge läuft dann durch alle
+  // Töne, bevor sich einer wiederholt. Bei sechs Tönen ist 5 die Schrittweite,
+  // die am wenigsten nach Muster aussieht – 1 wäre ein Durchzählen, 3 und 2
+  // hätten mit 6 einen gemeinsamen Teiler und ließen Töne aus.
+  const schritt = n > 2 ? 5 % n || 1 : 1;
+  let i = seed % n;
+  for (const year of sortiert) {
+    map.set(year, CHAPTER_TONES[i]!);
+    i = (i + schritt) % n;
+  }
+  return map;
+}
+
+/**
  * Relative Helligkeit einer Farbe nach WCAG.
  *
  * Gebraucht für die Entscheidung, ob Text darauf dunkel oder hell stehen muss.
