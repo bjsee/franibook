@@ -1,16 +1,12 @@
-= Anforderungsbeschreibung: Automatischer Fotobuch-Generator
-:toc: left
-:toclevels: 2
-:sectnums:
+# Anforderungsbeschreibung: Automatischer Fotobuch-Generator
 
-[NOTE]
-====
-Dieses Dokument ist die unveränderte fachliche Ausgangsanforderung.
-Die technische Umsetzung ist in link:konzept.adoc[konzept.adoc] beschrieben,
-die Zerlegung in Umsetzungsschritte in link:implementierungsphasen.adoc[implementierungsphasen.adoc].
-====
+> **Hinweis**
+>
+> Dieses Dokument ist die unveränderte fachliche Ausgangsanforderung.
+> Die technische Umsetzung ist in [konzept.md](konzept.md) beschrieben,
+> die Zerlegung in Umsetzungsschritte in [implementierungsphasen.md](implementierungsphasen.md).
 
-== Ziel
+## Ziel
 
 Es soll eine lokale Anwendung entstehen, mit der aus einer großen Sammlung von Fotos weitgehend automatisch ein hochwertiges Fotobuch erstellt werden kann.
 
@@ -26,7 +22,7 @@ Das finale Ergebnis soll als druckfertiges PDF exportiert werden können.
 
 Als möglicher Druckdienstleister ist insbesondere PrintPartner vorgesehen, da dort extern erzeugte PDFs für Fotobücher hochgeladen werden können.
 
-== Grundprinzip
+## Grundprinzip
 
 Der Workflow soll folgendermaßen aussehen:
 
@@ -44,7 +40,7 @@ Die Web-Vorschau ist ein zentraler Bestandteil der Anwendung.
 
 Sie soll insbesondere ermöglichen, Fehler in EXIF-Daten oder der automatischen zeitlichen Zuordnung einfach zu korrigieren.
 
-== Fotoimport
+## Fotoimport
 
 Die Anwendung soll einen lokalen Ordner mit Fotos importieren können.
 
@@ -54,18 +50,18 @@ Für jedes Foto sollen verfügbare Metadaten ausgelesen werden.
 
 Dazu gehören insbesondere:
 
-* Aufnahmedatum und Uhrzeit
-* Bildbreite und Bildhöhe
-* Orientierung
-* GPS-Daten, sofern vorhanden
-* Dateiname
-* Dateierstellungsdatum beziehungsweise Änderungsdatum als mögliche Fallback-Information
+- Aufnahmedatum und Uhrzeit
+- Bildbreite und Bildhöhe
+- Orientierung
+- GPS-Daten, sofern vorhanden
+- Dateiname
+- Dateierstellungsdatum beziehungsweise Änderungsdatum als mögliche Fallback-Information
 
 Die Originaldateien dürfen nicht verändert werden.
 
 Alle Änderungen an Datum, Zuordnung oder Reihenfolge sollen ausschließlich innerhalb des Projektes gespeichert werden.
 
-== Umgang mit fehlerhaften Metadaten
+## Umgang mit fehlerhaften Metadaten
 
 Es ist davon auszugehen, dass die Metadaten nicht vollständig oder teilweise falsch sind.
 
@@ -73,17 +69,17 @@ Die Anwendung soll deshalb zwischen dem ursprünglichen Aufnahmedatum und einem 
 
 Das effektive Datum eines Fotos soll beispielsweise aus folgenden Quellen bestimmt werden können:
 
-. manuell korrigiertes Datum
-. EXIF-Aufnahmedatum
-. andere vorhandene Bildmetadaten
-. Dateidatum
-. unbekannt
+1. manuell korrigiertes Datum
+2. EXIF-Aufnahmedatum
+3. andere vorhandene Bildmetadaten
+4. Dateidatum
+5. unbekannt
 
 Die Herkunft beziehungsweise Zuverlässigkeit des verwendeten Datums sollte in der Benutzeroberfläche erkennbar sein.
 
 Fotos mit offensichtlich fehlenden oder problematischen Datumsinformationen sollten leicht auffindbar sein.
 
-== Chronologische Struktur
+## Chronologische Struktur
 
 Das Fotobuch soll grundsätzlich chronologisch aufgebaut werden.
 
@@ -93,13 +89,13 @@ Dabei soll sie nach Möglichkeit zusammengehörige Ereignisse erkennen.
 
 Ein Ereignis könnte beispielsweise sein:
 
-* Geburtstag
-* Urlaub
-* Weihnachten
-* Einschulung
-* Ausflug
-* Sportveranstaltung
-* mehrere Fotos innerhalb eines kurzen Zeitraums
+- Geburtstag
+- Urlaub
+- Weihnachten
+- Einschulung
+- Ausflug
+- Sportveranstaltung
+- mehrere Fotos innerhalb eines kurzen Zeitraums
 
 Die automatische Ereigniserkennung soll zunächst insbesondere anhand zeitlicher Abstände erfolgen.
 
@@ -107,7 +103,7 @@ GPS-Daten können ergänzend verwendet werden.
 
 Die Architektur sollte ermöglichen, später weitere Verfahren zur Ereigniserkennung hinzuzufügen.
 
-== Buchstruktur
+## Buchstruktur
 
 Das Buch soll ungefähr 900 Fotos enthalten können.
 
@@ -119,32 +115,32 @@ Es sollen unterschiedliche Seitentypen existieren.
 
 Beispiele:
 
-* einzelnes großes Foto
-* zwei Fotos
-* drei Fotos
-* vier Fotos
-* fünf bis sechs Fotos als Collage
-* größere Collageseiten
-* Panoramaseite
-* Kapitelstart
-* Jahresstart
-* Ereignisstart
+- einzelnes großes Foto
+- zwei Fotos
+- drei Fotos
+- vier Fotos
+- fünf bis sechs Fotos als Collage
+- größere Collageseiten
+- Panoramaseite
+- Kapitelstart
+- Jahresstart
+- Ereignisstart
 
 Es soll ein überschaubarer Satz hochwertiger Templates definiert werden.
 
 Die Anwendung soll automatisch das am besten geeignete Template auswählen.
 
-== Automatische Layout-Auswahl
+## Automatische Layout-Auswahl
 
 Bei der Auswahl eines Layouts sollen insbesondere berücksichtigt werden:
 
-* Anzahl der Fotos
-* Hochformat oder Querformat
-* Seitenverhältnis
-* Bildauflösung
-* zeitliche beziehungsweise inhaltliche Zusammengehörigkeit
-* verfügbare Fläche
-* notwendiger Beschnitt
+- Anzahl der Fotos
+- Hochformat oder Querformat
+- Seitenverhältnis
+- Bildauflösung
+- zeitliche beziehungsweise inhaltliche Zusammengehörigkeit
+- verfügbare Fläche
+- notwendiger Beschnitt
 
 Bilder sollen möglichst nicht unnötig stark beschnitten werden.
 
@@ -156,7 +152,7 @@ Die Entscheidung dafür sollte zunächst über einfache Heuristiken erfolgen.
 
 Die Architektur sollte eine spätere automatische Qualitäts- oder Bildanalyse ermöglichen.
 
-== Doppelseiten
+## Doppelseiten
 
 Die eigentliche Gestaltungseinheit sollte nach Möglichkeit eine Doppelseite sein.
 
@@ -164,7 +160,7 @@ Die Web-Vorschau soll deshalb zwei gegenüberliegende Seiten so darstellen, wie 
 
 Dabei müssen Buchfalz, Beschnitt und Sicherheitsbereiche sichtbar beziehungsweise bei Bedarf einblendbar sein.
 
-== Web-Vorschau
+## Web-Vorschau
 
 Nach der automatischen Generierung soll die Anwendung eine lokale Weboberfläche bereitstellen.
 
@@ -174,20 +170,20 @@ Die Darstellung sollte möglichst nahe am späteren Druckergebnis liegen.
 
 Für jede Seite beziehungsweise Doppelseite sollen mindestens folgende Aktionen möglich sein:
 
-* Layout wechseln
-* Layout automatisch neu erzeugen
-* Fotos verschieben
-* Fotos zwischen Seiten verschieben
-* Reihenfolge ändern
-* Foto entfernen
-* anderes Foto hinzufügen
-* Foto größer oder kleiner gewichten
-* Bildausschnitt verändern
-* Seite beziehungsweise Doppelseite neu generieren
+- Layout wechseln
+- Layout automatisch neu erzeugen
+- Fotos verschieben
+- Fotos zwischen Seiten verschieben
+- Reihenfolge ändern
+- Foto entfernen
+- anderes Foto hinzufügen
+- Foto größer oder kleiner gewichten
+- Bildausschnitt verändern
+- Seite beziehungsweise Doppelseite neu generieren
 
 Änderungen sollen sofort in der Vorschau sichtbar sein.
 
-== Timeline
+## Timeline
 
 Zusätzlich zur Buchansicht soll es eine Timeline beziehungsweise Fotoübersicht geben.
 
@@ -201,27 +197,27 @@ Es sollte außerdem möglich sein, mehrere Fotos gemeinsam einem Datum, Zeitraum
 
 Besonders wichtig ist eine Ansicht für Fotos mit:
 
-* fehlendem Datum
-* vermutlich falschem Datum
-* ungewöhnlichem Datum
-* widersprüchlichen Metadaten
+- fehlendem Datum
+- vermutlich falschem Datum
+- ungewöhnlichem Datum
+- widersprüchlichen Metadaten
 
-== Ereignisse
+## Ereignisse
 
 Benutzer sollen automatisch erkannte Ereignisse bearbeiten können.
 
 Dazu gehören:
 
-* Ereignis umbenennen
-* Fotos hinzufügen
-* Fotos entfernen
-* Ereignisse zusammenführen
-* Ereignis aufteilen
-* Datum beziehungsweise Zeitraum ändern
+- Ereignis umbenennen
+- Fotos hinzufügen
+- Fotos entfernen
+- Ereignisse zusammenführen
+- Ereignis aufteilen
+- Datum beziehungsweise Zeitraum ändern
 
 Optional soll ein Ereignis einen Titel erhalten können, der später im Fotobuch verwendet werden kann.
 
-== Kapitel und Jahre
+## Kapitel und Jahre
 
 Jahre sollen optional als visuelle Kapitel behandelt werden können.
 
@@ -233,7 +229,7 @@ Ein Jahreswechsel soll nicht zwingend eine eigene Seite benötigen.
 
 Die Layout-Engine sollte unterschiedliche Möglichkeiten unterstützen, beispielsweise eine dezente Jahresangabe oder eine komplette Kapitel-Doppelseite.
 
-== Texte
+## Texte
 
 Das Buch soll hauptsächlich aus Fotos bestehen.
 
@@ -241,66 +237,66 @@ Trotzdem sollen optionale Texte unterstützt werden.
 
 Beispiele:
 
-* Jahreszahlen
-* Ereignisnamen
-* Orte
-* kurze Bildunterschriften
-* kurze persönliche Texte
+- Jahreszahlen
+- Ereignisnamen
+- Orte
+- kurze Bildunterschriften
+- kurze persönliche Texte
 
 Texte sollen vollständig optional sein.
 
-== Persistenz
+## Persistenz
 
 Ein Fotobuch muss als Projekt gespeichert werden können.
 
 Das Projekt soll unter anderem enthalten:
 
-* Referenzen auf Originalbilder
-* ausgelesene Metadaten
-* korrigierte Metadaten
-* Ereignisse
-* Reihenfolge
-* Buchstruktur
-* ausgewählte Templates
-* manuelle Layoutänderungen
-* Bildausschnitte
-* Texte
-* Exporteinstellungen
+- Referenzen auf Originalbilder
+- ausgelesene Metadaten
+- korrigierte Metadaten
+- Ereignisse
+- Reihenfolge
+- Buchstruktur
+- ausgewählte Templates
+- manuelle Layoutänderungen
+- Bildausschnitte
+- Texte
+- Exporteinstellungen
 
 Nach einem Neustart muss das Projekt exakt weiterbearbeitet werden können.
 
 Die Originalbilder dürfen dabei nicht verändert werden.
 
-== Nicht-destruktives Arbeiten
+## Nicht-destruktives Arbeiten
 
 Alle Bearbeitungsschritte müssen nicht-destruktiv erfolgen.
 
 Das betrifft insbesondere:
 
-* Datumsänderungen
-* Zuschneiden
-* Positionierung
-* Sortierung
-* Ereigniszuordnung
+- Datumsänderungen
+- Zuschneiden
+- Positionierung
+- Sortierung
+- Ereigniszuordnung
 
 Die Originalbilder bleiben unverändert.
 
-== PDF-Export
+## PDF-Export
 
 Am Ende soll ein druckfertiges PDF erzeugt werden.
 
 Dabei müssen folgende Parameter konfigurierbar sein:
 
-* Buchformat
-* Seitenformat
-* Seitenzahl
-* Beschnitt
-* Sicherheitsabstand
-* Auflösung
-* Farbprofil beziehungsweise Farbraum
-* Cover
-* Buchrücken
-* Bindungsart
+- Buchformat
+- Seitenformat
+- Seitenzahl
+- Beschnitt
+- Sicherheitsabstand
+- Auflösung
+- Farbprofil beziehungsweise Farbraum
+- Cover
+- Buchrücken
+- Bindungsart
 
 Die Druckparameter sollen möglichst über Profile abgebildet werden.
 
@@ -310,7 +306,7 @@ Dadurch soll die Layout-Engine selbst möglichst unabhängig vom späteren Druck
 
 Weitere Druckprofile sollen später ergänzt werden können.
 
-== Cover
+## Cover
 
 Auch das Cover soll automatisch erzeugt und anschließend manuell bearbeitet werden können.
 
@@ -318,7 +314,7 @@ Es besteht je nach Druckprofil aus: Rückseite + Buchrücken + Vorderseite.
 
 Die Breite des Buchrückens muss abhängig von Seitenzahl und Druckprofil berechnet werden können.
 
-== Technische Anforderungen
+## Technische Anforderungen
 
 Die Anwendung soll lokal auf einem Mac ausführbar sein.
 
@@ -336,50 +332,49 @@ Für die Web-Vorschau sollten deshalb Vorschaubilder beziehungsweise Thumbnails 
 
 Für den finalen PDF-Export müssen dagegen immer die hochauflösenden Originalbilder verwendet werden.
 
-== Erweiterbarkeit
+## Erweiterbarkeit
 
 Die Architektur soll bewusst Möglichkeiten für spätere intelligente Bildanalyse vorsehen.
 
 Denkbare spätere Funktionen sind:
 
-* Erkennung ähnlicher beziehungsweise nahezu identischer Fotos
-* Gesichtserkennung
-* Erkennung geschlossener Augen
-* Erkennung unscharfer Bilder
-* automatische Bewertung der Bildqualität
-* Erkennung besonders guter Fotos
-* automatische Auswahl eines Hauptfotos eines Ereignisses
-* semantische Bilderkennung
-* intelligentere Ereigniserkennung
-* automatische Generierung kurzer Überschriften
+- Erkennung ähnlicher beziehungsweise nahezu identischer Fotos
+- Gesichtserkennung
+- Erkennung geschlossener Augen
+- Erkennung unscharfer Bilder
+- automatische Bewertung der Bildqualität
+- Erkennung besonders guter Fotos
+- automatische Auswahl eines Hauptfotos eines Ereignisses
+- semantische Bilderkennung
+- intelligentere Ereigniserkennung
+- automatische Generierung kurzer Überschriften
 
 Diese Funktionen sind nicht zwingend Bestandteil des ersten MVP.
 
-== MVP
+## MVP
 
 Die erste Version soll bewusst kleiner gehalten werden.
 
 Der MVP soll mindestens folgendes ermöglichen:
 
-. Ordner mit Fotos importieren.
-. EXIF- und Dateimetadaten auslesen.
-. Fotos chronologisch sortieren.
-. Fotos automatisch in Ereignisse gruppieren.
-. Ein Fotobuch aus ungefähr 10 bis 15 Layout-Templates automatisch erzeugen.
-. Das komplette Buch als Doppelseiten im Browser anzeigen.
-. Fotos per Drag-and-drop verschieben.
-. Datum beziehungsweise Reihenfolge korrigieren.
-. Ereignisse bearbeiten.
-. Layout einer Seite wechseln oder neu generieren.
-. Änderungen persistent speichern.
-. Ein druckfähiges PDF erzeugen.
-. Druckparameter über ein konfigurierbares Druckprofil verwalten.
+1. Ordner mit Fotos importieren.
+2. EXIF- und Dateimetadaten auslesen.
+3. Fotos chronologisch sortieren.
+4. Fotos automatisch in Ereignisse gruppieren.
+5. Ein Fotobuch aus ungefähr 10 bis 15 Layout-Templates automatisch erzeugen.
+6. Das komplette Buch als Doppelseiten im Browser anzeigen.
+7. Fotos per Drag-and-drop verschieben.
+8. Datum beziehungsweise Reihenfolge korrigieren.
+9. Ereignisse bearbeiten.
+10. Layout einer Seite wechseln oder neu generieren.
+11. Änderungen persistent speichern.
+12. Ein druckfähiges PDF erzeugen.
+13. Druckparameter über ein konfigurierbares Druckprofil verwalten.
 
-== UX-Ziel
+## UX-Ziel
 
 Das wichtigste UX-Ziel lautet:
 
-[quote]
 "900 Fotos hineinwerfen und nach wenigen Minuten einen brauchbaren Fotobuch-Entwurf erhalten."
 
 Danach soll der Benutzer hauptsächlich Fehler korrigieren und einzelne Seiten verbessern müssen.
@@ -388,27 +383,27 @@ Es soll ausdrücklich nicht notwendig sein, jede einzelne Seite manuell zu gesta
 
 Die Anwendung soll deshalb sinnvolle Entscheidungen selbst treffen, diese Entscheidungen aber jederzeit nachvollziehbar und korrigierbar machen.
 
-== Gewünschtes Vorgehen für die Implementierung
+## Gewünschtes Vorgehen für die Implementierung
 
 Vor Beginn der eigentlichen Implementierung soll zunächst ein technisches Konzept erstellt werden.
 
 Dieses soll mindestens enthalten:
 
-* vorgeschlagene Architektur
-* Technologieauswahl
-* Datenmodell
-* Projektformat und Persistenz
-* Metadaten-Strategie
-* Layout-Engine-Konzept
-* Template-Modell
-* Ereigniserkennung
-* Preview-Rendering
-* PDF-Rendering
-* Druckprofil-Modell
-* Umgang mit HEIC
-* Thumbnail- und Cache-Strategie
-* Drag-and-drop-Konzept
-* Teststrategie
+- vorgeschlagene Architektur
+- Technologieauswahl
+- Datenmodell
+- Projektformat und Persistenz
+- Metadaten-Strategie
+- Layout-Engine-Konzept
+- Template-Modell
+- Ereigniserkennung
+- Preview-Rendering
+- PDF-Rendering
+- Druckprofil-Modell
+- Umgang mit HEIC
+- Thumbnail- und Cache-Strategie
+- Drag-and-drop-Konzept
+- Teststrategie
 
 Anschließend soll die Implementierung in kleine, separat testbare Phasen zerlegt werden.
 

@@ -9,17 +9,26 @@ Konkreter Anlass: ein Fotobuch zum 18. Geburtstag mit rund 900 Fotos aus den Jah
 
 ## Stand
 
-Phase 0 abgeschlossen: Monorepo-Gerüst steht, die Umgebungsannahmen des
-Konzepts sind gemessen. Als nächstes Phase 1 — der vertikale Prototyp.
+Der Durchstich steht: 820 Fotos werden importiert, chronologisch nach Jahren und
+Fotogruppen gegliedert und zu 86 Doppelseiten gesetzt, die sich im Browser
+durchblättern und über ein Layout-JSON umbauen lassen. Der Innenteil wird als PDF
+exportiert (819 Bilder in 31 s), und der Parity-Test belegt, dass Vorschau und
+Druck übereinstimmen.
+
+Bis zum ersten Druckauftrag fehlen vier Dinge, alle als
+[Issue](https://github.com/bjsee/franibook/issues) erfasst: verifizierte Maße von
+Saal, ein Cover, eine kleinere PDF-Datei und eine exakt getroffene Seitenzahl
+(derzeit 172 statt 160). Ausführlich in
+[docs/implementierungsphasen.md](docs/implementierungsphasen.md).
 
 ## Dokumentation
 
-| Dokument                                                             | Inhalt                                                                                     |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [docs/anforderungen.adoc](docs/anforderungen.adoc)                   | Fachliche Ausgangsanforderung                                                              |
-| [docs/konzept.adoc](docs/konzept.adoc)                               | Technisches Konzept: Architektur, Datenmodell, Layout-Engine, PDF-Rendering, Teststrategie |
-| [docs/implementierungsphasen.adoc](docs/implementierungsphasen.adoc) | Zerlegung in einzeln testbare Phasen                                                       |
-| [docs/spikes/phase-0.adoc](docs/spikes/phase-0.adoc)                 | Messergebnisse zu HEIC, PDF-Speicher und Metadaten-Durchsatz                               |
+| Dokument                                                         | Inhalt                                                                                     |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [docs/anforderungen.md](docs/anforderungen.md)                   | Fachliche Ausgangsanforderung                                                              |
+| [docs/konzept.md](docs/konzept.md)                               | Technisches Konzept: Architektur, Datenmodell, Layout-Engine, PDF-Rendering, Teststrategie |
+| [docs/implementierungsphasen.md](docs/implementierungsphasen.md) | Zerlegung in einzeln testbare Phasen                                                       |
+| [docs/spikes/phase-0.md](docs/spikes/phase-0.md)                 | Messergebnisse zu HEIC, PDF-Speicher und Metadaten-Durchsatz                               |
 
 ## Entwicklung
 

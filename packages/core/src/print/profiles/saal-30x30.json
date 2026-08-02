@@ -45,6 +45,6 @@
   "provenance": {
     "source": "Rahmenregeln aus der Saal-Professional-Zone; Maße noch nicht aus dem offiziellen Template übernommen",
     "verifiedAt": null,
-    "notes": "ACHTUNG: page.*, cover.* und pageCount sind plausible Annahmen, KEINE verifizierten Werte. Vor dem ersten Druckauftrag das Photoshop- oder InDesign-Template aus der Professional Zone laden und Endformat, Beschnitt, Sicherheitsabstand, Umschlag, Gelenkzone und die Rückenformel daraus übernehmen. Verifiziert sind nur: getrennte PDFs für Cover und Innenteil, 300 ppi, eingebettete Schriften. Erst danach verifiedAt setzen. pageCount.max=160 ist vom Nutzer bestaetigt. resolution.minDpi=240 und encoding.* sind bewusste Projektentscheidungen, siehe docs/spikes/bestandsanalyse.adoc."
+    "notes": "ACHTUNG: page.*, cover.* und pageCount sind plausible Annahmen, KEINE verifizierten Werte. Vor dem ersten Druckauftrag das Photoshop- oder InDesign-Template aus der Professional Zone laden und Endformat, Beschnitt, Sicherheitsabstand, Umschlag, Gelenkzone und die Rückenformel daraus übernehmen. Verifiziert sind nur: getrennte PDFs für Cover und Innenteil, 300 ppi, eingebettete Schriften. Erst danach verifiedAt setzen. pageCount.max=160 ist vom Nutzer bestaetigt. resolution.minDpi=240 und encoding.* sind bewusste Projektentscheidungen, siehe docs/spikes/bestandsanalyse.md."
   }
 }

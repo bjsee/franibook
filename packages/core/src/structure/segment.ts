@@ -13,7 +13,7 @@
  *   Monat   → Segment (weiche Gruppierung, bestimmt Seitenumbrüche)
  *   Tag     → Serie (hält Aufnahmen einer Stunde auf derselben Doppelseite)
  *
- * Messwerte in docs/spikes/bestandsanalyse.adoc.
+ * Messwerte in docs/spikes/bestandsanalyse.md.
  */
 import type { NaiveDateTime, PhotoId } from '../model/photo.js';
 
