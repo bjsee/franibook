@@ -27,6 +27,8 @@ interface Group {
   coverPhotoId?: string;
   origin: 'manual' | 'place' | 'calendar';
   active: boolean;
+  /** Auftaktseite für diese Gruppe, unabhängig von der Vorgabe. */
+  opener?: boolean;
   reason?: string;
 }
 
@@ -350,6 +352,29 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
                   }
                 />
                 gliedert das Buch
+              </label>
+              {/*
+                Dreiwertig, weil die Vorgabe selbst schon eine Regel ist: Ohne
+                eigene Angabe folgt die Gruppe `settings.groupOpeners`, das
+                seinerseits an den Zeitstrahl gekoppelt sein kann.
+              */}
+              <label style={S.check}>
+                Auftakt
+                <select
+                  value={aktiveGruppe.opener === undefined ? '' : String(aktiveGruppe.opener)}
+                  onChange={(e) =>
+                    void call(`/api/groups/${aktiveGruppe.id}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify({
+                        opener: e.target.value === '' ? null : e.target.value === 'true',
+                      }),
+                    })
+                  }
+                >
+                  <option value="">wie Vorgabe</option>
+                  <option value="true">eigene Seite</option>
+                  <option value="false">keine</option>
+                </select>
               </label>
               {/*
                 Zusammenführen: Die Automatik zerlegt einen Aufenthalt

@@ -33,6 +33,14 @@ export interface PhotoGroup {
    * achtzehn Jahre ständig auf und wäre als Abschnitt sinnlos.
    */
   active: boolean;
+  /**
+   * Eigene Auftaktseite für diese Gruppe, unabhängig von der Vorgabe.
+   *
+   * Ohne Angabe gilt `settings.groupOpeners`. Weil Gruppen vom Benutzer
+   * bestätigt und damit stabil sind, übersteht diese Entscheidung – anders als
+   * eine Eigenschaft der Doppelseite – jedes Neugenerieren.
+   */
+  opener?: boolean;
   /** Kurzer Hinweis, warum die Automatik diese Gruppe vorgeschlagen hat. */
   reason?: string;
 }
@@ -101,7 +109,7 @@ export function createGroup(
 export function updateGroup(
   groups: readonly PhotoGroup[],
   id: GroupId,
-  patch: Partial<Pick<PhotoGroup, 'title' | 'coverPhotoId' | 'active' | 'photoIds'>>,
+  patch: Partial<Pick<PhotoGroup, 'title' | 'coverPhotoId' | 'active' | 'photoIds' | 'opener'>>,
 ): PhotoGroup[] {
   return groups.map((g) =>
     g.id === id

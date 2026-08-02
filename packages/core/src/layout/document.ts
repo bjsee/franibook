@@ -79,6 +79,8 @@ export interface LayoutDocument {
     chapterOpeners: boolean;
     /** Zeitstrahl am Fuß jeder Doppelseite. */
     timeline: boolean;
+    /** Auftaktseite je Fotogruppe. `"auto"` ist das Gegenteil von `timeline`. */
+    groupOpeners: boolean | 'auto';
   };
   summary: {
     spreads: number;
@@ -146,7 +148,12 @@ export interface ExportOptions {
   spreads: readonly Spread[];
   photos: ReadonlyMap<PhotoId, Photo>;
   profile: PrintProfile;
-  settings: { targetPages: number; chapterOpeners: boolean; timeline: boolean };
+  settings: {
+    targetPages: number;
+    chapterOpeners: boolean;
+    timeline: boolean;
+    groupOpeners: boolean | 'auto';
+  };
   /** Fotos, die in keiner Doppelseite stehen. */
   unplaced?: readonly PhotoId[];
   /** Benannte Fotogruppen, zur Orientierung im Dokument. */
@@ -257,7 +264,12 @@ export interface LayoutIssue {
 export interface ParsedLayout {
   /** Je Doppelseite die Fotokennungen in der gewünschten Reihenfolge. */
   spreads: { photoIds: PhotoId[]; templateId?: string; text?: string; timeline?: boolean }[];
-  settings?: { targetPages?: number; chapterOpeners?: boolean; timeline?: boolean };
+  settings?: {
+    targetPages?: number;
+    chapterOpeners?: boolean;
+    timeline?: boolean;
+    groupOpeners?: boolean | 'auto';
+  };
   issues: LayoutIssue[];
   /** Ob das Dokument übernommen werden kann. */
   ok: boolean;

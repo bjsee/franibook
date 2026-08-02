@@ -31,7 +31,7 @@ interface ProjectInfo {
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
-    groupOpeners: boolean;
+    groupOpeners: boolean | 'auto';
     timeline: boolean;
     seed: number;
     birthDate?: string;
@@ -352,6 +352,29 @@ export function App() {
                     onChange={(e) => void setSetting({ timeline: e.target.checked })}
                   />
                   Zeitstrahl
+                </label>
+                {/*
+                  Dreiwertig: „wie Zeitstrahl" ist die Vorgabe und bedeutet das
+                  Gegenteil von ihm – trägt der Zeitstrahl den Gruppentitel auf
+                  jeder Doppelseite, kostet ein eigener Auftakt nur zwei Seiten,
+                  ohne etwas hinzuzufügen. Anders als beim Zeitstrahl ändert
+                  sich hier die Fotoverteilung, also wird neu erzeugt.
+                */}
+                <label style={S.check}>
+                  Gruppenauftakte
+                  <select
+                    value={String(info.settings.groupOpeners)}
+                    onChange={(e) =>
+                      void regenerate({
+                        groupOpeners:
+                          e.target.value === 'auto' ? 'auto' : e.target.value === 'true',
+                      })
+                    }
+                  >
+                    <option value="auto">wie Zeitstrahl</option>
+                    <option value="true">immer</option>
+                    <option value="false">nie</option>
+                  </select>
                 </label>
                 <button
                   onClick={() => void regenerate({ seed: info.settings.seed + 1 })}
