@@ -3,12 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DecodeCache, istDecoderFehler } from './decode.js';
+import type { PathResolver } from './sources.js';
 
 /** Wortgleich die Meldung, an der der erste Vollexport ein Bild verlor. */
 const LESEFEHLER = new Error('vipspng: libpng read error');
 
 const QUELLE = '/quelle';
 const ID = 'ab12cd34';
+
+/** Ein Foto samt Auflösung seines Pfads – mehr braucht der Cache nicht. */
+const FOTO = { id: ID, relPath: 'foto.png' };
+const QUELLEN: PathResolver = { pfad: (photo) => join(QUELLE, photo.relPath) };
 
 let cacheDir: string;
 
@@ -29,7 +34,7 @@ function cacheMit(opts: { erfolg?: boolean } = {}): {
   konvertierungen: { src: string; dst: string }[];
 } {
   const konvertierungen: { src: string; dst: string }[] = [];
-  const cache = new DecodeCache(cacheDir, QUELLE, async (src, dst) => {
+  const cache = new DecodeCache(cacheDir, QUELLEN, async (src, dst) => {
     konvertierungen.push({ src, dst });
     if (opts.erfolg === false) throw new Error('sips: Error 4: unable to open file');
     await writeFile(dst, 'jpeg');
@@ -63,7 +68,7 @@ describe('DecodeCache', () => {
     const { cache, konvertierungen } = cacheMit();
     const gesehen: string[] = [];
 
-    const wert = await cache.withFallback(ID, 'foto.png', async (path) => {
+    const wert = await cache.withFallback(FOTO, async (path) => {
       gesehen.push(path);
       return 'gelesen';
     });
@@ -78,7 +83,7 @@ describe('DecodeCache', () => {
     const { cache, konvertierungen } = cacheMit();
     const gesehen: string[] = [];
 
-    const wert = await cache.withFallback(ID, 'foto.png', async (path) => {
+    const wert = await cache.withFallback(FOTO, async (path) => {
       gesehen.push(path);
       if (path.endsWith('.png')) throw LESEFEHLER;
       return 'gerettet';
@@ -96,7 +101,7 @@ describe('DecodeCache', () => {
     const { cache, konvertierungen } = cacheMit();
 
     await expect(
-      cache.withFallback(ID, 'foto.png', () => Promise.reject(new Error('Bild ohne Pixelmaße'))),
+      cache.withFallback(FOTO, () => Promise.reject(new Error('Bild ohne Pixelmaße'))),
     ).rejects.toThrow('Bild ohne Pixelmaße');
     expect(konvertierungen).toHaveLength(0);
   });
@@ -108,9 +113,9 @@ describe('DecodeCache', () => {
       return path;
     };
 
-    await cache.withFallback(ID, 'foto.png', lese);
+    await cache.withFallback(FOTO, lese);
     const gesehen: string[] = [];
-    await cache.withFallback(ID, 'foto.png', async (path) => {
+    await cache.withFallback(FOTO, async (path) => {
       gesehen.push(path);
       return lese(path);
     });
@@ -128,9 +133,9 @@ describe('DecodeCache', () => {
 
     // So greifen die sechs Vorschau-Worker auf dasselbe Bild zu.
     const werte = await Promise.all([
-      cache.withFallback(ID, 'foto.png', lese),
-      cache.withFallback(ID, 'foto.png', lese),
-      cache.withFallback(ID, 'foto.png', lese),
+      cache.withFallback(FOTO, lese),
+      cache.withFallback(FOTO, lese),
+      cache.withFallback(FOTO, lese),
     ]);
 
     expect(werte).toEqual([konvertat(), konvertat(), konvertat()]);
@@ -140,20 +145,20 @@ describe('DecodeCache', () => {
   it('meldet den ursprünglichen Fehler, wenn auch sips scheitert', async () => {
     const { cache, konvertierungen } = cacheMit({ erfolg: false });
 
-    await expect(
-      cache.withFallback(ID, 'foto.png', () => Promise.reject(LESEFEHLER)),
-    ).rejects.toThrow('libpng read error');
+    await expect(cache.withFallback(FOTO, () => Promise.reject(LESEFEHLER))).rejects.toThrow(
+      'libpng read error',
+    );
 
     // Ein zweiter Zugriff versucht es nicht noch einmal.
-    await expect(
-      cache.withFallback(ID, 'foto.png', () => Promise.reject(LESEFEHLER)),
-    ).rejects.toThrow('libpng read error');
+    await expect(cache.withFallback(FOTO, () => Promise.reject(LESEFEHLER))).rejects.toThrow(
+      'libpng read error',
+    );
     expect(konvertierungen).toHaveLength(1);
   });
 
   it('nutzt ein Konvertat aus einem früheren Lauf, statt neu zu konvertieren', async () => {
     const { cache, konvertierungen } = cacheMit();
-    await cache.withFallback(ID, 'foto.png', async (path) => {
+    await cache.withFallback(FOTO, async (path) => {
       if (path.endsWith('.png')) throw LESEFEHLER;
       return path;
     });
@@ -161,7 +166,7 @@ describe('DecodeCache', () => {
     // Zweiter Serverstart: neuer Cache, dieselbe Platte.
     const neu = cacheMit();
     expect(await neu.cache.existing(ID)).toBe(konvertat());
-    expect(await neu.cache.rescue(ID, 'foto.png')).toBe(konvertat());
+    expect(await neu.cache.rescue(FOTO)).toBe(konvertat());
     expect(neu.konvertierungen).toHaveLength(0);
     expect(konvertierungen).toHaveLength(1);
   });

@@ -59,7 +59,7 @@ ein bereits laufender `pnpm dev` muss dafür beendet sein (`reuseExistingServer:
 
 | Variable            | Vorgabe                                   | Wirkung                                           |
 | ------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `FRANIBOOK_SOURCE`  | `/Users/see/nas/dokumente/Franziska/buch` | Bildquelle, wird ausschließlich gelesen           |
+| `FRANIBOOK_SOURCE`  | `/Users/see/nas/dokumente/Franziska/buch` | Erste Bildquelle beim allerersten Start           |
 | `FRANIBOOK_PROJECT` | `.franibook-project`                      | Persistiertes Projekt (JSON)                      |
 | `FRANIBOOK_CACHE`   | `.franibook-cache`                        | WebP-Vorschauen                                   |
 | `FRANIBOOK_OUT`     | `.franibook-out`                          | PDF-Ausgabe                                       |
@@ -152,6 +152,23 @@ er darf nicht ins Netz.
 
 Foto-Kennung ist `contentHash`: Dateigröße + SHA-256 über die ersten und letzten 64 KB.
 Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
+
+**Aussortieren** (`DELETE /api/photos/:id`) verschiebt die Datei nach
+`<quelle>/.franibook-geloescht/` — der einzige schreibende Zugriff auf eine Bildquelle,
+und auch er löscht nichts. Versteckte Ordner liest der Scan nicht, das Foto kommt also
+bei keinem Reimport zurück; wer die Datei im Finder zurücklegt, bekommt sie samt ihrem
+alten Platz im Buch wieder. `Project.vergessen()` räumt dabei Gruppen, Hintergrund- und
+Umschlagbilder auf, lässt aber Slots und `PhotoOverride` stehen.
+
+**Bildquellen** (`sources.ts`) sind eine Liste von Ordnern im Projekt, nicht ein
+einzelner Pfad: Der Grundbestand liegt auf dem NAS, Nachzügler kommen als weiterer
+Ordner dazu. Kopiert wird nichts, jede Quelle wird ausschließlich gelesen und rekursiv
+gescannt. Die Kennung einer Quelle leitet sich aus ihrem Pfad ab (`quellenId`), jedes
+`Photo` trägt eine `sourceId`, und `Sources.pfad()` ist die einzige Stelle, an der aus
+einem Foto ein Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen
+Resolver. Eine gerade nicht lesbare Quelle wird beim Einlesen übersprungen und
+gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu gelten (ein nicht
+eingehängtes Netzlaufwerk sieht sonst aus wie ein leerer Ordner).
 
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.

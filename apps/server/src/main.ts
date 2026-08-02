@@ -24,6 +24,7 @@ import { renderCoverPdf, renderPdf } from '@franibook/render-pdf';
 import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
+import { Sources } from './sources.js';
 import { shutdownImport } from './import.js';
 
 const PORT = Number(process.env['PORT'] ?? 5174);
@@ -41,14 +42,22 @@ const app = Fastify({ logger: { level: 'warn' } });
 
 const PROJECT_DIR = resolve(process.env['FRANIBOOK_PROJECT'] ?? '.franibook-project');
 
-const decodes = new DecodeCache(CACHE_DIR, SOURCE_ROOT);
+/**
+ * Die Bildquellen des Projekts.
+ *
+ * `FRANIBOOK_SOURCE` ist nur die Vorgabe für den ersten Start: Sobald ein
+ * Projekt gespeichert ist, kommt die Liste von dort, und weitere Ordner
+ * kommen über `POST /api/sources` hinzu.
+ */
+const sources = new Sources();
+const decodes = new DecodeCache(CACHE_DIR, sources);
 const previews = new PreviewCache(CACHE_DIR, decodes);
-const project = new Project(SOURCE_ROOT, previews, decodes, PROJECT_DIR);
+const project = new Project(sources, previews, decodes, PROJECT_DIR);
 
 app.get('/api/health', async () => ({ status: 'ok' }));
 
 app.get('/api/project', async () => ({
-  sourceRoot: project.sourceRoot,
+  sources: await sources.status(),
   profile: project.profile,
   settings: project.settings,
   // Was ein Neugenerieren verwerfen würde – die Oberfläche schreibt es an den Knopf.
@@ -222,6 +231,26 @@ app.get('/api/spreads', async () => ({
   spreads: project.renderAll(),
 }));
 
+/**
+ * Die Fotos einer Doppelseite mit allem, was über sie bekannt ist.
+ *
+ * Ein Aufruf je Doppelseite statt einer je Bild: Der Editor braucht mindestens
+ * den Dateinamen für jedes Bild, das man aussortieren kann, und blendet auf
+ * Wunsch Aufnahmezeit und Ort ein. Die Antwort ist derselbe `PhotoView` wie in
+ * der Fotoliste – die Datumskaskade soll nicht zweimal beschrieben werden.
+ */
+app.get<{ Params: { index: string } }>('/api/spreads/:index/photos', async (req, reply) => {
+  const spread = project.spreads[Number(req.params.index)];
+  if (!spread) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
+
+  const ids = [
+    ...spread.slots.map((sl) => sl.photoId),
+    ...(spread.backgroundPhotoId ? [spread.backgroundPhotoId] : []),
+  ].filter((id): id is string => !!id);
+
+  return { photos: project.photoViewsOf(ids) };
+});
+
 app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
   const index = Number(req.params.index);
   const rendered = project.render(index);
@@ -270,20 +299,86 @@ app.put<{ Params: { year: string }; Body: { events: string[] } }>(
 app.get('/api/chapters/events', async () => ({ yearEvents: project.yearEvents }));
 
 /**
- * Liest den Quellordner erneut ein.
+ * Liest die Bildquellen erneut ein.
  *
  * Das Buch bleibt stehen. Neue Fotos landen im Fotopool, verschwundene werden
  * gemeldet – auch solche, die noch in einer Doppelseite stehen.
  */
-app.post<{ Body?: { limit?: number } }>('/api/import', async (req) => {
-  const ergebnis = await project.reimport(req.body?.limit ?? IMPORT_LIMIT);
+app.post<{ Body?: { limit?: number; sourceId?: string } }>('/api/import', async (req) => {
+  const ergebnis = await project.reimport(
+    req.body?.limit ?? IMPORT_LIMIT,
+    req.body?.sourceId ? [req.body.sourceId] : undefined,
+  );
   await project.save();
+  // Erst antworten, dann die Vorschauen der Nachzügler im Hintergrund bauen:
+  // Der Fotopool zeigt sie sonst als graue Kästen, bis er jede einzeln anfordert.
+  project.warmPreviews(ergebnis.neu);
+  return { ...ergebnis, photoCount: project.photos.size, handwork: project.handwork() };
+});
+
+// ------------------------------------------------------------- Bildquellen
+
+app.get('/api/sources', async () => {
+  const imBuch = new Set(project.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)));
   return {
-    ...ergebnis,
-    photoCount: project.photos.size,
-    handwork: project.handwork(),
+    sources: (await sources.status()).map((q) => {
+      const photos = project.photosOfSource(q.id);
+      return {
+        ...q,
+        photoCount: photos.length,
+        // Damit die Oberfläche vor dem Entfernen sagen kann, was im Buch
+        // dadurch zur Lücke wird.
+        inBookCount: photos.filter((p) => imBuch.has(p.id)).length,
+      };
+    }),
   };
 });
+
+/**
+ * Nimmt einen weiteren Ordner als Bildquelle auf und liest ihn ein.
+ *
+ * Der Pfad kommt als Text, nicht über einen Dateidialog: Der Browser gibt bei
+ * einer Ordnerauswahl keinen echten Pfad heraus, und der Server läuft ohnehin
+ * auf demselben Rechner wie die Bilder.
+ */
+app.post<{ Body?: { root?: string; label?: string } }>('/api/sources', async (req, reply) => {
+  const root = req.body?.root?.trim();
+  if (!root) return reply.code(400).send({ error: 'Pfad fehlt' });
+
+  try {
+    const ergebnis = await project.addSource(root, req.body?.label);
+    await project.save();
+    project.warmPreviews(ergebnis.neu);
+    return { ...ergebnis, photoCount: project.photos.size };
+  } catch (err) {
+    return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * Entfernt eine Bildquelle samt ihrer Fotos.
+ *
+ * Die Doppelseiten bleiben stehen; belegte Plätze werden zu fehlenden Bildern.
+ * Wie viele das wären, steht in der Antwort – und vorher schon in `GET
+ * /api/sources`, damit die Oberfläche warnen kann.
+ */
+app.delete<{ Params: { id: string } }>('/api/sources/:id', async (req, reply) => {
+  const ergebnis = project.removeSource(req.params.id);
+  if (!ergebnis) return reply.code(404).send({ error: 'Quelle nicht gefunden' });
+  await project.save();
+  return { ...ergebnis, photoCount: project.photos.size };
+});
+
+/** Anzeigename einer Quelle. */
+app.patch<{ Params: { id: string }; Body?: { label?: string } }>(
+  '/api/sources/:id',
+  async (req, reply) => {
+    const quelle = sources.rename(req.params.id, req.body?.label ?? '');
+    if (!quelle) return reply.code(404).send({ error: 'Quelle nicht gefunden' });
+    await project.save();
+    return { source: quelle };
+  },
+);
 
 /** Wählbare Hintergrundfarben und die Fotos, die als Hintergrund taugen. */
 app.get('/api/background', async () => ({
@@ -371,13 +466,41 @@ app.get<{ Params: { id: string }; Querystring: { size?: string } }>(
     if (!photo) return reply.code(404).send({ error: 'Foto nicht gefunden' });
 
     const size = req.query.size === 'thumb' ? 'thumb' : 'preview';
-    const path = await previews.get(photo.id, photo.relPath, size);
+    const path = await previews.get(photo, size);
     return reply
       .type('image/webp')
       .header('Cache-Control', 'public, max-age=31536000, immutable')
       .send(createReadStream(path));
   },
 );
+
+/**
+ * Legt die Datei eines Fotos in den Papierkorb seiner Quelle.
+ *
+ * Der einzige schreibende Zugriff auf eine Bildquelle im ganzen Programm – und
+ * auch er löscht nicht, sondern verschiebt nach `.franibook-geloescht`. Steht
+ * das Foto noch im Buch, bleibt der Platz leer, statt die Doppelseite
+ * umzubauen; die betroffenen Doppelseiten stehen in der Antwort, damit die
+ * Oberfläche sie neu holen kann.
+ */
+app.delete<{ Params: { id: string } }>('/api/photos/:id', async (req, reply) => {
+  try {
+    const ergebnis = await project.deletePhoto(req.params.id);
+    if (!ergebnis) return reply.code(404).send({ error: 'Foto nicht gefunden' });
+    await project.save();
+    return {
+      ...ergebnis,
+      photoCount: project.photos.size,
+      // Fertig gerendert wie bei `/api/book/move`: Die Oberfläche zeigt die
+      // Lücke sofort, ohne nachzufragen.
+      rendered: ergebnis.spreads.map((i) => ({ index: i, spread: project.render(i) })),
+    };
+  } catch (err) {
+    // Etwa: die Quelle ist gerade nicht eingehängt. Dann ist nichts geschehen –
+    // das Foto bleibt im Projekt, die Datei liegt, wo sie lag.
+    return reply.code(409).send({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 /**
  * Liefert das Original. Wird ausschließlich vom Parity-Test gebraucht, damit
@@ -393,7 +516,7 @@ app.get<{ Params: { id: string } }>('/api/photos/:id/original', async (req, repl
   // libvips unlesbaren Datei genau diese Pixel, und der Parity-Test darf nicht
   // Original gegen Konvertat vergleichen.
   const gerettet = await decodes.existing(photo.id);
-  const path = gerettet ?? join(SOURCE_ROOT, photo.relPath);
+  const path = gerettet ?? sources.pfad(photo);
   const ext = extname(gerettet ?? photo.fileName).toLowerCase();
   const type = ext === '.png' ? 'image/png' : 'image/jpeg';
   return reply
@@ -450,7 +573,7 @@ app.post<{ Body?: { fileName?: string } }>('/api/export/cover', async (req) => {
     resolvePhoto: (photoId) => {
       const photo = project.photo(photoId);
       if (!photo) return undefined;
-      return { path: join(SOURCE_ROOT, photo.relPath), orientation: photo.orientation };
+      return { path: sources.pfad(photo), orientation: photo.orientation };
     },
   });
 
@@ -482,7 +605,7 @@ app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
       resolvePhoto: (photoId) => {
         const photo = project.photo(photoId);
         if (!photo) return undefined;
-        return { path: join(SOURCE_ROOT, photo.relPath), orientation: photo.orientation };
+        return { path: sources.pfad(photo), orientation: photo.orientation };
       },
       // Zweiter Anlauf für Dateien, die sharp nicht dekodieren kann – ein
       // 13-MB-PNG im Bestand fiel dem ersten Vollexport zum Opfer.
@@ -494,7 +617,7 @@ app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
       recoverPhoto: async (photoId) => {
         const photo = project.photo(photoId);
         if (!photo) return undefined;
-        const path = await decodes.rescue(photo.id, photo.relPath);
+        const path = await decodes.rescue(photo);
         return path ? { path, orientation: photo.orientation } : undefined;
       },
     });
@@ -507,17 +630,38 @@ async function start(): Promise<void> {
   const t0 = Date.now();
 
   // Ein gespeichertes Projekt hat Vorrang: Es enthält die Korrekturen des
-  // Benutzers, die ein erneuter Import nicht wiederherstellen könnte.
+  // Benutzers, die ein erneuter Import nicht wiederherstellen könnte. Es bringt
+  // auch seine Bildquellen mit; `FRANIBOOK_SOURCE` greift nur beim ersten Start.
   const geladen = process.env['FRANIBOOK_FRESH'] ? false : await project.load();
 
   if (geladen) {
+    const liste = sources.list();
     process.stdout.write(
-      `Projekt geladen: ${project.photos.size} Fotos, ${project.spreads.length} Doppelseiten\n`,
+      `Projekt geladen: ${project.photos.size} Fotos, ${project.spreads.length} Doppelseiten, ` +
+        `${liste.length} ${liste.length === 1 ? 'Bildquelle' : 'Bildquellen'}\n`,
     );
+    for (const quelle of await sources.status()) {
+      if (!quelle.erreichbar) {
+        process.stdout.write(`  Quelle „${quelle.label}" nicht erreichbar: ${quelle.root}\n`);
+      }
+    }
   } else {
-    process.stdout.write(
-      `Importiere ${SOURCE_ROOT}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `,
-    );
+    // Nur wenn noch keine Quelle bekannt ist: Ein Projekt ohne Fotos, aber mit
+    // Quellenliste soll seine Ordner behalten, nicht die Umgebungsvorgabe
+    // danebengesetzt bekommen.
+    if (sources.list().length === 0) {
+      try {
+        await sources.add(SOURCE_ROOT);
+      } catch (err) {
+        process.stdout.write(`\nBildquelle unbrauchbar: ${String(err)}\n`);
+        throw err;
+      }
+    }
+    const roots = sources
+      .list()
+      .map((q) => q.root)
+      .join(', ');
+    process.stdout.write(`Importiere ${roots}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `);
     await project.importPhotos(IMPORT_LIMIT);
     process.stdout.write(`${project.photos.size} Fotos (${Date.now() - t0} ms)\n`);
 

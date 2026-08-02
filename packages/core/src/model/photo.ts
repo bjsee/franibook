@@ -13,8 +13,16 @@ export type NaiveDateTime = string;
 
 export interface Photo {
   id: PhotoId;
-  /** Relativ zur Bildquelle des Projekts. */
+  /** Relativ zur Bildquelle, aus der das Foto stammt. */
   relPath: string;
+  /**
+   * Aus welcher Bildquelle das Foto stammt.
+   *
+   * Fehlt bei Fotos aus Projekten vor der Quellenliste; sie gehören dann zur
+   * ersten Quelle. Die Engine liest das Feld nie – nur der Server braucht es,
+   * um von `relPath` zu einem Dateipfad zu kommen.
+   */
+  sourceId?: string;
   fileName: string;
   bytes: number;
 

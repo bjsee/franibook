@@ -138,7 +138,8 @@ Alle Typen leben in `packages/core/src/model/`. Zeitangaben sind grundsätzlich 
 /** Unveränderlich nach dem Import. Spiegelt ausschließlich, was in der Datei steht. */
 interface Photo {
   id: PhotoId;                    // stabil: contentHash, siehe Cache-Kapitel
-  relPath: string;                // relativ zur Bildquelle des Projekts
+  relPath: string;                // relativ zu seiner Bildquelle
+  sourceId?: string;              // aus welcher Bildquelle; fehlt vor Schema 2
   fileName: string;
   bytes: number;
   mimeType: 'image/jpeg' | 'image/png' | 'image/heic' | 'image/heif' | 'image/tiff';
@@ -330,10 +331,12 @@ interface Project {
 > `rename`. Sie enthält Fotos, Overrides, Gruppen und Doppelseiten zusammen und
 > ist bei 820 Fotos rund 680 KB groß.
 >
-> Nicht umgesetzt: die Aufteilung in sechs Dateien, `history/`-Snapshots, die
-> Migrationskette samt Backup (bei abweichender `schemaVersion` wird das
-> gespeicherte Projekt verworfen und neu importiert), `fsync`, debouncetes
-> Autosave und `sendBeacon`. Gespeichert wird nach jeder ändernden Anfrage.
+> Nicht umgesetzt: die Aufteilung in sechs Dateien, `history/`-Snapshots, das
+> Backup vor der Migration, `fsync`, debouncetes Autosave und `sendBeacon`.
+> Gespeichert wird nach jeder ändernden Anfrage. Migriert wird seit Schema 2
+> (Bildquellen als Liste) tatsächlich — `migriere()` in `project.ts` hebt den
+> alten Stand an, statt ihn zu verwerfen; ein unbekanntes Schema führt weiterhin
+> zum Neuimport.
 >
 > Das ist Phase 7 und bewusst aufgeschoben — solange das Projekt in Sekunden aus
 > dem Quellordner neu entsteht, ist der Verlust überschaubar.
@@ -838,11 +841,55 @@ Weiß und die beiden dunklen Töne gehören nicht zur Kapitelpalette: Ein weiße
 
 **Hintergrundbild.** Ein Foto kann die Doppelseite randabfallend füllen (`Spread.backgroundPhotoId`); technisch ist es eine gewöhnliche Bildbox über die ganze Beschnittfläche, als erste der Liste. Die Auflösung reicht dafür aber fast nie: 606 × 306 mm verlangen bei 150 dpi eine lange Kante von 3579 px, bei 240 dpi wie für Motive 5726 px. Am Zielbestand gemessen (820 Fotos, Median 2048 px) erreichen **zwei** Fotos 150 dpi und **keines** 240 dpi. Deshalb prüft `backgroundFit` und das Modell meldet `background-low-dpi`; gesetzt wird das Bild trotzdem, die Entscheidung bleibt beim Benutzer. Sie soll nur vor dem Druck fallen und nicht danach.
 
+### Bildquellen
+
+Ein Buch entsteht aus einer **Liste** von Ordnern, nicht aus einem. Der Grundbestand liegt auf dem NAS; was danach dazukommt — ein Kartenexport, ein geteiltes Album, die Bilder aus einer anderen Familie — wird als weitere Quelle aufgenommen, statt in den Bestandsordner kopiert zu werden. Kopieren würde eine zweite Wahrheit auf der Platte erzeugen und die Zusage brechen, dass die Originale ausschließlich gelesen werden.
+
+```typescript
+interface PhotoSource {
+  id: string;      // aus dem Pfad abgeleitet: sha256(resolve(root)).slice(0, 8)
+  label: string;   // Anzeigename, per Vorgabe der Ordnername
+  root: string;    // absoluter Pfad
+  addedAt: string;
+}
+```
+
+Vier Festlegungen tragen den Entwurf:
+
+- **Die Kennung kommt aus dem Pfad.** Damit ist das Hinzufügen derselben Quelle folgenlos statt doppelt, und die Kennung überlebt einen Serverstart ohne eigene Verwaltung.
+- **`Sources.pfad()` ist die einzige Stelle, an der aus einem Foto ein Dateipfad wird.** `DecodeCache` und `PreviewCache` bekommen nur diesen Resolver, nicht die Quellenliste — sie sollen nicht wissen, woher ein Bild kommt.
+- **Nicht erreichbar heißt übersprungen, nicht gelöscht.** Ein nicht eingehängtes Netzlaufwerk sieht aus wie ein leerer Ordner. Ohne diese Prüfung erklärte ein Reimport den halben Bestand für verschwunden und risse das Buch auf; stattdessen bleiben die Fotos stehen und die Quelle wird als `offline` gemeldet.
+- **Ineinander verschachtelte Quellen werden abgelehnt.** Dieselbe Datei in zwei Quellen macht jede Meldung über neue und verschwundene Fotos unlesbar. Dasselbe Foto in zwei getrennten Ordnern dagegen ist erlaubt und fällt über den Inhaltshash zu einem zusammen; es gehört zu der Quelle, die es zuerst gemeldet hat.
+
+Jede Quelle wird rekursiv gescannt, versteckte Einträge ausgenommen: Nachschub kommt typischerweise als ganzer Ordner. Der Pfad wird in der Oberfläche getippt statt ausgewählt — ein Dateidialog im Browser gibt keinen echten Pfad heraus, und der Server läuft ohnehin auf demselben Rechner wie die Bilder.
+
+`FRANIBOOK_SOURCE` ist damit nur noch die Vorgabe für den allerersten Start. Sobald ein Projekt gespeichert ist, bringt es seine Quellen selbst mit.
+
+### Ein Foto aussortieren
+
+Nicht jedes Bild im Bestand gehört ins Buch, und manches gehört überhaupt nicht in den Bestand: Dubletten, Verwackeltes, der versehentliche Auslöser. `DELETE /api/photos/:id` verschiebt die Datei in den Ordner `.franibook-geloescht` **innerhalb ihrer Bildquelle** und nimmt das Foto aus dem Projekt.
+
+Der Punkt vor dem Ordnernamen erledigt zwei Dinge auf einmal: `sammleDateien` überspringt versteckte Einträge ohnehin, das Foto kommt also bei keinem Reimport zurück — ohne dass eine Liste gelöschter Dateien gepflegt werden müsste. Und weil der Ordner in derselben Quelle liegt, ist das Aussortieren ein `rename` auf demselben Datenträger: augenblicklich und atomar, auch über das Netzlaufwerk. Im Finder ist der Ordner mit ⌘⇧. sichtbar, die Datei lässt sich von Hand zurücklegen; der nächste Reimport holt sie dann wieder ins Projekt, und weil die Foto-Kennung der Inhaltshash ist, füllt sie ihren alten Platz im Buch wieder.
+
+Was ein aussortiertes Foto im Projekt hinterlässt, ist eine bewusste Unterscheidung (`Project.vergessen`):
+
+- **Slots behalten ihre Kennung** und werden zu fehlenden Bildern (`photo-missing`). Das Buch beim Aussortieren eines einzigen Fotos umzubauen, wäre die schlechtere Antwort — der Platz soll sichtbar bleiben, damit man ihn füllt.
+- **Alles andere, was auf das Foto zeigt, muss mit**: die Mitgliedschaft in einer Gruppe samt Hauptbild, ein Hintergrundbild einer Doppelseite, ein Titel- oder Rückseitenbild des Umschlags. Eine tote Kennung an diesen Stellen wäre ein stiller Fehler statt einer sichtbaren Lücke.
+- **`PhotoOverride` bleibt.** Er hängt an der Kennung, nicht am Foto, und ist sofort wieder gültig, wenn die Datei zurückkommt.
+
+Erreichbar ist das Aussortieren an den drei Stellen, an denen man Fotos einzeln vor sich hat: im Fotopool, am ausgewählten Slot der Doppelseite (dort neben „Aus dem Buch nehmen", in Rot — die beiden sind leicht zu verwechseln, und nur eines von beiden fasst die Datei an) und in der Fotoliste der Gruppenansicht.
+
+### Aufnahmedaten in der Doppelseite
+
+`i` blendet über jedem Bild der Doppelseite Aufnahmezeitpunkt und Ort ein; ist ein Bild ausgewählt, steht darunter die ganze Auskunft: Dateiname, Zeitpunkt, **Herkunft des Datums** samt Konfidenz, Ort, Koordinaten als Verweis auf OpenStreetMap, Kamera, Pixelmaße und offene Befunde. Die Daten kommen als `PhotoView` von `GET /api/spreads/:index/photos` — dieselbe Sicht wie in der Fotoliste, ein Aufruf je Doppelseite.
+
+Dass die Herkunft danebensteht, ist der eigentliche Zweck: Ein interpoliertes Datum sieht sonst genauso verbindlich aus wie ein aus dem EXIF gelesenes, und gerade die geschätzten sind es, die man beim Durchblättern korrigieren will.
+
 ### Neu einlesen und neu anordnen
 
 Zwei Vorgänge, die leicht verwechselt werden und deshalb getrennt sind:
 
-- **Neu einlesen** (`POST /api/import`) liest den Quellordner erneut und lässt das Buch stehen. Weil die Foto-Kennung der Inhaltshash ist, bleiben unveränderte Dateien dieselben Fotos — auch umbenannt oder verschoben. Neue landen im Fotopool, verschwundene werden gemeldet; steht eines noch in einer Doppelseite, bleibt dort der Platz leer (`photo-missing`), statt die Seite umzubauen. `PhotoOverride` bleibt in jedem Fall erhalten.
+- **Neu einlesen** (`POST /api/import`) liest die Bildquellen erneut und lässt das Buch stehen. Weil die Foto-Kennung der Inhaltshash ist, bleiben unveränderte Dateien dieselben Fotos — auch umbenannt, in einen Unterordner verschoben oder in eine andere Quelle umgezogen. Neue landen im Fotopool, verschwundene werden gemeldet; steht eines noch in einer Doppelseite, bleibt dort der Platz leer (`photo-missing`), statt die Seite umzubauen. `PhotoOverride` bleibt in jedem Fall erhalten.
 - **Neu anordnen** (`POST /api/generate` mit erhöhtem Seed) baut das Buch komplett neu und verwirft jede Handarbeit an den Doppelseiten: manuelle Ausschnitte, verschobene Fotos, Hintergründe, Zeitstrahlausnahmen. `project.handwork()` zählt sie, damit die Oberfläche vorher sagen kann, was verloren geht. Erhalten bleiben Fotos, Korrekturen, Gruppen, Jahresereignisse und die Einstellungen.
 
 ### Typografie

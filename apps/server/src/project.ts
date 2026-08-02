@@ -5,7 +5,7 @@
  * Platte. Die Originaldateien werden ausschließlich gelesen.
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   type Chapter,
   type CoverDesign,
@@ -60,10 +60,38 @@ import {
   updateGroup,
 } from '@franibook/core';
 import type { DecodeCache } from './decode.js';
-import { importFolder } from './import.js';
+import { importSource } from './import.js';
 import type { PreviewCache } from './previews.js';
+import { type PhotoSource, quellenId, Sources } from './sources.js';
 
-const SCHEMA_VERSION = 1;
+/**
+ * 2: Bildquellen sind eine Liste, Fotos tragen eine `sourceId`.
+ *
+ * Der Sprung von 1 wird migriert statt verworfen – ein Projekt enthält
+ * Datumskorrekturen, bestätigte Gruppen und ein von Hand nachgearbeitetes
+ * Buch, und nichts davon stellt ein Neuimport wieder her.
+ */
+const SCHEMA_VERSION = 2;
+
+/** Fotos zeitlich, Undatiertes ans Ende – dieselbe Ordnung wie im Import. */
+function nachAufnahme(a: Photo, b: Photo): number {
+  if (a.takenAt && b.takenAt) return a.takenAt.localeCompare(b.takenAt);
+  if (a.takenAt) return -1;
+  if (b.takenAt) return 1;
+  return a.relPath.localeCompare(b.relPath);
+}
+
+/** Quellen, die beim Einlesen nicht erreichbar waren. */
+export interface QuellenBericht {
+  offline: (PhotoSource & { photoCount: number })[];
+}
+
+export interface ImportDiff extends QuellenBericht {
+  neu: PhotoId[];
+  verschwunden: PhotoId[];
+  unveraendert: number;
+  imBuchVerschwunden: PhotoId[];
+}
 
 export interface ProjectSettings {
   targetPages: number;
@@ -92,7 +120,10 @@ export interface ProjectSettings {
 
 interface PersistedProject {
   schemaVersion: number;
-  sourceRoot: string;
+  /** Ab Schema 2. Vorher: das eine `sourceRoot`. */
+  sources?: PhotoSource[];
+  /** Nur noch für die Migration von Schema 1 gelesen. */
+  sourceRoot?: string;
   settings: ProjectSettings;
   photos: Photo[];
   overrides: Record<PhotoId, PhotoOverride>;
@@ -102,6 +133,38 @@ interface PersistedProject {
   /** Erst ab Umschlagunterstützung vorhanden; ältere Projekte haben es nicht. */
   cover?: CoverDesign;
   importedAt: string;
+}
+
+/**
+ * Hebt ein gespeichertes Projekt auf das aktuelle Schema.
+ *
+ * @returns `null`, wenn das Format unbekannt ist – dann importiert der Server
+ * lieber neu, als eine fremde Struktur falsch zu deuten.
+ */
+export function migriere(data: PersistedProject): PersistedProject | null {
+  if (data.schemaVersion === SCHEMA_VERSION) return data;
+
+  // 1 → 2: Aus dem einen Quellordner wird eine Liste mit einem Eintrag, und
+  // jedes Foto bekommt dessen Kennung. Ohne diese Zuordnung wäre nach dem
+  // ersten zusätzlichen Ordner nicht mehr entscheidbar, in welchem Ordner eine
+  // Datei zu suchen ist.
+  if (data.schemaVersion === 1 && data.sourceRoot) {
+    const root = data.sourceRoot;
+    const source: PhotoSource = {
+      id: quellenId(root),
+      label: basename(root) || root,
+      root,
+      addedAt: data.importedAt,
+    };
+    return {
+      ...data,
+      schemaVersion: SCHEMA_VERSION,
+      sources: [source],
+      photos: data.photos.map((p) => ({ ...p, sourceId: p.sourceId ?? source.id })),
+    };
+  }
+
+  return null;
 }
 
 export interface PhotoView extends Photo {
@@ -167,30 +230,186 @@ export class Project {
   importedAt = new Date().toISOString();
 
   constructor(
-    readonly sourceRoot: string,
+    readonly sources: Sources,
     readonly previews: PreviewCache,
     readonly decodes: DecodeCache,
     private readonly projectPath: string,
   ) {}
 
-  // ---------------------------------------------------------------- Import
+  // ---------------------------------------------------------------- Quellen
 
-  async importPhotos(limit?: number): Promise<void> {
-    const result = await importFolder(this.sourceRoot, this.decodes, limit);
-    this.photos.clear();
-    for (const p of result.photos) this.photos.set(p.id, p);
-    this.skippedVideos = result.skippedVideos;
-    this.failed = result.failed;
-    this.importedAt = new Date().toISOString();
+  /** Zu welcher Quelle ein Foto gehört – ohne Angabe zur ersten. */
+  private quelleVon(photo: Photo): string | undefined {
+    return photo.sourceId ?? this.sources.primary()?.id;
+  }
+
+  photosOfSource(sourceId: string): Photo[] {
+    return [...this.photos.values()].filter((p) => this.quelleVon(p) === sourceId);
   }
 
   /**
-   * Liest den Quellordner erneut ein, ohne das Buch anzutasten.
+   * Nimmt eine Bildquelle auf und liest sie ein.
+   *
+   * Bewusst ohne Neugenerieren, wie beim Reimport: Die neuen Fotos stehen
+   * danach im Fotopool und lassen sich von dort einsetzen. Wer das Buch neu
+   * bauen will, sagt das eigens.
+   */
+  async addSource(root: string, label?: string): Promise<{ source: PhotoSource } & ImportDiff> {
+    const { source } = await this.sources.add(root, label);
+    // Auch eine schon bekannte Quelle wird eingelesen: Der Aufruf heißt für
+    // den Benutzer „lies das hier ein", nicht „lege einen Eintrag an".
+    const diff = await this.reimport(undefined, [source.id]);
+    return { source, ...diff };
+  }
+
+  /**
+   * Entfernt eine Quelle samt ihrer Fotos.
+   *
+   * Die Doppelseiten bleiben stehen; belegte Plätze werden zu fehlenden
+   * Bildern (`photo-missing` im RSM), genau wie bei einer gelöschten Datei.
+   * Wie viele das sind, steht in der Rückgabe – die Oberfläche fragt damit
+   * vorher nach.
+   */
+  removeSource(sourceId: string): { source: PhotoSource; entfernt: number; imBuch: number } | null {
+    const betroffen = this.photosOfSource(sourceId);
+    const source = this.sources.remove(sourceId);
+    if (!source) return null;
+
+    const { imBuch } = this.vergessen(betroffen.map((p) => p.id));
+    return { source, entfernt: betroffen.length, imBuch };
+  }
+
+  // ----------------------------------------------------------------- Fotos
+
+  /**
+   * Nimmt Fotos aus dem Projekt, ohne die Doppelseiten umzubauen.
+   *
+   * Die Slots behalten ihre Kennung und werden zu fehlenden Bildern
+   * (`photo-missing` im RSM) – die Alternative wäre, das Buch beim Aussortieren
+   * eines einzigen Fotos umzuwerfen. Alles andere, was auf ein Foto zeigt, muss
+   * dagegen mit: eine Gruppe mit toter Kennung, ein Hintergrundbild oder ein
+   * Titelbild, das es nicht mehr gibt, wären stille Fehler.
+   *
+   * `PhotoOverride` bleibt bewusst erhalten. Er hängt an der Kennung, nicht am
+   * Foto, und ist sofort wieder gültig, wenn die Datei aus dem Papierkorb
+   * zurückkommt.
+   */
+  vergessen(ids: readonly PhotoId[]): { entfernt: number; imBuch: number; spreads: number[] } {
+    const menge = new Set(ids);
+    let entfernt = 0;
+    for (const id of menge) {
+      if (this.photos.delete(id)) entfernt++;
+    }
+
+    const spreads: number[] = [];
+    let imBuch = 0;
+    this.spreads.forEach((spread, i) => {
+      const slots = spread.slots.filter((sl) => sl.photoId && menge.has(sl.photoId)).length;
+      imBuch += slots;
+      let betroffen = slots > 0;
+      if (spread.backgroundPhotoId && menge.has(spread.backgroundPhotoId)) {
+        delete spread.backgroundPhotoId;
+        betroffen = true;
+      }
+      if (betroffen) spreads.push(i);
+    });
+
+    this.groups = ungroupPhotos(this.groups, [...menge]);
+    if (this.cover.frontPhotoId && menge.has(this.cover.frontPhotoId)) {
+      delete this.cover.frontPhotoId;
+      delete this.cover.frontCrop;
+    }
+    if (this.cover.backPhotoId && menge.has(this.cover.backPhotoId)) {
+      delete this.cover.backPhotoId;
+      delete this.cover.backCrop;
+    }
+
+    this.rebuildStructure();
+    return { entfernt, imBuch, spreads };
+  }
+
+  /**
+   * Legt die Datei eines Fotos in den Papierkorb seiner Quelle und vergisst es.
+   *
+   * Der Rückweg bleibt offen: Die Datei liegt unter `.franibook-geloescht` in
+   * derselben Quelle und lässt sich im Finder zurücklegen. Ein späterer Reimport
+   * holt sie erst wieder ins Projekt, wenn sie dort auch wirklich liegt –
+   * versteckte Ordner liest der Scan nicht.
+   */
+  async deletePhoto(id: PhotoId): Promise<{
+    fileName: string;
+    papierkorb: string;
+    imBuch: number;
+    spreads: number[];
+  } | null> {
+    const photo = this.photos.get(id);
+    if (!photo) return null;
+
+    const papierkorb = await this.sources.inDenPapierkorb(photo);
+    const { imBuch, spreads } = this.vergessen([id]);
+    return { fileName: photo.fileName, papierkorb, imBuch, spreads };
+  }
+
+  // ---------------------------------------------------------------- Import
+
+  /**
+   * Liest die angegebenen Quellen ein (ohne Angabe: alle).
+   *
+   * Fotos aus Quellen, die gerade nicht lesbar sind, bleiben unangetastet und
+   * werden als `offline` gemeldet. Das ist der wichtigste Unterschied zum
+   * flachen Ordnerscan von früher: Der Grundbestand liegt auf einem
+   * Netzlaufwerk, und ein nicht eingehängtes Laufwerk sieht aus wie ein leerer
+   * Ordner – ohne diese Prüfung gälte jedes Foto darin als gelöscht.
+   */
+  async importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
+    const gesammelt: Photo[] = [];
+    const offline: QuellenBericht['offline'] = [];
+    const skippedVideos: string[] = [];
+    const failed: { file: string; reason: string }[] = [];
+    let rest = limit;
+
+    for (const quelle of this.sources.list()) {
+      // Nicht angefragt oder nicht lesbar: Der bisherige Bestand dieser Quelle
+      // bleibt, wie er ist.
+      if (nurQuellen && !nurQuellen.includes(quelle.id)) {
+        gesammelt.push(...this.photosOfSource(quelle.id));
+        continue;
+      }
+      if (!(await this.sources.erreichbar(quelle.id))) {
+        const bestand = this.photosOfSource(quelle.id);
+        gesammelt.push(...bestand);
+        offline.push({ ...quelle, photoCount: bestand.length });
+        continue;
+      }
+
+      const result = await importSource(quelle, this.decodes, rest);
+      gesammelt.push(...result.photos);
+      skippedVideos.push(...result.skippedVideos.map((f) => `${quelle.label}/${f}`));
+      failed.push(...result.failed.map((f) => ({ ...f, file: `${quelle.label}/${f.file}` })));
+      if (rest !== undefined) rest = Math.max(0, rest - result.photos.length);
+    }
+
+    // Über Quellen hinweg entscheidet wieder der Inhaltshash: Dasselbe Foto in
+    // zwei Ordnern ist ein Foto, und es gehört zu der Quelle, die es zuerst
+    // gemeldet hat. Sonst stünde dasselbe Bild zweimal im Pool.
+    this.photos.clear();
+    for (const photo of gesammelt.sort(nachAufnahme)) {
+      if (!this.photos.has(photo.id)) this.photos.set(photo.id, photo);
+    }
+
+    this.skippedVideos = skippedVideos;
+    this.failed = failed;
+    this.importedAt = new Date().toISOString();
+    return { offline };
+  }
+
+  /**
+   * Liest die Bildquellen erneut ein, ohne das Buch anzutasten.
    *
    * Die Foto-Kennung ist der Inhaltshash, deshalb bleiben unveränderte Dateien
-   * dieselben Fotos – auch wenn sie umbenannt oder verschoben wurden. Neue
-   * kommen hinzu, verschwundene fehlen; die Doppelseiten bleiben stehen, wie sie
-   * sind.
+   * dieselben Fotos – auch wenn sie umbenannt, in einen Unterordner verschoben
+   * oder in eine andere Quelle umgezogen wurden. Neue kommen hinzu,
+   * verschwundene fehlen; die Doppelseiten bleiben stehen, wie sie sind.
    *
    * Bewusst ohne Neugenerieren: Ein Reimport ist meistens „ich habe zwanzig
    * Bilder nachgelegt", nicht „baue das Buch neu". Die neuen Fotos stehen danach
@@ -200,14 +419,9 @@ export class Project {
    * Korrekturen (`PhotoOverride`) bleiben in jedem Fall erhalten: Sie hängen an
    * der Kennung, nicht am Importergebnis.
    */
-  async reimport(limit?: number): Promise<{
-    neu: PhotoId[];
-    verschwunden: PhotoId[];
-    unveraendert: number;
-    imBuchVerschwunden: PhotoId[];
-  }> {
+  async reimport(limit?: number, nurQuellen?: readonly string[]): Promise<ImportDiff> {
     const vorher = new Set(this.photos.keys());
-    await this.importPhotos(limit);
+    const { offline } = await this.importPhotos(limit, nurQuellen);
     const nachher = new Set(this.photos.keys());
 
     const neu = [...nachher].filter((id) => !vorher.has(id));
@@ -224,7 +438,21 @@ export class Project {
       verschwunden,
       unveraendert: [...nachher].filter((id) => vorher.has(id)).length,
       imBuchVerschwunden,
+      offline,
     };
+  }
+
+  /**
+   * Wärmt die Vorschauen der genannten Fotos auf.
+   *
+   * Nach einem Reimport nötig, nicht bloß nett: Ohne sie erzeugt der Fotopool
+   * jede Vorschau einzeln beim Scrollen, und bei ein paar hundert Nachzüglern
+   * ruckelt genau die Ansicht, in der man sie einsetzen will.
+   */
+  warmPreviews(ids: readonly PhotoId[]): void {
+    const photos = ids.map((id) => this.photos.get(id)).filter((p): p is Photo => p !== undefined);
+    if (photos.length === 0) return;
+    void this.previews.warm(photos, 'preview', 6);
   }
 
   /**
@@ -913,6 +1141,31 @@ export class Project {
     return views.sort((a, b) => (a.effectiveDate ?? '￿').localeCompare(b.effectiveDate ?? '￿'));
   }
 
+  /**
+   * Dieselbe Sicht für einzelne Fotos, in der Reihenfolge der Anfrage.
+   *
+   * Unbekannte Kennungen fallen weg statt zu scheitern: Ein Slot kann auf ein
+   * aussortiertes Foto zeigen, und das ist ein gewöhnlicher Zustand, kein
+   * Fehler.
+   */
+  photoViewsOf(ids: readonly PhotoId[]): PhotoView[] {
+    const ctx = this.dateContext();
+    const views: PhotoView[] = [];
+    for (const id of ids) {
+      const photo = this.photos.get(id);
+      if (!photo) continue;
+      const e = resolveEffectiveDate(photo, this.overrides[id], ctx);
+      views.push({
+        ...photo,
+        effectiveDate: e.value,
+        dateSource: e.source,
+        dateConfidence: e.confidence,
+        issues: e.issues,
+      });
+    }
+    return views;
+  }
+
   chapters(): { year: number; photoCount: number; firstSpreadIndex: number }[] {
     const result: { year: number; photoCount: number; firstSpreadIndex: number }[] = [];
     // Der erste Spread eines Jahres ist der Kapitelauftakt bzw. der erste,
@@ -981,7 +1234,7 @@ export class Project {
   async save(): Promise<void> {
     const data: PersistedProject = {
       schemaVersion: SCHEMA_VERSION,
-      sourceRoot: this.sourceRoot,
+      sources: [...this.sources.list()],
       settings: this.settings,
       photos: [...this.photos.values()],
       overrides: this.overrides,
@@ -1003,13 +1256,15 @@ export class Project {
   async load(): Promise<boolean> {
     try {
       const raw = await readFile(join(this.projectPath, 'project.json'), 'utf8');
-      const data = JSON.parse(raw) as PersistedProject;
+      const data = migriere(JSON.parse(raw) as PersistedProject);
 
-      if (data.schemaVersion !== SCHEMA_VERSION) {
-        // Migrationen kommen in Phase 7; bis dahin lieber neu importieren als
-        // ein unbekanntes Format falsch zu deuten.
+      if (data === null) {
+        // Ein neueres oder unbekanntes Format lieber gar nicht deuten als
+        // falsch – der Server importiert dann neu.
         return false;
       }
+
+      if (data.sources?.length) this.sources.restore(data.sources);
 
       this.photos.clear();
       for (const p of data.photos) this.photos.set(p.id, p);
