@@ -197,9 +197,16 @@ export function groupOpenerTemplates(): Template[] {
   return ALL.filter((t) => t.tags?.includes('gruppenauftakt'));
 }
 
-/** Kapitelauftakte. */
+/**
+ * Kapitelauftakte, die zur Wahl stehen.
+ *
+ * Als `veraltet` markierte bleiben in der Bibliothek, damit gespeicherte
+ * Projekte weiter auflösbar sind – gewählt werden sie nicht mehr. Betroffen
+ * sind die beiden Auftakte mit einem großen Bild, seit die Jahresseite links
+ * das Jahr und rechts mehrere Bilder zeigt.
+ */
 export function chapterTemplates(): Template[] {
-  return ALL.filter((t) => templateMeta(t.id).chapterOnly);
+  return ALL.filter((t) => templateMeta(t.id).chapterOnly && !t.tags?.includes('veraltet'));
 }
 
 /** Welche Gruppengrößen die Bibliothek überhaupt abdeckt. */

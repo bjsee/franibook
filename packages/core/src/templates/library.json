@@ -702,9 +702,151 @@
       ]
     },
     {
-      "id": "spread.chapter.year",
-      "name": "Jahresauftakt mit Bild",
+      "id": "spread.chapter.2up",
+      "name": "Jahresauftakt, links das Jahr, rechts zwei Bilder",
       "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 324,
+          "y": 66,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        { "id": "b", "x": 449, "y": 66, "w": 121, "h": 161, "prominence": 3, "prefers": "portrait" }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.3up",
+      "name": "Jahresauftakt, links das Jahr, rechts drei Bilder",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        { "id": "a", "x": 316, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" },
+        { "id": "b", "x": 405, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" },
+        { "id": "c", "x": 494, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.4up",
+      "name": "Jahresauftakt, links das Jahr, rechts vier Bilder",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 316,
+          "y": 44,
+          "w": 129,
+          "h": 97,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 449,
+          "y": 44,
+          "w": 129,
+          "h": 97,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 316,
+          "y": 145,
+          "w": 129,
+          "h": 97,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 449,
+          "y": 145,
+          "w": 129,
+          "h": 97,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.year",
+      "name": "Jahresauftakt mit einem großen Bild (veraltet)",
+      "tags": ["kapitel", "auftakt", "veraltet"],
       "chapterOnly": true,
       "slots": [
         {
@@ -743,7 +885,7 @@
     },
     {
       "id": "spread.chapter.year-portrait",
-      "name": "Jahresauftakt mit Hochformat",
+      "name": "Jahresauftakt mit einem großen Hochformat (veraltet)",
       "$comment": [
         "Zweite Fassung des Jahresauftakts, weil die erste nur Querformate",
         "aufnehmen konnte: Alle 19 Auftakte des echten Buchs zeigten ein 4:3-Bild,",
@@ -751,7 +893,7 @@
         "stehen an derselben Stelle wie dort – der Leser soll die Zahl im ganzen",
         "Buch am gleichen Ort finden, nur das Bild wechselt die Form."
       ],
-      "tags": ["kapitel", "auftakt"],
+      "tags": ["kapitel", "auftakt", "veraltet"],
       "chapterOnly": true,
       "slots": [
         {
