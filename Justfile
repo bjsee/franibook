@@ -72,6 +72,16 @@ quelle:
         && echo "erreichbar, $(ls -1 "{{ quelle }}" | wc -l | tr -d ' ') Einträge" \
         || echo "NICHT erreichbar — hängt das NAS?"
 
+# Auf Ausweichports starten, wenn 5173/5174 belegt sind.
+#
+# Hier laufen gelegentlich mehrere Arbeitskopien gleichzeitig; dann ist ein
+# zweiter Satz Ports bequemer, als den anderen Prozess zu beenden. Die Vorschau
+# liegt auf `web`, die API auf `web + 1`.
+[doc("Auf Ausweichports starten: just start-auf 5183")]
+start-auf web="5183":
+    FRANIBOOK_WEB_PORT={{ web }} FRANIBOOK_API_PORT=$(({{ web }} + 1)) \
+    PORT=$(({{ web }} + 1)) FRANIBOOK_SOURCE={{ quelle }} pnpm dev
+
 # Wer belegt die Ports?
 ports:
     @lsof -nP -iTCP:5173 -iTCP:5174 -sTCP:LISTEN || echo "beide Ports frei"
