@@ -21,6 +21,15 @@ describe('Saal-Profil 30×30', () => {
     expect(profile.resolution.minDpi).toBe(240);
   });
 
+  it('kodiert mit den auf Uploadgröße gemessenen Werten', () => {
+    // Issue #3: 404 MB für 153 Doppelseiten waren zu viel. 88 / 4:2:0 samt
+    // Trellis-Quantisierung im Encoder drückt dasselbe Buch von 288 auf 160 MB,
+    // ohne die Zielauflösung anzutasten – die bleibt bei 300 dpi, über minDpi.
+    expect(profile.encoding.jpegQuality).toBe(88);
+    expect(profile.encoding.chromaSubsampling).toBe('4:2:0');
+    expect(profile.resolution.targetDpi).toBe(300);
+  });
+
   it('ist als unverifiziert markiert, solange die Maße nicht aus der Vorlage stammen', () => {
     // Schlägt bewusst fehl, sobald jemand verifiedAt setzt, ohne den Test
     // anzupassen – dann muss auch geprüft worden sein.
