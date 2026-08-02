@@ -267,14 +267,14 @@ describe('rebuildSpreads', () => {
     expect(crop.w).toBeGreaterThan(0);
   });
 
-  it('deckt jede Bilderzahl von eins bis zwölf ab', () => {
+  it('deckt jede Bilderzahl von eins bis vierundzwanzig ab', () => {
     // Beim Umhängen entstehen laufend ungerade Zahlen. Eine Lücke in der
     // Bibliothek würde die Bearbeitung an dieser Stelle blockieren.
     const viele = new Map(PHOTOS);
-    for (let i = 6; i <= 20; i++) viele.set(`x${i}`, photo(`x${i}`, `X_${i}.jpeg`));
+    for (let i = 6; i <= 40; i++) viele.set(`x${i}`, photo(`x${i}`, `X_${i}.jpeg`));
     const ids = [...viele.keys()];
 
-    for (let n = 1; n <= 12; n++) {
+    for (let n = 1; n <= 24; n++) {
       const result = rebuildSpreads({
         spreads: [{ photoIds: ids.slice(0, n) }],
         photos: viele,
@@ -287,14 +287,14 @@ describe('rebuildSpreads', () => {
 
   it('meldet eine Bilderzahl jenseits der Bibliothek', () => {
     const viele = new Map(PHOTOS);
-    for (let i = 6; i <= 20; i++) viele.set(`x${i}`, photo(`x${i}`, `X_${i}.jpeg`));
+    for (let i = 6; i <= 40; i++) viele.set(`x${i}`, photo(`x${i}`, `X_${i}.jpeg`));
     const result = rebuildSpreads({
-      spreads: [{ photoIds: [...viele.keys()].slice(0, 13) }],
+      spreads: [{ photoIds: [...viele.keys()].slice(0, 30) }],
       photos: viele,
       profile,
     });
     expect(result.spreads).toHaveLength(0);
-    expect(result.problems[0]!.photoCount).toBe(13);
+    expect(result.problems[0]!.photoCount).toBe(30);
     expect(result.problems[0]!.message).toContain('keine Vorlage');
   });
 

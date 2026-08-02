@@ -479,6 +479,88 @@ describe('generateBook', () => {
     expect(result.report.groupOpeners).toBe(1);
   });
 
+  it('verliert unter keinen Umständen ein Foto', () => {
+    // Die Auftaktlogik nimmt Bilder aus dem Fluss. Kommt der Auftakt dann
+    // nicht zustande, fehlten sie im Buch — genau das ist am echten Bestand
+    // mit acht Fotos passiert.
+    const { photos, dated } = buildBestand(ECHT);
+    const structure = buildStructure(dated);
+    const alleIds = new Set(dated.map((d) => d.id));
+
+    for (const opener of [
+      { chapterOpeners: false, groupOpeners: false },
+      { chapterOpeners: true, groupOpeners: false },
+      { chapterOpeners: true, groupOpeners: true },
+    ]) {
+      const result = generateBook({
+        structure,
+        photos,
+        profile,
+        targetPages: 160,
+        ...opener,
+        groups: [
+          { id: 'g1', title: 'Reise', photoIds: dated.slice(0, 30).map((d) => d.id), active: true },
+          {
+            id: 'g2',
+            title: 'Klein',
+            photoIds: dated.slice(40, 43).map((d) => d.id),
+            active: true,
+          },
+        ],
+      });
+
+      const platziert = new Set(
+        result.spreads.flatMap((s) =>
+          s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+        ),
+      );
+      const fehlend = [...alleIds].filter((id) => !platziert.has(id));
+      expect(fehlend, `${JSON.stringify(opener)}: ${fehlend.length} Fotos fehlen`).toEqual([]);
+      expect(result.report.unplaced).toEqual([]);
+    }
+  });
+
+  it('verliert unter keinen Umständen ein Foto', () => {
+    // Die Auftaktlogik nimmt Bilder aus dem Fluss. Kommt der Auftakt dann
+    // nicht zustande, fehlten sie im Buch — genau das ist am echten Bestand
+    // mit acht Fotos passiert.
+    const { photos, dated } = buildBestand(ECHT);
+    const structure = buildStructure(dated);
+    const alleIds = new Set(dated.map((d) => d.id));
+
+    for (const opener of [
+      { chapterOpeners: false, groupOpeners: false },
+      { chapterOpeners: true, groupOpeners: false },
+      { chapterOpeners: true, groupOpeners: true },
+    ]) {
+      const result = generateBook({
+        structure,
+        photos,
+        profile,
+        targetPages: 160,
+        ...opener,
+        groups: [
+          { id: 'g1', title: 'Reise', photoIds: dated.slice(0, 30).map((d) => d.id), active: true },
+          {
+            id: 'g2',
+            title: 'Klein',
+            photoIds: dated.slice(40, 43).map((d) => d.id),
+            active: true,
+          },
+        ],
+      });
+
+      const platziert = new Set(
+        result.spreads.flatMap((s) =>
+          s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+        ),
+      );
+      const fehlend = [...alleIds].filter((id) => !platziert.has(id));
+      expect(fehlend, `${JSON.stringify(opener)}: ${fehlend.length} Fotos fehlen`).toEqual([]);
+      expect(result.report.unplaced).toEqual([]);
+    }
+  });
+
   it('kommt mit einem leeren Bestand zurecht', () => {
     const result = generateBook({
       structure: buildStructure([]),

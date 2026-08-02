@@ -110,6 +110,16 @@ export interface GroupingOptions {
    */
   groupOf?: ReadonlyMap<string, string>;
   /**
+   * Wie viele Fotos jede Gruppe umfasst.
+   *
+   * Entscheidet, wie hart die Gruppengrenze wirkt. Eine Gruppe mit drei Fotos
+   * darf sich eine Doppelseite mit dem Nachbarn teilen; eine mit dreißig
+   * bekommt eigene. Ohne diese Abstufung beanspruchten am echten Bestand 42
+   * Kleingruppen 42 Doppelseiten für 135 Fotos – die halbe Buchlänge für ein
+   * Sechstel der Bilder.
+   */
+  groupSizes?: ReadonlyMap<string, number>;
+  /**
    * Fotos, die nicht in den Fluss gehören – etwa weil sie eine Gruppe
    * eröffnen und dort bereits groß erscheinen.
    */
@@ -174,7 +184,8 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGro
       if (!Number.isFinite(prev)) continue;
 
       const cost =
-        prev + groupCost(photoIds, i - k, k, idealSize, serieOf, segmentOf, opts.groupOf);
+        prev +
+        groupCost(photoIds, i - k, k, idealSize, serieOf, segmentOf, opts.groupOf, opts.groupSizes);
       if (cost < bestCost[i]!) {
         bestCost[i] = cost;
         backtrack[i] = k;
@@ -222,6 +233,7 @@ function groupCost(
   serieOf: ReadonlyMap<string, string>,
   segmentOf: ReadonlyMap<string, string>,
   groupOf?: ReadonlyMap<string, string>,
+  groupSizes?: ReadonlyMap<string, number>,
 ): number {
   const ids = photoIds.slice(start, start + size);
 
@@ -259,7 +271,17 @@ function groupCost(
   let groupMix = 0;
   if (groupOf) {
     const zugehoerigkeiten = new Set(ids.map((id) => groupOf.get(id) ?? ''));
-    groupMix = Math.max(0, zugehoerigkeiten.size - 1) * 2.5;
+    if (zugehoerigkeiten.size > 1) {
+      // Wie schwer eine Vermischung wiegt, hängt an der kleinsten beteiligten
+      // Gruppe: Eine Handvoll Fotos rechtfertigt keine eigene Doppelseite,
+      // wenn im Buch 13 Bilder je Doppelseite unterzubringen sind.
+      const groessen = [...zugehoerigkeiten]
+        .filter((g) => g !== '')
+        .map((g) => groupSizes?.get(g) ?? idealSize);
+      const kleinste = groessen.length > 0 ? Math.min(...groessen) : idealSize;
+      const gewicht = Math.min(1, kleinste / Math.max(1, idealSize));
+      groupMix = (zugehoerigkeiten.size - 1) * 2.5 * gewicht;
+    }
   }
 
   return sizeDeviation + serieBreaks * 0.4 + monthMix + mixPenalty + groupMix;
