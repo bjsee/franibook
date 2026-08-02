@@ -83,7 +83,15 @@ export type RenderWarning =
   | { code: 'below-min-dpi'; dpi: number; minDpi: number }
   | { code: 'crosses-gutter' }
   | { code: 'outside-safety' }
-  | { code: 'photo-missing'; photoId: PhotoId };
+  | { code: 'photo-missing'; photoId: PhotoId }
+  /**
+   * Hintergrundbild mit zu geringer Auflösung.
+   *
+   * Eigener Code und eigene Schwelle: Ein Hintergrund darf weicher sein als ein
+   * Motiv (siehe `render/background.ts`), aber irgendwann ist auch er sichtbar
+   * unscharf.
+   */
+  | { code: 'background-low-dpi'; dpi: number; recommendedDpi: number };
 
 /** Hilfslinien. Ausschließlich für die Vorschau – nie Teil des PDFs. */
 export interface Guide {

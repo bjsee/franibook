@@ -13,6 +13,8 @@ import { mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
 import {
+  BACKGROUND_COLORS,
+  BACKGROUND_MIN_DPI,
   type CoverDesign,
   type MoveSource,
   type MoveTarget,
@@ -236,8 +238,9 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
  * jede handgemachte Korrektur im Buch verwerfen, nur um eine Linie ein- oder
  * auszublenden.
  */
-app.patch<{ Body: { timeline?: boolean } }>('/api/settings', async (req) => {
+app.patch<{ Body: { timeline?: boolean; background?: string } }>('/api/settings', async (req) => {
   if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
+  if (req.body.background !== undefined) project.settings.background = req.body.background;
   await project.save();
   return { settings: project.settings };
 });
@@ -263,6 +266,29 @@ app.put<{ Params: { year: string }; Body: { events: string[] } }>(
 );
 
 app.get('/api/chapters/events', async () => ({ yearEvents: project.yearEvents }));
+
+/** Wählbare Hintergrundfarben und die Fotos, die als Hintergrund taugen. */
+app.get('/api/background', async () => ({
+  colors: BACKGROUND_COLORS,
+  minDpi: BACKGROUND_MIN_DPI,
+  candidates: project.backgroundCandidates(),
+}));
+
+/**
+ * Hintergrund einer Doppelseite: Farbe oder Bild.
+ *
+ * Kein Neugenerieren – der Hintergrund ändert nichts an der Fotoverteilung.
+ * `null` setzt auf die Vorgabe zurück.
+ */
+app.patch<{
+  Params: { index: string };
+  Body: { color?: string | null; photoId?: string | null };
+}>('/api/spreads/:index/background', async (req, reply) => {
+  const ergebnis = project.setSpreadBackground(Number(req.params.index), req.body);
+  if (!ergebnis.ok) return reply.code(404).send({ error: 'Doppelseite oder Foto nicht gefunden' });
+  await project.save();
+  return { ok: true, ...(ergebnis.hinweis ? { hinweis: ergebnis.hinweis } : {}) };
+});
 
 /** Zeitstrahl einer einzelnen Doppelseite, abweichend von der Vorgabe. */
 app.patch<{ Params: { index: string }; Body: { timeline: boolean | null } }>(

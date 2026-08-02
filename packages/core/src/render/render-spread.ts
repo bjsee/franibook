@@ -16,6 +16,12 @@ import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { spreadHeightMm, spreadWidthMm } from '../print/profile.js';
 import { templateMeta } from '../templates/index.js';
+import {
+  BACKGROUND_MIN_DPI,
+  DEFAULT_BACKGROUND,
+  backgroundFit,
+  textColorOn,
+} from './background.js';
 import type {
   Guide,
   ImageBox,
@@ -162,6 +168,35 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   const { profile, template } = ctx;
   const boxes: RenderBox[] = [];
 
+  const background = spread.background ?? ctx.background ?? DEFAULT_BACKGROUND;
+
+  // Ein Hintergrundbild ist eine gewöhnliche Bildbox über die ganze
+  // Beschnittfläche – kein neuer Kasten und kein Sonderweg in den Renderern.
+  // Es kommt zuerst, damit alles andere darüber liegt.
+  const backgroundPhoto = spread.backgroundPhotoId
+    ? ctx.photos.get(spread.backgroundPhotoId)
+    : undefined;
+  if (backgroundPhoto) {
+    const flaeche = {
+      xMm: 0,
+      yMm: 0,
+      wMm: spreadWidthMm(profile),
+      hMm: spreadHeightMm(profile),
+    };
+    const fit = backgroundFit(backgroundPhoto, profile);
+    boxes.push({
+      kind: 'image',
+      ...flaeche,
+      slotId: 'background',
+      photoId: backgroundPhoto.id,
+      crop: coverCrop(aspectRatio(backgroundPhoto), flaeche.wMm / flaeche.hMm),
+      effectiveDpi: fit.dpi,
+      warnings: fit.taugt
+        ? []
+        : [{ code: 'background-low-dpi', dpi: fit.dpi, recommendedDpi: BACKGROUND_MIN_DPI }],
+    });
+  }
+
   const bySlotId = new Map(spread.slots.map((s) => [s.slotId, s]));
 
   for (const slot of template.slots) {
@@ -225,7 +260,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
         fontSizePt,
         weight: style.weight,
         align: textSlot.align ?? 'left',
-        color: style.color,
+        color: textColorOn(background, style.color),
       });
     });
   }
@@ -233,7 +268,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   // Der Zeitstrahl kommt zuletzt: Er liegt im Fußraum, den kein Slot belegt,
   // und soll auch in der Zeichenreihenfolge nichts überdecken.
   if (ctx.timeline && spread.timeline !== false) {
-    boxes.push(...buildTimeline(spread, ctx, ctx.timeline));
+    boxes.push(...buildTimeline(spread, ctx, ctx.timeline, background));
   }
 
   return {
@@ -242,7 +277,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     heightMm: spreadHeightMm(profile),
     bleedMm: profile.page.bleedMm,
     gutterXMm: profile.page.bleedMm + profile.page.trimWidthMm,
-    background: ctx.background ?? '#ffffff',
+    background,
     boxes,
     guides: buildGuides(profile),
   };
@@ -254,7 +289,12 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
  * Die Auswahl der Daten steckt hier und nicht im Zeitstrahl selbst: Sie ist
  * eine Aussage über den Bestand, keine Geometrie.
  */
-function buildTimeline(spread: Spread, ctx: RenderContext, tl: TimelineContext): RenderBox[] {
+function buildTimeline(
+  spread: Spread,
+  ctx: RenderContext,
+  tl: TimelineContext,
+  background: string,
+): RenderBox[] {
   const { profile, template } = ctx;
 
   // Reicht ein Slot in den Fußraum, entfällt der Strahl. Die Regel ist aus der
@@ -308,6 +348,7 @@ function buildTimeline(spread: Spread, ctx: RenderContext, tl: TimelineContext):
   return timelineBoxes(
     {
       dates,
+      background,
       markerless: templateMeta(template.id).chapterOnly,
       ...(label && !hatUeberschrift ? { label } : {}),
       ...(tl.fallbackYear !== undefined ? { fallbackYear: tl.fallbackYear } : {}),
