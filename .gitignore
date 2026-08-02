@@ -16,3 +16,14 @@ spikes/out/
 
 .DS_Store
 *.log
+
+# Laufzeit-Artefakte des Prototyps
+.franibook-cache/
+.franibook-out/
+tests/parity/.cache/
+tests/parity/.out/
+tests/parity/.artifacts/
+test-results/
+playwright-report/
+apps/server/.franibook-cache/
+apps/server/.franibook-out/

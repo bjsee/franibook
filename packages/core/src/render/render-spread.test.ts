@@ -1,0 +1,211 @@
+import { describe, expect, it } from 'vitest';
+import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import type { PrintProfile } from '../print/profile.js';
+import type { Photo } from '../model/photo.js';
+import type { Spread } from '../model/spread.js';
+import { requireTemplate } from '../templates/index.js';
+import { renderSpread } from './render-spread.js';
+import { imageBoxes } from './rendered-spread.js';
+
+const profile = saal as PrintProfile;
+const template = requireTemplate('spread.4up.grid');
+
+function photo(id: string, width: number, height: number): Photo {
+  return {
+    id,
+    relPath: `${id}.jpeg`,
+    fileName: `${id}.jpeg`,
+    bytes: 800_000,
+    width,
+    height,
+    orientation: 1,
+  };
+}
+
+/** Vier typische Bilder des echten Bestands: 2048 px lange Kante, gemischt. */
+const PHOTOS = new Map<string, Photo>([
+  ['p1', photo('p1', 2048, 1536)], // quer 4:3
+  ['p2', photo('p2', 1536, 2048)], // hoch 3:4
+  ['p3', photo('p3', 2048, 1152)], // quer 16:9
+  ['p4', photo('p4', 2048, 2048)], // quadratisch
+]);
+
+function spreadWith(photoIds: (string | null)[]): Spread {
+  return {
+    id: 's1',
+    index: 0,
+    templateId: template.id,
+    slots: template.slots.map((slot, i) => ({
+      slotId: slot.id,
+      photoId: photoIds[i] ?? null,
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+    })),
+  };
+}
+
+const ctx = { profile, template, photos: PHOTOS };
+
+describe('Doppelseitengeometrie', () => {
+  it('hat die Maße des Druckprofils einschließlich Beschnitt', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(rsm.widthMm).toBe(606);
+    expect(rsm.heightMm).toBe(306);
+    expect(rsm.bleedMm).toBe(3);
+  });
+
+  it('legt die Falzachse in die Mitte des Endformats', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(rsm.gutterXMm).toBe(303); // 3 mm Beschnitt + 300 mm Seitenbreite
+  });
+
+  it('erzeugt Hilfslinien für Beschnitt, Endformat, Sicherheit und Falz', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    const kinds = rsm.guides.map((g) => g.kind);
+    expect(kinds).toContain('bleed');
+    expect(kinds).toContain('trim');
+    expect(kinds).toContain('safety');
+    expect(kinds).toContain('gutter');
+  });
+});
+
+describe('Slotgeometrie des 4er-Rasters', () => {
+  it('setzt die Slots auf die geplanten 120 mm im Quadrat', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    for (const box of imageBoxes(rsm)) {
+      expect(box.wMm).toBeCloseTo(120, 1);
+      expect(box.hMm).toBeCloseTo(120, 1);
+    }
+  });
+
+  it('hält alle Slots innerhalb des Endformats', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    for (const box of imageBoxes(rsm)) {
+      expect(box.xMm).toBeGreaterThanOrEqual(3);
+      expect(box.yMm).toBeGreaterThanOrEqual(3);
+      expect(box.xMm + box.wMm).toBeLessThanOrEqual(603);
+      expect(box.yMm + box.hMm).toBeLessThanOrEqual(303);
+    }
+  });
+
+  it('lässt die Falzzone frei', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    const gutterSafe = profile.page.gutterSafeMm;
+    for (const box of imageBoxes(rsm)) {
+      const kollidiert =
+        box.xMm < rsm.gutterXMm + gutterSafe && box.xMm + box.wMm > rsm.gutterXMm - gutterSafe;
+      expect(kollidiert).toBe(false);
+    }
+  });
+
+  it('verteilt zwei Slots auf jede Seite', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    const links = imageBoxes(rsm).filter((b) => b.xMm + b.wMm <= rsm.gutterXMm);
+    const rechts = imageBoxes(rsm).filter((b) => b.xMm >= rsm.gutterXMm);
+    expect(links).toHaveLength(2);
+    expect(rechts).toHaveLength(2);
+  });
+});
+
+describe('Auflösung', () => {
+  it('hält für den gesamten Bestand die Mindestauflösung ein', () => {
+    // Das ist die eigentliche Zusage des Templates: 120 mm ist so gewählt,
+    // dass auch der ungünstigste verbreitete Fall (16:9) durchkommt.
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    for (const box of imageBoxes(rsm)) {
+      expect(box.effectiveDpi).toBeGreaterThanOrEqual(profile.resolution.minDpi);
+      expect(box.warnings.map((w) => w.code)).not.toContain('below-min-dpi');
+    }
+  });
+
+  it('hält für 4:3, 3:4 und quadratisch sogar die Zielauflösung', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', null, 'p4']), ctx);
+    for (const box of imageBoxes(rsm)) {
+      expect(box.effectiveDpi).toBeGreaterThanOrEqual(profile.resolution.targetDpi);
+      expect(box.warnings).toHaveLength(0);
+    }
+  });
+
+  it('rechnet die Auflösung über die sichtbaren Pixel, nicht die Bildgröße', () => {
+    // Ein 16:9-Bild verliert im quadratischen Slot seitlich viel Fläche.
+    // Maßgeblich sind die verbleibenden Pixel – deshalb ist dieses Bild trotz
+    // 2048 px Breite der knappste Fall im ganzen Bestand.
+    const rsm = renderSpread(spreadWith(['p3', null, null, null]), ctx);
+    const box = imageBoxes(rsm)[0]!;
+    const sichtbarePx = 1152; // die kurze Kante, nicht die lange
+    expect(box.effectiveDpi).toBeCloseTo(sichtbarePx / (120 / 25.4), 0);
+    expect(box.effectiveDpi).toBeGreaterThanOrEqual(profile.resolution.minDpi);
+  });
+
+  it('warnt unterhalb der Mindestauflösung', () => {
+    const winzig = new Map(PHOTOS);
+    winzig.set('klein', photo('klein', 400, 400));
+    const rsm = renderSpread(spreadWith(['klein', null, null, null]), {
+      ...ctx,
+      photos: winzig,
+    });
+    const box = imageBoxes(rsm)[0]!;
+    expect(box.effectiveDpi).toBeLessThan(profile.resolution.minDpi);
+    expect(box.warnings.map((w) => w.code)).toContain('below-min-dpi');
+  });
+
+  it('warnt zwischen Mindest- und Zielauflösung getrennt', () => {
+    // 1300 px in 124 mm ergibt rund 266 dpi: über 240, unter 300
+    const mittel = new Map(PHOTOS);
+    mittel.set('mittel', photo('mittel', 1300, 1300));
+    const rsm = renderSpread(spreadWith(['mittel', null, null, null]), {
+      ...ctx,
+      photos: mittel,
+    });
+    const codes = imageBoxes(rsm)[0]!.warnings.map((w) => w.code);
+    expect(codes).toContain('below-target-dpi');
+    expect(codes).not.toContain('below-min-dpi');
+  });
+});
+
+describe('Ausschnitt', () => {
+  it('berechnet auto-cover für die tatsächlichen Slotmaße', () => {
+    const rsm = renderSpread(spreadWith(['p1', null, null, null]), ctx);
+    const box = imageBoxes(rsm)[0]!;
+    // Quadratischer Slot, 4:3-Bild → seitlich beschnitten, volle Höhe
+    expect(box.crop.h).toBeCloseTo(1, 6);
+    expect(box.crop.w).toBeCloseTo(3 / 4, 6);
+  });
+
+  it('lässt einen manuell gesetzten Ausschnitt unangetastet', () => {
+    const manuell: Spread = {
+      ...spreadWith(['p1', null, null, null]),
+      slots: [
+        {
+          slotId: 'a',
+          photoId: 'p1',
+          crop: { x: 0.1, y: 0.1, w: 0.4, h: 0.4, mode: 'manual' },
+        },
+      ],
+    };
+    const box = imageBoxes(renderSpread(manuell, ctx))[0]!;
+    expect(box.crop).toEqual({ x: 0.1, y: 0.1, w: 0.4, h: 0.4, mode: 'manual' });
+  });
+});
+
+describe('Randfälle', () => {
+  it('stellt leere Slots als solche dar', () => {
+    const rsm = renderSpread(spreadWith([null, null, null, null]), ctx);
+    expect(imageBoxes(rsm)).toHaveLength(0);
+    expect(rsm.boxes.filter((b) => b.kind === 'empty')).toHaveLength(4);
+  });
+
+  it('rendert weiter, wenn eine Bilddatei fehlt', () => {
+    const rsm = renderSpread(spreadWith(['gibtesnicht', 'p2', null, null]), ctx);
+    const boxen = imageBoxes(rsm);
+    expect(boxen).toHaveLength(2);
+    expect(boxen[0]!.warnings.map((w) => w.code)).toContain('photo-missing');
+    // Das intakte Foto wird trotzdem normal gerendert
+    expect(boxen[1]!.warnings).toHaveLength(0);
+  });
+
+  it('ist deterministisch', () => {
+    const a = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    const b = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(a).toEqual(b);
+  });
+});

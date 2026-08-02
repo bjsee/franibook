@@ -5,8 +5,9 @@
  * Quelle wie die Vorschau – jede Abweichung zwischen beiden ist per
  * Konstruktion ein Fehler in einem der Adapter und wird vom Parity-Test
  * gefunden.
- *
- * Inhalt folgt in Phase 1 (vertikaler Prototyp).
  */
 
-export {};
+export { renderPdf } from './render-pdf.js';
+export type { RenderPdfOptions, RenderPdfResult, PhotoSource } from './render-pdf.js';
+export { prepareImage } from './prepare-image.js';
+export type { PreparedImage, PrepareOptions } from './prepare-image.js';
