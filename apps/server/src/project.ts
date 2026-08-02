@@ -179,6 +179,68 @@ export class Project {
     this.importedAt = new Date().toISOString();
   }
 
+  /**
+   * Liest den Quellordner erneut ein, ohne das Buch anzutasten.
+   *
+   * Die Foto-Kennung ist der Inhaltshash, deshalb bleiben unveränderte Dateien
+   * dieselben Fotos – auch wenn sie umbenannt oder verschoben wurden. Neue
+   * kommen hinzu, verschwundene fehlen; die Doppelseiten bleiben stehen, wie sie
+   * sind.
+   *
+   * Bewusst ohne Neugenerieren: Ein Reimport ist meistens „ich habe zwanzig
+   * Bilder nachgelegt", nicht „baue das Buch neu". Die neuen Fotos stehen danach
+   * im Fotopool der Doppelseitenansicht und lassen sich von dort einsetzen. Wer
+   * doch neu bauen will, ruft anschließend `generate()`.
+   *
+   * Korrekturen (`PhotoOverride`) bleiben in jedem Fall erhalten: Sie hängen an
+   * der Kennung, nicht am Importergebnis.
+   */
+  async reimport(limit?: number): Promise<{
+    neu: PhotoId[];
+    verschwunden: PhotoId[];
+    unveraendert: number;
+    imBuchVerschwunden: PhotoId[];
+  }> {
+    const vorher = new Set(this.photos.keys());
+    await this.importPhotos(limit);
+    const nachher = new Set(this.photos.keys());
+
+    const neu = [...nachher].filter((id) => !vorher.has(id));
+    const verschwunden = [...vorher].filter((id) => !nachher.has(id));
+
+    // Fehlt ein Foto, das im Buch steht, bleibt die Doppelseite intakt und der
+    // Platz wird als fehlendes Bild gemeldet – siehe `photo-missing` im RSM.
+    const imBuch = new Set(this.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)));
+    const imBuchVerschwunden = verschwunden.filter((id) => imBuch.has(id));
+
+    this.rebuildStructure();
+    return {
+      neu,
+      verschwunden,
+      unveraendert: [...nachher].filter((id) => vorher.has(id)).length,
+      imBuchVerschwunden,
+    };
+  }
+
+  /**
+   * Handarbeit an den Doppelseiten, die ein Neugenerieren verwerfen würde.
+   *
+   * Gezählt, nicht geraten: Der Knopf „Neu anordnen" baut das Buch komplett neu,
+   * und was dabei verloren geht, soll vorher dranstehen.
+   */
+  handwork(): { crops: number; hintergruende: number; zeitstrahl: number } {
+    let crops = 0;
+    let hintergruende = 0;
+    let zeitstrahl = 0;
+    for (const spread of this.spreads) {
+      crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
+      if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
+        hintergruende++;
+      if (spread.timeline !== undefined) zeitstrahl++;
+    }
+    return { crops, hintergruende, zeitstrahl };
+  }
+
   // ------------------------------------------------------------- Struktur
 
   /**
