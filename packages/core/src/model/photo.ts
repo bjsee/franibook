@@ -40,6 +40,14 @@ export interface Photo {
   fileBirthtime?: NaiveDateTime;
 
   gps?: { lat: number; lon: number };
+  /**
+   * Beim Import aufgelöster Ort.
+   *
+   * Wird gespeichert statt bei Bedarf berechnet: Die Ortsdatenbank ist 2,4 MB
+   * groß, das Ergebnis ein kurzer String – und die Oberfläche braucht ihn in
+   * jeder Zeile der Fotoliste.
+   */
+  place?: { key: string; label: string };
   camera?: string;
 }
 

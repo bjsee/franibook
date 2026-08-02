@@ -75,6 +75,51 @@ app.post<{ Body: unknown }>('/api/book/layout', async (req, reply) => {
   return result;
 });
 
+// ------------------------------------------------------------------ Gruppen
+
+app.get('/api/groups', async () => ({
+  groups: project.sortedGroups(),
+}));
+
+/** Erzeugt Vorschläge aus den aufgelösten Orten. */
+app.post('/api/groups/suggest', async () => {
+  const result = project.suggestGroups();
+  void project.save();
+  return { groups: project.sortedGroups(), added: result.added };
+});
+
+app.post<{ Body: { title: string; photoIds: string[] } }>('/api/groups', async (req, reply) => {
+  const { title, photoIds } = req.body ?? {};
+  if (!title || !Array.isArray(photoIds) || photoIds.length === 0) {
+    return reply.code(400).send({ error: 'title und photoIds sind erforderlich' });
+  }
+  project.createGroup(title, photoIds);
+  void project.save();
+  return { groups: project.sortedGroups() };
+});
+
+app.patch<{
+  Params: { id: string };
+  Body: { title?: string; coverPhotoId?: string; active?: boolean; photoIds?: string[] };
+}>('/api/groups/:id', async (req) => {
+  project.updateGroup(req.params.id, req.body ?? {});
+  void project.save();
+  return { groups: project.sortedGroups() };
+});
+
+app.delete<{ Params: { id: string } }>('/api/groups/:id', async (req) => {
+  project.removeGroup(req.params.id);
+  void project.save();
+  return { groups: project.sortedGroups() };
+});
+
+/** Nimmt Fotos aus ihren Gruppen heraus, ohne sie zu löschen. */
+app.post<{ Body: { photoIds: string[] } }>('/api/groups/ungroup', async (req) => {
+  project.ungroupPhotos(req.body?.photoIds ?? []);
+  void project.save();
+  return { groups: project.sortedGroups() };
+});
+
 /** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
 app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
   const views = project.photoViews(req.query.problems !== undefined);

@@ -39,6 +39,11 @@ export interface GenerateOptions {
   /** Ob jedes Jahr eine eigene Auftaktdoppelseite bekommt. */
   chapterOpeners?: boolean;
   weightOf?: (photoId: PhotoId) => PhotoWeight;
+  /**
+   * Aktive Fotogruppen. Nur sie gliedern das Buch – abgeschaltete laufen im
+   * normalen chronologischen Fluss mit.
+   */
+  groups?: readonly { id: string; photoIds: readonly PhotoId[]; active: boolean; title: string }[];
   /** Steuert die Auswahl unter gleichwertigen Templates. */
   seed?: number;
 }
@@ -353,6 +358,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
   const slotCounts = supportedSlotCounts();
 
+  // Nur aktive Gruppen gliedern. Abgeschaltete – typischerweise der Wohnort –
+  // sollen den Fluss nicht zerschneiden.
+  const groupOf = new Map<PhotoId, string>();
+  for (const g of opts.groups ?? []) {
+    if (!g.active) continue;
+    for (const id of g.photoIds) groupOf.set(id, g.id);
+  }
+
   const budgets = distributeBudget(structure.chapters, {
     targetPages,
     chapterSpreads: useOpeners ? 1 : 0,
@@ -387,6 +400,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     const groups = groupChapter(chapter, {
       slotCounts,
       targetSpreads: spreadsPerYear.get(chapter.year) ?? 1,
+      ...(groupOf.size > 0 ? { groupOf } : {}),
     });
 
     for (const group of groups) {

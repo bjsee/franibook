@@ -98,9 +98,20 @@ export interface GroupingOptions {
   slotCounts: readonly number[];
   /** Wie viele Doppelseiten dem Kapitel zustehen. */
   targetSpreads: number;
+  /**
+   * Zugehörigkeit zu einer benannten Fotogruppe.
+   *
+   * Eine Gruppe soll auf ihren eigenen Doppelseiten stehen: Wer „Kreta 2025"
+   * als Abschnitt anlegt, will dort keine Bilder vom Schulhof dazwischen. Die
+   * Kostenfunktion bestraft deshalb Doppelseiten, die eine Gruppengrenze
+   * überschreiten – hart genug, dass es praktisch nicht vorkommt, aber nicht
+   * als absolutes Verbot, damit eine Dreiergruppe nicht eine ganze Doppelseite
+   * mit fünf leeren Plätzen erzwingt.
+   */
+  groupOf?: ReadonlyMap<string, string>;
 }
 
-export interface PhotoGroup {
+export interface SpreadGroup {
   photoIds: string[];
   /** Aus welchem Segment das erste Foto der Gruppe stammt. */
   segmentId: string;
@@ -121,7 +132,7 @@ export interface PhotoGroup {
  * die günstigste Zerlegung gespeichert und am Ende zurückverfolgt. Exakt statt
  * gierig, und bei einigen hundert Fotos je Jahr in Millisekunden erledigt.
  */
-export function groupChapter(chapter: Chapter, opts: GroupingOptions): PhotoGroup[] {
+export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGroup[] {
   const photoIds = chapter.segments.flatMap((s) => s.photoIds);
   const n = photoIds.length;
   if (n === 0) return [];
@@ -155,7 +166,8 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): PhotoGrou
       const prev = bestCost[i - k]!;
       if (!Number.isFinite(prev)) continue;
 
-      const cost = prev + groupCost(photoIds, i - k, k, idealSize, serieOf, segmentOf);
+      const cost =
+        prev + groupCost(photoIds, i - k, k, idealSize, serieOf, segmentOf, opts.groupOf);
       if (cost < bestCost[i]!) {
         bestCost[i] = cost;
         backtrack[i] = k;
@@ -173,7 +185,7 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): PhotoGrou
     pos -= k;
   }
 
-  const groups: PhotoGroup[] = [];
+  const groups: SpreadGroup[] = [];
   const gesehen = new Set<string>();
   let offset = 0;
 
@@ -202,6 +214,7 @@ function groupCost(
   idealSize: number,
   serieOf: ReadonlyMap<string, string>,
   segmentOf: ReadonlyMap<string, string>,
+  groupOf?: ReadonlyMap<string, string>,
 ): number {
   const ids = photoIds.slice(start, start + size);
 
@@ -232,11 +245,21 @@ function groupCost(
   const serien = new Set(ids.map((id) => serieOf.get(id))).size;
   const mixPenalty = Math.max(0, serien - 3) * 0.1;
 
-  return sizeDeviation + serieBreaks * 0.4 + monthMix + mixPenalty;
+  // 5. Benannte Gruppen sollen unter sich bleiben. Jede zusätzliche
+  //    Zugehörigkeit auf einer Doppelseite kostet spürbar mehr als jede
+  //    andere Abweichung – so entsteht praktisch nie eine Doppelseite, die
+  //    „Kreta 2025" mit Alltagsbildern mischt.
+  let groupMix = 0;
+  if (groupOf) {
+    const zugehoerigkeiten = new Set(ids.map((id) => groupOf.get(id) ?? ''));
+    groupMix = Math.max(0, zugehoerigkeiten.size - 1) * 2.5;
+  }
+
+  return sizeDeviation + serieBreaks * 0.4 + monthMix + mixPenalty + groupMix;
 }
 
 /** Gesamtzahl Doppelseiten einer Gruppierung. */
-export function countSpreads(groups: readonly PhotoGroup[]): number {
+export function countSpreads(groups: readonly SpreadGroup[]): number {
   return groups.length;
 }
 
