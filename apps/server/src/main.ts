@@ -339,20 +339,23 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
  * jede handgemachte Korrektur im Buch verwerfen, nur um eine Linie ein- oder
  * auszublenden.
  */
-app.patch<{ Body: { timeline?: boolean; background?: string; tilt?: number } }>(
-  '/api/settings',
-  async (req) => {
-    if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
-    if (req.body.background !== undefined) project.settings.background = req.body.background;
-    // Die Neigung gehört aus demselben Grund hierher wie der Zeitstrahl: Sie
-    // entsteht beim Rendern und rührt die Fotoverteilung nicht an.
-    if (req.body.tilt !== undefined && Number.isFinite(req.body.tilt)) {
-      project.settings.tilt = Math.min(MAX_TILT_DEG, Math.max(0, req.body.tilt));
-    }
-    await project.save();
-    return { settings: project.settings };
-  },
-);
+app.patch<{
+  Body: { timeline?: boolean; timelineStyle?: 'foot' | 'side'; background?: string; tilt?: number };
+}>('/api/settings', async (req) => {
+  if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
+  // Fuß oder Rand: eine Frage der Darstellung, keine der Fotoverteilung.
+  if (req.body.timelineStyle === 'foot' || req.body.timelineStyle === 'side') {
+    project.settings.timelineStyle = req.body.timelineStyle;
+  }
+  if (req.body.background !== undefined) project.settings.background = req.body.background;
+  // Die Neigung gehört aus demselben Grund hierher wie der Zeitstrahl: Sie
+  // entsteht beim Rendern und rührt die Fotoverteilung nicht an.
+  if (req.body.tilt !== undefined && Number.isFinite(req.body.tilt)) {
+    project.settings.tilt = Math.min(MAX_TILT_DEG, Math.max(0, req.body.tilt));
+  }
+  await project.save();
+  return { settings: project.settings };
+});
 
 /**
  * Ereignisse eines Jahres für den Kapitelauftakt.
@@ -537,6 +540,25 @@ app.patch<{
 }>('/api/spreads/:index/slots/:slotId/rotate', async (req, reply) => {
   const index = Number(req.params.index);
   const result = project.setSlotRotation(index, req.params.slotId, req.body.deg);
+  if (!result.ok) return reply.code(404).send({ error: result.error });
+
+  void project.save();
+  return { ok: true, spread: project.render(index) };
+});
+
+/**
+ * Setzt Position und Größe eines Bildes von Hand.
+ *
+ * `rect: null` stellt den Platz der Vorlage wieder her. Die Werte sind normiert
+ * wie ein Templateslot, damit ein Wechsel des Druckprofils die Handarbeit nicht
+ * zerreißt.
+ */
+app.patch<{
+  Params: { index: string; slotId: string };
+  Body: { rect: { x: number; y: number; w: number; h: number } | null };
+}>('/api/spreads/:index/slots/:slotId/rect', async (req, reply) => {
+  const index = Number(req.params.index);
+  const result = project.setSlotRect(index, req.params.slotId, req.body?.rect ?? null);
   if (!result.ok) return reply.code(404).send({ error: result.error });
 
   void project.save();

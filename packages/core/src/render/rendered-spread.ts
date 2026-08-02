@@ -46,6 +46,14 @@ export interface ImageBox extends Rect {
    * Umschlags (`cover/rendered-cover.ts`).
    */
   rotateDeg?: number;
+  /**
+   * Ob Position und Größe von Hand gesetzt sind statt aus der Vorlage zu
+   * kommen.
+   *
+   * Keine Geometrie, sondern Herkunft – wie `warnings`. Der Editor zeigt daran,
+   * ob „Ins Raster" etwas zurückzunehmen hat; die Renderer sehen es nie an.
+   */
+  manualRect?: true;
   warnings: RenderWarning[];
 }
 

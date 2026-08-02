@@ -117,6 +117,14 @@ export interface ProjectSettings {
   groupOpenerMinPhotos: number;
   /** Zeitstrahl am Fuß jeder Doppelseite. */
   timeline: boolean;
+  /**
+   * Welche Achse gezeichnet wird, solange `timeline` an ist.
+   *
+   * `foot` ist der Zeitstrahl im Fußraum mit Gruppentitel, `side` die stumme
+   * Lebensachse am äußeren Rand über alle Jahrgänge. Sie beantworten
+   * verschiedene Fragen, deshalb ist es eine Wahl und keine Verbesserung.
+   */
+  timelineStyle: 'foot' | 'side';
   /** Hintergrundfarbe aller Doppelseiten, sofern keine eigene gesetzt ist. */
   background: string;
   /** Ob jeder Jahrgang beim Erzeugen eine eigene Hintergrundfarbe bekommt. */
@@ -262,6 +270,7 @@ export class Project {
     // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
     // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
     timeline: true,
+    timelineStyle: 'foot',
     // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
     // deshalb die Palette in render/background.ts.
     background: DEFAULT_BACKGROUND,
@@ -522,21 +531,29 @@ export class Project {
    * Gezählt, nicht geraten: Der Knopf „Neu anordnen" baut das Buch komplett neu,
    * und was dabei verloren geht, soll vorher dranstehen.
    */
-  handwork(): { crops: number; neigungen: number; hintergruende: number; zeitstrahl: number } {
+  handwork(): {
+    crops: number;
+    neigungen: number;
+    hintergruende: number;
+    zeitstrahl: number;
+    positionen: number;
+  } {
     let crops = 0;
     let neigungen = 0;
     let hintergruende = 0;
     let zeitstrahl = 0;
+    let positionen = 0;
     for (const spread of this.spreads) {
       crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
       // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
       // eine Entscheidung, die der Neuaufbau verwirft.
       neigungen += spread.slots.filter((sl) => sl.rotateDeg !== undefined).length;
+      positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
       if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
     }
-    return { crops, neigungen, hintergruende, zeitstrahl };
+    return { crops, neigungen, hintergruende, zeitstrahl, positionen };
   }
 
   // ------------------------------------------------------------- Struktur
@@ -1024,6 +1041,53 @@ export class Project {
     return { ok: true };
   }
 
+  /**
+   * Setzt Position und Größe eines Bildes von Hand – oder zurück auf die Vorlage.
+   *
+   * `rect === null` heißt zurück ins Raster. Die Werte sind normiert wie ein
+   * Templateslot und werden auf die Beschnittfläche geklemmt: Ein Bild ganz
+   * außerhalb der Seite wäre kein Gestaltungsmittel, sondern ein verlorenes
+   * Foto. Über die Endformatkante hinaus darf es sehr wohl – randabfallend ist
+   * gewollt, dafür ist der Beschnitt da.
+   */
+  setSlotRect(
+    index: number,
+    slotId: string,
+    rect: { x: number; y: number; w: number; h: number } | null,
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const slot = spread.slots.find((s) => s.slotId === slotId);
+    if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
+
+    if (rect === null) {
+      delete slot.rect;
+      return { ok: true };
+    }
+
+    const zahlen = [rect.x, rect.y, rect.w, rect.h];
+    if (!zahlen.every((v) => Number.isFinite(v))) {
+      return { ok: false, error: 'Position ist keine Zahl' };
+    }
+    if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
+
+    // Der Beschnitt in normierten Einheiten: So weit darf ein Bild über das
+    // Endformat hinausragen, ohne dass es aus dem Blatt fällt.
+    const { bleedMm, trimWidthMm, trimHeightMm } = this.profile.page;
+    const randX = bleedMm / (2 * trimWidthMm);
+    const randY = bleedMm / trimHeightMm;
+    const klemme = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+    slot.rect = {
+      x: klemme(rect.x, -randX, 1 + randX - rect.w),
+      y: klemme(rect.y, -randY, 1 + randY - rect.h),
+      w: klemme(rect.w, 0.02, 1 + 2 * randX),
+      h: klemme(rect.h, 0.02, 1 + 2 * randY),
+    };
+    return { ok: true };
+  }
+
   /** Hängt ein einzelnes Foto um: Slot zu Slot, in den Pool oder aus ihm. */
   movePhoto(source: MoveSource, target: MoveTarget): MoveResult {
     // Der Bildbestand geht immer mit: Ein Zug auf eine ganze Doppelseite ordnet
@@ -1262,7 +1326,10 @@ export class Project {
     }
 
     const fallbackYear = this.nearestYear(index);
+    const spanne = this.bookYears();
     return {
+      style: this.settings.timelineStyle,
+      ...(spanne ? { bookYears: spanne } : {}),
       dateOf: (id: PhotoId) => {
         const photo = this.photos.get(id);
         return photo ? resolveEffectiveDate(photo, this.overrides[id], ctx) : undefined;
@@ -1273,6 +1340,19 @@ export class Project {
       },
       ...(fallbackYear !== undefined ? { fallbackYear } : {}),
     };
+  }
+
+  /**
+   * Erstes und letztes Jahr des Buches – der Maßstab der Randachse.
+   *
+   * Aus der Kalenderstruktur und nicht aus den Doppelseiten: Die Struktur kennt
+   * auch Jahrgänge, deren Fotos gerade alle im Pool liegen, und die Achse soll
+   * beim Umhängen eines Bildes nicht ihren Maßstab wechseln.
+   */
+  bookYears(): { from: number; to: number } | undefined {
+    const jahre = this.structure.chapters.map((c) => c.year);
+    if (jahre.length === 0) return undefined;
+    return { from: Math.min(...jahre), to: Math.max(...jahre) };
   }
 
   /**
