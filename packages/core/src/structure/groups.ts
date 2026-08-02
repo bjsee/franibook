@@ -152,6 +152,47 @@ export function addToGroup(
   });
 }
 
+/**
+ * Führt zwei Gruppen zusammen.
+ *
+ * Die Fotos der Quellgruppe wandern ans Ende der Zielgruppe, die Quellgruppe
+ * verschwindet. Gedacht für den Fall, dass die Automatik einen Aufenthalt
+ * zerlegt hat – „Helgoland Mai 2025" und „Helgoland Juli 2025" gehören
+ * vielleicht doch zusammen.
+ *
+ * Das Hauptbild der Zielgruppe bleibt; hatte nur die Quelle eines, wird es
+ * übernommen.
+ */
+export function mergeGroups(
+  groups: readonly PhotoGroup[],
+  sourceId: GroupId,
+  targetId: GroupId,
+): PhotoGroup[] {
+  if (sourceId === targetId) return [...groups];
+
+  const source = groups.find((g) => g.id === sourceId);
+  const target = groups.find((g) => g.id === targetId);
+  if (!source || !target) return [...groups];
+
+  const vorhanden = new Set(target.photoIds);
+  const zusammen = [...target.photoIds, ...source.photoIds.filter((id) => !vorhanden.has(id))];
+
+  return groups
+    .filter((g) => g.id !== sourceId)
+    .map((g) =>
+      g.id === targetId
+        ? {
+            ...g,
+            photoIds: zusammen,
+            ...((g.coverPhotoId ?? source.coverPhotoId)
+              ? { coverPhotoId: g.coverPhotoId ?? source.coverPhotoId! }
+              : {}),
+            origin: 'manual' as const,
+          }
+        : g,
+    );
+}
+
 /** Entfernt Gruppen ohne Fotos. */
 export function pruneEmpty(groups: readonly PhotoGroup[]): PhotoGroup[] {
   return groups.filter((g) => g.photoIds.length > 0);
