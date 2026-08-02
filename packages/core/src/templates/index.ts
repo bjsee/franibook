@@ -1,26 +1,123 @@
 /**
  * Templatebibliothek.
  *
- * Für Phase 1 genügt ein einziges Template. Die Bibliothek wächst in Phase 5
- * auf rund fünfzehn Einträge; die Ladelogik bleibt dieselbe.
- *
- * Slotmaße von `spread.4up.grid` bei 30×30 cm: vier quadratische Slots von je
- * 120×120 mm.
- *
- * Quadratisch, weil der Bestand mit 51,6 % Hochformat zu 47,9 % Querformat
- * fast hälftig geteilt ist – ein quadratischer Slot beschneidet beide
- * gleichmäßig, statt eine Ausrichtung zu bevorzugen.
- *
- * 120 mm und nicht mehr, weil die *kurze* Bildkante den quadratischen Slot
- * begrenzt. Sie liegt im Bestand bei 1536 px (4:3-Bilder, 74,6 %) und bei
- * 1152 px (16:9-Bilder, 12,9 %). Bei 240 dpi Mindestauflösung ergeben 1152 px
- * genau 121,9 mm – ein 124-mm-Slot hätte die 16:9-Bilder unter die Grenze
- * gedrückt. Gemessen, nicht geschätzt: siehe docs/spikes/bestandsanalyse.adoc.
+ * Die Templates sind in Millimetern auf einer Referenz-Doppelseite definiert
+ * und werden hier einmalig auf 0..1 normiert. Millimeter sind beim Entwerfen
+ * und Nachrechnen lesbar, normierte Koordinaten sind es nicht – und die
+ * Engine braucht ohnehin nur die normierte Form, weil dasselbe Template für
+ * 21×21 cm und 30×30 cm gelten soll.
  */
-import type { Template, TemplateId } from '../model/template.js';
-import fourUpGrid from './spread.4up.grid.json' with { type: 'json' };
+import type { Template, TemplateId, TemplateSlot } from '../model/template.js';
+import { mirrorTemplate } from '../model/template.js';
+import library from './library.json' with { type: 'json' };
 
-const ALL: Template[] = [fourUpGrid as Template];
+interface RawSlot {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  prominence: number;
+  prefers?: string;
+}
+
+interface RawTextSlot {
+  id: string;
+  role: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  style: string;
+  optional: boolean;
+}
+
+interface RawTemplate {
+  id: string;
+  name: string;
+  tags?: string[];
+  slots: RawSlot[];
+  textSlots?: RawTextSlot[];
+  chapterOnly?: boolean;
+  highResOnly?: boolean;
+}
+
+const REF = library.reference;
+
+function normalize(raw: RawTemplate): Template {
+  const slot = (s: RawSlot): TemplateSlot => ({
+    id: s.id,
+    x: s.x / REF.widthMm,
+    y: s.y / REF.heightMm,
+    w: s.w / REF.widthMm,
+    h: s.h / REF.heightMm,
+    prominence: s.prominence as 1 | 2 | 3,
+    ...(s.prefers ? { prefers: s.prefers as 'landscape' | 'portrait' | 'any' } : {}),
+  });
+
+  return {
+    id: raw.id,
+    name: raw.name,
+    pageSpan: 2,
+    slots: raw.slots.map(slot),
+    ...(raw.tags ? { tags: raw.tags } : {}),
+    ...(raw.textSlots
+      ? {
+          textSlots: raw.textSlots.map((t) => ({
+            id: t.id,
+            role: t.role as 'year' | 'eventTitle' | 'caption' | 'place' | 'freeText',
+            x: t.x / REF.widthMm,
+            y: t.y / REF.heightMm,
+            w: t.w / REF.widthMm,
+            h: t.h / REF.heightMm,
+            style: t.style,
+            optional: t.optional,
+          })),
+        }
+      : {}),
+  };
+}
+
+/** Merkmale, die die Engine bei der Auswahl braucht. */
+export interface TemplateMeta {
+  /** Nur für Kapitelauftakte, nie im normalen Fluss. */
+  chapterOnly: boolean;
+  /** Braucht ein Foto oberhalb der üblichen Auflösung. */
+  highResOnly: boolean;
+}
+
+const RAW = library.templates as RawTemplate[];
+
+const META = new Map<TemplateId, TemplateMeta>();
+const ALL: Template[] = [];
+
+for (const raw of RAW) {
+  const base = normalize(raw);
+  const meta: TemplateMeta = {
+    chapterOnly: raw.chapterOnly ?? false,
+    highResOnly: raw.highResOnly ?? false,
+  };
+  ALL.push(base);
+  META.set(base.id, meta);
+
+  // Gespiegelte Varianten verdoppeln die Bibliothek ohne Mehraufwand und
+  // brechen den Rhythmus auf, wenn dasselbe Template zweimal in Folge fällt.
+  // Symmetrische Templates brauchen keine Spiegelung.
+  if (!isSymmetric(base)) {
+    const mirrored = mirrorTemplate(base);
+    ALL.push(mirrored);
+    META.set(mirrored.id, meta);
+  }
+}
+
+/** Ob das Template durch Spiegelung an der Falzachse auf sich selbst fällt. */
+function isSymmetric(t: Template): boolean {
+  if (t.textSlots?.length) return false;
+  const key = (s: { x: number; y: number; w: number; h: number }) =>
+    `${s.x.toFixed(5)},${s.y.toFixed(5)},${s.w.toFixed(5)},${s.h.toFixed(5)}`;
+  const original = new Set(t.slots.map(key));
+  return t.slots.every((s) => original.has(key({ ...s, x: 1 - s.x - s.w })));
+}
 
 const BY_ID = new Map<TemplateId, Template>(ALL.map((t) => [t.id, t]));
 
@@ -32,14 +129,43 @@ export function templateById(id: TemplateId): Template | undefined {
   return BY_ID.get(id);
 }
 
-/** Wirft, wenn das Template fehlt – für Stellen, an denen es existieren muss. */
 export function requireTemplate(id: TemplateId): Template {
   const t = BY_ID.get(id);
   if (!t) throw new Error(`Template nicht gefunden: ${id}`);
   return t;
 }
 
-/** Templates mit genau dieser Slotzahl. */
-export function templatesWithSlotCount(n: number): Template[] {
-  return ALL.filter((t) => t.slots.length === n);
+export function templateMeta(id: TemplateId): TemplateMeta {
+  return META.get(id) ?? { chapterOnly: false, highResOnly: false };
 }
+
+/**
+ * Templates, die für eine Gruppe dieser Größe in Frage kommen.
+ *
+ * Kapitel- und Reserve-Templates sind ausgenommen; sie werden gezielt
+ * angefordert, nicht über die Slotzahl gefunden.
+ */
+export function templatesWithSlotCount(n: number): Template[] {
+  return ALL.filter((t) => {
+    const meta = templateMeta(t.id);
+    return t.slots.length === n && !meta.chapterOnly && !meta.highResOnly;
+  });
+}
+
+/** Kapitelauftakte. */
+export function chapterTemplates(): Template[] {
+  return ALL.filter((t) => templateMeta(t.id).chapterOnly);
+}
+
+/** Welche Gruppengrößen die Bibliothek überhaupt abdeckt. */
+export function supportedSlotCounts(): number[] {
+  const counts = new Set<number>();
+  for (const t of ALL) {
+    const meta = templateMeta(t.id);
+    if (!meta.chapterOnly && !meta.highResOnly && t.slots.length > 0) counts.add(t.slots.length);
+  }
+  return [...counts].sort((a, b) => a - b);
+}
+
+/** Referenzmaße, gegen die die Templates entworfen wurden. */
+export const TEMPLATE_REFERENCE = REF;

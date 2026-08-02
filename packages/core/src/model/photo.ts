@@ -28,7 +28,19 @@ export interface Photo {
   /** Wie in der Datei vorgefunden, 1..8. Der PDF-Renderer braucht das noch. */
   orientation: number;
 
+  /** EXIF DateTimeOriginal – die verlässlichste Quelle. */
   takenAt?: NaiveDateTime;
+  /** CreateDate, XMP oder ähnliches, wenn DateTimeOriginal fehlt. */
+  secondaryDate?: NaiveDateTime;
+  /** GPS-Zeitstempel. Dient auch als Gegenprobe zum Aufnahmedatum. */
+  gpsDate?: NaiveDateTime;
+  /** Aus dem Dateinamen geraten, etwa IMG_20150612_141233.jpg. */
+  nameDate?: NaiveDateTime;
+  fileMtime?: NaiveDateTime;
+  fileBirthtime?: NaiveDateTime;
+
+  gps?: { lat: number; lon: number };
+  camera?: string;
 }
 
 /** Seitenverhältnis, orientierungskorrigiert. */
