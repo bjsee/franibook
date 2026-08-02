@@ -92,9 +92,12 @@ export class Project {
   lastReport: GenerateResult['report'] | null = null;
 
   settings: ProjectSettings = {
-    targetPages: 200,
+    targetPages: 160,
     chapterOpeners: true,
-    groupOpeners: true,
+    // Aus: Eine eigene Trennerseite je Gruppe kostet bei 160 Seiten zu viel
+    // Platz. Der Gruppentitel steht stattdessen auf der ersten Doppelseite
+    // der Gruppe – sichtbar, ohne eine ganze Doppelseite zu verbrauchen.
+    groupOpeners: false,
     groupOpenerMinPhotos: 6,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag

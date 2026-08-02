@@ -348,6 +348,30 @@ function buildGroupOpener(
   };
 }
 
+/**
+ * Trägt dieses Bild eine Auftaktseite?
+ *
+ * Muss vor der Gruppierung feststehen und mit der späteren Entscheidung
+ * übereinstimmen: Das Auftaktbild wird aus dem Fluss genommen: Käme der
+ * Auftakt dann doch nicht zustande, fiele das Foto ganz aus dem Buch. Genau
+ * das ist passiert – acht Fotos fehlten.
+ */
+function kannAuftaktTragen(
+  photo: Photo,
+  profile: PrintProfile,
+  templates: readonly Template[],
+): boolean {
+  return templates.some((t) => {
+    const slot = t.slots[0];
+    if (!slot) return false;
+    const cost = slotCost(photo, slot, slotGeometry(slot, profile), {
+      profile,
+      weightOf: () => 'hero',
+    });
+    return cost.dpi >= profile.resolution.minDpi;
+  });
+}
+
 /** Bestes Bild eines Jahres für dessen Auftaktseite. */
 function pickChapterCover(
   chapter: Chapter,
@@ -508,7 +532,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
    * auftauchen.
    */
   const jahresBild = new Map<number, PhotoId>();
-  if (useOpeners) {
+  if (useOpeners && chapterTemplates().some((t) => t.slots.length > 0)) {
     for (const chapter of structure.chapters) {
       const kandidat = pickChapterCover(chapter, photos, profile);
       if (kandidat) jahresBild.set(chapter.year, kandidat);
@@ -529,6 +553,12 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         g.coverPhotoId ?? g.photoIds.find((id) => !schonVergeben.has(id)) ?? g.photoIds[0];
       if (cover === undefined) continue;
 
+      // Nur reservieren, wenn der Auftakt auch wirklich gebaut werden kann.
+      const coverPhoto = photos.get(cover);
+      if (!coverPhoto || !kannAuftaktTragen(coverPhoto, profile, groupOpenerTemplates())) {
+        continue;
+      }
+
       // Ein gewähltes Hauptbild sticht den Jahresauftakt aus
       if (g.coverPhotoId !== undefined && schonVergeben.has(g.coverPhotoId)) {
         for (const [jahr, bild] of jahresBild) {
@@ -543,8 +573,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
   const ausDemFluss = new Set([...auftaktBild.values(), ...jahresBild.values()]);
 
+  // Gruppenauftakte gehen vom selben Kontingent ab wie alles andere. Ohne sie
+  // einzurechnen, plante das Budget 61 Doppelseiten und das Buch wurde 68 lang.
+  const auftaktSpreads = auftaktBild.size;
   const budgets = distributeBudget(structure.chapters, {
-    targetPages,
+    targetPages: Math.max(2, targetPages - auftaktSpreads * 2),
     chapterSpreads: useOpeners ? 1 : 0,
   });
   const spreadsPerYear = budgetByYear(budgets);
@@ -576,7 +609,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     const groups = groupChapter(chapter, {
       slotCounts,
       targetSpreads: spreadsPerYear.get(chapter.year) ?? 1,
-      ...(groupOf.size > 0 ? { groupOf } : {}),
+      ...(groupOf.size > 0 ? { groupOf, groupSizes: groesseVonGruppe } : {}),
       ...(ausDemFluss.size > 0 ? { exclude: ausDemFluss } : {}),
     });
 

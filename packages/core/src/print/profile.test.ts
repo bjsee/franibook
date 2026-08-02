@@ -77,13 +77,13 @@ describe('Seitenzahlregeln', () => {
     expect(isValidPageCount(profile, 160)).toBe(true);
     expect(isValidPageCount(profile, 161)).toBe(false);
     expect(isValidPageCount(profile, 22)).toBe(false); // unter dem Minimum
-    expect(isValidPageCount(profile, 202)).toBe(false); // über dem Maximum
+    expect(isValidPageCount(profile, 162)).toBe(false); // über dem Maximum
   });
 
   it('rundet auf die nächste zulässige Seitenzahl auf', () => {
-    expect(nextValidPageCount(profile, 161)).toBe(162);
+    expect(nextValidPageCount(profile, 161)).toBe(160); // auf das Maximum begrenzt
     expect(nextValidPageCount(profile, 160)).toBe(160);
     expect(nextValidPageCount(profile, 10)).toBe(24);
-    expect(nextValidPageCount(profile, 500)).toBe(200);
+    expect(nextValidPageCount(profile, 500)).toBe(160);
   });
 });

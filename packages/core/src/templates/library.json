@@ -2402,6 +2402,4314 @@
           "optional": false
         }
       ]
+    },
+    {
+      "id": "spread.13up.grid",
+      "name": "13 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 112,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        }
+      ]
+    },
+    {
+      "id": "spread.13up.grid.titled",
+      "name": "13 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 112,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 162,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 162,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 162,
+          "w": 81,
+          "h": 116,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.14up.grid",
+      "name": "14 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 112,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        }
+      ]
+    },
+    {
+      "id": "spread.14up.grid.titled",
+      "name": "14 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 112,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.15up.grid",
+      "name": "15 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 67,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 158,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        }
+      ]
+    },
+    {
+      "id": "spread.15up.grid.titled",
+      "name": "15 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 67,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 158,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.16up.grid",
+      "name": "16 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 67,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 158,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 361,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 452,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        }
+      ]
+    },
+    {
+      "id": "spread.16up.grid.titled",
+      "name": "16 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 67,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 158,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 361,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 452,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.17up.grid",
+      "name": "17 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 361,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 452,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        }
+      ]
+    },
+    {
+      "id": "spread.17up.grid.titled",
+      "name": "17 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 361,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 452,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.18up.grid",
+      "name": "18 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 316,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 406,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 497,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        }
+      ]
+    },
+    {
+      "id": "spread.18up.grid.titled",
+      "name": "18 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 316,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 406,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 497,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.19up.grid",
+      "name": "19 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 112,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 497,
+          "y": 110,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 406,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 497,
+          "y": 199,
+          "w": 81,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        }
+      ]
+    },
+    {
+      "id": "spread.19up.grid.titled",
+      "name": "19 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 112,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 497,
+          "y": 121,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 406,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 497,
+          "y": 204,
+          "w": 81,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.20up.grid",
+      "name": "20 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 112,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 316,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 497,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 406,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 497,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 406,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        }
+      ]
+    },
+    {
+      "id": "spread.20up.grid.titled",
+      "name": "20 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 112,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 316,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 406,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 497,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 406,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 497,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 406,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.21up.grid",
+      "name": "21 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 67,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 316,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 406,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 497,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 316,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 406,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 497,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 406,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        }
+      ]
+    },
+    {
+      "id": "spread.21up.grid.titled",
+      "name": "21 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 67,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 316,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 406,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 497,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 316,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 406,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 497,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 406,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.22up.grid",
+      "name": "22 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 67,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 316,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 406,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 497,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 316,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 406,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 497,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 361,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 452,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        }
+      ]
+    },
+    {
+      "id": "spread.22up.grid.titled",
+      "name": "22 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 112,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 203,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 112,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 203,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 22,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 112,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 203,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 67,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 316,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 406,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 497,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 316,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 406,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 497,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 361,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 452,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.23up.grid",
+      "name": "23 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 90,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 158,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 225,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 90,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 158,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 225,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 22,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 90,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 225,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 22,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 316,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 406,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 497,
+          "y": 88,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 316,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 406,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 497,
+          "y": 154,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 361,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        },
+        {
+          "x": 452,
+          "y": 221,
+          "w": 81,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "w"
+        }
+      ]
+    },
+    {
+      "id": "spread.23up.grid.titled",
+      "name": "23 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 90,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 158,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 225,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 90,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 158,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 225,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 22,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 90,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 225,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 406,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 497,
+          "y": 38,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 316,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 406,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 497,
+          "y": 100,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 316,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 406,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 497,
+          "y": 162,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 361,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        },
+        {
+          "x": 452,
+          "y": 225,
+          "w": 81,
+          "h": 53,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "w"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.24up.grid",
+      "name": "24 Fotos im Raster",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 90,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 158,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 225,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 22,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 90,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 158,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 225,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 22,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 90,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 225,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 384,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 452,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 519,
+          "y": 22,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 384,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 452,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 519,
+          "y": 110,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 316,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 384,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        },
+        {
+          "x": 452,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "w"
+        },
+        {
+          "x": 519,
+          "y": 199,
+          "w": 59,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "x"
+        }
+      ]
+    },
+    {
+      "id": "spread.24up.grid.titled",
+      "name": "24 Fotos im Raster, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 90,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 158,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 225,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 22,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 90,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 158,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 225,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 22,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 90,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 158,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        },
+        {
+          "x": 225,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "l"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "m"
+        },
+        {
+          "x": 384,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "n"
+        },
+        {
+          "x": 452,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "o"
+        },
+        {
+          "x": 519,
+          "y": 38,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "p"
+        },
+        {
+          "x": 316,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "q"
+        },
+        {
+          "x": 384,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "r"
+        },
+        {
+          "x": 452,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "s"
+        },
+        {
+          "x": 519,
+          "y": 121,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "t"
+        },
+        {
+          "x": 316,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "u"
+        },
+        {
+          "x": 384,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "v"
+        },
+        {
+          "x": 452,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "w"
+        },
+        {
+          "x": 519,
+          "y": 204,
+          "w": 59,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "x"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
     }
   ]
 }
