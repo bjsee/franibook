@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Crop, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
 import { dpiInSlot, imageBoxes, panCrop, photoPixelsOf, withCrop, zoomCrop } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
+import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
 const SPEICHER_VERZOEGERUNG_MS = 250;
@@ -32,6 +33,31 @@ interface PoolPhoto {
   date: string | null;
   width: number;
   height: number;
+}
+
+/**
+ * Was der Server über ein Foto weiß – `PhotoView` aus `project.ts`.
+ *
+ * `effectiveDate` ist das Ergebnis der Datumskaskade, `dateSource` sagt, woher
+ * es stammt (`exif`, `filename`, `interpolated` …). Beides zusammen anzuzeigen
+ * ist der Punkt: Ein interpoliertes Datum sieht sonst so verbindlich aus wie
+ * ein ausgelesenes.
+ */
+interface PhotoInfo {
+  id: string;
+  fileName: string;
+  relPath: string;
+  width: number;
+  height: number;
+  bytes: number;
+  effectiveDate: string | null;
+  dateSource: string;
+  dateConfidence: string;
+  takenAt?: string;
+  gps?: { lat: number; lon: number };
+  place?: { key: string; label: string };
+  camera?: string;
+  issues: { code: string; detail?: string }[];
 }
 
 interface Zug {
@@ -73,6 +99,9 @@ export function SpreadEditor({
   const [pool, setPool] = useState<PoolPhoto[] | null>(null);
   const [poolOffen, setPoolOffen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [infos, setInfos] = useState<Map<string, PhotoInfo>>(new Map());
+  /** Aufnahmezeit und Ort über den Bildern, umschaltbar mit `i`. */
+  const [infosSichtbar, setInfosSichtbar] = useState(false);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -96,6 +125,23 @@ export function SpreadEditor({
   }, []);
 
   useEffect(poolLaden, [poolLaden]);
+
+  // Was über die Fotos dieser Doppelseite bekannt ist: Aufnahmezeit, Ort,
+  // Kamera. Ein Aufruf je Doppelseite statt einer je Bild – gebraucht wird
+  // mindestens der Dateiname, sobald man ein Foto aussortieren kann.
+  const infosLaden = useCallback(() => {
+    fetch(`/api/spreads/${index}/photos`)
+      .then((r) => r.json())
+      .then((d: { photos: PhotoInfo[] }) =>
+        setInfos(new Map(d.photos.map((p) => [p.id, p] as const))),
+      )
+      .catch(() => setInfos(new Map()));
+  }, [index]);
+
+  useEffect(infosLaden, [infosLaden, spread]);
+
+  const infoVon = (photoId: string): PhotoInfo | undefined => infos.get(photoId);
+  const dateiname = (photoId: string): string => infoVon(photoId)?.fileName ?? 'Dieses Foto';
 
   /** Die Doppelseite, wie sie mit dem noch nicht gespeicherten Ausschnitt aussieht. */
   const angezeigt = useMemo(
@@ -235,6 +281,18 @@ export function SpreadEditor({
   }
 
   /** Pfeiltasten justieren fein, `+`/`−` zoomen, `0` setzt zurück. */
+  // Eigener Handler, weil er auch ohne ausgewählten Slot gelten soll: Die
+  // Aufnahmedaten aller Bilder einer Doppelseite will man am Stück sehen.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'i' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+      setInfosSichtbar((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     if (!selectedSlotId) return;
 
@@ -325,11 +383,48 @@ export function SpreadEditor({
     setZug(null);
   }
 
+  // -------------------------------------------------------- Aussortieren
+
+  /**
+   * Legt die Datei in den Papierkorb ihrer Quelle.
+   *
+   * Anders als „Aus dem Buch nehmen": Dort bleibt das Foto im Projekt und
+   * wandert in den Pool, hier verlässt es beides.
+   */
+  async function loeschen(photoId: string, name: string, imBuch: boolean) {
+    const antwort = await fotoLoeschen(photoId, { name, imBuch });
+    if (!antwort) return;
+    if (!antwort.ok) {
+      setNote(antwort.fehler);
+      return;
+    }
+
+    const treffer = antwort.ergebnis.rendered.find((r) => r.index === index);
+    if (treffer) onSpread(treffer.spread);
+    if (imBuch) onSelect(null);
+    setPendingCrop(null);
+    poolLaden();
+    onChanged();
+    setNote(loeschMeldung(antwort.ergebnis));
+  }
+
   const poolSichtbar = pool?.slice(0, POOL_SICHTBAR) ?? [];
 
   return (
     <>
       <div style={S.leiste}>
+        {/*
+          Ganz vorn und außerhalb der drei Zweige: Der Umschalter gilt für die
+          ganze Doppelseite, nicht für den ausgewählten Slot, und soll nicht je
+          nach Auswahl die Stelle wechseln.
+        */}
+        <button
+          onClick={() => setInfosSichtbar((v) => !v)}
+          style={infosSichtbar ? S.buttonAn : S.button}
+          title="Aufnahmezeit und Ort über den Bildern einblenden (i)"
+        >
+          Bildinfos (i)
+        </button>
         {gewaehlteBox ? (
           <>
             <strong style={S.slotName}>Slot {gewaehlteBox.slotId}</strong>
@@ -375,6 +470,19 @@ export function SpreadEditor({
             >
               Aus dem Buch nehmen
             </button>
+            {/*
+              Bewusst neben „Aus dem Buch nehmen" und in Rot: Die beiden sind
+              leicht zu verwechseln, und nur eines von beiden fasst die Datei an.
+            */}
+            <button
+              onClick={() =>
+                void loeschen(gewaehlteBox.photoId, dateiname(gewaehlteBox.photoId), true)
+              }
+              style={S.buttonWeg}
+              title="Legt die Datei in den Papierkorb ihrer Bildquelle. Der Platz im Buch bleibt leer."
+            >
+              Foto aussortieren
+            </button>
             <span style={S.spacer} />
             <span style={S.hint}>
               Ziehen verschiebt den Ausschnitt, Pfeiltasten justieren fein (mit <kbd>⇧</kbd>
@@ -398,6 +506,10 @@ export function SpreadEditor({
 
       {note && <p style={S.note}>{note}</p>}
 
+      {infosSichtbar && (
+        <PhotoInfoZeile info={gewaehlteBox ? infoVon(gewaehlteBox.photoId) : undefined} />
+      )}
+
       <div ref={stageRef} style={S.stage}>
         <SpreadView
           spread={angezeigt}
@@ -412,22 +524,41 @@ export function SpreadEditor({
             onDrop: slotDrop,
             onDragEnd: () => setZug(null),
           }}
-          {...(zug
+          {...(zug || infosSichtbar
             ? {
                 slotOverlay: ({ slotId }) => {
-                  const rect = slotRect(slotId);
-                  if (!rect || !zug.photo) return null;
-                  const dpi = dpiInSlot(zug.photo, rect);
+                  // Beim Ziehen gilt die Auflösung des Ziels: Sie entscheidet,
+                  // ob das Foto hier überhaupt hingehört. Die Aufnahmedaten
+                  // können solange warten.
+                  if (zug) {
+                    const rect = slotRect(slotId);
+                    if (!rect || !zug.photo) return null;
+                    const dpi = dpiInSlot(zug.photo, rect);
+                    return (
+                      <div style={S.dropZiel}>
+                        <span
+                          style={{ ...S.dropDpi, background: dpiFarbe(dpi, minDpi, targetDpi) }}
+                        >
+                          {Math.round(dpi)} dpi
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const box = bildBox(slotId);
+                  const info = box && infoVon(box.photoId);
+                  if (!info) return null;
                   return (
-                    <div style={S.dropZiel}>
-                      <span
-                        style={{
-                          ...S.dropDpi,
-                          background: dpiFarbe(dpi, minDpi, targetDpi),
-                        }}
-                      >
-                        {Math.round(dpi)} dpi
+                    <div style={S.infoOverlay}>
+                      <span style={S.infoZeile}>
+                        {zeitpunkt(info) ?? 'ohne Datum'}
+                        {info.dateSource !== 'exif' && info.effectiveDate && (
+                          <span style={S.infoQuelle}>
+                            {DATUMSQUELLE[info.dateSource] ?? info.dateSource}
+                          </span>
+                        )}
                       </span>
+                      {info.place && <span style={S.infoZeile}>{info.place.label}</span>}
                     </div>
                   );
                 },
@@ -501,6 +632,29 @@ export function SpreadEditor({
                   draggable={false}
                   style={S.poolThumb}
                 />
+                {/*
+                  Hier sammelt sich der Ausschuss – Dubletten, Verwackeltes,
+                  Nachzügler, die niemand ins Buch nimmt. Deshalb sitzt das
+                  Aussortieren an dieser Kachel und nicht in einem Menü.
+                */}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void loeschen(p.id, p.fileName, false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.stopPropagation();
+                    e.preventDefault();
+                    void loeschen(p.id, p.fileName, false);
+                  }}
+                  title={`„${p.fileName}" aussortieren`}
+                  style={S.poolWeg}
+                >
+                  ×
+                </span>
               </button>
             ))}
             {pool && pool.length > POOL_SICHTBAR && (
@@ -510,6 +664,79 @@ export function SpreadEditor({
         )}
       </section>
     </>
+  );
+}
+
+/** Wortlaut der Datumsquellen aus `model/date.ts`, für die Anzeige. */
+const DATUMSQUELLE: Record<string, string> = {
+  manual: 'von Hand',
+  exif: 'EXIF',
+  exifSecondary: 'EXIF (Nebenfeld)',
+  filename: 'aus dem Dateinamen',
+  file: 'Dateidatum',
+  interpolated: 'geschätzt',
+  unknown: 'unbekannt',
+};
+
+/** `2015-06-12T14:12:33` → `12.06.2015, 14:12`. Ohne Datum: `undefined`. */
+function zeitpunkt(info: PhotoInfo): string | undefined {
+  const wert = info.effectiveDate;
+  if (!wert) return undefined;
+  const [tag, zeit] = wert.split('T');
+  const [j, m, t] = (tag ?? '').split('-');
+  if (!j || !m || !t) return wert;
+  // Die Uhrzeit nur, wenn sie etwas aussagt: Ein aus dem Dateinamen geratenes
+  // Datum trägt oft 00:00:00, und das ist keine Aufnahmezeit.
+  const uhr = zeit && zeit !== '00:00:00' ? `, ${zeit.slice(0, 5)} Uhr` : '';
+  return `${t}.${m}.${j}${uhr}`;
+}
+
+/**
+ * Alles, was über das ausgewählte Bild bekannt ist.
+ *
+ * Getrennt vom Overlay über dem Bild: Dort ist Platz für zwei Zeilen, hier für
+ * die Herkunft des Datums, die Koordinaten und die Kamera.
+ */
+function PhotoInfoZeile({ info }: { info: PhotoInfo | undefined }) {
+  if (!info) {
+    return (
+      <p style={S.infoLeiste}>
+        <span style={S.muted}>Ein Bild auswählen, um Aufnahmezeit und Ort zu sehen.</span>
+      </p>
+    );
+  }
+
+  const gps = info.gps;
+  return (
+    <p style={S.infoLeiste}>
+      <strong>{info.fileName}</strong>
+      <span>{zeitpunkt(info) ?? 'ohne Datum'}</span>
+      <span style={S.muted}>
+        {DATUMSQUELLE[info.dateSource] ?? info.dateSource}
+        {info.dateConfidence !== 'high' && `, Konfidenz ${info.dateConfidence}`}
+      </span>
+      {info.place && <span>{info.place.label}</span>}
+      {gps ? (
+        <a
+          href={`https://www.openstreetmap.org/?mlat=${gps.lat}&mlon=${gps.lon}#map=14/${gps.lat}/${gps.lon}`}
+          target="_blank"
+          rel="noreferrer"
+          style={S.kartenLink}
+          title="Auf OpenStreetMap zeigen"
+        >
+          {gps.lat.toFixed(5)}, {gps.lon.toFixed(5)}
+        </a>
+      ) : (
+        <span style={S.muted}>ohne Ortsangabe</span>
+      )}
+      {info.camera && <span style={S.muted}>{info.camera}</span>}
+      <span style={S.muted}>
+        {info.width} × {info.height} px
+      </span>
+      {info.issues.length > 0 && (
+        <span style={S.infoWarnung}>{info.issues.map((i) => i.code).join(', ')}</span>
+      )}
+    </p>
   );
 }
 
@@ -545,7 +772,75 @@ const S = {
     cursor: 'pointer',
     fontSize: '0.8125rem',
   },
+  buttonAn: {
+    padding: '0.25rem 0.6rem',
+    border: '1px solid #2563eb',
+    borderRadius: '6px',
+    background: '#eff6ff',
+    color: '#1d4ed8',
+    cursor: 'pointer',
+    fontSize: '0.8125rem',
+  },
+  buttonWeg: {
+    padding: '0.25rem 0.6rem',
+    border: '1px solid #fca5a5',
+    borderRadius: '6px',
+    background: '#fff',
+    color: '#991b1b',
+    cursor: 'pointer',
+    fontSize: '0.8125rem',
+  },
   note: { fontSize: '0.8125rem', color: '#b91c1c' },
+  /** Kompakt über dem Bild: nur, was man im Vorbeisehen liest. */
+  // Oben, weil unten links die Auflösung steht – zwei Marken übereinander
+  // machen beide unlesbar.
+  infoOverlay: {
+    position: 'absolute' as const,
+    left: '0.25rem',
+    top: '0.25rem',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '0.1rem',
+    pointerEvents: 'none' as const,
+  },
+  infoZeile: {
+    background: 'rgba(24, 24, 27, 0.72)',
+    color: '#fff',
+    fontSize: '0.6875rem',
+    lineHeight: 1.35,
+    padding: '0.1rem 0.35rem',
+    borderRadius: 3,
+    alignSelf: 'flex-start' as const,
+  },
+  infoQuelle: { opacity: 0.75, marginLeft: '0.35rem' },
+  infoLeiste: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'baseline',
+    gap: '0.75rem',
+    margin: '0.35rem 0 0',
+    padding: '0.35rem 0.6rem',
+    background: '#f4f4f5',
+    borderRadius: 4,
+    fontSize: '0.8125rem',
+  },
+  infoWarnung: { color: '#b45309' },
+  kartenLink: { color: '#1d4ed8' },
+  poolWeg: {
+    position: 'absolute' as const,
+    top: '-0.35rem',
+    right: '-0.35rem',
+    width: '1.15rem',
+    height: '1.15rem',
+    borderRadius: '50%',
+    border: '1px solid #fca5a5',
+    background: '#fff',
+    color: '#991b1b',
+    fontSize: '0.75rem',
+    lineHeight: '1.05rem',
+    textAlign: 'center' as const,
+    cursor: 'pointer',
+  },
   stage: {
     margin: '0.75rem 0',
     boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08)',
@@ -587,6 +882,7 @@ const S = {
     alignItems: 'center',
   },
   poolBild: {
+    position: 'relative' as const,
     padding: 0,
     border: '1px solid #d1d5db',
     borderRadius: '4px',

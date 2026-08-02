@@ -9,6 +9,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import type { DecodeCache } from './decode.js';
+import type { PhotoRef } from './sources.js';
 
 export type PreviewSize = 'thumb' | 'preview';
 
@@ -41,8 +42,8 @@ export class PreviewCache {
     return join(this.cacheDir, size, photoId.slice(0, 2), `${photoId}.webp`);
   }
 
-  async get(photoId: string, relPath: string, size: PreviewSize): Promise<string> {
-    const target = this.pathFor(photoId, size);
+  async get(photo: PhotoRef, size: PreviewSize): Promise<string> {
+    const target = this.pathFor(photo.id, size);
     try {
       await access(target);
       return target;
@@ -50,8 +51,8 @@ export class PreviewCache {
       // noch nicht erzeugt
     }
 
-    await mkdir(join(this.cacheDir, size, photoId.slice(0, 2)), { recursive: true });
-    const buffer = await this.decodes.withFallback(photoId, relPath, (path) =>
+    await mkdir(join(this.cacheDir, size, photo.id.slice(0, 2)), { recursive: true });
+    const buffer = await this.decodes.withFallback(photo, (path) =>
       sharp(path)
         // Wendet die EXIF-Orientierung an, damit die Vorschau dieselbe
         // Ausrichtung zeigt wie das Modell sie annimmt.
@@ -72,7 +73,7 @@ export class PreviewCache {
 
   /** Erzeugt Vorschauen im Voraus, mit begrenzter Nebenläufigkeit. */
   async warm(
-    photos: readonly { id: string; relPath: string }[],
+    photos: readonly PhotoRef[],
     size: PreviewSize,
     concurrency: number,
     onProgress?: (done: number, total: number) => void,
@@ -86,7 +87,7 @@ export class PreviewCache {
           if (i >= photos.length) return;
           const p = photos[i]!;
           try {
-            await this.get(p.id, p.relPath, size);
+            await this.get(p, size);
           } catch {
             // Ein defektes Bild darf den Import nicht anhalten; es fällt
             // später als fehlende Vorschau auf.

@@ -4,6 +4,7 @@ import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
+import { PhotoSources } from './PhotoSources.js';
 import { YearEvents } from './YearEvents.js';
 import { BackgroundPicker } from './BackgroundPicker.js';
 import { SpreadEditor } from './SpreadEditor.js';
@@ -30,7 +31,8 @@ interface Report {
 type SpreadResponse = RenderedSpread & { timelineOverride?: boolean | null };
 
 interface ProjectInfo {
-  sourceRoot: string;
+  /** Die Ordner, aus denen das Buch gespeist wird. */
+  sources: { id: string; label: string; root: string; erreichbar: boolean }[];
   /** Nur die Auflösungsschwellen: Der Editor bewertet damit jede Änderung sofort. */
   profile: { resolution: { minDpi: number; targetDpi: number } };
   settings: {
@@ -55,7 +57,7 @@ interface ProjectInfo {
   undatedCount: number;
 }
 
-type View = 'overview' | 'spread' | 'groups' | 'years' | 'edit';
+type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit';
 
 /**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
@@ -170,7 +172,7 @@ export function App() {
   }
 
   /**
-   * Liest den Quellordner erneut ein.
+   * Liest alle Bildquellen erneut ein.
    *
    * Das Buch bleibt stehen – neue Fotos stehen danach im Fotopool. Ein
    * Neuanordnen ist ausdrücklich nicht Teil davon.
@@ -185,6 +187,7 @@ export function App() {
         verschwunden: string[];
         unveraendert: number;
         imBuchVerschwunden: string[];
+        offline: { label: string; photoCount: number }[];
         photoCount: number;
       };
       loadInfo();
@@ -200,6 +203,11 @@ export function App() {
         teile.push(
           `davon ${d.imBuchVerschwunden.length} noch im Buch – dort bleibt der Platz leer`,
         );
+      }
+      // Eine übersprungene Quelle muss dranstehen, sonst liest sich „0 neu" wie
+      // „nichts dazugekommen" statt wie „gar nicht nachgesehen".
+      for (const q of d.offline ?? []) {
+        teile.push(`„${q.label}" nicht erreichbar, ${q.photoCount} Fotos daraus unberührt`);
       }
       setNote(teile.join(', '));
     } catch (e: unknown) {
@@ -295,6 +303,15 @@ export function App() {
             {report && ` · ${report.pageCount} Seiten`}
           </span>
         )}
+        {/*
+          Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im
+          PDF fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
+        */}
+        {info && info.sources.some((q) => !q.erreichbar) && (
+          <button onClick={() => setView('sources')} style={S.warnung}>
+            {info.sources.filter((q) => !q.erreichbar).length} Bildquelle(n) nicht erreichbar
+          </button>
+        )}
         <span style={S.spacer} />
         <div style={S.tabs}>
           <button
@@ -311,6 +328,12 @@ export function App() {
           </button>
           <button onClick={() => setView('years')} style={view === 'years' ? S.tabActive : S.tab}>
             Jahre
+          </button>
+          <button
+            onClick={() => setView('sources')}
+            style={view === 'sources' ? S.tabActive : S.tab}
+          >
+            Bildquellen
           </button>
           <button onClick={() => setView('edit')} style={view === 'edit' ? S.tabActive : S.tab}>
             Aufteilung (JSON)
@@ -333,6 +356,16 @@ export function App() {
         />
       ) : view === 'groups' ? (
         <PhotoGroups onChanged={loadInfo} />
+      ) : view === 'sources' ? (
+        <PhotoSources
+          onChanged={() => {
+            loadInfo();
+            // Fotos können hinzugekommen oder weggefallen sein – die
+            // gerenderte Doppelseite im Speicher gilt nicht weiter.
+            setSpread(null);
+            setRenderVersion((v) => v + 1);
+          }}
+        />
       ) : view === 'edit' ? (
         <LayoutEditor
           imageSrc={imageSrc}
@@ -629,6 +662,16 @@ const S = {
   header: { display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '1rem' },
   title: { fontSize: '1.25rem', fontWeight: 600, margin: 0 },
   muted: { color: '#6b7280', fontSize: '0.875rem' },
+  warnung: {
+    font: 'inherit',
+    fontSize: '0.8rem',
+    color: '#b45309',
+    background: '#fffbeb',
+    border: '1px solid #fcd34d',
+    borderRadius: 4,
+    padding: '0.2rem 0.5rem',
+    cursor: 'pointer',
+  },
   spacer: { flex: 1 },
   tabs: { display: 'flex', gap: '0.25rem' },
   tab: {

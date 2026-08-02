@@ -113,6 +113,20 @@ describe('Fotos verschieben', () => {
     expect(g[0]!.photoIds).toEqual(['1', '3']);
   });
 
+  it('nimmt das Hauptbild mit, wenn es herausgenommen wird', () => {
+    // Sonst zeigte die Auftaktseite auf ein Foto, das nicht mehr zur Gruppe
+    // gehört – seit Fotos einzeln aussortiert werden, sogar auf eines, das es
+    // nicht mehr gibt.
+    const g = ungroupPhotos([group('a', ['1', '2'], { coverPhotoId: '1' })], ['1']);
+    expect(g[0]!.coverPhotoId).toBeUndefined();
+    expect(g[0]!.photoIds).toEqual(['2']);
+  });
+
+  it('lässt ein Hauptbild stehen, das bleibt', () => {
+    const g = ungroupPhotos([group('a', ['1', '2'], { coverPhotoId: '1' })], ['2']);
+    expect(g[0]!.coverPhotoId).toBe('1');
+  });
+
   it('löscht eine Gruppe, ohne die Fotos zu verlieren', () => {
     const g = removeGroup([group('a', ['1']), group('b', ['2'])], 'a');
     expect(g.map((x) => x.id)).toEqual(['b']);

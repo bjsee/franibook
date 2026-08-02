@@ -129,14 +129,29 @@ export function removeGroup(groups: readonly PhotoGroup[], id: GroupId): PhotoGr
   return groups.filter((g) => g.id !== id);
 }
 
-/** Nimmt Fotos aus ihren Gruppen heraus. */
+/**
+ * Nimmt Fotos aus ihren Gruppen heraus.
+ *
+ * Das Hauptbild fällt mit, wenn es eines der herausgenommenen war: Eine Gruppe,
+ * die von einem Foto vertreten wird, das nicht mehr zu ihr gehört, wäre auf
+ * ihrer Auftaktseite schlicht falsch – und seit Fotos einzeln gelöscht werden
+ * können, zeigte sie sonst auf ein Bild, das es nicht mehr gibt.
+ */
 export function ungroupPhotos(
   groups: readonly PhotoGroup[],
   photoIds: readonly PhotoId[],
 ): PhotoGroup[] {
   const ids = new Set(photoIds);
   return groups
-    .map((g) => ({ ...g, photoIds: g.photoIds.filter((id) => !ids.has(id)) }))
+    .map((g) => {
+      const { coverPhotoId, ...rest } = g;
+      const behalten = coverPhotoId !== undefined && !ids.has(coverPhotoId);
+      return {
+        ...rest,
+        ...(behalten ? { coverPhotoId } : {}),
+        photoIds: g.photoIds.filter((id) => !ids.has(id)),
+      };
+    })
     .filter((g) => g.photoIds.length > 0);
 }
 

@@ -1,21 +1,21 @@
 /**
  * Fotoimport.
  *
- * Für Phase 1 bewusst schlank: Ordner scannen, Metadaten lesen, Vorschaubilder
- * erzeugen. Die vollständige Metadatenkaskade mit Plausibilitätsprüfungen
- * folgt in Phase 2.
+ * Eine Bildquelle rekursiv scannen, Metadaten lesen, Fotos aufbauen. Welche
+ * Quellen es gibt und wie sie zu Dateipfaden werden, steht in `sources.ts`.
  *
  * Die Originaldateien werden ausschließlich gelesen.
  */
 import { createHash } from 'node:crypto';
 import { open, readdir, stat } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
-import { extname, join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { exiftool } from 'exiftool-vendored';
 import sharp from 'sharp';
 import type { NaiveDateTime, Photo } from '@franibook/core';
 import { lookupPlace } from '@franibook/geo';
 import type { DecodeCache } from './decode.js';
+import type { PhotoSource } from './sources.js';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
 const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
@@ -113,30 +113,67 @@ async function mapLimit<T, R>(
   return results;
 }
 
-export async function importFolder(
-  root: string,
-  decodes: DecodeCache,
-  limit?: number,
-): Promise<ImportResult> {
-  const entries = await readdir(root);
+/**
+ * Sammelt Bilddateien einer Quelle, Unterordner eingeschlossen.
+ *
+ * Rekursiv, weil Nachschub typischerweise als ganzer Ordner ankommt – ein
+ * Kartenexport, ein geteiltes Album. Ein flacher Scan hätte davon nichts
+ * gesehen und die Dateien stillschweigend unter „übersprungen" abgelegt.
+ *
+ * Versteckte Einträge bleiben außen vor: `.DS_Store`, `.Trashes` und
+ * Fotos-Mediatheken haben im Bestand nichts verloren.
+ */
+export async function sammleDateien(root: string): Promise<{
+  images: string[];
+  skippedVideos: string[];
+  skippedOther: string[];
+}> {
   const images: string[] = [];
   const skippedVideos: string[] = [];
   const skippedOther: string[] = [];
 
-  for (const name of entries.sort()) {
-    if (name.startsWith('.')) continue;
-    const ext = extname(name).toLowerCase();
-    if (IMAGE_EXT.has(ext)) images.push(name);
-    else if (VIDEO_EXT.has(ext)) skippedVideos.push(name);
-    else skippedOther.push(name);
+  async function ordner(rel: string): Promise<void> {
+    const entries = await readdir(join(root, rel), { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name.startsWith('.')) continue;
+      const relPath = rel ? join(rel, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        await ordner(relPath);
+        continue;
+      }
+      const ext = extname(entry.name).toLowerCase();
+      if (IMAGE_EXT.has(ext)) images.push(relPath);
+      else if (VIDEO_EXT.has(ext)) skippedVideos.push(relPath);
+      else skippedOther.push(relPath);
+    }
   }
+
+  await ordner('');
+  return { images, skippedVideos, skippedOther };
+}
+
+/**
+ * Liest eine Bildquelle ein.
+ *
+ * @param limit Höchstzahl einzulesender Fotos. Bei mehreren Quellen gibt der
+ * Aufrufer das Restkontingent weiter, damit `FRANIBOOK_LIMIT` weiterhin die
+ * Gesamtzahl begrenzt und nicht die je Ordner.
+ */
+export async function importSource(
+  source: PhotoSource,
+  decodes: DecodeCache,
+  limit?: number,
+): Promise<ImportResult> {
+  const root = source.root;
+  const { images, skippedVideos, skippedOther } = await sammleDateien(root);
 
   const selected = limit ? images.slice(0, limit) : images;
   const failed: { file: string; reason: string }[] = [];
   const concurrency = Math.max(1, availableParallelism() - 1);
 
-  const results = await mapLimit(selected, concurrency, async (fileName): Promise<Photo | null> => {
-    const path = join(root, fileName);
+  const results = await mapLimit(selected, concurrency, async (relPath): Promise<Photo | null> => {
+    const path = join(root, relPath);
+    const fileName = basename(relPath);
     try {
       // Der Inhaltshash muss vor den Pixeln bekannt sein: Er benennt das
       // Konvertat im Decode-Cache. Die verlorene Nebenläufigkeit sind 128 KB
@@ -150,7 +187,7 @@ export async function importFolder(
         // Metadaten liest exiftool immer aus dem Original – die Konvertierung
         // betrifft nur die Pixel. Nur die Pixelmaße kommen bei einer für
         // libvips unlesbaren Datei aus dem Konvertat, und `sips` ist maßhaltig.
-        decodes.withFallback(id, fileName, (p) => sharp(p).metadata()),
+        decodes.withFallback({ id, relPath, sourceId: source.id }, (p) => sharp(p).metadata()),
       ]);
 
       // Pixelmaße sofort orientierungsnormalisieren. Alles Nachgelagerte –
@@ -189,7 +226,8 @@ export async function importFolder(
 
       return {
         id,
-        relPath: fileName,
+        relPath,
+        sourceId: source.id,
         fileName,
         bytes: st.size,
         width: swap ? rawH : rawW,
@@ -208,7 +246,7 @@ export async function importFolder(
         ...(camera ? { camera } : {}),
       };
     } catch (err) {
-      failed.push({ file: fileName, reason: err instanceof Error ? err.message : String(err) });
+      failed.push({ file: relPath, reason: err instanceof Error ? err.message : String(err) });
       return null;
     }
   });
@@ -224,7 +262,7 @@ export async function importFolder(
     if (a.takenAt && b.takenAt) return a.takenAt.localeCompare(b.takenAt);
     if (a.takenAt) return -1;
     if (b.takenAt) return 1;
-    return a.fileName.localeCompare(b.fileName);
+    return a.relPath.localeCompare(b.relPath);
   });
 
   return { photos, skippedVideos, skippedOther, failed };

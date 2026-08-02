@@ -8,6 +8,7 @@
  * Die Automatik schlägt Gruppen anhand der Orte vor – entschieden wird hier.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 
 interface PhotoRow {
   id: string;
@@ -57,6 +58,29 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Legt die Datei in den Papierkorb ihrer Quelle.
+   *
+   * Von hier aus ist nicht erkennbar, ob das Foto im Buch steht – die Liste
+   * kennt die Doppelseiten nicht. Die Rückmeldung sagt es hinterher.
+   */
+  async function aussortieren(id: string, fileName: string) {
+    const antwort = await fotoLoeschen(id, { name: fileName });
+    if (!antwort) return;
+    if (!antwort.ok) {
+      setNote(antwort.fehler);
+      return;
+    }
+    setSelected((s) => {
+      const neu = new Set(s);
+      neu.delete(id);
+      return neu;
+    });
+    await load();
+    onChanged();
+    setNote(loeschMeldung(antwort.ergebnis));
+  }
 
   const groupOf = useMemo(() => {
     const map = new Map<string, Group>();
@@ -464,6 +488,22 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
                 {g && (
                   <span style={{ ...S.groupTag, opacity: g.active ? 1 : 0.45 }}>{g.title}</span>
                 )}
+                {/*
+                  Hier stehen die Bilder eines Tages untereinander – die Stelle,
+                  an der Dubletten auffallen. Deshalb das Aussortieren direkt in
+                  der Zeile, mit stopPropagation, damit es die Auswahl nicht
+                  umwirft.
+                */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void aussortieren(p.id, p.fileName);
+                  }}
+                  title={`„${p.fileName}" aussortieren`}
+                  style={S.rowWeg}
+                >
+                  ×
+                </button>
               </div>
             );
           })}
@@ -632,6 +672,19 @@ const S = {
     background: '#f3f4f6',
     borderRadius: '4px',
     whiteSpace: 'nowrap' as const,
+  },
+  rowWeg: {
+    font: 'inherit',
+    fontSize: '0.9rem',
+    lineHeight: 1,
+    width: '1.4rem',
+    height: '1.4rem',
+    border: '1px solid #fca5a5',
+    borderRadius: '50%',
+    background: '#fff',
+    color: '#991b1b',
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   figCaption: {
     display: 'flex',

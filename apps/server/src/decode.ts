@@ -24,6 +24,7 @@ import { execFile } from 'node:child_process';
 import { access, mkdir, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import type { PathResolver, PhotoRef } from './sources.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -97,7 +98,12 @@ export class DecodeCache {
 
   constructor(
     private readonly cacheDir: string,
-    private readonly sourceRoot: string,
+    /**
+     * Löst das Foto zu einem Dateipfad auf. Der Cache kennt die Quellen nicht:
+     * Ein Foto kann aus jedem der Ordner stammen, die dem Projekt hinzugefügt
+     * wurden, und der Weg dorthin ist die Sache der Quellenverwaltung.
+     */
+    private readonly quellen: PathResolver,
     /** Nur für Tests austauschbar. */
     private readonly konvertiere: (src: string, dst: string) => Promise<void> = sipsNachJpeg,
   ) {}
@@ -129,10 +135,10 @@ export class DecodeCache {
    *
    * @returns Pfad zum Konvertat, oder `undefined`, wenn auch `sips` scheitert.
    */
-  async rescue(photoId: string, relPath: string): Promise<string | undefined> {
-    if (this.aussichtslos.has(photoId)) return undefined;
+  async rescue(photo: PhotoRef): Promise<string | undefined> {
+    if (this.aussichtslos.has(photo.id)) return undefined;
 
-    const laufend = this.laufend.get(photoId);
+    const laufend = this.laufend.get(photo.id);
     if (laufend) {
       try {
         return await laufend;
@@ -141,32 +147,32 @@ export class DecodeCache {
       }
     }
 
-    const versuch = this.convert(photoId, relPath);
-    this.laufend.set(photoId, versuch);
+    const versuch = this.convert(photo);
+    this.laufend.set(photo.id, versuch);
     try {
       const target = await versuch;
-      this.defekt.add(photoId);
+      this.defekt.add(photo.id);
       return target;
     } catch {
-      this.aussichtslos.add(photoId);
+      this.aussichtslos.add(photo.id);
       return undefined;
     } finally {
-      this.laufend.delete(photoId);
+      this.laufend.delete(photo.id);
     }
   }
 
-  private async convert(photoId: string, relPath: string): Promise<string> {
-    const vorhanden = await this.existing(photoId);
+  private async convert(photo: PhotoRef): Promise<string> {
+    const vorhanden = await this.existing(photo.id);
     if (vorhanden) return vorhanden;
 
-    const target = this.pathFor(photoId);
+    const target = this.pathFor(photo.id);
     await mkdir(dirname(target), { recursive: true });
 
     // Über eine Nebendatei und `rename`, wie bei der Projektdatei: Ein Abbruch
     // mitten in der Konvertierung darf kein halbes JPEG hinterlassen, das beim
     // nächsten Start als gültiges Konvertat gilt.
     const tmp = `${target}.${process.pid}.tmp`;
-    await this.konvertiere(join(this.sourceRoot, relPath), tmp);
+    await this.konvertiere(this.quellen.pfad(photo), tmp);
     await rename(tmp, target);
     return target;
   }
@@ -180,21 +186,17 @@ export class DecodeCache {
    * `sharp().metadata()` je Zugriff wäre bei 820 Bildern reine Verschwendung –
    * betroffen ist eines.
    */
-  async withFallback<T>(
-    photoId: string,
-    relPath: string,
-    op: (path: string) => Promise<T>,
-  ): Promise<T> {
-    if (this.defekt.has(photoId)) {
-      const bekannt = (await this.existing(photoId)) ?? (await this.rescue(photoId, relPath));
+  async withFallback<T>(photo: PhotoRef, op: (path: string) => Promise<T>): Promise<T> {
+    if (this.defekt.has(photo.id)) {
+      const bekannt = (await this.existing(photo.id)) ?? (await this.rescue(photo));
       if (bekannt) return await op(bekannt);
     }
 
     try {
-      return await op(join(this.sourceRoot, relPath));
+      return await op(this.quellen.pfad(photo));
     } catch (err) {
       if (!istDecoderFehler(err)) throw err;
-      const gerettet = await this.rescue(photoId, relPath);
+      const gerettet = await this.rescue(photo);
       // Scheitert auch `sips`, ist der ursprüngliche Fehler die ehrlichere
       // Meldung – er benennt das Format, nicht den Rettungsversuch.
       if (!gerettet) throw err;
