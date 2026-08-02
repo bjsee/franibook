@@ -12,7 +12,12 @@ import { createReadStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
-import { type CoverDesign, coverWarningText } from '@franibook/core';
+import {
+  type CoverDesign,
+  type MoveSource,
+  type MoveTarget,
+  coverWarningText,
+} from '@franibook/core';
 import { renderCoverPdf, renderPdf } from '@franibook/render-pdf';
 import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
@@ -78,6 +83,43 @@ app.post<{ Body: unknown }>('/api/book/layout', async (req, reply) => {
   void project.save();
   return result;
 });
+
+/** Fotos, die derzeit in keinem Slot liegen. */
+app.get('/api/book/unplaced', async () => {
+  const photos = project.unplacedPhotos();
+  return { count: photos.length, photos };
+});
+
+/**
+ * Hängt ein einzelnes Foto um.
+ *
+ * Bewusst ein eigener Endpunkt und nicht `POST /api/book/layout`: Dort wird
+ * das ganze Buch neu zusammengesetzt (Vorlagenwahl, Slotzuordnung,
+ * Ausschnitte), was für einen einzelnen Griff drei unerwünschte Nebenwirkungen
+ * hätte – manuelle Ausschnitte unbeteiligter Doppelseiten fallen weg, eine
+ * Doppelseite kann eine andere Vorlage bekommen, und das gesamte Dokument muss
+ * über die Leitung. Hier ändern sich ausschließlich die beiden beteiligten
+ * Slots; die Antwort liefert die betroffenen Doppelseiten fertig gerendert
+ * zurück, damit die Oberfläche nicht nachfragen muss.
+ */
+app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
+  '/api/book/move',
+  async (req, reply) => {
+    const { source, target } = req.body ?? {};
+    if (!source || !target) return reply.code(400).send({ error: 'source und target fehlen' });
+
+    const result = project.movePhoto(source, target);
+    if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+
+    void project.save();
+    return {
+      ok: true,
+      touched: result.touched,
+      spreads: result.touched.map((index) => project.render(index)),
+      report: project.lastReport,
+    };
+  },
+);
 
 // ------------------------------------------------------------------ Gruppen
 
@@ -246,26 +288,42 @@ app.patch<{ Params: { index: string }; Body: { timeline: boolean | null } }>(
 /**
  * Setzt den Bildausschnitt eines Slots.
  *
- * In Phase 1 vor allem für den Parity-Test da: Ohne einen manuell
- * verschobenen Ausschnitt prüft der Test nur zentrierte Zuschnitte – und
- * gerade bei denen liefern eine korrekte Ausschnittsberechnung und der naive
- * Weg über `object-position: center` zufällig dasselbe Ergebnis. Der Editor
- * in Phase 6 nutzt denselben Endpunkt.
+ * Zuerst für den Parity-Test gebaut: Ohne einen manuell verschobenen
+ * Ausschnitt prüft der Test nur zentrierte Zuschnitte – und gerade bei denen
+ * liefern eine korrekte Ausschnittsberechnung und der naive Weg über
+ * `object-position: center` zufällig dasselbe Ergebnis. Der Ausschnitt-Editor
+ * der Doppelseitenansicht nutzt denselben Endpunkt.
  */
 app.patch<{
   Params: { index: string; slotId: string };
   Body: { x: number; y: number; w: number; h: number };
 }>('/api/spreads/:index/slots/:slotId/crop', async (req, reply) => {
-  const spread = project.spreads[Number(req.params.index)];
-  if (!spread) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
-
-  const slot = spread.slots.find((s) => s.slotId === req.params.slotId);
-  if (!slot) return reply.code(404).send({ error: 'Slot nicht gefunden' });
-
   const { x, y, w, h } = req.body;
-  slot.crop = { x, y, w, h, mode: 'manual' };
-  return { ok: true, crop: slot.crop };
+  const result = project.setSlotCrop(Number(req.params.index), req.params.slotId, {
+    x,
+    y,
+    w,
+    h,
+    mode: 'manual',
+  });
+  if (!result.ok) return reply.code(404).send({ error: result.error });
+
+  void project.save();
+  return { ok: true, spread: project.render(Number(req.params.index)) };
 });
+
+/** Stellt den Ausschnitt auf automatisch zurück. */
+app.delete<{ Params: { index: string; slotId: string } }>(
+  '/api/spreads/:index/slots/:slotId/crop',
+  async (req, reply) => {
+    const index = Number(req.params.index);
+    const result = project.setSlotCrop(index, req.params.slotId, null);
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: project.render(index) };
+  },
+);
 
 app.get<{ Params: { id: string }; Querystring: { size?: string } }>(
   '/api/photos/:id/preview',

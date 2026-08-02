@@ -24,6 +24,7 @@ tests/parity/.cache/
 tests/parity/.project/
 tests/parity/.out/
 tests/parity/.artifacts/
+tests/parity/.project/
 test-results/
 playwright-report/
 apps/server/.franibook-cache/

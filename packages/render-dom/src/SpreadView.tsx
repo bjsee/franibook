@@ -10,7 +10,7 @@
  * könnte. Fehlt es, zeigt die Vorschau eine Systemschrift – auffällig genug,
  * und der Parity-Test schlägt an.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import {
   BOOK_FONT_FAMILY,
   CSS_FONT_WEIGHT,
@@ -32,6 +32,23 @@ export interface GuideVisibility {
   diagnostics?: boolean;
 }
 
+/**
+ * Foto von Slot zu Slot ziehen.
+ *
+ * Absichtlich nur Ereignisse, keine Bibliothek: `dnd-kit` (im Issue
+ * vorgesehen) hätte dieses Paket von einer UI-Abhängigkeit abhängig gemacht,
+ * obwohl der Renderer nichts weiter braucht als „hier begann es, hier endet
+ * es". Was ein Zug bedeutet, entscheidet allein der Aufrufer – der Renderer
+ * trifft weder eine Layout- noch eine Modellentscheidung. Die
+ * Tastaturbedienung läuft entsprechend über die Slotauswahl und den Fotopool,
+ * nicht über den Ziehvorgang.
+ */
+export interface SlotDragHandlers {
+  onDragStart: (slotId: string) => void;
+  onDrop: (slotId: string) => void;
+  onDragEnd?: () => void;
+}
+
 export interface SpreadViewProps {
   spread: RenderedSpread;
   /** Darstellungsbreite in Pixeln. Bestimmt den Maßstab. */
@@ -42,6 +59,21 @@ export interface SpreadViewProps {
   onSlotClick?: (slotId: string) => void;
   /** Kennzeichnet den ausgewählten Slot. */
   selectedSlotId?: string;
+  /**
+   * Beginn eines Ziehvorgangs im Slot – für den Ausschnitt-Editor.
+   *
+   * Der Aufrufer rechnet die Mausbewegung in eine Ausschnittsänderung um und
+   * schickt das Ergebnis als geändertes Modell zurück in diese Ansicht. Damit
+   * bleibt auch beim Ziehen jede Position eine Position aus dem RSM.
+   */
+  onSlotPointerDown?: (slotId: string, event: ReactPointerEvent<HTMLDivElement>) => void;
+  slotDrag?: SlotDragHandlers;
+  /**
+   * Zusätzliche Einblendung über einem Slot, etwa die Auflösung, die ein
+   * gezogenes Foto hier erreichen würde. Rein darstellend; der Renderer
+   * bestimmt nur das Rechteck, den Inhalt der Aufrufer.
+   */
+  slotOverlay?: (slot: { slotId: string; kind: 'image' | 'empty' }) => ReactNode;
 }
 
 const GUIDE_STYLES: Record<Guide['kind'], CSSProperties> = {
@@ -91,6 +123,9 @@ export function SpreadView({
   guides = {},
   onSlotClick,
   selectedSlotId,
+  onSlotPointerDown,
+  slotDrag,
+  slotOverlay,
 }: SpreadViewProps) {
   // Der einzige Maßstab der gesamten Vorschau.
   const pxPerMm = widthPx / spread.widthMm;
@@ -131,6 +166,36 @@ export function SpreadView({
     </div>
   );
 
+  /**
+   * Ereignisse für das Ziehen eines Fotos an einem Slot.
+   *
+   * Der ausgewählte Slot ist bewusst nicht ziehbar: Dort zieht die Maus den
+   * Ausschnitt. Ohne diese Trennung bräuchte es eine Zusatztaste, um zwischen
+   * „Bild verschieben" und „Ausschnitt verschieben" zu unterscheiden – ein
+   * Klick als Umschalter ist ohne Erklärung verständlich.
+   */
+  function dragProps(slotId: string, hasPhoto: boolean) {
+    if (!slotDrag) return {};
+    return {
+      draggable: hasPhoto && selectedSlotId !== slotId,
+      onDragStart: (e: DragEvent<HTMLDivElement>) => {
+        e.dataTransfer.effectAllowed = 'move';
+        // Ohne Nutzlast bricht Firefox den Zug sofort ab.
+        e.dataTransfer.setData('text/plain', slotId);
+        slotDrag.onDragStart(slotId);
+      },
+      onDragOver: (e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      },
+      onDrop: (e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        slotDrag.onDrop(slotId);
+      },
+      onDragEnd: () => slotDrag.onDragEnd?.(),
+    };
+  }
+
   function renderBox(box: RenderBox, i: number): ReactNode {
     switch (box.kind) {
       case 'image': {
@@ -142,10 +207,16 @@ export function SpreadView({
             data-testid={`slot-${box.slotId}`}
             data-dpi={Math.round(box.effectiveDpi)}
             onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
+            onPointerDown={onSlotPointerDown ? (e) => onSlotPointerDown(box.slotId, e) : undefined}
+            {...dragProps(box.slotId, true)}
             style={{
               ...rect(box),
               overflow: 'hidden',
-              cursor: onSlotClick ? 'pointer' : undefined,
+              cursor: selectedSlotId === box.slotId ? 'grab' : onSlotClick ? 'pointer' : undefined,
+              // Beim Ziehen des Ausschnitts darf der Browser nicht anfangen,
+              // Text zu markieren – sonst reißt die Bewegung ab.
+              userSelect: onSlotPointerDown ? 'none' : undefined,
+              touchAction: onSlotPointerDown ? 'none' : undefined,
               background: missing
                 ? 'repeating-linear-gradient(45deg,#fee,#fee 6px,#fdd 6px,#fdd 12px)'
                 : undefined,
@@ -187,6 +258,7 @@ export function SpreadView({
                 {box.slotId} · {Math.round(box.effectiveDpi)} dpi
               </span>
             )}
+            {slotOverlay?.({ slotId: box.slotId, kind: 'image' })}
           </div>
         );
       }
@@ -197,12 +269,17 @@ export function SpreadView({
             key={box.slotId}
             data-testid={`slot-${box.slotId}`}
             onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
+            {...dragProps(box.slotId, false)}
             style={{
               ...rect(box),
               border: '1px dashed rgba(0,0,0,0.25)',
               cursor: onSlotClick ? 'pointer' : undefined,
+              outline: selectedSlotId === box.slotId ? '2px solid #2563eb' : undefined,
+              outlineOffset: '-2px',
             }}
-          />
+          >
+            {slotOverlay?.({ slotId: box.slotId, kind: 'empty' })}
+          </div>
         );
 
       /**
