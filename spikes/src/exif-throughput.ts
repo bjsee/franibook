@@ -62,7 +62,9 @@ async function main() {
     mapLimit(files, CONCURRENCY, (f) => exiftool.read(f)),
   );
   const mitDatum = exifResults.filter((t) => t.DateTimeOriginal != null).length;
-  console.log(`exiftool (Batch):     ${fmtMs(exifMs)}  → ${(exifMs / files.length).toFixed(1)} ms/Datei`);
+  console.log(
+    `exiftool (Batch):     ${fmtMs(exifMs)}  → ${(exifMs / files.length).toFixed(1)} ms/Datei`,
+  );
   console.log(`                      ${mitDatum}/${files.length} mit DateTimeOriginal`);
 
   // 2. sharp.metadata()
@@ -70,13 +72,17 @@ async function main() {
     mapLimit(files, CONCURRENCY, (f) => sharp(f).metadata()),
   );
   const mitMassen = sharpResults.filter((m) => m.width && m.height).length;
-  console.log(`sharp.metadata():     ${fmtMs(sharpMs)}  → ${(sharpMs / files.length).toFixed(1)} ms/Datei`);
+  console.log(
+    `sharp.metadata():     ${fmtMs(sharpMs)}  → ${(sharpMs / files.length).toFixed(1)} ms/Datei`,
+  );
   console.log(`                      ${mitMassen}/${files.length} mit Pixelmaßen`);
 
   // 3. Inhaltshash
   const [hashes, hashMs] = await timed(() => mapLimit(files, CONCURRENCY, contentHash));
   const eindeutig = new Set(hashes).size;
-  console.log(`Inhaltshash:          ${fmtMs(hashMs)}  → ${(hashMs / files.length).toFixed(2)} ms/Datei`);
+  console.log(
+    `Inhaltshash:          ${fmtMs(hashMs)}  → ${(hashMs / files.length).toFixed(2)} ms/Datei`,
+  );
   console.log(`                      ${eindeutig}/${files.length} eindeutig`);
 
   // 4. Kombiniert, wie im echten Import
@@ -90,12 +96,18 @@ async function main() {
       return { tags, meta, hash };
     }),
   );
-  console.log(`\nKombinierter Import:  ${fmtMs(kombiMs)}  → ${(kombiMs / files.length).toFixed(1)} ms/Datei`);
+  console.log(
+    `\nKombinierter Import:  ${fmtMs(kombiMs)}  → ${(kombiMs / files.length).toFixed(1)} ms/Datei`,
+  );
 
-  const ziel = 30_000;
+  // Nach der ersten Messung von 30 s auf 10 s verschärft – siehe
+  // docs/spikes/phase-0.adoc.
+  const ziel = 10_000;
   console.log(
     `\nBudget laut Konzept: ${fmtMs(ziel)} für 900 Fotos → ` +
-      (kombiMs <= ziel ? `eingehalten (${((kombiMs / ziel) * 100).toFixed(0)} %)` : 'ÜBERSCHRITTEN'),
+      (kombiMs <= ziel
+        ? `eingehalten (${((kombiMs / ziel) * 100).toFixed(0)} %)`
+        : 'ÜBERSCHRITTEN'),
   );
 
   await exiftool.end();

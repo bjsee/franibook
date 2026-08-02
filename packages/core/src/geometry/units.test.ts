@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  MM_PER_INCH,
-  effectiveDpi,
-  mmToPt,
-  mmToPx,
-  ptToMm,
-  pxToMm,
-  targetPx,
-} from './units.js';
+import { MM_PER_INCH, effectiveDpi, mmToPt, mmToPx, ptToMm, pxToMm, targetPx } from './units.js';
 
 describe('mm ↔ pt', () => {
   it('rechnet ein Zoll auf 72 Punkte', () => {

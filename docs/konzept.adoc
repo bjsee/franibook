@@ -80,8 +80,8 @@ Ein `pnpm dev` startet Backend und Frontend. Das Backend hält genau ein geöffn
 | Bereich | Wahl | Begründung
 
 | Sprache
-| TypeScript 5.x, strict
-| Ein Sprachraum für Engine, Server und UI. Die Layout-Engine muss in beiden Laufzeiten identisch arbeiten – das ist mit einer zweiten Sprache nur über Duplikation oder eine zusätzliche Serialisierungsschicht erreichbar.
+| TypeScript 6.0, strict
+| Ein Sprachraum für Engine, Server und UI. Die Layout-Engine muss in beiden Laufzeiten identisch arbeiten – das ist mit einer zweiten Sprache nur über Duplikation oder eine zusätzliche Serialisierungsschicht erreichbar. Nicht 7.x: `tsc` 7 übersetzt das Projekt sauber, aber typescript-eslint unterstützt es noch nicht (Peer `<6.1.0`, auch im Canary). Nachziehen, sobald das Plugin folgt.
 
 | Laufzeit
 | Node 22 LTS
@@ -790,6 +790,39 @@ Entscheidend ist, dass sharp **exakt die benötigte Pixelzahl** liefert: `zielPx
 
 Die Verarbeitung läuft über einen Worker-Pool mit begrenzter Warteschlange; pdfkit schreibt die fertigen Seiten fortlaufend in den Ausgabestream, sodass der Speicherverbrauch unabhängig von der Seitenzahl bleibt.
 
+=== Gemessenes Verhalten
+
+Phase 0 hat 180 Seiten à 5 Bilder mit beiden Renderern über dieselbe Pipeline geschrieben:
+
+[cols="2,1,1"]
+|===
+| | pdfkit (Stream) | pdf-lib (im Speicher)
+
+| Peak RSS | *495 MB* | *4.916 MB*
+| Laufzeit | 2 min 28 s | 2 min 35 s
+| Dateigröße | 2.309 MB | 2.309 MB
+|===
+
+Die Entscheidung für pdfkit ist damit bestätigt, deutlicher als angenommen – geschätzt waren für pdf-lib 1 bis 1,5 GB, gemessen wurden knapp 5 GB. Die Laufzeit ist bei beiden gleich, weil sie fast vollständig in sharp anfällt und nicht im PDF-Renderer; der Worker-Pool ist entsprechend die Stellschraube, nicht die Wahl der PDF-Bibliothek.
+
+=== Dateigröße
+
+Ein Buch dieser Größe erzeugt eine Datei, die man im Blick behalten muss. Die Messung an einem repräsentativen Slot (148×148 mm bei 300 dpi), hochgerechnet auf 180 Seiten à 5 Bilder:
+
+[cols="1,1,1"]
+|===
+| Qualität / Chroma | Rauschen (Worst Case) | fotoähnlich
+
+| 92 / 4:4:4 | 2.779 MB | 338 MB
+| 92 / 4:2:0 | 1.516 MB | 206 MB
+| 88 / 4:2:0 | 1.226 MB | 161 MB
+| 85 / 4:2:0 | 1.048 MB | 133 MB
+|===
+
+Echte Fotos liegen zwischen beiden Spalten, näher an der rechten; für 900 Fotos ist bei der Vorgabe eine Größenordnung von 400 bis 900 MB zu erwarten.
+
+Die wirksamste Stellschraube ist nicht die Qualität, sondern das Chroma-Subsampling: der Wechsel von 4:4:4 auf 4:2:0 halbiert die Datei bei kaum sichtbarem Unterschied. Vorgabe bleibt **q92 mit 4:4:4**, weil Fotobuchdruck der Fall ist, in dem sich volle Chroma-Auflösung lohnt; 4:2:0 ist der erste Griff, wenn die Datei zu groß wird. Beide Werte stehen im Druckprofil unter `encoding`.
+
 === Seitenaufteilung
 
 Das Druckprofil entscheidet, ob der Innenteil als Einzelseiten oder als Doppelseiten hochgeladen wird (`spreadExport: 'single' | 'spread'`). Bei `single` wird jede Doppelseite an der Falzachse in zwei PDF-Seiten geschnitten – Bilder über den Falz werden dabei an genau dieser Achse geteilt, jede Hälfte erhält ihren eigenen Beschnittzuschlag zur Falzseite hin. Das ist ein reiner Geometrieschritt auf dem RSM und in beiden Modi aus derselben Quelle abgeleitet.
@@ -890,22 +923,33 @@ Diese Trennung ist auch der Grund, warum die Profilwerte Daten und nicht Code si
 [[heic]]
 == Umgang mit HEIC
 
-HEIC ist der einzige Punkt der Pipeline, an dem die Plattform durchschlägt, und je nach `sharp`-Build ist HEIF-Unterstützung nicht enthalten (Lizenzgründe rund um die HEVC-Patente).
+HEIC ist der einzige Punkt der Pipeline, an dem die Plattform durchschlägt.
 
-Die Strategie ist eine Kette mit Selbstprüfung beim Start:
+Die Strategie ist eine Kette mit Selbstprüfung zur Laufzeit:
 
-. **sharp mit libheif** – wird beim Start über `sharp.format.heif.input.file` geprüft. Wenn verfügbar, der schnellste Weg.
-. **macOS `sips`** – auf jedem Mac vorhanden, konvertiert zuverlässig nach JPEG: `sips -s format jpeg --setProperty formatOptions 95 in.heic --out out.jpg`. Langsamer, aber unabhängig vom sharp-Build.
-. **heic-decode (libde265 in WASM)** – reine JS-Notlösung, plattformunabhängig, deutlich langsamer.
+. **sharp mit libheif** – wird über `sharp.format.heif.input.file` geprüft und versucht. Der schnellste Weg, wenn er trägt.
+. **macOS `sips`** – auf jedem Mac vorhanden: `sips -s format jpeg -s formatOptions 98 in.heic --out out.jpg`. Der praktische Regelfall, siehe unten.
+. **heic-decode (libde265 in WASM)** – reine JS-Notlösung, plattformunabhängig, deutlich langsamer. Nicht installiert, solange Stufe 2 trägt.
 
-Metadaten liest in allen Fällen exiftool direkt aus der HEIC-Datei; die Konvertierung betrifft nur die Pixel.
+[IMPORTANT]
+.Messergebnis aus Phase 0 – Stufe 2 ist der Regelfall
+====
+Die ursprüngliche Annahme war, dass `sharp` HEIF je nach Build gar nicht mitbringt. Die Messung zeigt etwas anderes: Der Build *hat* HEIF-Unterstützung und liest selbst geschriebene HEIF-Dateien problemlos – er scheitert reproduzierbar an *Apple-erzeugten* HEICs.
 
-Konvertate landen als JPEG mit Qualität 98 unter `cache/decoded/` und werden sowohl für die Vorschaugenerierung als auch für den PDF-Export verwendet. Der Cache-Eintrag hängt am `contentHash`, wird also genau einmal je Bild erzeugt. Bei etwa 900 Fotos, von denen erfahrungsgemäß ein Teil HEIC ist, bleibt das im Bereich weniger Minuten einmalig beim Import.
+Apple speichert Bilder gekachelt und referenziert die Kacheln über die `iref`-Box. libheif begrenzt deren Zahl auf 16; ein 6000×4000-Bild kommt auf 42 bis 48. Weder `unlimited: true` noch `failOn: 'none'` heben das auf.
+
+`sips` konvertiert dieselben Dateien zuverlässig in 298 ms, maßhaltig und mit erhaltenen EXIF-Daten. **Der Erwartungswert ist deshalb, dass iPhone-Fotos über Stufe 2 laufen.** Stufe 1 bleibt in der Kette, weil sie für HEIFs anderer Herkunft funktioniert.
+
+Damit ist die Anwendung an dieser Stelle an macOS gebunden – für den Anwendungsfall unproblematisch, aber eine bewusste Festlegung. Messwerte in link:spikes/phase-0.adoc[spikes/phase-0.adoc].
+
+Offen: Die Testdateien wurden mit `sips` erzeugt, nicht vom iPhone kopiert. Beide nutzen denselben Encoder, bewiesen ist die Übereinstimmung damit nicht. In Phase 2 gegen ein echtes iPhone-Foto prüfen.
+====
+
+Metadaten liest in allen Fällen exiftool direkt aus der HEIC-Datei; die Konvertierung betrifft nur die Pixel. Das ist gemessen und funktioniert.
+
+Konvertate landen als JPEG mit Qualität 98 unter `cache/decoded/` und werden sowohl für die Vorschaugenerierung als auch für den PDF-Export verwendet. Der Cache-Eintrag hängt am `contentHash`, wird also genau einmal je Bild erzeugt. Bei geschätzt 300 HEIC-Dateien im Bestand sind das rund 90 Sekunden einmalig beim Import.
 
 Die Originaldatei wird dabei nicht angefasst – die Anforderung der Nicht-Destruktivität gilt auch hier.
-
-[NOTE]
-Der Decodierpfad ist Gegenstand eines eigenen Spikes in Phase 0. Er ist die einzige Stelle des Konzepts, deren Machbarkeit von einer Umgebungseigenschaft abhängt, und sollte deshalb vor allem anderen geklärt sein.
 
 == Thumbnail- und Cache-Strategie
 
@@ -935,7 +979,9 @@ Beim Import läuft ein Worker-Pool über `os.availableParallelism() - 1` Threads
 
 Die Reihenfolge ist bewusst gewählt: erst alle Metadaten (schnell, ermöglicht sofortiges Sortieren und Gruppieren), dann Thumbs in chronologischer Reihenfolge (die Timeline füllt sich sichtbar von vorn), dann Previews im Hintergrund. Der Benutzer kann mit der Timeline arbeiten, während die Previews noch entstehen.
 
-Zielwert für 900 Fotos auf einem aktuellen Mac: Metadaten unter 30 Sekunden, Thumbs unter 3 Minuten, erster vollständiger Buchentwurf verfügbar sobald die Metadaten stehen.
+Zielwert für 900 Fotos auf einem aktuellen Mac: Metadaten unter 10 Sekunden, Thumbs unter 3 Minuten, erster vollständiger Buchentwurf verfügbar sobald die Metadaten stehen.
+
+Die 10 Sekunden sind gemessen und nicht geschätzt: Der kombinierte Lauf aus exiftool, `sharp.metadata()` und Inhaltshash braucht für 900 Dateien 2,4 Sekunden. Der ursprünglich angesetzte Wert von 30 Sekunden war um den Faktor zwölf zu vorsichtig. Praktisch bedeutet das, dass der Metadatenlauf kein spürbarer Wartepunkt mehr ist – die Timeline steht, bevor der Benutzer sie ansieht.
 
 === Invalidierung
 
@@ -1063,8 +1109,8 @@ Ein Skript erzeugt reproduzierbar einen Testbestand: Bilder in verschiedenen For
 | Risiko | Bewertung | Umgang
 
 | HEIC-Decodierung nicht verfügbar
-| Mittlere Wahrscheinlichkeit, hohe Wirkung
-| Dreistufige Fallback-Kette, Spike in Phase 0 vor allem anderen
+| ✅ geklärt in Phase 0
+| Trat ein, mit anderer Ursache als vermutet. `sips` trägt zuverlässig und ist jetzt der Primärpfad. Restunsicherheit: Prüfung gegen ein echtes iPhone-Foto in Phase 2
 
 | Saal-Maße weichen von den Annahmen ab
 | Hoch, geringe Wirkung
@@ -1075,8 +1121,12 @@ Ein Skript erzeugt reproduzierbar einen Testbestand: Bilder in verschiedenen For
 | Testdruck einer einzelnen Doppelseite mit Farbfeldern und Hauttönen, bevor 160 Seiten in Auftrag gehen. Kostet wenig und ist der einzige belastbare Test
 
 | Speicherbedarf beim PDF-Export
-| Mittel, hohe Wirkung
-| pdfkit streamt; sharp skaliert vor dem Einbetten auf die Zielgröße; Performance-Budget als Test
+| ✅ geklärt in Phase 0
+| 495 MB gemessen, Budget von 1,5 GB deutlich eingehalten. pdf-lib hätte 4,9 GB gebraucht
+
+| Größe der PDF-Datei
+| Neu, mittlere Wirkung
+| 400–900 MB erwartet. Chroma-Subsampling auf 4:2:0 halbiert sie, falls nötig. In Phase 8 an echten Fotos gegenmessen und die Uploadgrenze bei Saal klären
 
 | Automatik erzeugt langweilige oder unruhige Seiten
 | Hoch, mittlere Wirkung
@@ -1101,3 +1151,4 @@ Bewusst nicht im Konzept entschieden, weil erst mit echten Daten oder Informatio
 
 * link:anforderungen.adoc[Anforderungsbeschreibung] – die fachliche Ausgangsbasis
 * link:implementierungsphasen.adoc[Implementierungsphasen] – Zerlegung in einzeln testbare Schritte
+* link:spikes/phase-0.adoc[Phase-0-Spikes] – Messergebnisse zu HEIC, PDF-Speicher und Metadaten-Durchsatz, samt der daraus folgenden Korrekturen an diesem Dokument

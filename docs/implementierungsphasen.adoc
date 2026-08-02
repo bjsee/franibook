@@ -13,10 +13,20 @@ Zwei Leitgedanken bestimmen die Reihenfolge:
 
 Die Zeitangaben sind grobe Größenordnungen für konzentrierte Arbeit, keine Zusagen.
 
-== Phase 0 — Spikes und Gerüst
+== Phase 0 — Spikes und Gerüst ✅
 
 .Ziel
 Die Umgebungsannahmen prüfen, bevor darauf gebaut wird.
+
+[NOTE]
+====
+Abgeschlossen am 2. August 2026. Messwerte und die daraus folgenden
+Konzeptkorrekturen in link:spikes/phase-0.adoc[spikes/phase-0.adoc].
+
+Kurzfassung: Metadaten-Durchsatz zwölfmal besser als veranschlagt, pdfkit gegen
+pdf-lib mit 495 MB gegen 4.916 MB klar bestätigt, HEIC scheitert bei `sharp` an
+Apples Kachelstruktur – `sips` wird Primärpfad statt Rückfallebene.
+====
 
 .Inhalt
 * Monorepo: pnpm workspaces, Turborepo, TypeScript strict, Vitest, ESLint, Prettier
@@ -251,7 +261,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 |===
 | Phase | Ergebnis | Aufwand | Risiko
 
-| 0 | Gerüst, Umgebungsannahmen geprüft | 1–2 d | hoch
+| 0 ✅ | Gerüst, Umgebungsannahmen geprüft | erledigt | —
 | 1 | *Vertikaler Durchstich mit Parity-Nachweis* | 3–4 d | hoch
 | 2 | 900 Fotos belastbar importiert | 4–5 d | mittel
 | 3 | Chronologie korrigierbar | 5–6 d | mittel
