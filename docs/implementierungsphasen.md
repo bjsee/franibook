@@ -370,7 +370,10 @@ Ein PDF, das bei PrintPartner tatsächlich hochgeladen werden kann.
 >   `provenance.verifiedAt` steht weiterhin auf `null`
 > - **Kein Cover** ([#2](https://github.com/bjsee/franibook/issues/2)); die
 >   Rückenformel in `profile.ts` gibt es, den Renderer nicht
-> - **404 MB Dateigröße** bei 153 Doppelseiten gemessen
+> - ~~**404 MB Dateigröße** bei 153 Doppelseiten~~ — Encoder auf 88 / 4:2:0 mit
+>   Trellis-Quantisierung umgestellt. Dasselbe Buch zweimal exportiert: 288 MB
+>   vorher, **160 MB** nachher, bei unveränderter Auflösung von 300 dpi. Offen
+>   bleibt nur die Uploadgrenze bei Saal, die der Anbieter beantworten muss
 >   ([#3](https://github.com/bjsee/franibook/issues/3))
 > - **172 statt 160 Seiten** ([#4](https://github.com/bjsee/franibook/issues/4));
 >   `nextValidPageCount()` existiert, wird aber nicht verwendet
@@ -480,6 +483,6 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 
 Der in der Anforderung beschriebene MVP ist nach Phase 8 vollständig erfüllt – Phase 9 und 10 sind Ausbau.
 
-Was bis zum ersten Druckauftrag fehlt, sind die vier als `blocker` markierten Punkte aus Phase 8: verifizierte Maße, Cover, Dateigröße, Seitenzahl.
+Was bis zum ersten Druckauftrag fehlt, sind die als `blocker` markierten Punkte aus Phase 8: verifizierte Maße, Cover, Seitenzahl. Die Dateigröße ist erledigt, soweit sie in unserer Hand liegt — was Saal beim Upload zulässt, ist noch zu erfragen.
 
 Drei Phasen sind Meilensteine, an denen sich eine Zwischenbeurteilung lohnt: Phase 1 beweist die Architektur, Phase 5 beweist das UX-Ziel, Phase 8 beweist die Druckbarkeit.
