@@ -256,14 +256,9 @@ app.put<{ Params: { year: string }; Body: { events: string[] } }>(
     const year = Number(req.params.year);
     if (!Number.isInteger(year)) return reply.code(400).send({ error: 'Jahr ungültig' });
 
-    const zeilen = (req.body.events ?? []).map((z) => z.trim()).filter((z) => z.length > 0);
-    if (zeilen.length === 0) delete project.yearEvents[String(year)];
-    else project.yearEvents[String(year)] = zeilen;
-
-    // Die Auftaktseite trägt den Text, also muss sie neu entstehen.
-    project.generate();
+    const angewendet = project.setYearEvents(year, req.body.events ?? []);
     await project.save();
-    return { year, events: zeilen };
+    return { year, events: project.yearEvents[String(year)] ?? [], angewendet };
   },
 );
 

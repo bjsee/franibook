@@ -798,9 +798,9 @@
           "id": "t-year",
           "role": "year",
           "x": 45,
-          "y": 96,
+          "y": 100,
           "w": 220,
-          "h": 62,
+          "h": 54,
           "style": "yearLarge",
           "optional": false
         },
@@ -808,9 +808,9 @@
           "id": "t-events",
           "role": "freeText",
           "x": 330,
-          "y": 100,
+          "y": 106,
           "w": 225,
-          "h": 100,
+          "h": 32,
           "style": "body",
           "optional": true,
           "lines": 5
