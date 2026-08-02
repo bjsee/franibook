@@ -27,8 +27,10 @@ import {
   type RenderedSpread,
   type Spread,
   type Structure,
+  allTemplates,
   bookStats,
   buildStructure,
+  chapterTemplates,
   DEFAULT_BACKGROUND,
   DEFAULT_TILT_DEG,
   MAX_TILT_DEG,
@@ -38,6 +40,7 @@ import {
   findBulkSeconds,
   FULL_CROP,
   generateBook,
+  layoutSpread,
   movePhoto,
   addToGroup,
   createGroup,
@@ -54,6 +57,7 @@ import {
   sortKey,
   removeGroup,
   templateById,
+  templateMeta,
   sortGroupsChronologically,
   suggestDayGroups,
   suggestOccasionGroups,
@@ -1020,12 +1024,113 @@ export class Project {
 
   /** Hängt ein einzelnes Foto um: Slot zu Slot, in den Pool oder aus ihm. */
   movePhoto(source: MoveSource, target: MoveTarget): MoveResult {
-    const result = movePhoto(this.spreads, source, target);
+    // Der Bildbestand geht immer mit: Ein Zug auf eine ganze Doppelseite ordnet
+    // beide Seiten neu an und braucht dafür die Maße jedes beteiligten Fotos.
+    const result = movePhoto(this.spreads, source, target, {
+      photos: this.photos,
+      profile: this.profile,
+      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+    });
     if (result.ok) {
       this.spreads = result.spreads;
       this.refreshReport();
     }
     return result;
+  }
+
+  /**
+   * Setzt eine andere Vorlage für eine Doppelseite.
+   *
+   * Die Fotos bleiben dieselben und werden den neuen Plätzen zugeordnet – nach
+   * Passung, nicht nach ihrer bisherigen Reihenfolge. Hat die Vorlage weniger
+   * Plätze, wandern die überzähligen Bilder in den Pool; hat sie mehr, bleiben
+   * Plätze leer. Beides ist erlaubt, denn genau darum geht es beim Wechsel von
+   * Hand: Man will die Seite anders aufteilen, nicht dieselbe Aufteilung mit
+   * anderen Kanten.
+   */
+  setSpreadTemplate(
+    index: number,
+    templateId: string,
+  ): { ok: boolean; error?: string; leftover: PhotoId[] } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
+    if (!templateById(templateId)) {
+      return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, leftover: [] };
+    }
+
+    const photos = spread.slots
+      .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
+      .filter((p): p is Photo => p !== undefined);
+
+    const angeordnet = layoutSpread({
+      photos,
+      profile: this.profile,
+      templateId,
+      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+    });
+    if (!angeordnet) {
+      return { ok: false, error: `Vorlage ${templateId} lässt sich nicht anwenden`, leftover: [] };
+    }
+
+    spread.templateId = angeordnet.templateId;
+    spread.slots = angeordnet.slots;
+    this.refreshReport();
+    return { ok: true, leftover: angeordnet.leftover };
+  }
+
+  /**
+   * Die Vorlagen, unter denen eine Doppelseite wählen kann.
+   *
+   * Nach Bilderzahl sortiert und mit der Slotgeometrie, damit die Oberfläche
+   * jede Anordnung als Skizze zeigen kann statt als Kennung. Vorlagen mit
+   * Überschriftenstreifen bleiben draußen, solange die Seite keinen Text trägt –
+   * der Streifen bliebe leer und die Bilder stünden kleiner.
+   */
+  templateChoices(index: number): {
+    id: string;
+    name: string;
+    slotCount: number;
+    slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
+    current: boolean;
+  }[] {
+    const spread = this.spreads[index];
+    if (!spread) return [];
+
+    const hatText = (spread.texts ?? []).length > 0;
+    const belegt = spread.slots.filter((s) => s.photoId).length;
+    const meta = templateMeta(spread.templateId);
+
+    // Kapitelauftakte und Gruppenauftakte bleiben unter sich: Ihre Vorlagen
+    // tragen Text und werden gezielt vergeben, nicht über die Slotzahl gefunden.
+    const auswahl = meta.chapterOnly
+      ? chapterTemplates().filter((t) => t.slots.length > 0)
+      : allTemplates().filter((t) => {
+          const m = templateMeta(t.id);
+          if (m.chapterOnly || t.tags?.includes('veraltet')) return false;
+          if (!hatText && t.tags?.includes('mit-titel')) return false;
+          return true;
+        });
+
+    return auswahl
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        slotCount: t.slots.length,
+        slots: t.slots.map((s) => ({
+          x: s.x,
+          y: s.y,
+          w: s.w,
+          h: s.h,
+          ...(s.bleed ? { bleed: true } : {}),
+        })),
+        current: t.id === spread.templateId,
+      }))
+      .sort(
+        (a, b) =>
+          Math.abs(a.slotCount - belegt) - Math.abs(b.slotCount - belegt) ||
+          a.slotCount - b.slotCount ||
+          a.id.localeCompare(b.id),
+      );
   }
 
   /**

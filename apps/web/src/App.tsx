@@ -671,6 +671,8 @@ export function App() {
                   selectedSlotId={selectedSlotId}
                   onSelect={setSelectedSlotId}
                   onChanged={loadInfo}
+                  spreadCount={info.spreadCount}
+                  onOpenSpread={setIndex}
                 />
               ) : (
                 <div style={S.stage}>

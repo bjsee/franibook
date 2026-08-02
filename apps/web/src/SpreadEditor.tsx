@@ -27,6 +27,8 @@ import {
 } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
+import { SpreadNeighbors } from './SpreadNeighbors.js';
+import { TemplatePicker } from './TemplatePicker.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
 const SPEICHER_VERZOEGERUNG_MS = 250;
@@ -88,6 +90,10 @@ interface Props {
   onSelect: (slotId: string | null) => void;
   /** Nach jeder Änderung: Kennzahlen der Kopfzeile neu laden. */
   onChanged: () => void;
+  /** Zahl der Doppelseiten im Buch – für den Nachbarstreifen. */
+  spreadCount: number;
+  /** Blättert zu einer anderen Doppelseite. */
+  onOpenSpread: (index: number) => void;
 }
 
 export function SpreadEditor({
@@ -101,6 +107,8 @@ export function SpreadEditor({
   selectedSlotId,
   onSelect,
   onChanged,
+  spreadCount,
+  onOpenSpread,
 }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(1200);
@@ -114,6 +122,13 @@ export function SpreadEditor({
   const [infos, setInfos] = useState<Map<string, PhotoInfo>>(new Map());
   /** Aufnahmezeit und Ort über den Bildern, umschaltbar mit `i`. */
   const [infosSichtbar, setInfosSichtbar] = useState(false);
+  /**
+   * Zählt hoch, sobald sich am Buch etwas geändert hat.
+   *
+   * Nachbarstreifen und Vorlagenliste halten eigene Kopien vom Server; nach
+   * einem Umzug stimmt die Miniatur der Zielseite nicht mehr.
+   */
+  const [buchVersion, setBuchVersion] = useState(0);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -438,6 +453,11 @@ export function SpreadEditor({
       const neu = k >= 0 ? data.spreads[k] : undefined;
       if (neu) onSpread(neu);
       setPendingCrop(null);
+      // Die Zuordnung der Slots kann sich geändert haben – bei einem Umzug
+      // bekommt die Seite sogar eine andere Vorlage. Eine Auswahl auf einen
+      // Slot, den es nicht mehr gibt, wäre ein stiller Fehlgriff.
+      if (data.touched.includes(index)) onSelect(null);
+      setBuchVersion((v) => v + 1);
       poolLaden();
       onChanged();
     } catch (e) {
@@ -651,6 +671,40 @@ export function SpreadEditor({
             : {})}
         />
       </div>
+
+      <SpreadNeighbors
+        index={index}
+        spreadCount={spreadCount}
+        zieht={zug !== null}
+        version={buchVersion}
+        onOpen={onOpenSpread}
+        onDrop={(ziel) => {
+          if (!zug) return;
+          void verschieben(zug.source, { kind: 'spread', spreadIndex: ziel });
+          setZug(null);
+        }}
+      />
+
+      <TemplatePicker
+        index={index}
+        photoCount={spread.boxes.filter((b) => b.kind === 'image').length}
+        version={buchVersion}
+        onFehler={setNote}
+        onApplied={({ spread: neu, leftover }) => {
+          onSpread(neu as RenderedSpread);
+          onSelect(null);
+          setPendingCrop(null);
+          setBuchVersion((v) => v + 1);
+          poolLaden();
+          onChanged();
+          setNote(
+            leftover.length === 0
+              ? null
+              : `${leftover.length} ${leftover.length === 1 ? 'Bild liegt' : 'Bilder liegen'} ` +
+                  `jetzt im Fotopool — die neue Anordnung hat weniger Plätze`,
+          );
+        }}
+      />
 
       <section
         style={{ ...S.pool, ...(zug?.source.kind === 'slot' ? S.poolAktiv : {}) }}

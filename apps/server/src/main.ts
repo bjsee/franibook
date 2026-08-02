@@ -119,6 +119,12 @@ app.get('/api/book/unplaced', async () => {
  * über die Leitung. Hier ändern sich ausschließlich die beiden beteiligten
  * Slots; die Antwort liefert die betroffenen Doppelseiten fertig gerendert
  * zurück, damit die Oberfläche nicht nachfragen muss.
+ *
+ * Zwei Züge, ein Endpunkt, unterschieden allein durch die Art des Ziels: Auf
+ * einen Slot gezogen tauschen zwei Bilder ihre Plätze. Auf eine ganze
+ * Doppelseite (`{ kind: 'spread' }`) gezogen zieht das Bild um, und beide
+ * beteiligten Seiten werden neu angeordnet – dort ändert sich die Bilderzahl,
+ * und eine Lücke stehen zu lassen wäre keine Aufteilung, sondern ein Loch.
  */
 app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
   '/api/book/move',
@@ -134,6 +140,41 @@ app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
       ok: true,
       touched: result.touched,
       spreads: result.touched.map((index) => project.render(index)),
+      report: project.lastReport,
+    };
+  },
+);
+
+/**
+ * Die Anordnungen, unter denen diese Doppelseite wählen kann.
+ *
+ * Mit der Slotgeometrie, damit die Oberfläche jede als Skizze zeigen kann:
+ * Vorlagennamen wie `spread.4up.grid` sagen niemandem, wie die Seite aussieht.
+ */
+app.get<{ Params: { index: string } }>('/api/spreads/:index/templates', async (req, reply) => {
+  const index = Number(req.params.index);
+  if (!project.spreads[index]) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
+  return { templates: project.templateChoices(index) };
+});
+
+/** Wechselt die Anordnung einer Doppelseite. */
+app.patch<{ Params: { index: string }; Body: { templateId?: string } }>(
+  '/api/spreads/:index/template',
+  async (req, reply) => {
+    const templateId = req.body?.templateId;
+    if (!templateId) return reply.code(400).send({ error: 'templateId fehlt' });
+
+    const index = Number(req.params.index);
+    const result = project.setSpreadTemplate(index, templateId);
+    if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+
+    void project.save();
+    return {
+      ok: true,
+      // Was keinen Platz mehr fand, liegt jetzt im Pool. Die Oberfläche sagt
+      // es, statt die Bilder stillschweigend verschwinden zu lassen.
+      leftover: result.leftover,
+      spread: project.render(index),
       report: project.lastReport,
     };
   },

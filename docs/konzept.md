@@ -1438,6 +1438,47 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 > geht verzögert (250 ms) als eigener Aufruf an den Server, ein Undo gibt es
 > nicht — „Automatisch" stellt nur den berechneten Ausschnitt wieder her.
 
+### Zwei Züge, unterschieden am Ziel
+
+Ein gezogenes Bild kann zweierlei bedeuten, und der Unterschied ist nicht die
+Genauigkeit des Ziels, sondern die Absicht:
+
+- **Auf einen Slot** gezogen tauschen zwei Bilder ihre Plätze. Die Bilderzahl je
+  Seite bleibt, Vorlagen bleiben, unbeteiligte Ausschnitte bleiben. Das ist der
+  Zug für „die beiden gehören andersherum".
+- **Auf eine Nachbarseite** gezogen (`{ kind: 'spread' }`) zieht das Bild um. Die
+  Quellseite hat danach eines weniger, die Zielseite eines mehr — beide bekommen
+  über `layoutSpread` eine neue Vorlage. Eine Lücke stehen zu lassen, wo das Bild
+  war, wäre keine Aufteilung, sondern ein Loch.
+
+Der Umzug kostet die Ausschnitte beider Seiten: Ein von Hand gesetzter Ausschnitt
+gilt für das Seitenverhältnis seines alten Platzes. Leer werden darf eine Seite
+dabei nicht — für null Bilder gibt es keine Vorlage, und eine Seite aus dem Buch
+zu nehmen verschöbe alle folgenden Seitenzahlen, im Zweifel mitten unter den
+Händen. Der Zug wird dann abgelehnt.
+
+Als Ablagefläche dient ein Streifen mit den zwei Nachbarseiten in jede Richtung
+(`SpreadNeighbors`). Weiter zu springen ist selten und geht über den Fotopool.
+
+### Anordnung von Hand wählen
+
+Die Engine sucht die Vorlage nach Passung — Auflösung, Ausrichtung, Gewicht. Das
+trifft es meistens und manchmal eben nicht: Ein Bild soll groß stehen, weil es
+das wichtigere ist, nicht weil es die meisten Pixel hat. `PATCH
+/api/spreads/:i/template` setzt eine andere Anordnung; die Bilder werden den
+neuen Plätzen wieder nach Passung zugeordnet, nicht nach ihrer bisherigen
+Reihenfolge.
+
+Die Vorlage darf dabei mehr oder weniger Plätze haben als Bilder da sind:
+Überzählige Plätze bleiben leer, überzählige Bilder wandern in den Fotopool und
+werden gemeldet. Genau darum geht es beim Wechsel von Hand — man will die Seite
+anders aufteilen, nicht dieselbe Aufteilung mit anderen Kanten.
+
+Gezeigt werden Skizzen aus der Slotgeometrie, keine Vorlagennamen:
+`spread.4up.grid` sagt niemandem, wie die Seite aussieht. Weil die Skizze
+dieselben Koordinaten zeichnet, aus denen das Layout entsteht, kann sie von der
+Vorlage nicht abweichen.
+
 ### Zustandsmodell
 
 Der Frontend-Store hält das gesamte Projekt. Jede Mutation läuft über `produceWithPatches` von Immer und liefert dabei zwei Dinge gleichzeitig:
@@ -1515,8 +1556,10 @@ Der Server bindet ausschließlich an `127.0.0.1` und legt keine Authentifizierun
 > | `/api/groups/:id/merge`, `/add`, `/ungroup` | POST              | zusammenführen, zuordnen, herauslösen   |
 > | `/api/photos`                               | GET               | Fotos mit Datum, `?problems` filtert    |
 > | `/api/book/unplaced`                        | GET               | Fotopool: Fotos in keinem Slot          |
-> | `/api/book/move`                            | POST              | ein Foto umhängen, Slot oder Pool       |
+> | `/api/book/move`                            | POST              | ein Foto umhängen: Slot, Seite, Pool    |
 > | `/api/spreads`, `/api/spreads/:index`       | GET               | gerenderte Doppelseiten (RSM)           |
+> | `/api/spreads/:i/templates`                 | GET               | wählbare Anordnungen samt Slotgeometrie |
+> | `/api/spreads/:i/template`                  | PATCH             | Anordnung dieser Doppelseite wechseln   |
 > | `/api/spreads/:i/slots/:slotId/crop`        | PATCH/DELETE      | Ausschnitt setzen, zurücksetzen         |
 > | `/api/photos/:id/preview`                   | GET               | WebP-Vorschau                           |
 > | `/api/photos/:id/original`                  | GET               | Original, nur für den Parity-Test       |
