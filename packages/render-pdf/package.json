@@ -1,0 +1,20 @@
+{
+  "name": "@franibook/render-pdf",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@franibook/core": "workspace:*",
+    "pdfkit": "^0.19.1",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.6"
+  }
+}

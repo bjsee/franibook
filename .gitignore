@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Der pnpm-Store liegt in dieser Umgebung im Projektverzeichnis (~310 MB).
+.pnpm-store/
+
+# Spike-Artefakte: Messergebnisse werden nach docs/spikes/ übernommen,
+# die erzeugten Bilder und PDFs nicht.
+spikes/out/
+
+# Projektdaten und Caches
+*.franibook/cache/
+*.franibook.bak-*/
+
+.DS_Store
+*.log

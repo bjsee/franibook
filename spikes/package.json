@@ -1,0 +1,24 @@
+{
+  "name": "@franibook/spikes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase-0-Spikes: Machbarkeitsmessungen, kein Produktionscode.",
+  "scripts": {
+    "fixtures": "tsx src/make-fixtures.ts",
+    "heic": "tsx src/heic-decode.ts",
+    "pdf": "tsx src/pdf-memory.ts",
+    "exif": "tsx src/exif-throughput.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@franibook/core": "workspace:*",
+    "exiftool-vendored": "^37.1.0",
+    "pdfkit": "^0.19.1",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
+    "pdf-lib": "^1.17.1"
+  }
+}
