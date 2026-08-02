@@ -355,12 +355,16 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     // Fixtures tragen ihr Datum im Dateinamen, und ohne belastbares Datum gäbe
     // es keinen Marker – der Test wäre grün, ohne etwas zu prüfen.
     const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
-    const polygone = rsm.boxes.filter((b: { kind: string }) => b.kind === 'polygon');
+    // Die Perle am Median: das einzige Quadrat mit vollem Eckenradius.
+    const perlen = rsm.boxes.filter(
+      (b: { kind: string; rxMm?: number; wMm: number; hMm: number }) =>
+        b.kind === 'rect' && b.rxMm !== undefined && b.wMm === b.hMm,
+    );
     const jahreszahlen = rsm.boxes.filter(
       (b: { kind: string; slotId?: string }) =>
         b.kind === 'text' && b.slotId?.startsWith('timeline-year'),
     );
-    expect(polygone).toHaveLength(1);
+    expect(perlen).toHaveLength(1);
     expect(jahreszahlen).toHaveLength(2);
 
     await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);

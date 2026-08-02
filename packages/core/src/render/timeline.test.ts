@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PrintProfile } from '../print/profile.js';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { NaiveDateTime } from '../model/photo.js';
-import type { PolygonBox, RectBox, RenderBox, TextBox } from './rendered-spread.js';
+import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
 import { TIMELINE_FOOT_HEIGHT_MM, timelineBoxes, timelineFootTopMm } from './timeline.js';
 
 const profile = saal as PrintProfile;
@@ -21,16 +21,21 @@ const rects = (boxes: RenderBox[]): RectBox[] =>
   boxes.filter((b): b is RectBox => b.kind === 'rect');
 const texts = (boxes: RenderBox[]): TextBox[] =>
   boxes.filter((b): b is TextBox => b.kind === 'text');
-const polygons = (boxes: RenderBox[]): PolygonBox[] =>
-  boxes.filter((b): b is PolygonBox => b.kind === 'polygon');
-
-/** Waagerechte Mitte der Markerspitze. */
-function markerX(boxes: RenderBox[]): number {
-  const spitze = polygons(boxes)[0];
-  if (!spitze) throw new Error('keine Markerspitze');
-  const unten = [...spitze.pointsMm].sort((a, b) => b.yMm - a.yMm)[0];
-  return unten!.xMm;
+/** Die Perle am Median: die einzige quadratische Box mit vollem Eckenradius. */
+function perle(boxes: RenderBox[]): RectBox | undefined {
+  return rects(boxes).find((r) => r.rxMm !== undefined && r.rxMm === r.hMm / 2 && r.wMm === r.hMm);
 }
+
+/** Waagerechte Mitte der Perle. */
+function markerX(boxes: RenderBox[]): number {
+  const p = perle(boxes);
+  if (!p) throw new Error('keine Perle');
+  return p.xMm + p.wMm / 2;
+}
+
+/** Der Spannbalken: Kapsel von 1,2 mm Höhe. */
+const balken = (boxes: RenderBox[]): RectBox[] =>
+  rects(boxes).filter((r) => r.hMm === 1.2 && r.wMm > r.hMm);
 
 describe('Zeitstrahl: Fenster und Maßstab', () => {
   it('spannt 18 Monate über die volle Achse zwischen den Sicherheitsrändern', () => {
@@ -83,40 +88,41 @@ describe('Zeitstrahl: Fenster und Maßstab', () => {
 });
 
 describe('Zeitstrahl: Marker', () => {
-  it('zeigt bei einem Tag Spanne fast nur die Spitze', () => {
+  it('zeigt bei einem Tag Spanne nur die Perle', () => {
+    // Ein Balken von einem halben Millimeter läge vollständig unter ihr.
     const boxes = boxesOf(['2017-06-15T08:00:00', '2017-06-15T20:00:00']);
-    const balken = rects(boxes).filter((r) => r.hMm === 1.2);
-    expect(balken).toHaveLength(1);
-    expect(balken[0]!.wMm).toBeLessThan(1.5);
-    expect(polygons(boxes)).toHaveLength(1);
+    expect(balken(boxes)).toHaveLength(0);
+    expect(perle(boxes)).toBeDefined();
   });
 
   it('zieht den Balken über die ganze Spanne einer breiten Doppelseite', () => {
     // 11,7 Monate ist die breiteste gemessene Doppelseite des Bestands.
     const boxes = boxesOf(['2012-01-10T00:00:00', '2012-06-01T00:00:00', '2012-12-28T00:00:00']);
-    const balken = rects(boxes).filter((r) => r.hMm === 1.2)[0];
-    expect(balken!.wMm).toBeGreaterThan(340);
-    expect(balken!.wMm).toBeLessThan(390);
+    const kapsel = balken(boxes)[0];
+    expect(kapsel!.wMm).toBeGreaterThan(340);
+    expect(kapsel!.wMm).toBeLessThan(390);
+    // Runde Enden: der Radius ist die halbe Höhe.
+    expect(kapsel!.rxMm).toBe(0.6);
   });
 
-  it('setzt die Spitze auf den Median, nicht auf die Mitte der Spanne', () => {
+  it('setzt die Perle auf den Median, nicht auf die Mitte der Spanne', () => {
     const boxes = boxesOf(['2017-02-01T00:00:00', '2017-02-05T00:00:00', '2017-11-01T00:00:00']);
-    const balken = rects(boxes).filter((r) => r.hMm === 1.2)[0]!;
-    const mitteDerSpanne = balken.xMm + balken.wMm / 2;
+    const kapsel = balken(boxes)[0]!;
+    const mitteDerSpanne = kapsel.xMm + kapsel.wMm / 2;
     expect(markerX(boxes)).toBeLessThan(mitteDerSpanne - 100);
   });
 
   it('lässt den Marker weg, wenn die Doppelseite kein belastbares Datum hat', () => {
     const boxes = boxesOf([], { fallbackYear: 2019 });
-    expect(polygons(boxes)).toHaveLength(0);
-    // Achse und Ticks bleiben, damit die Reihe nicht reißt.
+    expect(perle(boxes)).toBeUndefined();
+    // Achse und Jahreszeitenbänder bleiben, damit die Reihe nicht reißt.
     expect(rects(boxes).length).toBeGreaterThan(10);
     expect(texts(boxes).map((t) => t.content)).toEqual(['2019', '2020']);
   });
 
   it('zeichnet auf Kapitelauftakten die Achse ohne Marker', () => {
     const boxes = boxesOf(['2017-08-13T00:00:00'], { markerless: true, label: 'Deichbrand' });
-    expect(polygons(boxes)).toHaveLength(0);
+    expect(perle(boxes)).toBeUndefined();
     expect(texts(boxes).map((t) => t.content)).toEqual(['2017', '2018']);
   });
 
@@ -126,23 +132,31 @@ describe('Zeitstrahl: Marker', () => {
 });
 
 describe('Zeitstrahl: Falzband', () => {
-  it('setzt im Falzband keinen Tick', () => {
+  it('legt achtzehn Jahreszeitenbänder lückenlos über die Achse', () => {
+    // Sie ersetzen die Monatsticks: ein Band je Monatsfeld, eingefärbt nach
+    // Jahreszeit. Lückenlos, weil eine Fuge im Druck das Papier zeigen würde.
     const boxes = boxesOf(['2017-06-15T00:00:00']);
-    const ticks = rects(boxes).filter((r) => r.hMm === 1.6);
-    // Der Juli-Tick liegt auf jeder Seite des Buches im Falz und entfällt.
-    expect(ticks).toHaveLength(16);
-    for (const tick of ticks) {
-      expect(Math.abs(tick.xMm + tick.wMm / 2 - GUTTER_X)).toBeGreaterThan(
-        profile.page.gutterSafeMm,
-      );
-    }
+    const baender = rects(boxes).filter((r) => r.hMm === 3.4);
+    expect(baender).toHaveLength(18);
+    expect(Math.min(...baender.map((b) => b.xMm))).toBeCloseTo(AXIS_X0, 6);
+    expect(Math.max(...baender.map((b) => b.xMm + b.wMm))).toBeGreaterThanOrEqual(AXIS_X1);
+    // Vier Töne, jeder mehrfach – das Fenster deckt anderthalb Jahre ab.
+    expect(new Set(baender.map((b) => b.fill)).size).toBe(4);
+  });
+
+  it('färbt das Juli-Feld sommerlich und das Januar-Feld winterlich', () => {
+    const boxes = boxesOf(['2017-06-15T00:00:00']);
+    const baender = rects(boxes).filter((r) => r.hMm === 3.4);
+    // Feld 0 ist der Oktober des Vorjahres, Feld 9 der Juli.
+    expect(baender[9]!.fill).toBe('#f7e9c9');
+    expect(baender[3]!.fill).toBe('#dde3ec');
   });
 
   it('lässt Achse und Balken durch den Falz laufen', () => {
     const boxes = boxesOf(['2017-06-01T00:00:00', '2017-08-01T00:00:00']);
-    const balken = rects(boxes).filter((r) => r.hMm === 1.2)[0]!;
-    expect(balken.xMm).toBeLessThan(GUTTER_X);
-    expect(balken.xMm + balken.wMm).toBeGreaterThan(GUTTER_X);
+    const kapsel = balken(boxes)[0]!;
+    expect(kapsel.xMm).toBeLessThan(GUTTER_X);
+    expect(kapsel.xMm + kapsel.wMm).toBeGreaterThan(GUTTER_X);
   });
 
   it('führt das Label am Falz vorbei, statt es zu zerschneiden', () => {
@@ -160,7 +174,9 @@ describe('Zeitstrahl: Falzband', () => {
     const boxes = boxesOf(['2017-03-15T00:00:00'], { label: 'Ostern' });
     const label = texts(boxes).find((t) => t.slotId === 'timeline-label')!;
     expect(label.align).toBe('center');
-    expect(label.xMm + label.wMm / 2).toBeCloseTo(markerX(boxes), 6);
+    // Um den halben Sperrungsausgleich versetzt: Beide Renderer setzen die
+    // Sperrung auch hinter das letzte Zeichen.
+    expect(label.xMm + label.wMm / 2 - label.letterSpacingMm! / 2).toBeCloseTo(markerX(boxes), 6);
   });
 
   it('lässt eine Jahreszahl weg, wenn der Marker sie überdeckt', () => {

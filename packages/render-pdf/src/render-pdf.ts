@@ -172,6 +172,12 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
               width: mmToPt(box.wMm),
               align: box.align,
               lineBreak: false,
+              // Die Sperrung steht im Modell in Millimetern, pdfkit erwartet
+              // Punkt – dieselbe Umrechnung wie für jede andere Länge. Ohne die
+              // ausdrückliche Null bliebe der Wert der vorigen Textbox stehen:
+              // `characterSpacing` ist bei pdfkit Zustand, keine Eigenschaft
+              // des Aufrufs.
+              characterSpacing: mmToPt(box.letterSpacingMm ?? 0),
               // Die y-Koordinate ist die Grundlinie, nicht der Kastenoberrand.
               // Ohne diese Angabe verschiebt pdfkit die Zeile um seinen eigenen
               // Ascender (1,024 em) nach unten – eine Layoutentscheidung des
@@ -179,14 +185,15 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
               baseline: 'alphabetic',
             });
         } else if (box.kind === 'rect') {
-          doc
-            .rect(
-              mmToPt(box.xMm + slice.offsetXMm),
-              mmToPt(box.yMm),
-              mmToPt(box.wMm),
-              mmToPt(box.hMm),
-            )
-            .fill(box.fill);
+          const x = mmToPt(box.xMm + slice.offsetXMm);
+          const y = mmToPt(box.yMm);
+          const w = mmToPt(box.wMm);
+          const h = mmToPt(box.hMm);
+          // `roundedRect` klemmt einen zu großen Radius nicht; die halbe kurze
+          // Kante ist die Grenze, ab der die Form wieder aufbricht.
+          const r = Math.min(mmToPt(box.rxMm ?? 0), Math.min(w, h) / 2);
+          if (r > 0) doc.roundedRect(x, y, w, h, r).fill(box.fill);
+          else doc.rect(x, y, w, h).fill(box.fill);
         } else if (box.kind === 'polygon') {
           const [first, ...rest] = box.pointsMm;
           if (first) {

@@ -320,6 +320,9 @@ export function SpreadView({
               fontWeight={CSS_FONT_WEIGHT[box.weight]}
               fontSize={ptToMm(box.fontSizePt)}
               fill={box.color}
+              // Im viewBox sind die Einheiten Millimeter, die Zahl wandert also
+              // unverändert aus dem Modell. Im PDF steht dieselbe Zahl in Punkt.
+              {...(box.letterSpacingMm ? { letterSpacing: box.letterSpacingMm } : {})}
             >
               {box.content}
             </text>
@@ -328,7 +331,18 @@ export function SpreadView({
       }
 
       case 'rect':
-        return <div key={`rect-${i}`} style={{ ...rect(box), background: box.fill }} />;
+        return (
+          <div
+            key={`rect-${i}`}
+            style={{
+              ...rect(box),
+              background: box.fill,
+              // Der Radius kommt aus dem Modell und wird nur in die
+              // Längeneinheit der Vorschau übersetzt.
+              ...(box.rxMm ? { borderRadius: mm(box.rxMm) } : {}),
+            }}
+          />
+        );
 
       case 'polygon': {
         if (box.pointsMm.length === 0) return null;

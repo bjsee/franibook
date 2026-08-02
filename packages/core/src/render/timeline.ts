@@ -2,7 +2,7 @@
  * Zeitstrahl am Fuß der Doppelseite.
  *
  * Erzeugt die Boxen, die zeigen, wo im Kalender die Fotos einer Doppelseite
- * liegen: Achse, Monatsticks, Jahreszahlen, Spannbalken, Markerspitze und das
+ * liegen: Achse, Jahreszeitenbänder, Jahreszahlen, Spannbalken, Perle und das
  * Label der Fotogruppe. Wie jede andere Geometrie entsteht sie hier und nicht
  * in einem Renderer.
  *
@@ -18,18 +18,18 @@
  * Marker auf jeder Seite mittig, also genau auf der Falzachse, und es wandern
  * die Jahreszahlen statt des Markers.
  *
- * **Marker.** Immer beides zugleich – ein Balken über die Spanne der Fotos,
- * darauf die Spitze am Median. Die Form ist damit stetig und braucht keinen
- * Grenzwert: Bei einem Tag Spanne bleibt ein Millimeter Fuß unter der Spitze,
- * bei der breitesten gemessenen Doppelseite (11,7 Monate) sind es 374 mm. Eine
- * Schwelle „ab hier Balken statt Spitze“ wäre am Bestand ohnehin die Regel und
- * nicht die Ausnahme: Der Median der Spannen liegt bei 2,6 Monaten, 27 von 62
- * Doppelseiten überschreiten drei Monate.
+ * **Marker.** Eine Kapsel über die Spanne der Fotos, darauf die Perle am
+ * Median – eine Form, nicht zwei. Der Median der Spannen liegt bei 2,6 Monaten,
+ * also gut 84 mm, und 27 von 62 Doppelseiten überschreiten drei Monate: Der
+ * Balken ist die Regel, nicht die Ausnahme, und seine Form entscheidet, wie
+ * laut der Fuß der Seite spricht. Nur unterhalb eines Perlendurchmessers
+ * Spanne entfällt er, weil die Perle ihn ohnehin verdeckt.
  */
 import type { NaiveDateTime } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
 import { DEFAULT_BACKGROUND, textColorOn } from './background.js';
 import type { RenderBox } from './rendered-spread.js';
+import { ptToMm } from '../geometry/units.js';
 import { textFontSizePt, textStyle } from './typography.js';
 
 /** Fensterbreite in Monaten: Kalenderjahr plus Vorlauf und Nachlauf. */
@@ -56,32 +56,66 @@ export function timelineFootTopMm(profile: PrintProfile): number {
 /**
  * Aufteilung der 14 mm, gemessen von der Oberkante des Fußraums.
  *
- * Die Spitze sitzt oben und zeigt nach unten auf die Achse, das Label steht
+ * Die Perle sitzt auf dem Spannbalken, dieser auf der Achse, das Label steht
  * darunter. In der Skizze stand das Label über der Achse; in 14 mm ist dafür
  * kein Platz, ohne die Schrift unlesbar klein zu machen.
+ *
+ * Die Ticks sind Jahreszeitenbändern gewichen. Siebzehn Härchen von 1,6 mm
+ * ergaben auf 584 mm eine Strichelei, die man weder zählt noch liest; ein Band
+ * je Jahreszeit beantwortet dagegen ohne eine einzige Beschriftung die Frage,
+ * die man an ein Datum wirklich stellt.
  */
 const LAYOUT = {
-  /** Markerspitze und Jahreszahlen. */
-  markerTop: 0,
-  markerHeight: 4,
-  /** Spannbalken, sitzt unmittelbar auf der Achse auf. */
+  /** Jahreszahlen, oberhalb des Markers. */
+  yearTop: 0,
+  yearHeight: 3.2,
+  /** Perle am Median: liegt über dem Balken und ragt in die Jahreszahlzeile. */
+  beadDiameter: 2.6,
+  /** Spannbalken als Kapsel, sitzt unmittelbar auf der Achse auf. */
   barTop: 4,
   barHeight: 1.2,
   /** Die Achse selbst. */
   axisTop: 5.2,
   axisHeight: 0.3,
-  /** Monatsticks unterhalb der Achse. */
-  tickTop: 5.5,
-  tickHeight: 1.6,
-  tickWidth: 0.3,
+  /** Jahreszeitenbänder, hinter Achse und Balken. */
+  seasonTop: 4.2,
+  seasonHeight: 3.4,
   /** Label der Fotogruppe. */
-  labelTop: 8.5,
-  labelHeight: 3.5,
+  labelTop: 8.6,
+  labelHeight: 4.2,
 } as const;
 
 const COLOR_CHAPTER = '#3f3f46';
 const COLOR_MARGIN = '#a1a1aa';
 const COLOR_ACCENT = '#1d4ed8';
+/** Jahreszahlen treten hinter das Label zurück – sie ordnen ein, sie benennen nicht. */
+const COLOR_YEAR = '#b3aca2';
+
+/**
+ * Die vier Jahreszeiten als Bandfarben, beginnend mit dem Winter.
+ *
+ * Gegen den Papierton muss jeder Ton für sich erkennbar sein. Ein erster
+ * Entwurf lag zwei Prozent daneben: Sichtbar war allein der kühle Winter, den
+ * Rest hielt man für Hintergrund – ein Band, das man nicht sieht, ist kein
+ * ruhiges Band, sondern gar keins.
+ */
+const SEASON_TONES = ['#dde3ec', '#dfeadb', '#f7e9c9', '#ecd9cc'] as const;
+
+/**
+ * Sperrung des Labels als Anteil der Schriftgröße.
+ *
+ * Acht Prozent: genug, damit Versalien atmen, zu wenig, um als Effekt
+ * aufzufallen. Darüber zerfällt ein kurzer Gruppenname in Einzelbuchstaben.
+ */
+const LABEL_TRACKING = 0.08;
+
+/** Meteorologische Jahreszeit eines Monats: 0 Winter, 1 Frühling, 2 Sommer, 3 Herbst. */
+function seasonOf(month: number): number {
+  if (month === 12 || month <= 2) return 0;
+  if (month <= 5) return 1;
+  if (month <= 8) return 2;
+  return 3;
+}
 
 export interface TimelineInput {
   /**
@@ -167,6 +201,25 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   const boxes: RenderBox[] = [];
   const auf = (farbe: string) => textColorOn(input.background ?? DEFAULT_BACKGROUND, farbe);
 
+  // Jahreszeitenbänder, hinter allem anderen. Sie ersetzen die Monatsticks:
+  // Wer auf eine Zeitachse sieht, will nicht wissen, wie viele Monate seither
+  // vergangen sind, sondern in welche Zeit das Bild gehört. Die Grenzen sind
+  // die meteorologischen, weil sie auf Monatsanfänge fallen – die Achse ist in
+  // Monatsfelder geteilt, astronomische Grenzen lägen mitten darin.
+  for (let i = 0; i < WINDOW_MONTHS; i++) {
+    const monat = (((11 - LEAD_MONTHS + i) % 12) + 12) % 12;
+    boxes.push({
+      kind: 'rect',
+      xMm: x(i),
+      // Ein Hauch Überlappung: Zwei exakt aneinandergrenzende Flächen zeigen
+      // beim Rastern eine helle Fuge, und im Druck stünde dort das Papier.
+      wMm: monthWidth + 0.05,
+      yMm: top + LAYOUT.seasonTop,
+      hMm: LAYOUT.seasonHeight,
+      fill: SEASON_TONES[seasonOf(monat + 1)]!,
+    });
+  }
+
   // Achse in drei Segmenten: Vorlauf, Kapiteljahr, Nachlauf. Die Randmonate
   // sind schwächer gezeichnet – so ist zu sehen, wo das Jahr beginnt und
   // endet, ohne den Blick über die Grenze zu verlieren. Die Achse läuft durch
@@ -185,49 +238,38 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   axis(yearStart, yearEnd, auf(COLOR_CHAPTER));
   axis(yearEnd, axisX1, auf(COLOR_MARGIN));
 
-  // Monatsticks, ohne Beschriftung: abzählbar, aber ruhig. 18 Kürzel je
-  // Doppelseite wären auf 85 Seiten zu geschwätzig. Im Falzband entfallen sie –
-  // weil das Fenster am 1. Oktober beginnt, liegt die Achsenmitte auf jeder
-  // Seite des Buches genau auf dem 1. Juli, und dieser Tick wäre immer verloren.
-  for (let i = 1; i < WINDOW_MONTHS; i++) {
-    const tickX = x(i);
-    if (inGutter(tickX)) continue;
-    const imKapiteljahr = i >= LEAD_MONTHS && i < LEAD_MONTHS + 12;
-    boxes.push({
-      kind: 'rect',
-      xMm: tickX - LAYOUT.tickWidth / 2,
-      yMm: top + LAYOUT.tickTop,
-      wMm: LAYOUT.tickWidth,
-      hMm: LAYOUT.tickHeight,
-      fill: imKapiteljahr ? auf(COLOR_CHAPTER) : auf(COLOR_MARGIN),
-    });
-  }
-
-  // Marker: Balken über die Spanne, Spitze am Median.
+  // Marker: Kapsel über die Spanne, Perle am Median.
+  //
+  // Eine Form statt zweier. Der Balken misst die Spanne, die Perle zeigt den
+  // Median – als Rechteck mit aufgesetztem Dreieck lasen sich beide als zwei
+  // Dinge, die zufällig übereinanderliegen. Runde Enden lohnen erst über die
+  // typische Spanne: Der Median liegt bei 2,6 Monaten, also gut 84 mm.
+  const akzent = input.accentColor ?? COLOR_ACCENT;
   const markerX = median !== undefined && !input.markerless ? x(offsetOf(median)) : undefined;
   if (markerX !== undefined && first !== undefined && last !== undefined) {
     const x0 = x(offsetOf(first));
     const x1 = x(offsetOf(last));
-    if (x1 > x0) {
+    // Bei einem einzigen Tag Spanne bliebe ein Strich von 1 mm übrig, den die
+    // Perle vollständig verdeckt. Dann ist die Perle allein die Aussage.
+    if (x1 - x0 > LAYOUT.beadDiameter) {
       boxes.push({
         kind: 'rect',
         xMm: x0,
         yMm: top + LAYOUT.barTop,
         wMm: x1 - x0,
         hMm: LAYOUT.barHeight,
-        fill: input.accentColor ?? COLOR_ACCENT,
+        rxMm: LAYOUT.barHeight / 2,
+        fill: akzent,
       });
     }
-    const halfWidth = LAYOUT.markerHeight * 0.6;
-    const tip = top + LAYOUT.markerTop + LAYOUT.markerHeight;
     boxes.push({
-      kind: 'polygon',
-      pointsMm: [
-        { xMm: markerX - halfWidth, yMm: top + LAYOUT.markerTop },
-        { xMm: markerX + halfWidth, yMm: top + LAYOUT.markerTop },
-        { xMm: markerX, yMm: tip },
-      ],
-      fill: input.accentColor ?? COLOR_ACCENT,
+      kind: 'rect',
+      xMm: markerX - LAYOUT.beadDiameter / 2,
+      yMm: top + LAYOUT.barTop - LAYOUT.beadDiameter + LAYOUT.barHeight / 2,
+      wMm: LAYOUT.beadDiameter,
+      hMm: LAYOUT.beadDiameter,
+      rxMm: LAYOUT.beadDiameter / 2,
+      fill: akzent,
     });
   }
 
@@ -235,7 +277,7 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   // Überdeckt die Markerspitze eine Zahl, entfällt sie: Der Leser hat noch die
   // andere Zahl und die hell abgesetzten Randmonate.
   const yearStyle = textStyle('timelineYear');
-  const yearSize = textFontSizePt(LAYOUT.markerHeight, yearStyle);
+  const yearSize = textFontSizePt(LAYOUT.yearHeight, yearStyle);
   for (const [grenze, wert] of [
     [yearStart, year],
     [yearEnd, year + 1],
@@ -250,24 +292,34 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
     boxes.push({
       kind: 'text',
       xMm: boxX,
-      yMm: top + LAYOUT.markerTop,
+      yMm: top + LAYOUT.yearTop,
       wMm: breite,
-      hMm: LAYOUT.markerHeight,
+      hMm: LAYOUT.yearHeight,
       slotId: `timeline-year-${wert}`,
       content: String(wert),
       fontSizePt: yearSize,
       weight: yearStyle.weight,
       align: 'left',
-      color: auf(yearStyle.color),
+      // Leiser als das Label: Die Jahreszahl ordnet ein, sie benennt nicht.
+      // Vorher standen beide in derselben Farbe und Größe – drei gleich laute
+      // Stimmen auf 14 mm, von denen keine führte.
+      color: auf(COLOR_YEAR),
     });
   }
 
   // Label der Fotogruppe, auf jeder Doppelseite der Gruppe: Ein Fotobuch wird
   // aufgeschlagen, nicht von vorn gelesen.
+  //
+  // In Versalien und gesperrt, weil es die einzige Stelle im Innenteil ist, die
+  // etwas benennt: Gemischtschreibung in 3,5 mm sah aus wie das Kleingedruckte
+  // unter einer Grafik. Versalien brauchen die Sperrung – ohne sie stehen sie
+  // gedrängt und lesen sich schlechter als Gemischtes.
   if (input.label && markerX !== undefined) {
     const labelStyle = textStyle('timelineLabel');
     const size = textFontSizePt(LAYOUT.labelHeight, labelStyle);
-    const width = estimatedTextWidthMm(input.label, size);
+    const versal = input.label.toLocaleUpperCase('de-DE');
+    const spacing = ptToMm(size) * LABEL_TRACKING;
+    const width = estimatedTextWidthMm(versal, size) + versal.length * spacing;
     // Zentriert unter dem Marker, außer der Marker steht im Falzband: Dann
     // weicht das Label auf die Seite mit mehr Platz aus. Die Breite ist
     // geschätzt und dient nur dieser Entscheidung – gesetzt wird der Text von
@@ -284,18 +336,25 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
         align = 'left';
       }
     }
+    // Beide Renderer setzen die Sperrung auch hinter das letzte Zeichen. Bei
+    // zentriertem Satz steht der Text dadurch um eine halbe Sperrung zu weit
+    // links, bei rechtsbündigem um eine ganze. Ausgeglichen wird das hier, in
+    // der Box – die Adapter zeichnen weiter nur nach, was im Modell steht, und
+    // können deshalb gar nicht auseinanderlaufen.
+    const ausgleich = align === 'center' ? spacing / 2 : align === 'right' ? spacing : 0;
     boxes.push({
       kind: 'text',
-      xMm: Math.max(axisX0, Math.min(labelX, axisX1 - width)),
+      xMm: Math.max(axisX0, Math.min(labelX, axisX1 - width)) + ausgleich,
       yMm: top + LAYOUT.labelTop,
       wMm: width,
       hMm: LAYOUT.labelHeight,
       slotId: 'timeline-label',
-      content: input.label,
+      content: versal,
       fontSizePt: size,
       weight: labelStyle.weight,
       align,
       color: auf(labelStyle.color),
+      letterSpacingMm: spacing,
     });
   }
 
