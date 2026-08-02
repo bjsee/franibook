@@ -797,3 +797,55 @@ describe('Jahresereignisse auf dem Kapitelauftakt', () => {
     expect(auftakt?.texts?.some((t) => t.slotId === 't-events')).toBe(false);
   });
 });
+
+describe('Jahresauftakt auf einer Seite', () => {
+  it('setzt links das Jahr und rechts die ersten Fotos des Jahres', () => {
+    const { photos, dated } = buildBestand({ 2017: 30 });
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 60,
+      chapterOpeners: true,
+      yearEvents: { 2017: ['Erstes', 'Zweites'] },
+    });
+
+    const auftakt = result.spreads.find((s) => s.texts?.some((t) => t.role === 'year'))!;
+    const bilder = auftakt.slots.filter((sl) => sl.photoId !== null);
+    expect(bilder.length).toBeGreaterThan(0);
+    expect(auftakt.texts!.find((t) => t.slotId === 't-events')!.content.split('\n')).toHaveLength(
+      2,
+    );
+
+    // Die Bilder des Auftakts stehen nicht noch einmal im Fluss.
+    const alle = result.spreads.flatMap((s) =>
+      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+    );
+    expect(new Set(alle).size).toBe(alle.length);
+
+    // Und es sind die chronologisch ersten des Jahres.
+    const erste = dated.slice(0, bilder.length).map((d) => d.id);
+    expect(bilder.map((b) => b.photoId).sort()).toEqual([...erste].sort());
+  });
+
+  it('nimmt die bildlose Fassung, wenn das Jahr dafür zu wenige Fotos hat', () => {
+    // Zwei Fotos: Die kleinste Auftaktvorlage will zwei Bilder, dann bliebe für
+    // den Fluss des Jahres nichts übrig.
+    const { photos, dated } = buildBestand({ 2019: 2 });
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 40,
+      chapterOpeners: true,
+    });
+
+    const auftakt = result.spreads.find((s) => s.texts?.some((t) => t.role === 'year'))!;
+    expect(auftakt.slots.filter((sl) => sl.photoId !== null)).toHaveLength(0);
+    // Kein Foto darf dabei verloren gehen.
+    const alle = result.spreads.flatMap((s) =>
+      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+    );
+    expect(new Set(alle).size).toBe(2);
+  });
+});
