@@ -14,6 +14,14 @@ const ORTE = {
   kretaIraklio: [35.3387, 25.1442],
   kretaSuedkueste: [34.9403, 24.7166],
   daenemarkOksbol: [55.6169, 8.1444],
+  kosStadt: [36.8933, 27.2889],
+  kosKardamena: [36.7856, 27.1436],
+  rhodosStadt: [36.4412, 28.2225],
+  santorinOia: [36.4618, 25.3753],
+  korfuStadt: [39.6243, 19.9217],
+  mallorcaPalma: [39.5696, 2.6502],
+  teneriffaSantaCruz: [28.4636, -16.2518],
+  griechenlandFestland: [38.2466, 21.7346],
   tirolLechaschau: [47.4915, 10.7092],
   amsterdam: [52.3676, 4.9041],
 } as const;
@@ -75,6 +83,47 @@ describe('Inseln', () => {
 
   it('nennt Kreta auch fernab jeder größeren Stadt', () => {
     expect(label(ORTE.kretaSuedkueste)).toBe('Kreta');
+  });
+});
+
+describe('Inseln innerhalb einer Inselgruppe', () => {
+  // Kos, Rhodos, Santorin und Mykonos liegen alle in der Region „Südägäis".
+  // Der Regionsname taugt nicht als Gruppentitel, der nächste Ort trifft je
+  // nach Aufnahmeort daneben – deshalb die Umrisse.
+  it('nennt Kos', () => {
+    expect(label(ORTE.kosStadt)).toBe('Kos');
+    expect(label(ORTE.kosKardamena)).toBe('Kos');
+  });
+
+  it('nennt Rhodos', () => {
+    expect(label(ORTE.rhodosStadt)).toBe('Rhodos');
+  });
+
+  it('nennt Santorin', () => {
+    expect(label(ORTE.santorinOia)).toBe('Santorin');
+  });
+
+  it('nennt Korfu, nicht die Ionischen Inseln', () => {
+    expect(label(ORTE.korfuStadt)).toBe('Korfu');
+  });
+
+  it('nennt Mallorca, nicht die Balearen', () => {
+    expect(label(ORTE.mallorcaPalma)).toBe('Mallorca');
+  });
+
+  it('nennt Teneriffa, nicht die Kanaren', () => {
+    expect(label(ORTE.teneriffaSantaCruz)).toBe('Teneriffa');
+  });
+
+  it('lässt das Festland unbehelligt', () => {
+    // Patras liegt auf dem Peloponnes, nicht auf einer Insel.
+    expect(label(ORTE.griechenlandFestland)).not.toBe('Kos');
+    expect(lookupPlace(...ORTE.griechenlandFestland)?.kind).not.toBe('island');
+  });
+
+  it('führt alle Inseln unter derselben Kennung', () => {
+    expect(placeKey(lookupPlace(...ORTE.kosStadt)!)).toBe('island:Kos');
+    expect(placeKey(lookupPlace(...ORTE.kosKardamena)!)).toBe('island:Kos');
   });
 });
 
