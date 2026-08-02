@@ -349,10 +349,15 @@ describe('Mehrzeilige Texte', () => {
     const y = zeilen.map((b) => (b.kind === 'text' ? b.yMm : 0));
     const abstand = y[1]! - y[0]!;
     expect(y[2]! - y[1]!).toBeCloseTo(abstand, 9);
-    // Alle Zeilen tragen dieselbe Schriftgröße und passen in den Slot.
+    // Alle Zeilen tragen dieselbe Schriftgröße.
     const groessen = new Set(zeilen.map((b) => (b.kind === 'text' ? b.fontSizePt : 0)));
     expect(groessen.size).toBe(1);
-    expect(abstand * 3).toBeCloseTo((eventSlot.h * profile.page.trimHeightMm) as number, 6);
+
+    // Der Abstand folgt der im Template angegebenen Zeilenzahl, nicht der Zahl
+    // der gesetzten Zeilen: Drei Ereignisse stehen so groß da wie fünf.
+    const slotHoeheMm = eventSlot.h * profile.page.trimHeightMm;
+    expect(abstand).toBeCloseTo(slotHoeheMm / eventSlot.lines!, 6);
+    expect(eventSlot.lines).toBe(5);
   });
 
   it('behält für einzeilige Texte die Slothöhe', () => {

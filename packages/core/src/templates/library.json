@@ -694,7 +694,8 @@
           "w": 230,
           "h": 60,
           "style": "body",
-          "optional": true
+          "optional": true,
+          "lines": 5
         }
       ]
     },
@@ -709,21 +710,22 @@
           "id": "t-year",
           "role": "year",
           "x": 45,
-          "y": 128,
-          "w": 200,
-          "h": 44,
+          "y": 96,
+          "w": 220,
+          "h": 62,
           "style": "yearLarge",
           "optional": false
         },
         {
           "id": "t-events",
           "role": "freeText",
-          "x": 45,
-          "y": 182,
-          "w": 230,
-          "h": 60,
+          "x": 330,
+          "y": 100,
+          "w": 225,
+          "h": 100,
           "style": "body",
-          "optional": true
+          "optional": true,
+          "lines": 5
         }
       ]
     },
