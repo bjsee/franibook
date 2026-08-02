@@ -31,6 +31,7 @@ import {
   segmentsById,
 } from './grouping.js';
 import { type TemplateFit, assign, slotCost, slotGeometry } from './scoring.js';
+import { bookStats } from './stats.js';
 
 export interface GenerateOptions {
   structure: Structure;
@@ -686,32 +687,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const allPhotoIds = structure.chapters.flatMap((c) => c.segments.flatMap((s) => s.photoIds));
   const unplaced = allPhotoIds.filter((id) => !placed.has(id));
 
-  let worstDpi = Number.POSITIVE_INFINITY;
-  let belowTarget = 0;
-  const belowMinDpi: { photoId: PhotoId; spreadIndex: number; slotId: string; dpi: number }[] = [];
-
-  for (const spread of spreads) {
-    const template = templateById(spread.templateId);
-    if (!template) continue;
-    for (const assignment of spread.slots) {
-      if (!assignment.photoId) continue;
-      const photo = photos.get(assignment.photoId);
-      const slot = template.slots.find((s) => s.id === assignment.slotId);
-      if (!photo || !slot) continue;
-      const geometry = slotGeometry(slot, profile);
-      const cost = slotCost(photo, slot, geometry, { profile, weightOf });
-      worstDpi = Math.min(worstDpi, cost.dpi);
-      if (cost.dpi < profile.resolution.targetDpi) belowTarget++;
-      if (cost.dpi < profile.resolution.minDpi) {
-        belowMinDpi.push({
-          photoId: photo.id,
-          spreadIndex: spread.index,
-          slotId: slot.id,
-          dpi: cost.dpi,
-        });
-      }
-    }
-  }
+  // Dieselbe Rechnung wie nach einer punktuellen Änderung – die Kennzahlen
+  // eines generierten und eines von Hand nachbearbeiteten Buchs entstehen
+  // damit auf genau einem Weg.
+  const stats = bookStats({ spreads, photos, profile });
 
   const platzierbar = structure.chapters.reduce((n, c) => n + c.photoCount, 0);
 
@@ -720,17 +699,17 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     budgets,
     report: {
       photoCount: structure.photoCount,
-      placedCount: placed.size,
+      placedCount: stats.placedCount,
       spreadCount: spreads.length,
       pageCount: spreads.length * 2,
       targetPages,
       chapterOpeners: chapterOpenerCount,
       groupOpeners: groupOpenerCount,
       unplaced,
-      worstDpi: Number.isFinite(worstDpi) ? worstDpi : 0,
-      belowTargetDpi: belowTarget,
-      belowMinDpi,
-      photosPerSpread: spreads.length > 0 ? placed.size / spreads.length : 0,
+      worstDpi: stats.worstDpi,
+      belowTargetDpi: stats.belowTargetDpi,
+      belowMinDpi: stats.belowMinDpi,
+      photosPerSpread: stats.photosPerSpread,
       feasibility: checkFeasibility(
         platzierbar,
         targetPages,

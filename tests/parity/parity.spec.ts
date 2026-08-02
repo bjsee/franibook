@@ -54,17 +54,23 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  * Gemessen bei 2424 px Vergleichsbreite, indem ein Versatz absichtlich
  * eingebaut und wieder entfernt wurde:
  *
- *   korrekt, auto-cover:      0,137 %
- *   korrekt, manuelle Crops:  0,352 %   (kleinere Ausschnitte werden stärker
+ *   korrekt, auto-cover:      0,222 %
+ *   korrekt, manuelle Crops:  0,425 %   (kleinere Ausschnitte werden stärker
  *                                        vergrößert, also mehr Kantenrauschen)
- *   1 mm Versatz im PDF:      0,992 %
+ *   1 mm Versatz, auto-cover: 1,018 %
+ *   1 mm Versatz, manuell:    1,388 %
  *
  * Das verbleibende Rauschen sitzt ausschließlich auf Kanten – nachgeprüft im
  * Differenzbild. Ein echter Versatz zeigte sich dort als doppelte, parallel
  * versetzte Gitterlinien; die sind nicht vorhanden.
  *
  * Die Schwelle liegt zwischen dem ungünstigsten korrekten Fall und dem
- * Fehlerfall: 42 % Puffer nach oben, Faktor 2 nach unten.
+ * Fehlerfall: 18 % Puffer nach oben, Faktor 2,4 nach unten. Die Werte lagen
+ * früher niedriger (0,137 % und 0,352 %), weil die Ausgangslage damals aus
+ * einem gespeicherten Projekt kam und eine andere Vorlage traf; die Slots des
+ * 4-up-Rasters vergrößern die Bilder stärker. Die Schwelle bleibt trotz des
+ * knapperen Puffers bei 0,5 % — sie anzuheben würde genau die Empfindlichkeit
+ * kosten, die den Test wertvoll macht, und der Test ist deterministisch.
  */
 const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
 
@@ -84,6 +90,21 @@ async function toPng(buffer: Buffer, width: number, height: number): Promise<PNG
 test.beforeAll(async () => {
   await rm(ARTIFACTS, { recursive: true, force: true });
   await mkdir(ARTIFACTS, { recursive: true });
+
+  // Ausgangslage ausdrücklich herstellen: vier Fotos auf genau einer
+  // Doppelseite mit den Slots a bis d, auf die dieser Test gebaut ist.
+  //
+  // Vorher hing das am Zufall. Ein Kaltstart verteilt vier Fotos bei 160
+  // Zielseiten auf vier Doppelseiten – der Test kam nur durch, weil er ein
+  // gespeichertes Projekt aus einem früheren Lauf vorfand. Seit der
+  // Ausschnitt-Editor jede Änderung speichert, wäre dieser Stand ohnehin nicht
+  // mehr verlässlich (siehe FRANIBOOK_FRESH in playwright.config.ts).
+  const res = await fetch('http://127.0.0.1:5174/api/generate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ targetPages: 2, chapterOpeners: false }),
+  });
+  expect(res.ok).toBe(true);
 });
 
 test.describe('Vorschau und PDF stimmen überein', () => {
@@ -162,6 +183,29 @@ test.describe('Vorschau und PDF stimmen überein', () => {
       `Vorschau und PDF weichen um ${(ratio * 100).toFixed(2)} % ab. ` +
         `Vergleichsbilder in ${ARTIFACTS}`,
     ).toBeLessThan(MAX_DIFF_RATIO);
+  });
+
+  /**
+   * Die Bearbeitung darf die nackte Vorschau nicht anfassen.
+   *
+   * Ausschnitt-Editor und Drag-and-drop hängen an Ereignissen, die `?bare`
+   * nicht setzt. Bekäme die Vorschau sie doch – etwa weil jemand die
+   * Interaktion in `SpreadView` verdrahtet statt sie hineinzugeben –, würde der
+   * Vergleich Bedienelemente gegen PDF messen. Das fällt in den
+   * Pixelvergleichen erst auf, wenn etwas sichtbar wird; hier fällt es sofort
+   * auf.
+   */
+  test('die nackte Vorschau trägt keine Bedienelemente', async ({ page }) => {
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    await expect(page.getByTestId('spread')).toBeVisible();
+
+    // Keine Werkzeugleiste, kein Fotopool
+    expect(await page.locator('button').count()).toBe(0);
+
+    // Und kein Slot ist ziehbar: Ohne `slotDrag` setzt die Vorschau das Attribut
+    // nicht, der Screenshot bleibt frei von Ziehbildern des Browsers.
+    const ziehbar = await page.locator('[data-testid^="slot-"][draggable="true"]').count();
+    expect(ziehbar).toBe(0);
   });
 
   /**

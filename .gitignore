@@ -23,6 +23,7 @@ spikes/out/
 tests/parity/.cache/
 tests/parity/.out/
 tests/parity/.artifacts/
+tests/parity/.project/
 test-results/
 playwright-report/
 apps/server/.franibook-cache/

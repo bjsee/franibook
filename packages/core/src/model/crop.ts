@@ -118,3 +118,47 @@ export function panCrop(crop: Crop, dx: number, dy: number): Crop {
     mode: 'manual',
   };
 }
+
+/**
+ * Kleinste zulässige Kantenlänge eines Ausschnitts.
+ *
+ * Bei 5 % bleiben von den 2048 px dieses Bestands rund 100 px übrig – schon
+ * der kleinste Slot der Bibliothek (55 mm) verlangt bei 240 dpi über 500 px.
+ * Weiter hineinzuzoomen liefert also garantiert Ausschuss; der Zoom stoppt
+ * hier, statt eine unbrauchbare Vergrößerung zuzulassen.
+ */
+export const MIN_CROP_EDGE = 0.05;
+
+/**
+ * Vergrößert oder verkleinert den sichtbaren Bereich um seine Mitte.
+ *
+ * `factor < 1` zoomt hinein (kleinerer sichtbarer Bereich, mehr Vergrößerung),
+ * `factor > 1` heraus. Breite und Höhe werden mit demselben Faktor skaliert –
+ * nur so behält der Ausschnitt sein Seitenverhältnis und füllt den Slot weiter
+ * ohne Verzerrung. Der Faktor wird zurückgenommen, sobald der Bildrand oder
+ * `MIN_CROP_EDGE` erreicht ist; ein Fehlerfall ist das nicht, sondern das
+ * erwartete Anschlagen am Ende des Bildes.
+ */
+export function zoomCrop(crop: Crop, factor: number): Crop {
+  if (!Number.isFinite(factor) || factor <= 0) return crop;
+
+  const groesserAls1 = Math.min(1 / crop.w, 1 / crop.h);
+  const kleinerAlsMin = MIN_CROP_EDGE / Math.min(crop.w, crop.h);
+  const f = clamp(factor, kleinerAlsMin, groesserAls1);
+
+  const w = crop.w * f;
+  const h = crop.h * f;
+  // Mitte festhalten: Ohne das wandert das Bild beim Zoomen zur linken oberen
+  // Ecke, weil x/y die Kante beschreiben und nicht den Mittelpunkt.
+  const cx = crop.x + crop.w / 2;
+  const cy = crop.y + crop.h / 2;
+
+  return {
+    ...crop,
+    x: clamp(cx - w / 2, 0, 1 - w),
+    y: clamp(cy - h / 2, 0, 1 - h),
+    w,
+    h,
+    mode: 'manual',
+  };
+}
