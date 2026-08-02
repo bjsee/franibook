@@ -246,7 +246,16 @@ Aus Ereignissen ein vollständiges Buch erzeugen. Das Herzstück.
 > platziert. Budgetverteilung, DP-Gruppierung, Templatewahl mit Wiederholungsstrafe,
 > Slot-Zuordnung per Ungarischer Methode und seedbasierter Determinismus laufen.
 >
-> Über den Plan hinausgegangen: **60 Templates statt 15**, mit Slotzahlen von 1 bis
+> Über den Plan hinausgegangen: **Zeitstrahl am Seitenfuß** — jede Doppelseite zeigt
+> unten eine Zeitachse mit einem Marker an der Stelle ihrer Fotos und dem Titel der
+> Fotogruppe daran. Er nutzt die 14 mm, die alle Vorlagen ohnehin frei lassen, und
+> kommt damit ohne Templateänderung aus; geschaltet wird über `settings.timeline`
+> und je Doppelseite über `Spread.timeline`. Der Gruppenauftakt ist daran gekoppelt
+> (`groupOpeners: 'auto'`), weil der Zeitstrahl die Gruppe ohnehin auf jeder ihrer
+> Seiten benennt. Der Jahresauftakt trägt zusätzlich drei bis fünf handgepflegte
+> **Jahresereignisse**. Einzelheiten und verworfene Alternativen im Konzept.
+>
+> Ebenfalls über den Plan hinaus: **60 Templates statt 15**, mit Slotzahlen von 1 bis
 > 24 statt 1 bis 8. Grund ist die Fotodichte — 820 Bilder auf 160 Seiten verlangen
 > mehr als 10 Bilder je Doppelseite, mit einer Achterbibliothek wäre das Ziel
 > rechnerisch unerreichbar. Spiegelvarianten entstehen automatisch beim Laden.

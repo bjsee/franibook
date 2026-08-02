@@ -51,20 +51,23 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
 /**
  * Anteil abweichender Pixel, ab dem der Test fehlschlägt.
  *
- * Gemessen bei 2424 px Vergleichsbreite, indem ein Versatz absichtlich
- * eingebaut und wieder entfernt wurde:
+ * Gemessen bei 2424 px Vergleichsbreite, indem ein Versatz von 1 mm im
+ * PDF-Renderer absichtlich eingebaut und wieder entfernt wurde:
  *
- *   korrekt, auto-cover:      0,137 %
- *   korrekt, manuelle Crops:  0,352 %   (kleinere Ausschnitte werden stärker
- *                                        vergrößert, also mehr Kantenrauschen)
- *   1 mm Versatz im PDF:      0,992 %
+ *   korrekt, auto-cover:      0,242 %      mit 1 mm Versatz: 1,066 %
+ *   korrekt, manuelle Crops:  0,324 %      mit 1 mm Versatz: 1,341 %
+ *   korrekt, mit Zeitstrahl:  0,303 %      mit 1 mm Versatz: 1,127 %
  *
- * Das verbleibende Rauschen sitzt ausschließlich auf Kanten – nachgeprüft im
- * Differenzbild. Ein echter Versatz zeigte sich dort als doppelte, parallel
- * versetzte Gitterlinien; die sind nicht vorhanden.
+ * Die korrekten Werte lagen früher bei 0,137 % und 0,352 %. Der Anstieg im
+ * ersten Fall kommt nicht von der Geometrie, sondern vom Encoder: Seit der
+ * Umstellung auf Qualität 88 mit 4:2:0 und Trellis-Quantisierung – halbe
+ * Dateigröße, siehe Issue #3 – rauscht das PDF an den Bildkanten stärker. Das
+ * verbleibende Rauschen sitzt ausschließlich dort, nachgeprüft im Differenzbild.
  *
  * Die Schwelle liegt zwischen dem ungünstigsten korrekten Fall und dem
- * Fehlerfall: 42 % Puffer nach oben, Faktor 2 nach unten.
+ * Fehlerfall: 54 % Puffer nach oben, Faktor 2,1 nach unten. Sie anzuheben, weil
+ * ein neuer Fall knapp darüber liegt, würde genau die Empfindlichkeit aufgeben,
+ * die den Test wertvoll macht – dann lieber die Ursache suchen.
  */
 const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
 
@@ -72,13 +75,13 @@ const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
  * Schwelle für den Fall mit Zeitstrahl.
  *
  * Getrennt gemessen und getrennt geprüft, damit der Hauptfall weiter die
- * Fotogeometrie misst: Der Zeitstrahl bringt eine 0,3 mm dünne Achse, siebzehn
+ * Fotogeometrie misst: Der Zeitstrahl bringt eine 0,3 mm dünne Achse, sechzehn
  * Ticks und zwei Textzeilen mit – bei gut vier Pixeln je Millimeter sind das
- * subpixelbreite Formen, die Browser und pdfkit unterschiedlich glätten. Diesen
- * Beitrag in die 0,5 % des Hauptfalls einzurechnen hieße, dessen
- * Empfindlichkeit für Geometriefehler aufzugeben.
+ * subpixelbreite Formen, die Browser und pdfkit unterschiedlich glätten.
  *
- * Gemessener Wert siehe unten in der Testausgabe.
+ * Gemessen 0,303 % gegen 0,242 % im Hauptfall: Der Zeitstrahl trägt also 0,06
+ * Prozentpunkte bei, ein Fünftel aller abweichenden Pixel liegt im Fußraum. Mit
+ * 1 mm Versatz steigt der Fall auf 1,127 %, die Schwelle trennt also weiter.
  */
 const MAX_DIFF_TIMELINE = Number(process.env['PARITY_MAX_DIFF_TIMELINE'] ?? 0.005);
 

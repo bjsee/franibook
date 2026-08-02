@@ -745,10 +745,41 @@ type RenderBox =
   | { kind: 'text';  xMm: number; yMm: number; wMm: number; hMm: number;
       content: string; style: ResolvedTextStyle; align: 'left'|'center'|'right' }
   | { kind: 'rect';  xMm: number; yMm: number; wMm: number; hMm: number;
+      fill: string }
+  | { kind: 'polygon'; pointsMm: { xMm: number; yMm: number }[];
       fill: string };
 ```
 
+`polygon` ist der jüngste und einzige nicht rechteckige Kasten – eingeführt für
+die Markerspitze des Zeitstrahls und bewusst ohne umschließendes Rechteck: zwei
+Wahrheiten über dieselbe Geometrie laufen auseinander.
+
 Diese Struktur ist die einzige Schnittstelle, die Vorschau und PDF gemeinsam haben. Alles, was in der Vorschau anders aussieht als im PDF, ist per Konstruktion ein Fehler in einem der beiden Adapter – und wird vom Parity-Test gefunden.
+
+### Zeitstrahl am Seitenfuß
+
+Am Fuß jeder Doppelseite läuft eine Zeitachse durch beide Seiten; ein Marker zeigt, wo im Kalender ihre Fotos liegen, und trägt den Titel der Fotogruppe. Der Zweck ist nicht Verzierung, sondern eine Information, die dem Buch sonst fehlt: 831 Fotos über 19 Jahrgänge auf rund 80 Doppelseiten – die Kalendergliederung sagt, _dass_ ein Kapitel wechselt, nicht, _wie weit_ es entfernt ist.
+
+**Fenster.** Das Kalenderjahr der Doppelseite plus drei Monate Vorlauf und Nachlauf, zusammen 18 Monate auf 584 mm Achse – gut 32 mm im Monat, und zwar buchweit gleich. Der Leser lernt den Maßstab einmal und sieht danach auf jeder Seite, ob seit der letzten ein Monat oder ein Jahr vergangen ist. Das Fenster springt nur zum 1. Januar, an einer Grenze also, die der Kapitelauftakt ohnehin setzt; die Jahreszahlen stehen dadurch im ganzen Buch an derselben Stelle (ein Sechstel und fünf Sechstel der Achse).
+
+Verworfen wurde ein auf den Median zentriertes Fenster: Dann steht der Marker auf jeder Seite mittig, also genau auf der Falzachse, und es wandern die Jahreszahlen statt des Markers. Ebenfalls verworfen: linear in Tagen zu rechnen. Die Monatsbreite wäre dann zwischen Februar (29,8 mm) und einem 31-Tage-Monat (33,0 mm) verschieden und die Jahreszahlen stünden je nach Schaltjahr versetzt. Die Achse ist deshalb in 18 gleich breite Monatsfelder geteilt, innerhalb eines Monats tagesproportional.
+
+**Marker.** Immer beides zugleich: ein Balken über die Spanne der Fotos, darauf die Spitze am Median. Die Form ist damit stetig und braucht keinen Grenzwert – ein Tag Spanne ergibt einen Millimeter Fuß unter der Spitze, die breiteste gemessene Doppelseite 374 mm. Eine Schwelle „ab hier Balken statt Spitze" wäre am Bestand ohnehin die Regel und nicht die Ausnahme: Der Median der Spannen liegt bei 2,6 Monaten, 27 von 62 Doppelseiten überschreiten drei Monate.
+
+In die Spanne gehen nur Daten der Konfidenz `high` oder `medium` ein – ein Dateidatum ist häufig das Kopierdatum und würde den Balken über Jahre aufziehen. Fehlt jedes belastbare Datum, bleiben Achse und Ticks stehen und nur der Marker entfällt; ebenso auf Kapitelauftakten, deren Bild nach Auflösung gewählt wird und nicht nach Datum.
+
+**Platz.** Die 14 mm zwischen dem Ende aller Vorlagen (278 mm) und dem Sicherheitsrand (292 mm), die die Bibliothek ohnehin frei lässt. Kein Template wurde angefasst, die Layouts sind bitidentisch, das Seitenbudget unberührt. Reicht ein Slot in den Fußraum, entfällt der Strahl – heute betrifft das allein den randabfallenden Gruppenauftakt.
+
+**Falzband.** Im ±7-mm-Band um die Falzachse stehen keine Ticks und keine Textkanten; das Label weicht auf die Seite mit mehr Platz aus. Achse, Balken und Spitze laufen durch, damit der Marker seine ehrliche Position behält. Systematisch betroffen ist der Juli-Tick: Weil das Fenster am 1. Oktober beginnt, liegt die Achsenmitte auf jeder Seite genau auf dem 1. Juli. Beim Marker ist es gemessen ein einziger Fall von 62.
+
+Geschaltet wird über `settings.timeline` (Vorgabe an) und `Spread.timeline` für die einzelne Doppelseite. Der globale Schalter läuft über `PATCH /api/settings` und löst bewusst kein Neugenerieren aus – der Zeitstrahl ändert das RSM, nicht die Fotoverteilung.
+
+### Auftaktseiten
+
+Zwei Arten, unterschiedlich geregelt:
+
+- **Jahresauftakt** (`settings.chapterOpeners`, Vorgabe an) gliedert das Buch in Kapitel und trägt neben der Jahreszahl drei bis fünf **Jahresereignisse** – weltpolitisch, sportlich, kulturell. Sie werden von Hand gepflegt (`PUT /api/chapters/:year/events`, im Layout-Dokument unter `yearEvents`) und ordnen die privaten Fotos in ihre Zeit ein. Bewusst Daten und keine Abfrage: Ein Wikipedia-Abruf beim Erzeugen wäre netzabhängig und bräche den Determinismus, ein von einem Sprachmodell erfundenes Datum stünde gedruckt im Buch. Vorschlagswerkzeuge können darüber liegen; gespeichert wird nur Bestätigtes.
+- **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
 ### Typografie
 
@@ -758,7 +789,7 @@ Drei Festlegungen, die zusammengehören:
 
 - **Dieselbe Datei für Vorschau und PDF.** Der PDF-Renderer bettet sie über `doc.registerFont()` ein – Saal verlangt eingebettete Schriften, und pdfkits Vorgabe Helvetica ist eine der 14 nicht eingebetteten Basisschriften. Die Vorschau lädt genau dieselbe Datei per `@font-face`, keine WOFF2-Variante und keine zweite Kopie unter `apps/web/public`.
 - **Kein Fallback-Stack.** Griffe der Browser auf eine Systemschrift zurück, liefe die Vorschau lautlos gegen eine andere Schrift als das PDF. Ohne Fallback ist der Fehler sichtbar, statt sich als Millimeterversatz zu tarnen.
-- **Die Größe steht als Versalhöhe im Stil, die Grundlinie im Modell.** `TEXT_STYLES` (`core/render/typography.ts`) gibt je Stil – bisher `yearLarge` und `groupTitle` – Schnitt, Farbe und die Versalhöhe als Anteil der Kastenhöhe an. Nicht als Punktgröße, damit dasselbe Template für 21×21 cm und 30×30 cm gilt; nicht als Em-Größe, weil die bei gleicher Optik von Schnitt zu Schnitt verschieden ist. Die Grundlinie liefert `textBaselineOffsetMm()`, beide Adapter treffen sie nur noch: `baseline: 'alphabetic'` in pdfkit, `y` im SVG der Vorschau.
+- **Die Größe steht als Versalhöhe im Stil, die Grundlinie im Modell.** `TEXT_STYLES` (`core/render/typography.ts`) gibt je Stil – `yearLarge`, `groupTitle`, `body` und die beiden des Zeitstrahls – Schnitt, Farbe und die Versalhöhe als Anteil der Kastenhöhe an. Nicht als Punktgröße, damit dasselbe Template für 21×21 cm und 30×30 cm gilt; nicht als Em-Größe, weil die bei gleicher Optik von Schnitt zu Schnitt verschieden ist. Die Grundlinie liefert `textBaselineOffsetMm()`, beide Adapter treffen sie nur noch: `baseline: 'alphabetic'` in pdfkit, `y` im SVG der Vorschau.
 
 Der letzte Punkt hat einen konkreten Anlass. Vorher zentrierte die Vorschau eine CSS-Zeilenbox, während pdfkit vom Kastenoberrand aus setzte – bei einem 13 mm hohen Titelkasten rund 4 mm Höhenunterschied für denselben Text, ohne dass einer der beiden Adapter „falsch“ gewesen wäre. Der Halbdurchschuss einer CSS-Zeilenbox leitet sich je nach Plattform aus hhea oder den OS/2-Typo-Metriken ab; im SVG dagegen ist die Grundlinie eine Koordinate. Deshalb setzt die Vorschau Text in einem SVG und nicht in einem `div`.
 
