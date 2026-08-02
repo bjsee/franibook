@@ -25,6 +25,14 @@ export interface TemplateSlot {
    * ordnet hoch gewichtete Fotos bevorzugt prominenten Slots zu.
    */
   prominence: 1 | 2 | 3;
+  /**
+   * Für welche Bildausrichtung der Slot gedacht ist.
+   *
+   * Nicht bindend, aber die Zuordnung bestraft Abweichungen: Ein breiter Slot
+   * mit einem Hochformat darin nutzt nur einen Bruchteil der Bildpixel und
+   * fällt bei diesem Bestand schnell unter die Mindestauflösung.
+   */
+  prefers?: 'landscape' | 'portrait' | 'any';
 }
 
 export interface TemplateTextSlot {

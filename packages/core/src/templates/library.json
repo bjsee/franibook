@@ -1,0 +1,483 @@
+{
+  "$comment": [
+    "Templatebibliothek. Maße in Millimetern auf der Referenz-Doppelseite,",
+    "nicht normiert – Millimeter sind prüfbar, siebenstellige Bruchzahlen nicht.",
+    "Die Normierung passiert beim Laden.",
+    "",
+    "Gestaltungsraster der Referenz (600 x 300 mm Endformat, Falz bei 300):",
+    "  Außenrand 22 mm, Falzabstand 16 mm je Seite, Rand oben/unten 22 mm.",
+    "  Nutzfläche links  x 22..284, rechts x 316..578, je 262 mm breit.",
+    "  Nutzfläche vertikal y 22..278, also 256 mm hoch.",
+    "",
+    "SLOTBREITEN – hergeleitet, nicht geschätzt:",
+    "Maßgeblich ist nicht die lange Bildkante, sondern wie viele Pixel nach dem",
+    "Zuschnitt auf die Slotform übrig bleiben. Ist der Slot breiter proportioniert",
+    "als das Bild, wird die volle Bildbreite genutzt; ist er schmaler, wird",
+    "seitlich beschnitten und es bleiben weniger Pixel.",
+    "",
+    "  4:3-Slot mit 4:3-Bild   volle 2048 px  -> bis 216 mm",
+    "  4:3-Slot mit 16:9-Bild  nur  1536 px   -> bis 162 mm   <- bindend",
+    "  3:4-Slot mit 3:4-Bild   volle 1536 px  -> bis 162 mm",
+    "  3:4-Slot mit 9:16-Bild  nur  1152 px   -> bis 121 mm   <- bindend",
+    "  quadratisch mit 16:9    nur  1152 px   -> bis 121 mm   <- bindend",
+    "",
+    "Daraus die Obergrenzen dieser Bibliothek: Querformat 160 mm, Hochformat und",
+    "quadratisch 121 mm. Ein 160-mm-Bild auf einer 300-mm-Seite ist immer noch",
+    "gut die halbe Seitenbreite mit großzügigem Rand – bei Fotobüchern ein",
+    "Qualitätsmerkmal, keine Verlegenheit."
+  ],
+
+  "reference": { "widthMm": 600, "heightMm": 300 },
+
+  "templates": [
+    {
+      "id": "spread.1up.hero-left",
+      "name": "Ein großes Foto, ruhige Gegenseite",
+      "tags": ["ruhig", "auftakt"],
+      "slots": [
+        { "id": "a", "x": 73, "y": 90, "w": 160, "h": 120, "prominence": 3, "prefers": "landscape" }
+      ]
+    },
+    {
+      "id": "spread.1up.portrait-right",
+      "name": "Ein Hochformat, ruhige Gegenseite",
+      "tags": ["ruhig", "auftakt"],
+      "slots": [
+        { "id": "a", "x": 386, "y": 69, "w": 121, "h": 161, "prominence": 3, "prefers": "portrait" }
+      ]
+    },
+    {
+      "id": "spread.2up.pair",
+      "name": "Zwei Querformate, je Seite eines",
+      "tags": ["ruhig", "symmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 78,
+          "y": 93,
+          "w": 150,
+          "h": 113,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 372,
+          "y": 93,
+          "w": 150,
+          "h": 113,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.2up.portraits",
+      "name": "Zwei Hochformate",
+      "tags": ["ruhig", "symmetrisch"],
+      "slots": [
+        { "id": "a", "x": 94, "y": 71, "w": 118, "h": 157, "prominence": 2, "prefers": "portrait" },
+        { "id": "b", "x": 388, "y": 71, "w": 118, "h": 157, "prominence": 2, "prefers": "portrait" }
+      ]
+    },
+    {
+      "id": "spread.2up.hero-and-small",
+      "name": "Hauptbild mit kleinerem Begleiter",
+      "tags": ["erzählend", "asymmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 50,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 3,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 400,
+          "y": 110,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.3up.hero-plus-two",
+      "name": "Ein großes, zwei gestapelt",
+      "tags": ["erzählend"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 40,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 3,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 380,
+          "y": 55,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 380,
+          "y": 166,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.3up.two-and-one",
+      "name": "Zwei links, eines rechts",
+      "tags": ["rhythmisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 104,
+          "w": 123,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 161,
+          "y": 104,
+          "w": 123,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 385,
+          "y": 104,
+          "w": 123,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.4up.grid",
+      "name": "Vier Fotos, ruhiges Raster",
+      "tags": ["ruhig", "ausgewogen"],
+      "slots": [
+        { "id": "a", "x": 22, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
+        { "id": "b", "x": 162, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
+        { "id": "c", "x": 318, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
+        { "id": "d", "x": 458, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" }
+      ]
+    },
+    {
+      "id": "spread.4up.portraits",
+      "name": "Vier Hochformate",
+      "tags": ["rhythmisch"],
+      "slots": [
+        { "id": "a", "x": 22, "y": 69, "w": 121, "h": 161, "prominence": 2, "prefers": "portrait" },
+        {
+          "id": "b",
+          "x": 163,
+          "y": 69,
+          "w": 121,
+          "h": 161,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 316,
+          "y": 69,
+          "w": 121,
+          "h": 161,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        { "id": "d", "x": 457, "y": 69, "w": 121, "h": 161, "prominence": 2, "prefers": "portrait" }
+      ]
+    },
+    {
+      "id": "spread.4up.hero-left",
+      "name": "Hauptbild links, drei kleine rechts",
+      "tags": ["erzählend", "asymmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 40,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 3,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 350,
+          "y": 50,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 350,
+          "y": 145,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        { "id": "d", "x": 465, "y": 97, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" }
+      ]
+    },
+    {
+      "id": "spread.5up.offset",
+      "name": "Fünf im versetzten Raster",
+      "tags": ["dicht", "rhythmisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 30,
+          "y": 45,
+          "w": 140,
+          "h": 105,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 182,
+          "y": 45,
+          "w": 100,
+          "h": 133,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 30,
+          "y": 165,
+          "w": 110,
+          "h": 83,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 336,
+          "y": 55,
+          "w": 110,
+          "h": 83,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 336,
+          "y": 152,
+          "w": 140,
+          "h": 105,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.6up.dense-left",
+      "name": "Sechs, dicht links",
+      "tags": ["dicht"],
+      "slots": [
+        { "id": "a", "x": 45, "y": 60, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" },
+        {
+          "id": "b",
+          "x": 160,
+          "y": 60,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 45,
+          "y": 155,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 160,
+          "y": 155,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 385,
+          "y": 52,
+          "w": 123,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 385,
+          "y": 158,
+          "w": 123,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.8up.collage",
+      "name": "Dichte Collage",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        { "id": "a", "x": 30, "y": 50, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" },
+        {
+          "id": "b",
+          "x": 145,
+          "y": 50,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 30,
+          "y": 145,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 145,
+          "y": 145,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 350,
+          "y": 50,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 465,
+          "y": 50,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 350,
+          "y": 145,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 465,
+          "y": 145,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.year",
+      "name": "Jahresauftakt mit Bild",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 387,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 3,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 45,
+          "y": 118,
+          "w": 200,
+          "h": 44,
+          "style": "yearLarge",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.quiet",
+      "name": "Jahresauftakt ohne Bild",
+      "tags": ["kapitel", "auftakt", "ruhig"],
+      "chapterOnly": true,
+      "slots": [],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 45,
+          "y": 128,
+          "w": 200,
+          "h": 44,
+          "style": "yearLarge",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.1up.fullpage",
+      "name": "Ganzseitig (nur bei ausreichender Auflösung)",
+      "tags": ["reserve", "groß"],
+      "highResOnly": true,
+      "slots": [
+        { "id": "a", "x": 316, "y": 22, "w": 262, "h": 256, "prominence": 3, "prefers": "any" }
+      ]
+    }
+  ]
+}

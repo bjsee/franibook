@@ -12,8 +12,12 @@ export * from './print/profiles/index.js';
 
 export * from './model/photo.js';
 export * from './model/crop.js';
+export * from './model/date.js';
 export * from './model/template.js';
 export * from './model/spread.js';
+
+export * from './structure/segment.js';
+export * from './structure/detectors.js';
 
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
