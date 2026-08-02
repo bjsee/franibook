@@ -997,6 +997,270 @@
           "id": "h"
         }
       ]
+    },
+    {
+      "id": "spread.7up.three-and-four",
+      "name": "Sieben, drei links",
+      "tags": ["dicht", "rhythmisch"],
+      "slots": [
+        {
+          "x": 73,
+          "y": 22,
+          "w": 160,
+          "h": 74,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "a"
+        },
+        {
+          "x": 73,
+          "y": 113,
+          "w": 160,
+          "h": 74,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "b"
+        },
+        {
+          "x": 73,
+          "y": 204,
+          "w": 160,
+          "h": 74,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "c"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 458,
+          "y": 22,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 316,
+          "y": 161,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 458,
+          "y": 161,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        }
+      ]
+    },
+    {
+      "id": "spread.9up.four-and-five",
+      "name": "Neun, vier links",
+      "tags": ["dicht", "rhythmisch"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 161,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 161,
+          "w": 120,
+          "h": 117,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 458,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 458,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 387,
+          "y": 204,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        }
+      ]
+    },
+    {
+      "id": "spread.11up.five-and-six",
+      "name": "Elf, fünf links",
+      "tags": ["dicht", "rhythmisch"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 93,
+          "y": 204,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 316,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 458,
+          "y": 22,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 458,
+          "y": 113,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 204,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 458,
+          "y": 204,
+          "w": 120,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        }
+      ]
     }
   ]
 }

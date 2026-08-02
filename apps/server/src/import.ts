@@ -66,6 +66,32 @@ function toNaiveDateTime(v: unknown): NaiveDateTime | undefined {
   return undefined;
 }
 
+function toNaive(d: Date): NaiveDateTime {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * Datum aus dem Dateinamen.
+ *
+ * Deckt die verbreiteten Muster ab: `IMG_20150612_141233`,
+ * `20150612_163610_DSC_0146`, `2015-06-12 14.12.33`.
+ */
+function dateFromFileName(name: string): NaiveDateTime | undefined {
+  const m = name.match(
+    /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})(?:[-_ T]?(\d{2})[-_.:]?(\d{2})[-_.:]?(\d{2}))?/,
+  );
+  if (!m) return undefined;
+
+  const [, y, mo, d, h = '00', mi = '00', s = '00'] = m;
+  const month = Number(mo);
+  const day = Number(d);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  if (Number(h) > 23 || Number(mi) > 59 || Number(s) > 59) return undefined;
+
+  return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+}
+
 async function mapLimit<T, R>(
   items: readonly T[],
   limit: number,
@@ -121,7 +147,25 @@ export async function importFolder(root: string, limit?: number): Promise<Import
       const rawH = meta.height ?? 0;
       if (rawW === 0 || rawH === 0) throw new Error('keine Pixelmaße');
 
-      const takenAt = toNaiveDateTime(tags.DateTimeOriginal) ?? toNaiveDateTime(tags.CreateDate);
+      // Alle Quellen der Datumskaskade füllen, nicht nur die erste – sonst
+      // fällt sie bei fehlendem DateTimeOriginal sofort auf das Dateidatum
+      // zurück, obwohl noch bessere Angaben in der Datei stehen.
+      const takenAt = toNaiveDateTime(tags.DateTimeOriginal);
+      const secondaryDate =
+        toNaiveDateTime(tags.CreateDate) ?? toNaiveDateTime(tags.SubSecCreateDate);
+      const gpsDate = toNaiveDateTime(tags.GPSDateTime);
+      const nameDate = dateFromFileName(fileName);
+
+      const gps =
+        typeof tags.GPSLatitude === 'number' && typeof tags.GPSLongitude === 'number'
+          ? { lat: tags.GPSLatitude, lon: tags.GPSLongitude }
+          : undefined;
+
+      const camera = [tags.Make, tags.Model]
+        .filter((v): v is string => typeof v === 'string' && v.length > 0)
+        .join(' ')
+        .replace(/\b(\w+)\s+\1\b/i, '$1') // "Canon Canon EOS" → "Canon EOS"
+        .trim();
 
       return {
         id: await contentHash(path, st.size),
@@ -132,6 +176,15 @@ export async function importFolder(root: string, limit?: number): Promise<Import
         height: swap ? rawW : rawH,
         orientation,
         ...(takenAt ? { takenAt } : {}),
+        ...(secondaryDate ? { secondaryDate } : {}),
+        ...(gpsDate ? { gpsDate } : {}),
+        ...(nameDate ? { nameDate } : {}),
+        fileMtime: toNaive(st.mtime),
+        ...(st.birthtime && st.birthtime.getTime() > 0
+          ? { fileBirthtime: toNaive(st.birthtime) }
+          : {}),
+        ...(gps ? { gps } : {}),
+        ...(camera ? { camera } : {}),
       };
     } catch (err) {
       failed.push({ file: fileName, reason: err instanceof Error ? err.message : String(err) });

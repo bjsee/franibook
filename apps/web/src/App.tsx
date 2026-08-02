@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
+import { LayoutEditor } from './LayoutEditor.js';
 
 interface Report {
   photoCount: number;
@@ -28,7 +29,7 @@ interface ProjectInfo {
   undatedCount: number;
 }
 
-type View = 'overview' | 'spread';
+type View = 'overview' | 'spread' | 'edit';
 
 /**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
@@ -199,122 +200,137 @@ export function App() {
           <button onClick={() => setView('spread')} style={view === 'spread' ? S.tabActive : S.tab}>
             Doppelseite
           </button>
+          <button onClick={() => setView('edit')} style={view === 'edit' ? S.tabActive : S.tab}>
+            Aufteilung bearbeiten
+          </button>
         </div>
       </header>
 
       {report && <ReportBar report={report} undated={info?.undatedCount ?? 0} />}
 
-      <div style={S.toolbar}>
-        {view === 'spread' && (
-          <>
-            <button
-              onClick={() => setIndex((i) => Math.max(0, i - 1))}
-              disabled={index === 0}
-              style={S.button}
-            >
-              ←
-            </button>
-            <span style={S.counter}>
-              {index + 1} / {info?.spreadCount ?? '…'}
-            </span>
-            <button
-              onClick={() => setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1))}
-              disabled={!info || index >= info.spreadCount - 1}
-              style={S.button}
-            >
-              →
-            </button>
-
-            {(['trim', 'safety', 'gutter', 'diagnostics'] as const).map((k) => (
-              <label key={k} style={S.check}>
-                <input
-                  type="checkbox"
-                  checked={guides[k] ?? false}
-                  onChange={(e) => setGuides((g) => ({ ...g, [k]: e.target.checked }))}
-                />
-                {LABELS[k]}
-              </label>
-            ))}
-          </>
-        )}
-
-        {view === 'overview' && info && (
-          <>
-            <label style={S.check}>
-              Seiten
-              <input
-                type="number"
-                min={24}
-                max={400}
-                step={2}
-                defaultValue={info.settings.targetPages}
-                onBlur={(e) => {
-                  const v = Number(e.target.value);
-                  if (v !== info.settings.targetPages) void regenerate({ targetPages: v });
-                }}
-                style={S.number}
-              />
-            </label>
-            <label style={S.check}>
-              <input
-                type="checkbox"
-                checked={info.settings.chapterOpeners}
-                onChange={(e) => void regenerate({ chapterOpeners: e.target.checked })}
-              />
-              Jahresauftakte
-            </label>
-            <button
-              onClick={() => void regenerate({ seed: info.settings.seed + 1 })}
-              style={S.button}
-            >
-              Anders anordnen
-            </button>
-          </>
-        )}
-
-        <span style={S.spacer} />
-
-        <button
-          onClick={() => void exportPdf(view === 'overview')}
-          disabled={!!busy}
-          style={S.buttonPrimary}
-        >
-          {view === 'overview' ? 'Ganzes Buch als PDF' : 'Diese Doppelseite als PDF'}
-        </button>
-      </div>
-
-      {(busy || note) && <p style={S.note}>{busy ?? note}</p>}
-
-      {view === 'overview' && info ? (
-        <div style={{ marginTop: '1.5rem' }}>
-          <Overview
-            spreadCount={info.spreadCount}
-            chapters={info.chapters}
-            imageSrc={imageSrc}
-            onOpen={(i) => {
-              setIndex(i);
-              setView('spread');
-            }}
-          />
-        </div>
+      {view === 'edit' ? (
+        <LayoutEditor
+          imageSrc={imageSrc}
+          onApplied={() => {
+            loadInfo();
+            setSpread(null);
+          }}
+        />
       ) : (
         <>
-          <div ref={stageRef} style={S.stage}>
-            {spread ? (
-              <SpreadView
-                spread={spread}
-                widthPx={stageWidth}
-                imageSrc={imageSrc}
-                guides={guides}
-              />
-            ) : (
-              <p style={S.muted}>Lade Doppelseite …</p>
+          <div style={S.toolbar}>
+            {view === 'spread' && (
+              <>
+                <button
+                  onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                  disabled={index === 0}
+                  style={S.button}
+                >
+                  ←
+                </button>
+                <span style={S.counter}>
+                  {index + 1} / {info?.spreadCount ?? '…'}
+                </span>
+                <button
+                  onClick={() => setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1))}
+                  disabled={!info || index >= info.spreadCount - 1}
+                  style={S.button}
+                >
+                  →
+                </button>
+
+                {(['trim', 'safety', 'gutter', 'diagnostics'] as const).map((k) => (
+                  <label key={k} style={S.check}>
+                    <input
+                      type="checkbox"
+                      checked={guides[k] ?? false}
+                      onChange={(e) => setGuides((g) => ({ ...g, [k]: e.target.checked }))}
+                    />
+                    {LABELS[k]}
+                  </label>
+                ))}
+              </>
             )}
+
+            {view === 'overview' && info && (
+              <>
+                <label style={S.check}>
+                  Seiten
+                  <input
+                    type="number"
+                    min={24}
+                    max={400}
+                    step={2}
+                    defaultValue={info.settings.targetPages}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value);
+                      if (v !== info.settings.targetPages) void regenerate({ targetPages: v });
+                    }}
+                    style={S.number}
+                  />
+                </label>
+                <label style={S.check}>
+                  <input
+                    type="checkbox"
+                    checked={info.settings.chapterOpeners}
+                    onChange={(e) => void regenerate({ chapterOpeners: e.target.checked })}
+                  />
+                  Jahresauftakte
+                </label>
+                <button
+                  onClick={() => void regenerate({ seed: info.settings.seed + 1 })}
+                  style={S.button}
+                >
+                  Anders anordnen
+                </button>
+              </>
+            )}
+
+            <span style={S.spacer} />
+
+            <button
+              onClick={() => void exportPdf(view === 'overview')}
+              disabled={!!busy}
+              style={S.buttonPrimary}
+            >
+              {view === 'overview' ? 'Ganzes Buch als PDF' : 'Diese Doppelseite als PDF'}
+            </button>
           </div>
-          <p style={S.muted}>
-            Pfeiltasten blättern, <kbd>g</kbd> schaltet die Hilfslinien, <kbd>Esc</kbd> zur
-            Übersicht.
-          </p>
+
+          {(busy || note) && <p style={S.note}>{busy ?? note}</p>}
+
+          {view === 'overview' && info ? (
+            <div style={{ marginTop: '1.5rem' }}>
+              <Overview
+                spreadCount={info.spreadCount}
+                chapters={info.chapters}
+                imageSrc={imageSrc}
+                onOpen={(i) => {
+                  setIndex(i);
+                  setView('spread');
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              <div ref={stageRef} style={S.stage}>
+                {spread ? (
+                  <SpreadView
+                    spread={spread}
+                    widthPx={stageWidth}
+                    imageSrc={imageSrc}
+                    guides={guides}
+                  />
+                ) : (
+                  <p style={S.muted}>Lade Doppelseite …</p>
+                )}
+              </div>
+              <p style={S.muted}>
+                Pfeiltasten blättern, <kbd>g</kbd> schaltet die Hilfslinien, <kbd>Esc</kbd> zur
+                Übersicht.
+              </p>
+            </>
+          )}
         </>
       )}
     </main>

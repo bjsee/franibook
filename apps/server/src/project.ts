@@ -9,6 +9,8 @@ import { join } from 'node:path';
 import {
   type Chapter,
   type GenerateResult,
+  type LayoutDocument,
+  type LayoutIssue,
   type NaiveDateTime,
   type Photo,
   type PhotoId,
@@ -20,9 +22,12 @@ import {
   allSegments,
   buildStructure,
   defaultProfile,
+  exportLayout,
   findBulkSeconds,
   generateBook,
   needsAttention,
+  parseLayout,
+  rebuildSpreads,
   renderSpread,
   requireTemplate,
   resolveEffectiveDate,
@@ -164,6 +169,73 @@ export class Project {
     this.spreads = result.spreads;
     this.lastReport = result.report;
     return result;
+  }
+
+  // ------------------------------------------------------- Layout-Dokument
+
+  /** Die Buchaufteilung als lesbares, bearbeitbares JSON. */
+  exportLayout(): LayoutDocument {
+    const platziert = new Set<PhotoId>();
+    for (const spread of this.spreads) {
+      for (const slot of spread.slots) if (slot.photoId) platziert.add(slot.photoId);
+    }
+    const unplaced = [...this.photos.keys()].filter((id) => !platziert.has(id));
+
+    return exportLayout({
+      spreads: this.spreads,
+      photos: this.photos,
+      profile: this.profile,
+      settings: {
+        targetPages: this.settings.targetPages,
+        chapterOpeners: this.settings.chapterOpeners,
+      },
+      unplaced,
+    });
+  }
+
+  /**
+   * Übernimmt ein von Hand bearbeitetes Layout.
+   *
+   * Vorlagen und Ausschnitte werden neu berechnet, weil sich beim Umhängen
+   * regelmäßig die Zahl der Bilder je Doppelseite ändert. Was sich nicht
+   * auflösen lässt, wird gemeldet statt stillschweigend verworfen.
+   */
+  applyLayout(raw: unknown): {
+    ok: boolean;
+    issues: LayoutIssue[];
+    problems: { index: number; photoCount: number; message: string }[];
+    spreadCount: number;
+  } {
+    const parsed = parseLayout(raw, this.photos);
+    if (!parsed.ok) {
+      return { ok: false, issues: parsed.issues, problems: [], spreadCount: 0 };
+    }
+
+    const rebuilt = rebuildSpreads({
+      spreads: parsed.spreads,
+      photos: this.photos,
+      profile: this.profile,
+      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+    });
+
+    if (rebuilt.problems.length > 0) {
+      // Doppelseiten ohne passende Vorlage würden verschwinden – das wäre ein
+      // stiller Datenverlust. Lieber gar nichts übernehmen.
+      return {
+        ok: false,
+        issues: parsed.issues,
+        problems: rebuilt.problems,
+        spreadCount: rebuilt.spreads.length,
+      };
+    }
+
+    this.spreads = rebuilt.spreads;
+    if (parsed.settings?.targetPages) this.settings.targetPages = parsed.settings.targetPages;
+    if (parsed.settings?.chapterOpeners !== undefined) {
+      this.settings.chapterOpeners = parsed.settings.chapterOpeners;
+    }
+
+    return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
   }
 
   // -------------------------------------------------------------- Rendern
