@@ -13,7 +13,7 @@ import type { PhotoWeight } from '../model/date.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { Template } from '../model/template.js';
-import type { PrintProfile } from '../print/profile.js';
+import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import type { Chapter, Segment, Structure } from '../structure/segment.js';
 import {
   chapterTemplates,
@@ -75,7 +75,16 @@ export interface GenerateResult {
     placedCount: number;
     spreadCount: number;
     pageCount: number;
+    /** Wie angefordert. */
     targetPages: number;
+    /**
+     * Zielseitenzahl, die die Engine tatsächlich ansteuert.
+     *
+     * Die Anforderung wird auf das Druckprofil eingerastet: Vielfaches von
+     * `pageCount.step`, nicht unter `min`, nicht über `max`. Eine Vorgabe von
+     * 200 Seiten wird bei Saal zu 160, weil mehr nicht gebunden wird.
+     */
+    effectiveTargetPages: number;
     chapterOpeners: number;
     /** Auftaktseiten für Fotogruppen. */
     groupOpeners: number;
@@ -493,6 +502,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const useOpeners = opts.chapterOpeners ?? true;
   const rng = mulberry32(opts.seed ?? 1);
 
+  // Zielseitenzahl auf das Druckprofil einrasten. Vorher rechnete die Engine mit
+  // der rohen Vorgabe und konnte ein Buch erzeugen, das der Dienstleister nicht
+  // bindet: 172 Seiten bei einem Maximum von 160.
+  const zielSeiten = nextValidPageCount(profile, targetPages);
+
   const slotCounts = supportedSlotCounts();
 
   // Nur aktive Gruppen gliedern. Abgeschaltete – typischerweise der Wohnort –
@@ -573,12 +587,25 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
   const ausDemFluss = new Set([...auftaktBild.values(), ...jahresBild.values()]);
 
+  // Auftaktbilder stehen nicht mehr im Fluss. Das Budget muss mit den Fotos
+  // rechnen, die wirklich verteilt werden – sonst bekommt ein Jahr eine
+  // Doppelseite zugeteilt, für die es kein Foto mehr hat, und das Buch bleibt
+  // unter der Zielzahl.
+  const budgetKapitel = structure.chapters.map((c) => {
+    const ausgenommen = c.segments.reduce(
+      (n, s) => n + s.photoIds.filter((id) => ausDemFluss.has(id)).length,
+      0,
+    );
+    return { ...c, photoCount: Math.max(0, c.photoCount - ausgenommen) };
+  });
+
   // Gruppenauftakte gehen vom selben Kontingent ab wie alles andere. Ohne sie
   // einzurechnen, plante das Budget 61 Doppelseiten und das Buch wurde 68 lang.
   const auftaktSpreads = auftaktBild.size;
-  const budgets = distributeBudget(structure.chapters, {
-    targetPages: Math.max(2, targetPages - auftaktSpreads * 2),
+  const budgets = distributeBudget(budgetKapitel, {
+    targetPages: Math.max(2, zielSeiten - auftaktSpreads * 2),
     chapterSpreads: useOpeners ? 1 : 0,
+    maxPhotosPerSpread: Math.max(...slotCounts, 1),
   });
   const spreadsPerYear = budgetByYear(budgets);
   const segments = segmentsById(structure);
@@ -724,6 +751,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       spreadCount: spreads.length,
       pageCount: spreads.length * 2,
       targetPages,
+      effectiveTargetPages: zielSeiten,
       chapterOpeners: chapterOpenerCount,
       groupOpeners: groupOpenerCount,
       unplaced,
@@ -733,7 +761,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       photosPerSpread: spreads.length > 0 ? placed.size / spreads.length : 0,
       feasibility: checkFeasibility(
         platzierbar,
-        targetPages,
+        zielSeiten,
         slotCounts,
         structure.chapters.length,
         useOpeners,

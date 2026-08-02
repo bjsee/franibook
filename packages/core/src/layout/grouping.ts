@@ -26,10 +26,21 @@ export interface BudgetOptions {
   exponent?: number;
   /** Mindestzahl Doppelseiten je Jahr. */
   minSpreadsPerChapter?: number;
+  /**
+   * Größte Gruppe, die die Templatebibliothek setzen kann.
+   *
+   * Begrenzt das Budget von unten: 111 Fotos brauchen bei höchstens 24 Slots je
+   * Doppelseite mindestens fünf davon. Ohne diese Grenze verteilt die Rechnung
+   * einem Jahr weniger Doppelseiten, als es überhaupt füllen kann – die
+   * Gruppierung nimmt sich die fehlenden dann selbst und das Buch überschreitet
+   * die Zielvorgabe.
+   */
+  maxPhotosPerSpread?: number;
 }
 
 export interface ChapterBudget {
   year: number;
+  /** Fotos, die in diesem Jahr auf die Doppelseiten verteilt werden. */
   photoCount: number;
   /** Doppelseiten für Fotos, ohne Kapitelauftakt. */
   spreads: number;
@@ -41,6 +52,11 @@ export interface ChapterBudget {
  * Am echten Bestand liegt das Verhältnis zwischen stärkstem und schwächstem
  * Jahr bei 11:1 (2024 mit 111 Fotos, 2012 mit 10). Der Exponent dämpft das auf
  * etwa 7:1.
+ *
+ * Die Summe der Zuteilungen ist die Zusage, aus der die exakte Seitenzahl
+ * entsteht: Jedes Jahr erhält so viele Doppelseiten, wie es füllen kann – nie
+ * mehr als eine je Foto, nie weniger als die Bibliothek verlangt – und die
+ * Gruppierung hält die Zahl anschließend genau ein.
  */
 export function distributeBudget(
   chapters: readonly Chapter[],
@@ -49,6 +65,7 @@ export function distributeBudget(
   const exponent = opts.exponent ?? 0.85;
   const minSpreads = opts.minSpreadsPerChapter ?? 1;
   const chapterSpreads = opts.chapterSpreads ?? 0;
+  const maxPhotos = opts.maxPhotosPerSpread ?? Number.POSITIVE_INFINITY;
 
   // Eine Doppelseite sind zwei Seiten
   const totalSpreads = Math.floor(opts.targetPages / 2) - chapterSpreads * chapters.length;
@@ -56,37 +73,61 @@ export function distributeBudget(
     return chapters.map((c) => ({ year: c.year, photoCount: c.photoCount, spreads: minSpreads }));
   }
 
+  // Kapazitätsgrenzen je Jahr. Die Untergrenze folgt aus der größten Vorlage,
+  // die Obergrenze daraus, dass jede Doppelseite mindestens ein Foto zeigt. Ein
+  // Jahr ohne Fotos im Fluss – alle Bilder stehen auf Auftaktseiten – bekommt
+  // gar nichts, damit seine Doppelseite nicht verfällt.
+  const unten = chapters.map((c) =>
+    c.photoCount === 0 ? 0 : Math.max(minSpreads, Math.ceil(c.photoCount / maxPhotos)),
+  );
+  const oben = chapters.map((c, i) => Math.max(unten[i]!, c.photoCount));
+
   const weights = chapters.map((c) => Math.pow(c.photoCount, exponent));
   const weightSum = weights.reduce((a, b) => a + b, 0);
 
-  // Erste Zuteilung proportional zum gedämpften Gewicht
+  // Erste Zuteilung proportional zum gedämpften Gewicht, auf die Kapazität
+  // eingerastet
   const raw = chapters.map((_, i) => (weights[i]! / weightSum) * totalSpreads);
   const budgets: ChapterBudget[] = chapters.map((c, i) => ({
     year: c.year,
     photoCount: c.photoCount,
-    spreads: Math.max(minSpreads, Math.floor(raw[i]!)),
+    spreads: Math.min(oben[i]!, Math.max(unten[i]!, Math.floor(raw[i]!))),
   }));
 
-  // Rest nach größtem Nachkommaanteil verteilen, damit die Summe stimmt
+  // Rest nach größtem Nachkommaanteil verteilen, damit die Summe stimmt. Jahre
+  // an ihrer Obergrenze werden übersprungen; der Nachkommaanteil entscheidet
+  // nur die Reihenfolge, die Kennung bricht Gleichstände deterministisch.
   let used = budgets.reduce((n, b) => n + b.spreads, 0);
   const remainders = chapters
     .map((_, i) => ({ i, frac: raw[i]! - Math.floor(raw[i]!) }))
-    .sort((a, b) => b.frac - a.frac);
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
 
-  let k = 0;
-  while (used < totalSpreads && remainders.length > 0) {
-    budgets[remainders[k % remainders.length]!.i]!.spreads++;
-    used++;
-    k++;
+  let fortschritt = true;
+  while (used < totalSpreads && fortschritt) {
+    fortschritt = false;
+    for (const r of remainders) {
+      if (used >= totalSpreads) break;
+      if (budgets[r.i]!.spreads >= oben[r.i]!) continue;
+      budgets[r.i]!.spreads++;
+      used++;
+      fortschritt = true;
+    }
   }
 
-  // Bei Überbuchung dort abziehen, wo die Belegung am dünnsten ist
+  // Bei Überbuchung dort abziehen, wo die Belegung am dünnsten ist. Sind alle
+  // Jahre auf ihrer Untergrenze, ist die Zielseitenzahl mit dieser Bibliothek
+  // nicht erreichbar – dann bleibt es bei der Überschreitung, die
+  // `checkFeasibility` meldet.
   while (used > totalSpreads) {
     const kandidat = budgets
-      .filter((b) => b.spreads > minSpreads)
-      .sort((a, b) => a.photoCount / a.spreads - b.photoCount / b.spreads)[0];
+      .map((b, i) => ({ b, grenze: unten[i]! }))
+      .filter((x) => x.b.spreads > x.grenze)
+      .sort(
+        (a, b) =>
+          a.b.photoCount / a.b.spreads - b.b.photoCount / b.b.spreads || a.b.year - b.b.year,
+      )[0];
     if (!kandidat) break;
-    kandidat.spreads--;
+    kandidat.b.spreads--;
     used--;
   }
 
@@ -143,9 +184,20 @@ export interface SpreadGroup {
  * 500 Doppelseiten heraus. Der Monat ist eine *weiche* Gruppierung: Er wird
  * als Schnittpunkt bevorzugt, aber nicht erzwungen.
  *
- * Dynamische Programmierung über die Kostenfunktion: Für jede Präfixlänge wird
- * die günstigste Zerlegung gespeichert und am Ende zurückverfolgt. Exakt statt
- * gierig, und bei einigen hundert Fotos je Jahr in Millisekunden erledigt.
+ * Dynamische Programmierung über die Kostenfunktion, und zwar über zwei
+ * Dimensionen: Präfixlänge *und* Zahl der Doppelseiten. Damit ist die
+ * Seitenzahl keine Anregung mehr, die andere Kostenterme überstimmen können,
+ * sondern eine Nebenbedingung – gesucht ist die günstigste Zerlegung in
+ * *genau* `targetSpreads` Gruppen. Am echten Bestand hat die eindimensionale
+ * Fassung 86 statt der budgetierten 80 Doppelseiten erzeugt, also 172 statt 160
+ * Seiten; die Kostenterme für Serien, Monate und Gruppen entscheiden weiter
+ * darüber, *wo* geschnitten wird.
+ *
+ * Ein nachträgliches Zusammenlegen der dünnsten Doppelseiten wäre die
+ * einfachere Alternative gewesen, hätte aber eine zweite, eigene Heuristik
+ * neben die Kostenfunktion gestellt – die exakte Rechnung kostet hier nur den
+ * Faktor `targetSpreads` und bleibt bei einigen hundert Fotos je Jahr in
+ * Millisekunden.
  */
 export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGroup[] {
   const photoIds = opts.exclude
@@ -156,7 +208,13 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGro
 
   const counts = [...opts.slotCounts].sort((a, b) => a - b);
   const maxCount = counts.at(-1)!;
-  const idealSize = opts.targetSpreads > 0 ? n / opts.targetSpreads : maxCount;
+
+  // Zahl der Doppelseiten: die Vorgabe, begrenzt auf das rechnerisch Mögliche –
+  // höchstens eine je Foto, mindestens eine je `maxCount` Fotos.
+  const zielSpreads = Math.max(1, Math.round(opts.targetSpreads));
+  const mindestens = Math.ceil(n / maxCount);
+  const spreadsMax = Math.min(n, Math.max(zielSpreads, mindestens));
+  const idealSize = n / spreadsMax;
 
   // Zuordnungen, die die Kostenfunktion braucht
   const serieOf = new Map<string, string>();
@@ -173,22 +231,57 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGro
     position += segment.photoIds.length;
   }
 
-  const bestCost = new Array<number>(n + 1).fill(Number.POSITIVE_INFINITY);
-  const backtrack = new Array<number>(n + 1).fill(0);
+  // Zustand (i, j): die ersten i Fotos in genau j Doppelseiten. Flach in einem
+  // typisierten Feld statt als Feld von Feldern – bei 400 Fotos und 400
+  // möglichen Doppelseiten sind das 160 000 Zustände, und die Rechnung greift
+  // für jedes Foto auf jeden davon zu.
+  const breite = spreadsMax + 1;
+  const bestCost = new Float64Array((n + 1) * breite).fill(Number.POSITIVE_INFINITY);
+  const backtrack = new Int32Array((n + 1) * breite);
   bestCost[0] = 0;
 
   for (let i = 1; i <= n; i++) {
     for (const k of counts) {
       if (k > i) break;
-      const prev = bestCost[i - k]!;
-      if (!Number.isFinite(prev)) continue;
+      // Die Kosten einer Gruppe hängen nicht davon ab, wie viele Doppelseiten
+      // vor ihr liegen – einmal rechnen genügt.
+      const kosten = groupCost(
+        photoIds,
+        i - k,
+        k,
+        idealSize,
+        serieOf,
+        segmentOf,
+        opts.groupOf,
+        opts.groupSizes,
+      );
+      for (let j = 1; j <= spreadsMax; j++) {
+        const prev = bestCost[(i - k) * breite + (j - 1)]!;
+        if (!Number.isFinite(prev)) continue;
+        const idx = i * breite + j;
+        if (prev + kosten < bestCost[idx]!) {
+          bestCost[idx] = prev + kosten;
+          backtrack[idx] = k;
+        }
+      }
+    }
+  }
 
-      const cost =
-        prev +
-        groupCost(photoIds, i - k, k, idealSize, serieOf, segmentOf, opts.groupOf, opts.groupSizes);
-      if (cost < bestCost[i]!) {
-        bestCost[i] = cost;
-        backtrack[i] = k;
+  // Genau die vorgegebene Zahl, sonst die nächstkleinere: Ein Buch darf eher
+  // kürzer als länger werden – die Obergrenze des Druckprofils ist hart, das
+  // Erreichen der Zielzahl nicht.
+  let spreads = 0;
+  for (let j = Math.min(zielSpreads, spreadsMax); j >= 1; j--) {
+    if (Number.isFinite(bestCost[n * breite + j]!)) {
+      spreads = j;
+      break;
+    }
+  }
+  if (spreads === 0) {
+    for (let j = zielSpreads + 1; j <= spreadsMax; j++) {
+      if (Number.isFinite(bestCost[n * breite + j]!)) {
+        spreads = j;
+        break;
       }
     }
   }
@@ -196,11 +289,21 @@ export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGro
   // Zurückverfolgen
   const sizes: number[] = [];
   let pos = n;
-  while (pos > 0) {
-    const k = backtrack[pos]!;
+  let rest = spreads;
+  while (pos > 0 && rest > 0) {
+    const k = backtrack[pos * breite + rest]!;
     if (k === 0) break; // Schutz gegen eine Endlosschleife bei unerreichbarem Zustand
     sizes.unshift(k);
     pos -= k;
+    rest--;
+  }
+
+  // Deckt die Bibliothek keine Zerlegung ab – etwa weil sie nur Fünfergruppen
+  // kennt und sieben Fotos zu verteilen sind –, wird gleichmäßig geschnitten.
+  // Fotos zu verlieren wäre die schlechtere Antwort als eine unpassende Gruppe.
+  if (pos > 0) {
+    sizes.length = 0;
+    for (let offen = n; offen > 0; offen -= maxCount) sizes.push(Math.min(maxCount, offen));
   }
 
   const groups: SpreadGroup[] = [];
