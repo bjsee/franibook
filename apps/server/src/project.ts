@@ -26,7 +26,9 @@ import {
   exportLayout,
   findBulkSeconds,
   generateBook,
+  addToGroup,
   createGroup,
+  mergeGroups,
   mergeSuggestions,
   needsAttention,
   parseLayout,
@@ -243,6 +245,18 @@ export class Project {
 
   ungroupPhotos(photoIds: PhotoId[]): PhotoGroup[] {
     this.groups = ungroupPhotos(this.groups, photoIds);
+    return this.groups;
+  }
+
+  /** Führt die Quellgruppe in die Zielgruppe über; die Quelle verschwindet. */
+  mergeGroups(sourceId: string, targetId: string): PhotoGroup[] {
+    this.groups = mergeGroups(this.groups, sourceId, targetId);
+    return this.groups;
+  }
+
+  /** Ordnet Fotos einer bestehenden Gruppe zu. */
+  addToGroup(id: string, photoIds: PhotoId[]): PhotoGroup[] {
+    this.groups = addToGroup(this.groups, id, photoIds);
     return this.groups;
   }
 

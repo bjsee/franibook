@@ -113,6 +113,32 @@ app.delete<{ Params: { id: string } }>('/api/groups/:id', async (req) => {
   return { groups: project.sortedGroups() };
 });
 
+/** Führt eine Gruppe in eine andere über. Die Quellgruppe verschwindet. */
+app.post<{ Params: { id: string }; Body: { targetId: string } }>(
+  '/api/groups/:id/merge',
+  async (req, reply) => {
+    const targetId = req.body?.targetId;
+    if (!targetId) return reply.code(400).send({ error: 'targetId fehlt' });
+    project.mergeGroups(req.params.id, targetId);
+    void project.save();
+    return { groups: project.sortedGroups() };
+  },
+);
+
+/** Ordnet Fotos einer bestehenden Gruppe zu. */
+app.post<{ Params: { id: string }; Body: { photoIds: string[] } }>(
+  '/api/groups/:id/add',
+  async (req, reply) => {
+    const photoIds = req.body?.photoIds;
+    if (!Array.isArray(photoIds) || photoIds.length === 0) {
+      return reply.code(400).send({ error: 'photoIds fehlen' });
+    }
+    project.addToGroup(req.params.id, photoIds);
+    void project.save();
+    return { groups: project.sortedGroups() };
+  },
+);
+
 /** Nimmt Fotos aus ihren Gruppen heraus, ohne sie zu löschen. */
 app.post<{ Body: { photoIds: string[] } }>('/api/groups/ungroup', async (req) => {
   project.ungroupPhotos(req.body?.photoIds ?? []);

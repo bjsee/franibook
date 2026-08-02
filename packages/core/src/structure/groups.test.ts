@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addToGroup,
   createGroup,
+  mergeGroups,
   groupOfPhoto,
   makeGroupId,
   removeGroup,
@@ -113,6 +114,60 @@ describe('Fotos verschieben', () => {
   it('löscht eine Gruppe, ohne die Fotos zu verlieren', () => {
     const g = removeGroup([group('a', ['1']), group('b', ['2'])], 'a');
     expect(g.map((x) => x.id)).toEqual(['b']);
+  });
+});
+
+describe('mergeGroups', () => {
+  it('führt zwei Gruppen zusammen und löst die Quelle auf', () => {
+    // Die Automatik zerlegt einen Aufenthalt manchmal in zwei – etwa
+    // „Helgoland Mai 2025" und „Helgoland Juli 2025".
+    const g = mergeGroups([group('mai', ['1', '2']), group('juli', ['3'])], 'juli', 'mai');
+    expect(g.map((x) => x.id)).toEqual(['mai']);
+    expect(g[0]!.photoIds).toEqual(['1', '2', '3']);
+  });
+
+  it('nimmt keine Dubletten auf', () => {
+    const g = mergeGroups([group('a', ['1', '2']), group('b', ['2', '3'])], 'b', 'a');
+    expect(g[0]!.photoIds).toEqual(['1', '2', '3']);
+  });
+
+  it('behält das Hauptbild der Zielgruppe', () => {
+    const g = mergeGroups(
+      [group('a', ['1'], { coverPhotoId: '1' }), group('b', ['2'], { coverPhotoId: '2' })],
+      'b',
+      'a',
+    );
+    expect(g[0]!.coverPhotoId).toBe('1');
+  });
+
+  it('übernimmt das Hauptbild der Quelle, wenn das Ziel keines hat', () => {
+    const g = mergeGroups([group('a', ['1']), group('b', ['2'], { coverPhotoId: '2' })], 'b', 'a');
+    expect(g[0]!.coverPhotoId).toBe('2');
+  });
+
+  it('markiert das Ergebnis als manuell', () => {
+    const g = mergeGroups(
+      [group('a', ['1'], { origin: 'place' }), group('b', ['2'], { origin: 'place' })],
+      'b',
+      'a',
+    );
+    expect(g[0]!.origin).toBe('manual');
+  });
+
+  it('lässt unbeteiligte Gruppen unberührt', () => {
+    const g = mergeGroups([group('a', ['1']), group('b', ['2']), group('c', ['3'])], 'b', 'a');
+    expect(g.map((x) => x.id)).toEqual(['a', 'c']);
+  });
+
+  it('tut nichts, wenn Quelle und Ziel dieselbe Gruppe sind', () => {
+    const vorher = [group('a', ['1'])];
+    expect(mergeGroups(vorher, 'a', 'a')).toEqual(vorher);
+  });
+
+  it('tut nichts bei unbekannter Kennung', () => {
+    const vorher = [group('a', ['1'])];
+    expect(mergeGroups(vorher, 'gibtesnicht', 'a')).toEqual(vorher);
+    expect(mergeGroups(vorher, 'a', 'gibtesnicht')).toEqual(vorher);
   });
 });
 

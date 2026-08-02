@@ -40,6 +40,7 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const lastClicked = useRef<string | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [p, g] = await Promise.all([
@@ -142,6 +143,23 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
 
   const aktiveGruppe = filter.kind === 'group' ? groups.find((g) => g.id === filter.id) : undefined;
   const gruppiert = groupOf.size;
+  const grossesBild = sichtbar.find((p) => p.id === lightbox);
+
+  // Im geöffneten Bild lässt sich blättern, ohne es zu schließen.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null);
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const i = sichtbar.findIndex((p) => p.id === lightbox);
+        const next = e.key === 'ArrowRight' ? i + 1 : i - 1;
+        if (next >= 0 && next < sichtbar.length) setLightbox(sichtbar[next]!.id);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox, sichtbar]);
 
   return (
     <div style={S.wrap}>
@@ -211,6 +229,30 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
               >
                 Gruppierung lösen
               </button>
+              {/* Auswahl einer bestehenden Gruppe zuordnen */}
+              <select
+                value=""
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) return;
+                  void call(`/api/groups/${id}/add`, {
+                    method: 'POST',
+                    body: JSON.stringify({ photoIds: [...selected] }),
+                  }).then(() => {
+                    setSelected(new Set());
+                    setNote(`${selected.size} Fotos zugeordnet`);
+                  });
+                }}
+                style={S.select}
+              >
+                <option value="">Zu Gruppe hinzufügen …</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title} ({g.photoIds.length})
+                  </option>
+                ))}
+              </select>
+
               {aktiveGruppe && selected.size === 1 && (
                 <button
                   onClick={() =>
@@ -250,9 +292,45 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
                 />
                 gliedert das Buch
               </label>
+              {/*
+                Zusammenführen: Die Automatik zerlegt einen Aufenthalt
+                gelegentlich in zwei – „Helgoland Mai 2025" und „Helgoland
+                Juli 2025" gehören vielleicht doch zusammen.
+              */}
+              <select
+                value=""
+                onChange={(e) => {
+                  const ziel = e.target.value;
+                  if (!ziel) return;
+                  const zielTitel = groups.find((g) => g.id === ziel)?.title ?? '';
+                  void call(`/api/groups/${aktiveGruppe.id}/merge`, {
+                    method: 'POST',
+                    body: JSON.stringify({ targetId: ziel }),
+                  }).then(() => {
+                    setFilter({ kind: 'group', id: ziel });
+                    setNote(`„${aktiveGruppe.title}" ging in „${zielTitel}" auf`);
+                  });
+                }}
+                style={S.select}
+              >
+                <option value="">Zusammenführen mit …</option>
+                {groups
+                  .filter((g) => g.id !== aktiveGruppe.id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.title} ({g.photoIds.length})
+                    </option>
+                  ))}
+              </select>
+
               <button
                 onClick={() => {
-                  void call(`/api/groups/${aktiveGruppe.id}`, { method: 'DELETE' });
+                  void call(`/api/groups/${aktiveGruppe.id}`, { method: 'DELETE' }).then(() =>
+                    setNote(
+                      `„${aktiveGruppe.title}" aufgelöst — die ${aktiveGruppe.photoIds.length} Fotos bleiben, ` +
+                        `sind aber nicht mehr gruppiert`,
+                    ),
+                  );
                   setFilter({ kind: 'all' });
                 }}
                 style={S.button}
@@ -274,6 +352,8 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
               <div
                 key={p.id}
                 onClick={(e) => toggle(p.id, e)}
+                onDoubleClick={() => setLightbox(p.id)}
+                title="Doppelklick vergrößert"
                 style={{ ...S.row, ...(ausgewaehlt ? S.rowSelected : {}) }}
               >
                 <img src={`/api/photos/${p.id}/preview?size=thumb`} alt="" style={S.thumb} />
@@ -306,9 +386,34 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
         </div>
 
         <p style={S.hint}>
-          Klick wählt aus, Umschalt-Klick einen Bereich, Cmd-Klick einzelne dazu.
+          Klick wählt aus, Umschalt-Klick einen Bereich, Cmd-Klick einzelne dazu. Doppelklick
+          vergrößert.
         </p>
       </section>
+
+      {grossesBild && (
+        <div style={S.overlay} onClick={() => setLightbox(null)}>
+          <figure style={S.figure} onClick={(e) => e.stopPropagation()}>
+            <img
+              src={`/api/photos/${grossesBild.id}/preview`}
+              alt={grossesBild.fileName}
+              style={S.bigImage}
+            />
+            <figcaption style={S.figCaption}>
+              <strong style={S.captionFile}>{grossesBild.fileName}</strong>
+              <span style={S.captionMeta}>
+                {grossesBild.effectiveDate?.replace('T', ' ').slice(0, 16) ?? 'kein Datum'}
+                {grossesBild.place && ` · ${grossesBild.place.label}`}
+                {grossesBild.camera && ` · ${grossesBild.camera}`}
+                {` · ${grossesBild.width}×${grossesBild.height}`}
+              </span>
+              <span style={S.captionHint}>
+                Pfeiltasten blättern · Esc oder Klick daneben schließt
+              </span>
+            </figcaption>
+          </figure>
+        </div>
+      )}
     </div>
   );
 }
@@ -444,6 +549,52 @@ const S = {
     borderRadius: '4px',
     whiteSpace: 'nowrap' as const,
   },
+  figCaption: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '0.2rem',
+    textAlign: 'center' as const,
+  },
+  select: {
+    padding: '0.25rem 0.4rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '5px',
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: '0.78rem',
+    maxWidth: '13rem',
+  },
+  overlay: {
+    position: 'fixed' as const,
+    inset: 0,
+    background: 'rgba(17, 24, 39, 0.88)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    zIndex: 100,
+    cursor: 'zoom-out',
+  },
+  figure: {
+    margin: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '0.75rem',
+    maxHeight: '100%',
+    cursor: 'default',
+  },
+  bigImage: {
+    maxWidth: '100%',
+    maxHeight: 'calc(100vh - 10rem)',
+    objectFit: 'contain' as const,
+    boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
+    background: '#000',
+  },
+  captionFile: { color: '#fff', fontFamily: 'ui-monospace, monospace', fontSize: '0.85rem' },
+  captionMeta: { color: '#d1d5db', fontSize: '0.78rem' },
+  captionHint: { color: '#6b7280', fontSize: '0.7rem' },
   coverTag: {
     marginLeft: '0.5rem',
     fontSize: '0.65rem',
