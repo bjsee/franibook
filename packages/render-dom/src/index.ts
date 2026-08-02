@@ -8,3 +8,5 @@
 
 export { SpreadView } from './SpreadView.js';
 export type { SpreadViewProps, GuideVisibility } from './SpreadView.js';
+export { CoverView } from './CoverView.js';
+export type { CoverViewProps, CoverGuideVisibility } from './CoverView.js';

@@ -376,8 +376,12 @@ Ein PDF, das bei PrintPartner tatsächlich hochgeladen werden kann.
 >
 > - **Maße unverifiziert** ([#1](https://github.com/bjsee/franibook/issues/1)),
 >   `provenance.verifiedAt` steht weiterhin auf `null`
-> - **Kein Cover** ([#2](https://github.com/bjsee/franibook/issues/2)); die
->   Rückenformel in `profile.ts` gibt es, den Renderer nicht
+> - **Cover steht** ([#2](https://github.com/bjsee/franibook/issues/2)):
+>   `packages/core/src/cover/` rechnet Geometrie und Rendered Cover Model,
+>   `renderCoverPdf` schreibt die zweite PDF-Datei, `CoverView` zeigt den Bogen
+>   mit Gelenkzonenwarnung, `/api/cover` und `/api/export/cover` bedienen ihn.
+>   Die Maße bleiben so unverifiziert wie das Profil (#1), und die Rückenbreite
+>   folgt der noch nicht endgültigen Seitenzahl (#4)
 > - ~~**404 MB Dateigröße** bei 153 Doppelseiten~~ — Encoder auf 88 / 4:2:0 mit
 >   Trellis-Quantisierung umgestellt. Dasselbe Buch zweimal exportiert: 288 MB
 >   vorher, **160 MB** nachher, bei unveränderter Auflösung von 300 dpi. Offen

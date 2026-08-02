@@ -8,6 +8,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   type Chapter,
+  type CoverDesign,
   type DateContext,
   type GenerateResult,
   type LayoutDocument,
@@ -18,6 +19,7 @@ import {
   type PhotoGroup,
   type PhotoOverride,
   type PrintProfile,
+  type RenderedCover,
   type RenderedSpread,
   type Spread,
   type Structure,
@@ -35,6 +37,7 @@ import {
   parseLayout,
   propagatePlaces,
   rebuildSpreads,
+  renderCover,
   renderSpread,
   requireTemplate,
   resolveEffectiveDate,
@@ -83,6 +86,8 @@ interface PersistedProject {
   book: { spreads: Spread[] };
   groups: PhotoGroup[];
   yearEvents?: Record<string, string[]>;
+  /** Erst ab Umschlagunterstützung vorhanden; ältere Projekte haben es nicht. */
+  cover?: CoverDesign;
   importedAt: string;
 }
 
@@ -101,6 +106,15 @@ export class Project {
   spreads: Spread[] = [];
   structure: Structure = { chapters: [], undated: [], photoCount: 0 };
   lastReport: GenerateResult['report'] | null = null;
+
+  /**
+   * Gestaltung des Umschlags.
+   *
+   * Leer heißt „noch nichts entschieden": `coverDesign()` ergänzt dann
+   * Titel, Untertitel, Rückentext und Titelbild aus dem Projekt, damit der
+   * Umschlag ohne eine einzige Eingabe druckbar ist.
+   */
+  cover: CoverDesign = {};
 
   settings: ProjectSettings = {
     targetPages: 160,
@@ -496,6 +510,93 @@ export class Project {
     return undefined;
   }
 
+  // ---------------------------------------------------------------- Umschlag
+
+  /**
+   * Seitenzahl des Innenteils – und damit die Rückenbreite.
+   *
+   * Jede Doppelseite sind zwei Seiten. Solange die endgültige Seitenzahl nicht
+   * feststeht (#4), ändert sich mit jedem Neuaufbau auch das Cover; deshalb
+   * wird es nie gespeichert, sondern immer neu gerechnet.
+   */
+  pageCount(): number {
+    return this.spreads.length * 2;
+  }
+
+  /**
+   * Das Cover mit den Vorgaben aus dem Projekt.
+   *
+   * Der Titel ist der Name des Kindes, der Untertitel der Zeitraum des
+   * Bestands, der Rückentitel beides zusammen – die schlichteste Fassung, die
+   * ein Buchrücken im Regal überhaupt braucht. Alles davon ist überschreibbar;
+   * gespeicherte Werte haben Vorrang.
+   */
+  coverDesign(): CoverDesign {
+    const jahre = this.structure.chapters.map((c) => c.year).sort((a, b) => a - b);
+    const von = jahre[0];
+    const bis = jahre[jahre.length - 1];
+    const zeitraum = von === undefined ? undefined : von === bis ? `${von}` : `${von} – ${bis}`;
+    const titel = this.settings.subjectName ?? 'Fotobuch';
+    const vorschlag = this.coverCandidates(1)[0];
+
+    return {
+      title: titel,
+      ...(zeitraum ? { subtitle: zeitraum } : {}),
+      spineText: zeitraum ? `${titel} · ${zeitraum}` : titel,
+      // Ein Titelbild wird vorbelegt, damit der Umschlag ohne Eingabe
+      // druckbar ist. Der Benutzer wählt in der Coveransicht ein anderes.
+      ...(vorschlag ? { frontPhotoId: vorschlag.photoId } : {}),
+      ...this.cover,
+    };
+  }
+
+  renderCover(): RenderedCover {
+    return renderCover(this.coverDesign(), {
+      profile: this.profile,
+      pageCount: this.pageCount(),
+      photos: this.photos,
+    });
+  }
+
+  /** Übernimmt Änderungen am Umschlag. Leerer Text löscht das Feld. */
+  updateCover(patch: Partial<CoverDesign>): CoverDesign {
+    const naechste: CoverDesign = { ...this.cover, ...patch };
+    for (const key of ['title', 'subtitle', 'spineText', 'backText'] as const) {
+      if (naechste[key] === '') delete naechste[key];
+    }
+    this.cover = naechste;
+    return this.coverDesign();
+  }
+
+  /**
+   * Bilder, die als Titelbild in Frage kommen.
+   *
+   * Die Hauptbilder der aktiven Fotogruppen zuerst: Sie sind vom Benutzer
+   * bestätigt und damit die beste Auswahl, die das Projekt kennt. Erst wenn es
+   * keine gibt, wird auf die ersten Bilder der Doppelseiten zurückgefallen.
+   */
+  coverCandidates(limit = 24): { photoId: PhotoId; label: string }[] {
+    const kandidaten: { photoId: PhotoId; label: string }[] = [];
+    const gesehen = new Set<PhotoId>();
+
+    const nimm = (id: PhotoId | null | undefined, label: string): void => {
+      if (!id || gesehen.has(id) || !this.photos.has(id)) return;
+      gesehen.add(id);
+      kandidaten.push({ photoId: id, label });
+    };
+
+    for (const g of this.sortedGroups()) {
+      if (!g.active) continue;
+      nimm(g.coverPhotoId ?? g.photoIds[0], g.title);
+    }
+    for (const [i, spread] of this.spreads.entries()) {
+      if (kandidaten.length >= limit) break;
+      nimm(spread.slots.find((s) => s.photoId)?.photoId, `Doppelseite ${i + 1}`);
+    }
+
+    return kandidaten.slice(0, limit);
+  }
+
   photo(id: PhotoId): Photo | undefined {
     return this.photos.get(id);
   }
@@ -613,6 +714,7 @@ export class Project {
       groups: this.groups,
       yearEvents: this.yearEvents,
       book: { spreads: this.spreads },
+      cover: this.cover,
       importedAt: this.importedAt,
     };
 
@@ -641,6 +743,7 @@ export class Project {
       this.groups = data.groups ?? [];
       this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
+      this.cover = data.cover ?? {};
       this.settings = { ...this.settings, ...data.settings };
       this.importedAt = data.importedAt ?? this.importedAt;
       this.rebuildStructure();

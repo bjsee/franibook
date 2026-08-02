@@ -12,7 +12,8 @@ import { createReadStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
-import { renderPdf } from '@franibook/render-pdf';
+import { type CoverDesign, coverWarningText } from '@franibook/core';
+import { renderCoverPdf, renderPdf } from '@franibook/render-pdf';
 import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
@@ -302,6 +303,61 @@ app.get<{ Params: { id: string } }>('/api/photos/:id/original', async (req, repl
     .type(type)
     .header('Cache-Control', 'public, max-age=31536000, immutable')
     .send(createReadStream(path));
+});
+
+// ----------------------------------------------------------------- Umschlag
+
+/**
+ * Der Umschlag: Gestaltung, gerechnete Geometrie und Auswahl fürs Titelbild.
+ *
+ * Die Geometrie wird bei jedem Aufruf neu gerechnet, nie gespeichert – die
+ * Rückenbreite hängt an der Seitenzahl, und die ändert sich mit jedem
+ * Neuaufbau des Buchs.
+ */
+app.get('/api/cover', async () => coverAntwort());
+
+/** Nimmt Titel, Untertitel, Rückentext oder ein anderes Titelbild entgegen. */
+app.patch<{ Body?: Partial<CoverDesign> }>('/api/cover', async (req) => {
+  project.updateCover(req.body ?? {});
+  void project.save();
+  return coverAntwort();
+});
+
+function coverAntwort() {
+  const cover = project.renderCover();
+  return {
+    design: project.coverDesign(),
+    cover,
+    candidates: project.coverCandidates(),
+    // Derselbe Wortlaut wie im Exportbericht, damit nicht zwei Texte dieselbe
+    // Ursache verschieden beschreiben.
+    hints: cover.warnings.map(coverWarningText),
+    profileVerified: project.profile.provenance.verifiedAt !== null,
+  };
+}
+
+/**
+ * Der Umschlag als eigene PDF-Datei.
+ *
+ * Getrennt vom Innenteil, weil der Druckdienstleister es so verlangt – einer
+ * der wenigen verifizierten Punkte des Profils.
+ */
+app.post<{ Body?: { fileName?: string } }>('/api/export/cover', async (req) => {
+  await mkdir(OUT_DIR, { recursive: true });
+  const outputPath = join(OUT_DIR, req.body?.fileName ?? 'cover.pdf');
+
+  const result = await renderCoverPdf({
+    cover: project.renderCover(),
+    profile: project.profile,
+    outputPath,
+    resolvePhoto: (photoId) => {
+      const photo = project.photo(photoId);
+      if (!photo) return undefined;
+      return { path: join(SOURCE_ROOT, photo.relPath), orientation: photo.orientation };
+    },
+  });
+
+  return { outputPath, ...result };
 });
 
 app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
