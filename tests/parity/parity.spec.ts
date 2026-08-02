@@ -108,6 +108,10 @@ test.describe('Vorschau und PDF stimmen überein', () => {
       return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
     });
 
+    // Dasselbe für die Buchschrift: Sobald ein Spread Text trägt, entscheidet
+    // sie über Geometrie, nicht nur über das Aussehen.
+    await page.evaluate(() => document.fonts.ready);
+
     const shot = await stage.screenshot({ type: 'png' });
     await writeFile(join(ARTIFACTS, 'preview.png'), shot);
 

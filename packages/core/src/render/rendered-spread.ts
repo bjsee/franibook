@@ -17,6 +17,7 @@
  */
 import type { Crop } from '../model/crop.js';
 import type { PhotoId } from '../model/photo.js';
+import type { FontWeight } from './typography.js';
 
 export interface Rect {
   xMm: number;
@@ -40,6 +41,8 @@ export interface TextBox extends Rect {
   slotId: string;
   content: string;
   fontSizePt: number;
+  /** Schnitt der Buchschrift. Kein Renderer wählt ihn selbst. */
+  weight: FontWeight;
   align: 'left' | 'center' | 'right';
   color: string;
 }

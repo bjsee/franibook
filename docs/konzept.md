@@ -728,6 +728,20 @@ type RenderBox =
 
 Diese Struktur ist die einzige Schnittstelle, die Vorschau und PDF gemeinsam haben. Alles, was in der Vorschau anders aussieht als im PDF, ist per Konstruktion ein Fehler in einem der beiden Adapter – und wird vom Parity-Test gefunden.
 
+### Typografie
+
+Eine Familie, zwei Schnitte: **Franibook Sans**, abgeleitet von Source Sans 3 (Adobe, SIL Open Font License 1.1), Regular und SemiBold, je 37 KB. Die Dateien liegen in `packages/fonts/files/`; Herkunft, verworfene Alternativen und die Befehle zur Reproduktion stehen in `packages/fonts/HERKUNFT.md`. Umbenannt wurde sie, weil „Source“ ein Reserved Font Name der OFL ist und wir eine geänderte Fassung ausliefern.
+
+Drei Festlegungen, die zusammengehören:
+
+- **Dieselbe Datei für Vorschau und PDF.** Der PDF-Renderer bettet sie über `doc.registerFont()` ein – Saal verlangt eingebettete Schriften, und pdfkits Vorgabe Helvetica ist eine der 14 nicht eingebetteten Basisschriften. Die Vorschau lädt genau dieselbe Datei per `@font-face`, keine WOFF2-Variante und keine zweite Kopie unter `apps/web/public`.
+- **Kein Fallback-Stack.** Griffe der Browser auf eine Systemschrift zurück, liefe die Vorschau lautlos gegen eine andere Schrift als das PDF. Ohne Fallback ist der Fehler sichtbar, statt sich als Millimeterversatz zu tarnen.
+- **Die Größe steht als Versalhöhe im Stil, die Grundlinie im Modell.** `TEXT_STYLES` (`core/render/typography.ts`) gibt je Stil – bisher `yearLarge` und `groupTitle` – Schnitt, Farbe und die Versalhöhe als Anteil der Kastenhöhe an. Nicht als Punktgröße, damit dasselbe Template für 21×21 cm und 30×30 cm gilt; nicht als Em-Größe, weil die bei gleicher Optik von Schnitt zu Schnitt verschieden ist. Die Grundlinie liefert `textBaselineOffsetMm()`, beide Adapter treffen sie nur noch: `baseline: 'alphabetic'` in pdfkit, `y` im SVG der Vorschau.
+
+Der letzte Punkt hat einen konkreten Anlass. Vorher zentrierte die Vorschau eine CSS-Zeilenbox, während pdfkit vom Kastenoberrand aus setzte – bei einem 13 mm hohen Titelkasten rund 4 mm Höhenunterschied für denselben Text, ohne dass einer der beiden Adapter „falsch“ gewesen wäre. Der Halbdurchschuss einer CSS-Zeilenbox leitet sich je nach Plattform aus hhea oder den OS/2-Typo-Metriken ab; im SVG dagegen ist die Grundlinie eine Koordinate. Deshalb setzt die Vorschau Text in einem SVG und nicht in einem `div`.
+
+Gemessen an einem Spread mit Jahreszahl (87 pt), Gruppentitel (26 pt), einer Zeitstrahlzeile (8 pt) und allen drei Ausrichtungen: 0,19 % abweichende Pixel bei 2424 px Vergleichsbreite, ausschließlich Kantenglättung – keine doppelten oder versetzten Glyphen.
+
 ## Ereigniserkennung
 
 ### Aufbau
@@ -1272,7 +1286,7 @@ Bewusst nicht im Konzept entschieden, weil erst mit echten Daten oder Informatio
 
 - Konkrete Maße und Rückenformel des Saal-Profils – aus dem Professional-Zone-Template zu übernehmen (Phase 8)
 - Ob der Innenteil als Einzel- oder Doppelseiten hochgeladen wird – Profilfeld existiert, der Wert ist zu verifizieren
-- Typografie: eine Schriftfamilie mit passender Lizenz für die Einbettung ins PDF ist auszuwählen (Phase 9)
+- ~~Typografie: eine Schriftfamilie mit passender Lizenz für die Einbettung ins PDF ist auszuwählen (Phase 9)~~ — entschieden, siehe „Typografie“
 - Ob die Kalender-Detektoren über Weihnachten, Silvester und Geburtstag hinaus lohnen – an den echten Daten zu beurteilen
 - Kalibrierung von `sockel` und `skala` der Seitenbudgetformel – erst am realen Bestand von 900 Fotos sinnvoll einstellbar
 
@@ -1281,8 +1295,9 @@ Bewusst nicht im Konzept entschieden, weil erst mit echten Daten oder Informatio
 > - Maße und Rückenformel: unverändert offen, jetzt als
 >   [#1](https://github.com/bjsee/franibook/issues/1) geführt. Dasselbe Issue klärt
 >   `spreadExport`; beide Aufteilungen sind bereits implementiert.
-> - Schriftfamilie: [#5](https://github.com/bjsee/franibook/issues/5). Bis dahin
->   setzt der Export in der pdfkit-Standardschrift, ohne Einbettung.
+> - Schriftfamilie: entschieden ([#5](https://github.com/bjsee/franibook/issues/5)) —
+>   Franibook Sans aus Source Sans 3, zwei Schnitte, ins PDF eingebettet und in
+>   der Vorschau dieselbe Datei. Siehe „Typografie“.
 > - Kalender-Detektoren: entschieden — Geburtstag, Weihnachten, Silvester/Neujahr
 >   und Ostern sind umgesetzt und tragen. Ergänzt um Tagesgruppen aus
 >   Fotoballungen.

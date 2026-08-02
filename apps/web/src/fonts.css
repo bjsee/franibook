@@ -1,0 +1,29 @@
+/**
+ * Die Buchschrift für die Vorschau.
+ *
+ * Dieselben Dateien, die der PDF-Renderer einbettet – nicht eine Webfont-Variante
+ * davon. Eine zweite Fassung (WOFF2, andere Version, anderer Zeichensatz) wäre
+ * genau die Art Abweichung, die der Parity-Test nur mühsam erklärt.
+ *
+ * Der Pfad zeigt in das Workspace-Paket; Vite löst ihn beim Bauen zu einem Asset
+ * auf und liefert ihn im Dev-Server über /@fs aus.
+ *
+ * Bewusst ohne `font-display: swap`: Ein Textwechsel mitten in der Vorschau wäre
+ * hier kein Fortschritt, sondern ein falsches Bild – und der Parity-Test würde
+ * mit der Ersatzschrift screenshotten.
+ */
+@font-face {
+  font-family: 'Franibook Sans';
+  src: url('../../../packages/fonts/files/FranibookSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Franibook Sans';
+  src: url('../../../packages/fonts/files/FranibookSans-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
