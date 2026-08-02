@@ -354,7 +354,7 @@ Fabian18.franibook/
 └── cache/                vollständig ableitbar, nie versioniert
     ├── thumbs/  ab/abcd1234-320.webp
     ├── preview/ ab/abcd1234-1600.webp
-    ├── decoded/ ab/abcd1234.jpg        HEIC-Konvertate für den Export
+    ├── decoded/ ab/abcd1234.jpg        Konvertate unlesbarer Dateien (sips)
     └── index.json
 ```
 
@@ -1052,28 +1052,35 @@ Konvertate landen als JPEG mit Qualität 98 unter `cache/decoded/` und werden so
 
 Die Originaldatei wird dabei nicht angefasst – die Anforderung der Nicht-Destruktivität gilt auch hier.
 
-> **Korrektur (2. August 2026): nicht implementiert, weil gegenstandslos**
+> **Korrektur (2. August 2026): gebaut, aber als Rückfallebene für jedes Format**
 >
-> Der echte Bestand enthält **kein einziges HEIC**. Die Kette ist deshalb nicht
-> gebaut: Der Import akzeptiert `.heic`/`.heif`, reicht sie aber direkt an `sharp`
-> weiter — eine Apple-HEIC landete in der Fehlerliste. Einen `decoded`-Cache gibt
-> es nicht.
+> Der echte Bestand enthält **kein einziges HEIC** — die Kette wurde deshalb nicht
+> für HEIC gebaut, sondern für den Fall, der tatsächlich eintrat: Der erste
+> Vollexport verlor ein PNG mit 4640×3456 und 13 MB an einem
+> `vipspng: libpng read error`, das `sips` problemlos liest
+> ([#6](https://github.com/bjsee/franibook/issues/6)).
 >
-> Aufgeschoben, nicht aufgehoben: Für PNG-Dateien, an denen libvips scheitert, ist
-> genau dieselbe `sips`-Rückfallebene als
-> [#6](https://github.com/bjsee/franibook/issues/6) erfasst — der erste
-> Vollexport verlor darüber ein Bild.
+> `apps/server/src/decode.ts` hält den Rettungsweg jetzt formatunabhängig vor:
+> Scheitert sharp mit einem Decoderfehler, konvertiert `sips` die Datei einmalig
+> nach JPEG q98 unter `<cache>/decoded/`, und Vorschau, Import und PDF-Export
+> arbeiten mit dem Konvertat weiter. Eine Apple-HEIC nimmt damit denselben Weg,
+> ohne dass etwas dafür eigens verdrahtet werden musste. Stufe 1 der Kette bleibt
+> sharp, Stufe 3 (`heic-decode`) ist weiterhin nicht installiert.
+>
+> Vorab geprüft wird nichts: Der Regelfall läuft unverändert durch sharp, der
+> Fallback greift erst am Fehler. Bei 820 Bildern, von denen eines betroffen ist,
+> wäre ein Probelauf je Datei reine Verschwendung.
 
 ## Thumbnail- und Cache-Strategie
 
 ### Stufen
 
-| Stufe     | Kante    | Format   | Verwendung                                  |
-| --------- | -------- | -------- | ------------------------------------------- |
-| `thumb`   | 320 px   | WebP q80 | Timeline, Fotopool, Buchübersicht           |
-| `preview` | 1600 px  | WebP q82 | Doppelseitenvorschau                        |
-| `decoded` | Original | JPEG q98 | nur HEIC; Quelle für Preview und Export     |
-| —         | Original | —        | PDF-Export, immer direkt aus der Quelldatei |
+| Stufe     | Kante    | Format   | Verwendung                                           |
+| --------- | -------- | -------- | ---------------------------------------------------- |
+| `thumb`   | 320 px   | WebP q80 | Timeline, Fotopool, Buchübersicht                    |
+| `preview` | 1600 px  | WebP q82 | Doppelseitenvorschau                                 |
+| `decoded` | Original | JPEG q98 | nur unlesbare Dateien; Quelle für Preview und Export |
+| —         | Original | —        | PDF-Export, immer direkt aus der Quelldatei          |
 
 Bei 900 Fotos ergibt das grob 25 MB Thumbs und 250 MB Previews – unkritisch.
 
@@ -1099,10 +1106,12 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 
 > **Korrektur (2. August 2026)**
 >
-> Zwei Stufen statt vier: `thumb` (320 px) und `preview` (1600 px), beide WebP,
-> abgelegt unter `.franibook-cache/<stufe>/ab/<id>.webp`. Die `decoded`-Stufe
-> entfällt mit HEIC, ein `cache/index.json` und die versionsbasierte
-> Invalidierung gibt es nicht — der Cache wird bei Bedarf von Hand gelöscht.
+> Zwei Regelstufen statt vier: `thumb` (320 px) und `preview` (1600 px), beide
+> WebP, abgelegt unter `.franibook-cache/<stufe>/ab/<id>.webp`. Die
+> `decoded`-Stufe existiert, füllt sich aber nur mit den Dateien, an denen sharp
+> scheitert (siehe „Umgang mit HEIC"). Ein `cache/index.json` und die
+> versionsbasierte Invalidierung gibt es nicht — der Cache wird bei Bedarf von
+> Hand gelöscht.
 > Vorschauen werden nach dem Import im Hintergrund mit sechs parallelen Aufgaben
 > aufgewärmt, ein Fortschritt wird nicht gemeldet.
 

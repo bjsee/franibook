@@ -13,6 +13,7 @@ import { mkdir } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import Fastify from 'fastify';
 import { renderPdf } from '@franibook/render-pdf';
+import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
 import { shutdownImport } from './import.js';
@@ -32,8 +33,9 @@ const app = Fastify({ logger: { level: 'warn' } });
 
 const PROJECT_DIR = resolve(process.env['FRANIBOOK_PROJECT'] ?? '.franibook-project');
 
-const previews = new PreviewCache(CACHE_DIR, SOURCE_ROOT);
-const project = new Project(SOURCE_ROOT, previews, PROJECT_DIR);
+const decodes = new DecodeCache(CACHE_DIR, SOURCE_ROOT);
+const previews = new PreviewCache(CACHE_DIR, decodes);
+const project = new Project(SOURCE_ROOT, previews, decodes, PROJECT_DIR);
 
 app.get('/api/health', async () => ({ status: 'ok' }));
 
@@ -217,12 +219,18 @@ app.get<{ Params: { id: string }; Querystring: { size?: string } }>(
 app.get<{ Params: { id: string } }>('/api/photos/:id/original', async (req, reply) => {
   const photo = project.photo(req.params.id);
   if (!photo) return reply.code(404).send({ error: 'Foto nicht gefunden' });
-  const ext = extname(photo.fileName).toLowerCase();
+
+  // Liegt ein Konvertat vor, geht es vor: Der PDF-Export nimmt bei einer für
+  // libvips unlesbaren Datei genau diese Pixel, und der Parity-Test darf nicht
+  // Original gegen Konvertat vergleichen.
+  const gerettet = await decodes.existing(photo.id);
+  const path = gerettet ?? join(SOURCE_ROOT, photo.relPath);
+  const ext = extname(gerettet ?? photo.fileName).toLowerCase();
   const type = ext === '.png' ? 'image/png' : 'image/jpeg';
   return reply
     .type(type)
     .header('Cache-Control', 'public, max-age=31536000, immutable')
-    .send(createReadStream(join(SOURCE_ROOT, photo.relPath)));
+    .send(createReadStream(path));
 });
 
 app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
@@ -251,6 +259,19 @@ app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
         const photo = project.photo(photoId);
         if (!photo) return undefined;
         return { path: join(SOURCE_ROOT, photo.relPath), orientation: photo.orientation };
+      },
+      // Zweiter Anlauf für Dateien, die sharp nicht dekodieren kann – ein
+      // 13-MB-PNG im Bestand fiel dem ersten Vollexport zum Opfer.
+      //
+      // Die Orientierung bleibt die des Originals, weil `sips` die EXIF-Daten
+      // übernimmt statt die Pixel zu drehen (Phase 0). Für den bekannten Fall
+      // ist das ohnehin gegenstandslos: PNG kennt keine EXIF-Orientierung, der
+      // Wert ist 1. Bei einer gedrehten HEIC wäre das der Punkt zum Nachmessen.
+      recoverPhoto: async (photoId) => {
+        const photo = project.photo(photoId);
+        if (!photo) return undefined;
+        const path = await decodes.rescue(photo.id, photo.relPath);
+        return path ? { path, orientation: photo.orientation } : undefined;
       },
     });
 
