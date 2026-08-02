@@ -13,13 +13,21 @@ import { SpreadView } from '@franibook/render-dom';
 interface OverviewProps {
   spreadCount: number;
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
+  /** Erste Doppelseite jeder aktiven Fotogruppe. */
+  groupMarks?: { spreadIndex: number; title: string }[];
   imageSrc: (photoId: string) => string;
   onOpen: (index: number) => void;
 }
 
 const TILE_WIDTH = 260;
 
-export function Overview({ spreadCount, chapters, imageSrc, onOpen }: OverviewProps) {
+export function Overview({
+  spreadCount,
+  chapters,
+  groupMarks = [],
+  imageSrc,
+  onOpen,
+}: OverviewProps) {
   const [loaded, setLoaded] = useState<Map<number, RenderedSpread>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState<Set<number>>(new Set());
@@ -29,6 +37,12 @@ export function Overview({ spreadCount, chapters, imageSrc, onOpen }: OverviewPr
     for (const c of chapters) map.set(c.firstSpreadIndex, c.year);
     return map;
   }, [chapters]);
+
+  const groupAt = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const g of groupMarks) map.set(g.spreadIndex, g.title);
+    return map;
+  }, [groupMarks]);
 
   // Nur sichtbare Kacheln laden. Bei über hundert Doppelseiten mit je bis zu
   // zwölf Bildern wäre alles auf einmal weder für den Speicher noch für das
@@ -86,9 +100,15 @@ export function Overview({ spreadCount, chapters, imageSrc, onOpen }: OverviewPr
         {Array.from({ length: spreadCount }, (_, i) => {
           const spread = loaded.get(i);
           const jahr = chapterAt.get(i);
+          const gruppe = groupAt.get(i);
           return (
             <div key={i} data-index={i} style={S.cell}>
               {jahr !== undefined && <div style={S.yearMark}>{jahr}</div>}
+              {gruppe && (
+                <div style={{ ...S.groupMark, ...(jahr !== undefined ? S.groupMarkShifted : {}) }}>
+                  {gruppe}
+                </div>
+              )}
               <button
                 onClick={() => onOpen(i)}
                 style={S.tile}
@@ -130,6 +150,20 @@ const S = {
     flexDirection: 'column' as const,
     gap: '0.3rem',
   },
+  groupMark: {
+    position: 'absolute' as const,
+    top: '-0.9rem',
+    left: 0,
+    fontSize: '0.7rem',
+    fontWeight: 600,
+    color: '#0369a1',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  /** Steht ein Jahr daneben, rückt die Gruppe nach rechts. */
+  groupMarkShifted: { left: '2.6rem' },
   yearMark: {
     position: 'absolute' as const,
     top: '-0.9rem',

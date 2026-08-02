@@ -45,6 +45,18 @@
           "prominence": 3,
           "prefers": "landscape"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -60,6 +72,18 @@
           "h": 161,
           "prominence": 3,
           "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
         }
       ]
     },
@@ -86,6 +110,18 @@
           "prominence": 2,
           "prefers": "landscape"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -111,6 +147,18 @@
           "prominence": 2,
           "prefers": "portrait"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -135,6 +183,18 @@
           "h": 79,
           "prominence": 1,
           "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
         }
       ]
     },
@@ -170,6 +230,18 @@
           "prominence": 1,
           "prefers": "landscape"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -203,6 +275,18 @@
           "prominence": 2,
           "prefers": "landscape",
           "id": "c"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
         }
       ]
     },
@@ -247,6 +331,18 @@
           "prefers": "any",
           "id": "d"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -290,6 +386,18 @@
           "prefers": "portrait",
           "id": "d"
         }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
+        }
       ]
     },
     {
@@ -332,6 +440,18 @@
           "h": 79,
           "prominence": 1,
           "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
         }
       ]
     },
@@ -524,6 +644,18 @@
           "h": 79,
           "prominence": 1,
           "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 26,
+          "w": 250,
+          "h": 14,
+          "style": "groupTitle",
+          "optional": true
         }
       ]
     },
@@ -1259,6 +1391,897 @@
           "prominence": 1,
           "prefers": "any",
           "id": "k"
+        }
+      ]
+    },
+    {
+      "id": "spread.5up.offset.titled",
+      "name": "Fünf im versetzten Raster, mit Überschrift",
+      "tags": ["dicht", "rhythmisch", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "a"
+        },
+        {
+          "x": 194,
+          "y": 38,
+          "w": 90,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "b"
+        },
+        {
+          "x": 73,
+          "y": 166,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "c"
+        },
+        {
+          "x": 367,
+          "y": 38,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "d"
+        },
+        {
+          "x": 367,
+          "y": 166,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "e"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.6up.dense-left.titled",
+      "name": "Sechs, dicht links, mit Überschrift",
+      "tags": ["dicht", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 367,
+          "y": 38,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "e"
+        },
+        {
+          "x": 367,
+          "y": 166,
+          "w": 160,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "f"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.10up.dense.titled",
+      "name": "Zehn, dicht, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "e"
+        },
+        {
+          "x": 458,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "g"
+        },
+        {
+          "x": 458,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "i"
+        },
+        {
+          "x": 458,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "j"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.12up.mosaic.titled",
+      "name": "Zwölf im Mosaik, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "d"
+        },
+        {
+          "x": 22,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "e"
+        },
+        {
+          "x": 164,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "g"
+        },
+        {
+          "x": 458,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "h"
+        },
+        {
+          "x": 316,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "i"
+        },
+        {
+          "x": 458,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "j"
+        },
+        {
+          "x": 316,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "k"
+        },
+        {
+          "x": 458,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "landscape",
+          "id": "l"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.12up.rows.titled",
+      "name": "Zwölf in Reihen, mit Überschrift",
+      "tags": ["dicht", "fotoreich", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "a"
+        },
+        {
+          "x": 113,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "b"
+        },
+        {
+          "x": 204,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "c"
+        },
+        {
+          "x": 22,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "d"
+        },
+        {
+          "x": 113,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "e"
+        },
+        {
+          "x": 204,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "g"
+        },
+        {
+          "x": 407,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "h"
+        },
+        {
+          "x": 498,
+          "y": 38,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "j"
+        },
+        {
+          "x": 407,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "k"
+        },
+        {
+          "x": 498,
+          "y": 184,
+          "w": 80,
+          "h": 94,
+          "prominence": 1,
+          "prefers": "portrait",
+          "id": "l"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.8up.staggered.titled",
+      "name": "Acht, rechte Seite versetzt, mit Überschrift",
+      "tags": ["dicht", "rhythmisch", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 164,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 164,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 316,
+          "y": 49,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 458,
+          "y": 49,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 175,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 458,
+          "y": 175,
+          "w": 120,
+          "h": 103,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.7up.three-and-four.titled",
+      "name": "Sieben, drei links, mit Überschrift",
+      "tags": ["dicht", "rhythmisch", "mit-titel"],
+      "slots": [
+        {
+          "x": 73,
+          "y": 38,
+          "w": 160,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "a"
+        },
+        {
+          "x": 73,
+          "y": 123,
+          "w": 160,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "b"
+        },
+        {
+          "x": 73,
+          "y": 209,
+          "w": 160,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "c"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 458,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 316,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 458,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.9up.four-and-five.titled",
+      "name": "Neun, vier links, mit Überschrift",
+      "tags": ["dicht", "rhythmisch", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 168,
+          "w": 120,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 458,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 316,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 458,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 387,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.11up.five-and-six.titled",
+      "name": "Elf, fünf links, mit Überschrift",
+      "tags": ["dicht", "rhythmisch", "mit-titel"],
+      "slots": [
+        {
+          "x": 22,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "a"
+        },
+        {
+          "x": 164,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "b"
+        },
+        {
+          "x": 22,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "c"
+        },
+        {
+          "x": 164,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "d"
+        },
+        {
+          "x": 93,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "e"
+        },
+        {
+          "x": 316,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "f"
+        },
+        {
+          "x": 458,
+          "y": 38,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "g"
+        },
+        {
+          "x": 316,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "h"
+        },
+        {
+          "x": 458,
+          "y": 123,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "i"
+        },
+        {
+          "x": 316,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "j"
+        },
+        {
+          "x": 458,
+          "y": 209,
+          "w": 120,
+          "h": 69,
+          "prominence": 1,
+          "prefers": "any",
+          "id": "k"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 24,
+          "w": 250,
+          "h": 13,
+          "style": "groupTitle",
+          "optional": false
         }
       ]
     }
