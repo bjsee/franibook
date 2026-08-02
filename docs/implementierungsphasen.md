@@ -117,14 +117,18 @@ Diese Phase ist der Prüfstein der gesamten Architektur. Wenn die Parität hier 
 > echten Bestand), `resolveEffectiveDate` mit allen Quellen, atomare Persistenz
 > mit Schemaversion. 831 Bilder eingelesen, 820 nach Duplikaten.
 >
+> Ebenfalls erledigt, aber anders als geplant: Die `sips`-Kette aus Phase 0 hängt
+> nicht an HEIC, sondern an jedem Decoderfehler von sharp
+> (`apps/server/src/decode.ts`). Anlass war ein PNG, an dem libpng scheitert und
+> das dem ersten Vollexport verloren ging
+> ([#6](https://github.com/bjsee/franibook/issues/6)); eine Apple-HEIC nimmt
+> denselben Weg. Der Bestand enthält kein einziges HEIC.
+>
 > Offen:
 >
-> - **HEIC-Kette nicht verdrahtet.** Der Bestand enthält kein einziges HEIC, der
->   Pfad ist damit gegenstandslos — die Erweiterungen werden akzeptiert, eine
->   Apple-HEIC würde aber in der Fehlerliste landen. Für PNG-Lesefehler ist
->   dieselbe `sips`-Kette als [#6](https://github.com/bjsee/franibook/issues/6) erfasst.
 > - **Kein SSE-Fortschritt.** Der Import läuft beim Serverstart auf der Konsole.
-> - **Zwei Cachestufen** (`thumb`, `preview`) statt drei; `decoded` entfällt mit HEIC.
+> - **Zwei Regelcachestufen** (`thumb`, `preview`); `decoded` füllt sich nur mit
+>   Dateien, an denen sharp scheitert.
 > - **Kein Worker-Pool.** Die Nebenläufigkeit läuft über Promises, nicht über
 >   `worker_threads`. Bei 2,4 s für den Metadatenlauf gibt es dafür keinen Anlass.
 > - **Der Import liest nur den flachen Quellordner**, nicht rekursiv.
