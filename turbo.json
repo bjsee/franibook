@@ -11,7 +11,21 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      // Turbo filtert die Umgebung. Ohne diese Liste kommen die Variablen, die
+      // Bildquelle, Ports und Projektordner setzen, nicht bei Server und Vite
+      // an – `FRANIBOOK_WEB_PORT=5183 pnpm dev` startete stumm auf 5173.
+      "passThroughEnv": [
+        "FRANIBOOK_SOURCE",
+        "FRANIBOOK_PROJECT",
+        "FRANIBOOK_CACHE",
+        "FRANIBOOK_OUT",
+        "FRANIBOOK_LIMIT",
+        "FRANIBOOK_FRESH",
+        "FRANIBOOK_WEB_PORT",
+        "FRANIBOOK_API_PORT",
+        "PORT"
+      ]
     }
   }
 }
