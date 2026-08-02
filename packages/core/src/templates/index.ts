@@ -110,9 +110,15 @@ for (const raw of RAW) {
   }
 }
 
-/** Ob das Template durch Spiegelung an der Falzachse auf sich selbst fällt. */
+/**
+ * Ob das Template durch Spiegelung an der Falzachse auf sich selbst fällt.
+ *
+ * Betrachtet werden nur die Bildplätze. Der Titelplatz sitzt in jedem Template
+ * links oben und würde jedes symmetrische Layout formal unsymmetrisch machen –
+ * eine zweite Variante, die sich nur in der Position der Überschrift
+ * unterscheidet, brächte aber nichts.
+ */
 function isSymmetric(t: Template): boolean {
-  if (t.textSlots?.length) return false;
   const key = (s: { x: number; y: number; w: number; h: number }) =>
     `${s.x.toFixed(5)},${s.y.toFixed(5)},${s.w.toFixed(5)},${s.h.toFixed(5)}`;
   const original = new Set(t.slots.map(key));
@@ -150,6 +156,18 @@ export function templatesWithSlotCount(n: number): Template[] {
     const meta = templateMeta(t.id);
     return t.slots.length === n && !meta.chapterOnly && !meta.highResOnly;
   });
+}
+
+/**
+ * Templates, die einen Gruppentitel aufnehmen können.
+ *
+ * Nur Vorlagen mit Freiraum am oberen Rand – bei einer dichten Collage, deren
+ * Bilder am Satzspiegel beginnen, wäre kein Platz dafür.
+ */
+export function templatesWithTitle(slotCount: number): Template[] {
+  return templatesWithSlotCount(slotCount).filter((t) =>
+    t.textSlots?.some((ts) => ts.role === 'eventTitle'),
+  );
 }
 
 /** Kapitelauftakte. */

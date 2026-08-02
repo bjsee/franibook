@@ -47,6 +47,7 @@ app.get('/api/project', async () => ({
   failed: project.failed,
   report: project.lastReport,
   chapters: project.chapters(),
+  groupMarks: project.groupMarks(),
   undatedCount: project.structure.undated.length,
 }));
 
@@ -81,9 +82,14 @@ app.get('/api/groups', async () => ({
   groups: project.sortedGroups(),
 }));
 
-/** Erzeugt Vorschläge aus den aufgelösten Orten. */
-app.post('/api/groups/suggest', async () => {
-  const result = project.suggestGroups();
+/**
+ * Erzeugt Vorschläge aus den aufgelösten Orten.
+ *
+ * `reset: true` verwirft zuvor alles, auch von Hand Angelegtes – für den Fall,
+ * dass man von vorn anfangen will.
+ */
+app.post<{ Body?: { reset?: boolean } }>('/api/groups/suggest', async (req) => {
+  const result = project.suggestGroups({ reset: req.body?.reset === true });
   void project.save();
   return { groups: project.sortedGroups(), added: result.added };
 });

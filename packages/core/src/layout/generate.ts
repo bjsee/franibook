@@ -20,6 +20,7 @@ import {
   supportedSlotCounts,
   templateById,
   templatesWithSlotCount,
+  templatesWithTitle,
 } from '../templates/index.js';
 import {
   type ChapterBudget,
@@ -163,8 +164,14 @@ function chooseTemplate(
   profile: PrintProfile,
   weightOf: (id: PhotoId) => PhotoWeight,
   rng: () => number,
+  /** Am Anfang einer Gruppe nur Vorlagen, die den Titel aufnehmen können. */
+  needsTitle = false,
 ): TemplateFit | undefined {
-  const candidates = templatesWithSlotCount(group.length);
+  // Gibt es für diese Bilderzahl keine titelfähige Vorlage, wird lieber ohne
+  // Titel gesetzt als die Doppelseite umzubauen – der Gruppenname steht dann
+  // erst auf der nächsten Seite der Gruppe.
+  const mitTitel = needsTitle ? templatesWithTitle(group.length) : [];
+  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithSlotCount(group.length);
   if (candidates.length === 0) return undefined;
 
   const fits: TemplateFit[] = [];
@@ -223,6 +230,8 @@ function buildSpread(
   fit: TemplateFit,
   profile: PrintProfile,
   segment?: Segment,
+  /** Gruppentitel, wenn diese Doppelseite eine Gruppe eröffnet. */
+  groupTitle?: string,
 ): Spread {
   const slots = template.slots.map((slot, slotIndex) => {
     // `assignment[i]` ist der Slot für Foto i – gesucht ist die Umkehrung.
@@ -247,14 +256,17 @@ function buildSpread(
 
   const spread: Spread = { id, index, templateId: template.id, slots };
 
-  // Segmenttitel nur am Segmentbeginn, und nur wenn das Template ihn aufnimmt
-  if (segment?.title && template.textSlots?.some((t) => t.role === 'eventTitle')) {
+  // Überschrift nur, wenn die Vorlage einen Platz dafür hat. Der Gruppentitel
+  // geht vor: Er ist vom Benutzer gesetzt, der Segmenttitel nur geraten.
+  const titel = groupTitle ?? segment?.title;
+  const textSlot = template.textSlots?.find((t) => t.role === 'eventTitle');
+  if (titel && textSlot) {
     spread.texts = [
       {
         id: `${id}-title`,
         role: 'eventTitle',
-        content: segment.title,
-        slotId: template.textSlots.find((t) => t.role === 'eventTitle')!.id,
+        content: titel,
+        slotId: textSlot.id,
       },
     ];
   }
@@ -361,10 +373,13 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Nur aktive Gruppen gliedern. Abgeschaltete – typischerweise der Wohnort –
   // sollen den Fluss nicht zerschneiden.
   const groupOf = new Map<PhotoId, string>();
+  const titelVonGruppe = new Map<string, string>();
   for (const g of opts.groups ?? []) {
     if (!g.active) continue;
+    titelVonGruppe.set(g.id, g.title);
     for (const id of g.photoIds) groupOf.set(id, g.id);
   }
+  const gruppenGesehen = new Set<string>();
 
   const budgets = distributeBudget(structure.chapters, {
     targetPages,
@@ -409,7 +424,21 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         .filter((p): p is Photo => p !== undefined);
       if (groupPhotos.length === 0) continue;
 
-      const fit = chooseTemplate(groupPhotos, recentTemplates, profile, weightOf, rng);
+      // Eröffnet diese Doppelseite eine benannte Gruppe? Dann trägt sie deren
+      // Titel – und braucht eine Vorlage, die Platz dafür hat.
+      const gruppenId = groupOf.get(groupPhotos[0]!.id);
+      const eroeffnet = gruppenId !== undefined && !gruppenGesehen.has(gruppenId);
+      const gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
+      if (gruppenId !== undefined) gruppenGesehen.add(gruppenId);
+
+      const fit = chooseTemplate(
+        groupPhotos,
+        recentTemplates,
+        profile,
+        weightOf,
+        rng,
+        gruppenTitel !== undefined,
+      );
       if (!fit) continue;
 
       const template = templateById(fit.templateId);
@@ -423,6 +452,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         fit,
         profile,
         group.startsSegment ? segments.get(group.segmentId) : undefined,
+        gruppenTitel,
       );
       spreads.push(spread);
 

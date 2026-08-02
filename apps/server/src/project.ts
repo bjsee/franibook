@@ -194,7 +194,12 @@ export class Project {
    * Abschaltungen werden übernommen. Ein erneuter Aufruf darf nichts
    * überschreiben, was jemand eingerichtet hat.
    */
-  suggestGroups(): { groups: PhotoGroup[]; added: number } {
+  suggestGroups(opts: { reset?: boolean } = {}): { groups: PhotoGroup[]; added: number } {
+    // Beim vollständigen Neuaufbau werden auch von Hand angelegte Gruppen
+    // verworfen. Nur auf ausdrückliche Anforderung – sonst gilt der schonende
+    // Weg, der Bearbeitetes stehen lässt.
+    if (opts.reset) this.groups = [];
+
     const kandidaten = [...this.photos.values()]
       .map((photo) => {
         const e = resolveEffectiveDate(photo, this.overrides[photo.id]);
@@ -388,6 +393,37 @@ export class Project {
       });
     }
     return result;
+  }
+
+  /**
+   * Wo im Buch beginnt welche Gruppe?
+   *
+   * Für die Übersicht: Sie markiert die erste Doppelseite jeder Gruppe, so wie
+   * sie es für die Jahre tut.
+   */
+  groupMarks(): { spreadIndex: number; title: string }[] {
+    const gruppeVon = new Map<PhotoId, string>();
+    for (const g of this.groups) {
+      if (!g.active) continue;
+      for (const id of g.photoIds) gruppeVon.set(id, g.title);
+    }
+
+    const marks: { spreadIndex: number; title: string }[] = [];
+    const gesehen = new Set<string>();
+
+    this.spreads.forEach((spread, i) => {
+      for (const slot of spread.slots) {
+        if (!slot.photoId) continue;
+        const titel = gruppeVon.get(slot.photoId);
+        if (titel && !gesehen.has(titel)) {
+          gesehen.add(titel);
+          marks.push({ spreadIndex: i, title: titel });
+          return;
+        }
+      }
+    });
+
+    return marks;
   }
 
   private yearOf(spread: Spread): number | undefined {

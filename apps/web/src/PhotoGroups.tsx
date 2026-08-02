@@ -41,6 +41,7 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
   const [note, setNote] = useState<string | null>(null);
   const lastClicked = useRef<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [frageVorschlag, setFrageVorschlag] = useState(false);
 
   const load = useCallback(async () => {
     const [p, g] = await Promise.all([
@@ -123,12 +124,19 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
     setNote(`Gruppe „${titel.trim()}" angelegt`);
   }
 
-  async function vorschlagen() {
-    const data = await call('/api/groups/suggest', { method: 'POST' });
+  async function vorschlagen(reset = false) {
+    setFrageVorschlag(false);
+    const data = await call('/api/groups/suggest', {
+      method: 'POST',
+      body: JSON.stringify({ reset }),
+    });
+    setFilter({ kind: 'all' });
     setNote(
-      data.added > 0
-        ? `${data.added} Gruppen vorgeschlagen`
-        : 'Keine neuen Gruppen gefunden — vorhandene bleiben unverändert',
+      reset
+        ? `Von vorn begonnen: ${data.groups.length} Gruppen vorgeschlagen`
+        : data.added > 0
+          ? `${data.added} Gruppen hinzugekommen`
+          : 'Keine neuen Gruppen gefunden — vorhandene bleiben unverändert',
     );
   }
 
@@ -143,6 +151,8 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
 
   const aktiveGruppe = filter.kind === 'group' ? groups.find((g) => g.id === filter.id) : undefined;
   const gruppiert = groupOf.size;
+  const manuelleGruppen = groups.filter((g) => g.origin === 'manual').length;
+  const automatischeGruppen = groups.length - manuelleGruppen;
   const grossesBild = sichtbar.find((p) => p.id === lightbox);
 
   // Im geöffneten Bild lässt sich blättern, ohne es zu schließen.
@@ -166,14 +176,63 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
       <aside style={S.side}>
         <div style={S.sideHead}>
           <strong>Gruppen</strong>
-          <button onClick={() => void vorschlagen()} disabled={!!busy} style={S.smallButton}>
+          <button onClick={() => setFrageVorschlag(true)} disabled={!!busy} style={S.smallButton}>
             Vorschlagen
           </button>
         </div>
-        <p style={S.hint}>
-          Vorschläge entstehen aus den Orten. Häufig besuchte Orte gelten als Alltag und sind
-          abgeschaltet — sie gliedern das Buch nicht.
-        </p>
+        {frageVorschlag ? (
+          <div style={S.confirm}>
+            <strong style={S.confirmTitle}>Vorschläge neu berechnen?</strong>
+            <ul style={S.confirmList}>
+              <li>
+                <strong>{manuelleGruppen}</strong> von Hand angelegte oder bearbeitete{' '}
+                {manuelleGruppen === 1 ? 'Gruppe bleibt' : 'Gruppen bleiben'} unverändert. Als
+                bearbeitet gilt auch Umbenennen, Ab- und Anschalten sowie das Setzen eines
+                Hauptbilds.
+              </li>
+              <li>
+                <strong>{automatischeGruppen}</strong> unberührte{' '}
+                {automatischeGruppen === 1 ? 'Vorschlagsgruppe wird' : 'Vorschlagsgruppen werden'}{' '}
+                neu zugeschnitten. Welche Fotos darin liegen, kann sich ändern; einzelne Gruppen
+                können wegfallen oder hinzukommen.
+              </li>
+            </ul>
+            <div style={S.confirmButtons}>
+              <button onClick={() => void vorschlagen(false)} style={S.confirmOk}>
+                Neu berechnen
+              </button>
+              <button onClick={() => setFrageVorschlag(false)} style={S.button}>
+                Abbrechen
+              </button>
+            </div>
+
+            <p style={S.confirmReset}>
+              Oder{' '}
+              <button
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Wirklich von vorn beginnen? Alle ${groups.length} Gruppen werden verworfen, ` +
+                        `auch die ${manuelleGruppen} von Hand angelegten. Titel, Hauptbilder und ` +
+                        `Ein-/Aus-Schalter gehen dabei verloren.`,
+                    )
+                  ) {
+                    void vorschlagen(true);
+                  }
+                }}
+                style={S.linkButton}
+              >
+                ganz von vorn beginnen
+              </button>{' '}
+              — verwirft auch die von Hand angelegten Gruppen.
+            </p>
+          </div>
+        ) : (
+          <p style={S.hint}>
+            Vorschläge entstehen aus den Orten. Häufig besuchte Orte gelten als Alltag und sind
+            abgeschaltet — sie gliedern das Buch nicht.
+          </p>
+        )}
 
         <button
           onClick={() => setFilter({ kind: 'all' })}
@@ -555,6 +614,37 @@ const S = {
     alignItems: 'center',
     gap: '0.2rem',
     textAlign: 'center' as const,
+  },
+  confirm: {
+    padding: '0.6rem 0.7rem',
+    margin: '0.4rem 0 0.8rem',
+    background: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '6px',
+    fontSize: '0.75rem',
+    lineHeight: 1.5,
+  },
+  confirmTitle: { display: 'block', marginBottom: '0.3rem' },
+  confirmList: { margin: '0 0 0.5rem', paddingLeft: '1rem', color: '#78350f' },
+  confirmButtons: { display: 'flex', gap: '0.4rem' },
+  confirmReset: { margin: '0.55rem 0 0', fontSize: '0.7rem', color: '#92400e', lineHeight: 1.45 },
+  linkButton: {
+    padding: 0,
+    border: 'none',
+    background: 'none',
+    color: '#b45309',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    font: 'inherit',
+  },
+  confirmOk: {
+    padding: '0.25rem 0.6rem',
+    border: '1px solid #b45309',
+    borderRadius: '5px',
+    background: '#f59e0b',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '0.78rem',
   },
   select: {
     padding: '0.25rem 0.4rem',

@@ -27,6 +27,7 @@ interface ProjectInfo {
   failed: { file: string; reason: string }[];
   report: Report | null;
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
+  groupMarks: { spreadIndex: number; title: string }[];
   undatedCount: number;
 }
 
