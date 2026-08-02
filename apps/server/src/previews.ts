@@ -8,6 +8,7 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
+import type { DecodeCache } from './decode.js';
 
 export type PreviewSize = 'thumb' | 'preview';
 
@@ -24,7 +25,12 @@ const QUALITY: Record<PreviewSize, number> = {
 export class PreviewCache {
   constructor(
     private readonly cacheDir: string,
-    private readonly sourceRoot: string,
+    /**
+     * Löst den Quellpfad auf und rettet Bilder, an denen sharp scheitert. Die
+     * Vorschau war der stille Verlierer solcher Dateien: `warm` schluckt
+     * Fehler, das Bild blieb einfach grau.
+     */
+    private readonly decodes: DecodeCache,
   ) {}
 
   /**
@@ -45,18 +51,20 @@ export class PreviewCache {
     }
 
     await mkdir(join(this.cacheDir, size, photoId.slice(0, 2)), { recursive: true });
-    const buffer = await sharp(join(this.sourceRoot, relPath))
-      // Wendet die EXIF-Orientierung an, damit die Vorschau dieselbe
-      // Ausrichtung zeigt wie das Modell sie annimmt.
-      .rotate()
-      .resize({
-        width: LONG_EDGE[size],
-        height: LONG_EDGE[size],
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: QUALITY[size] })
-      .toBuffer();
+    const buffer = await this.decodes.withFallback(photoId, relPath, (path) =>
+      sharp(path)
+        // Wendet die EXIF-Orientierung an, damit die Vorschau dieselbe
+        // Ausrichtung zeigt wie das Modell sie annimmt.
+        .rotate()
+        .resize({
+          width: LONG_EDGE[size],
+          height: LONG_EDGE[size],
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: QUALITY[size] })
+        .toBuffer(),
+    );
 
     await writeFile(target, buffer);
     return target;

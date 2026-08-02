@@ -35,6 +35,16 @@ export interface RenderPdfOptions {
   profile: PrintProfile;
   /** Löst eine Foto-Kennung in eine lesbare Datei auf. */
   resolvePhoto: (photoId: PhotoId) => PhotoSource | undefined;
+  /**
+   * Zweiter Versuch, wenn sich das aufgelöste Original nicht aufbereiten ließ.
+   *
+   * Der Renderer entscheidet bewusst nicht, wie ein unlesbares Bild zu retten
+   * ist – das ist plattformabhängig (auf macOS `sips`) und Sache des Aufrufers.
+   * Er ruft den Weg nur an der Stelle auf, an der der Fehler auftritt, damit der
+   * Regelfall nichts kostet. Ohne Haken bleibt es beim bisherigen Verhalten:
+   * Das Bild landet in `skipped`.
+   */
+  recoverPhoto?: (photoId: PhotoId, reason: string) => Promise<PhotoSource | undefined>;
   outputPath: string;
   onProgress?: (done: number, total: number) => void;
 }
@@ -98,7 +108,7 @@ function pageSlices(spread: RenderedSpread, profile: PrintProfile): PageSlice[] 
 }
 
 export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult> {
-  const { spreads, profile, resolvePhoto, outputPath, onProgress } = opts;
+  const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
@@ -124,7 +134,7 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
 
       for (const box of spread.boxes) {
         if (box.kind === 'image') {
-          const ok = await drawImage(doc, box, slice, profile, resolvePhoto, skipped);
+          const ok = await drawImage(doc, box, slice, profile, resolvePhoto, skipped, recoverPhoto);
           if (ok) {
             images++;
             onProgress?.(images, totalImages);
@@ -176,6 +186,7 @@ async function drawImage(
   profile: PrintProfile,
   resolvePhoto: (id: PhotoId) => PhotoSource | undefined,
   skipped: { photoId: PhotoId; reason: string }[],
+  recoverPhoto?: (photoId: PhotoId, reason: string) => Promise<PhotoSource | undefined>,
 ): Promise<boolean> {
   const source = resolvePhoto(box.photoId);
   if (!source) {
@@ -187,9 +198,9 @@ async function drawImage(
   const xMm = box.xMm + slice.offsetXMm;
   if (xMm + box.wMm <= 0 || xMm >= slice.widthMm) return false;
 
-  try {
-    const prepared = await prepareImage(source.path, {
-      orientation: source.orientation,
+  const place = async (from: PhotoSource): Promise<void> => {
+    const prepared = await prepareImage(from.path, {
+      orientation: from.orientation,
       crop: box.crop,
       widthMm: box.wMm,
       heightMm: box.hMm,
@@ -200,12 +211,29 @@ async function drawImage(
       width: mmToPt(box.wMm),
       height: mmToPt(box.hMm),
     });
+  };
+
+  try {
+    await place(source);
     return true;
   } catch (err) {
-    skipped.push({
-      photoId: box.photoId,
-      reason: err instanceof Error ? err.message : String(err),
-    });
+    const reason = err instanceof Error ? err.message : String(err);
+    const rescued = recoverPhoto ? await recoverPhoto(box.photoId, reason) : undefined;
+    if (rescued) {
+      try {
+        await place(rescued);
+        return true;
+      } catch (second) {
+        // Auch die Rückfallebene trägt nicht. Beide Gründe melden – sonst
+        // sieht man nur den zweiten und rätselt über den ersten.
+        skipped.push({
+          photoId: box.photoId,
+          reason: `${reason} (Rettungsversuch: ${second instanceof Error ? second.message : String(second)})`,
+        });
+        return false;
+      }
+    }
+    skipped.push({ photoId: box.photoId, reason });
     return false;
   }
 }
