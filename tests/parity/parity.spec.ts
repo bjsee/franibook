@@ -362,18 +362,20 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     console.log(`Parity (Zeitstrahl): ${(ratio * 100).toFixed(3)} % abweichend`);
 
     // Zusätzlich der Fußraum allein: Dort sitzt der Zeitstrahl, und nur dort
-    // darf er etwas verändert haben. Ein Ausschlag oberhalb wäre ein Hinweis,
-    // dass er ins Layout hineinragt.
+    // darf er etwas verändert haben. Abweichende Pixel markiert pixelmatch rot;
+    // die übrigen zeichnet es abgeschwächt weiter, deshalb wird auf Rot geprüft
+    // und nicht auf „von Null verschieden".
     const fussOben = Math.round((281 / 306) * height);
     let imFuss = 0;
     for (let y = fussOben; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
-        if (diff.data[i] !== 0 || diff.data[i + 1] !== 0 || diff.data[i + 2] !== 0) imFuss++;
+        const rot = diff.data[i]! > 200 && diff.data[i + 1]! < 100 && diff.data[i + 2]! < 100;
+        if (rot) imFuss++;
       }
     }
     console.log(
-      `  davon im Fußraum: ${imFuss} Pixel (${((imFuss / differing) * 100).toFixed(1)} %)`,
+      `  davon im Fußraum: ${imFuss} Pixel (${((imFuss / Math.max(1, differing)) * 100).toFixed(1)} %)`,
     );
 
     expect(
