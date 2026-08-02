@@ -4,9 +4,9 @@
  * Bindet ausschließlich an das Loopback-Interface. Der Server läuft ohne
  * Authentifizierung und darf unter keinen Umständen im Netz stehen.
  *
- * Bemerkenswert an der Schnittstelle: Layoutoperationen laufen nicht hier,
- * sondern im Browser über @franibook/core. Der Server importiert, liefert
- * Bilder und exportiert PDFs.
+ * Der Server importiert, rechnet das Layout, liefert Bilder und exportiert PDFs.
+ * Die Engine selbst bleibt I/O-frei und könnte ebenso im Browser laufen – das
+ * Frontend nutzt aus @franibook/core aber nur die Typen und ruft hier an.
  */
 import { createReadStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';

@@ -101,7 +101,7 @@ async function main() {
   );
 
   // Nach der ersten Messung von 30 s auf 10 s verschärft – siehe
-  // docs/spikes/phase-0.adoc.
+  // docs/spikes/phase-0.md.
   const ziel = 10_000;
   console.log(
     `\nBudget laut Konzept: ${fmtMs(ziel)} für 900 Fotos → ` +
