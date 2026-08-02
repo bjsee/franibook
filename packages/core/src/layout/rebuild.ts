@@ -11,7 +11,7 @@ import type { PhotoWeight } from '../model/date.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
-import { templateById, templatesWithSlotCount } from '../templates/index.js';
+import { templateById, templatesWithSlotCount, templatesWithoutTitle } from '../templates/index.js';
 import { assign, slotCost, slotGeometry } from './scoring.js';
 
 export interface RebuildInput {
@@ -58,9 +58,13 @@ export function rebuildSpreads(opts: RebuildOptions): RebuildResult {
 
     if (groupPhotos.length === 0) return;
 
+    // Ohne Text keine `mit-titel`-Fassung: Sie würde 16 mm für eine Überschrift
+    // freihalten, die es nicht gibt, und die Bilder dafür kleiner setzen.
     const candidates = input.templateId
       ? [templateById(input.templateId)].filter((t) => t !== undefined)
-      : templatesWithSlotCount(groupPhotos.length);
+      : input.text
+        ? templatesWithSlotCount(groupPhotos.length)
+        : templatesWithoutTitle(groupPhotos.length);
 
     if (candidates.length === 0) {
       problems.push({

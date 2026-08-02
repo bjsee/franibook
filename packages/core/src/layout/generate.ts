@@ -20,8 +20,8 @@ import {
   supportedSlotCounts,
   templateById,
   groupOpenerTemplates,
-  templatesWithSlotCount,
   templatesWithTitle,
+  templatesWithoutTitle,
 } from '../templates/index.js';
 import {
   type ChapterBudget,
@@ -219,7 +219,7 @@ function chooseTemplate(
   // Titel gesetzt als die Doppelseite umzubauen – der Gruppenname steht dann
   // erst auf der nächsten Seite der Gruppe.
   const mitTitel = needsTitle ? templatesWithTitle(group.length) : [];
-  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithSlotCount(group.length);
+  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithoutTitle(group.length);
   if (candidates.length === 0) return undefined;
 
   const fits: TemplateFit[] = [];
@@ -401,27 +401,55 @@ function kannAuftaktTragen(
   });
 }
 
-/** Bestes Bild eines Jahres für dessen Auftaktseite. */
+/**
+ * Bestes Bild eines Jahres für dessen Auftaktseite – und die Vorlage dazu.
+ *
+ * Bild und Vorlage müssen gemeinsam gewählt werden. Vorher entschied die
+ * Auswahl nur über die *erste* Auftaktvorlage mit Bild, und `buildChapterOpener`
+ * zog danach eine beliebige; seit es eine Hochformatfassung gibt, wäre in der
+ * Hälfte der Fälle ein Querformat in einem Hochformatslot gelandet.
+ *
+ * Die Zufallszahl je Vorlage ist nötig, nicht kosmetisch: Ein 4:3-Bild im
+ * 4:3-Slot kostet 0, ein 3:4-Bild im 3:4-Slot 0,002 – ohne Streuung gewinnt
+ * die Querformatfassung jedes der 19 Jahre, und das Buch hätte 19 identische
+ * Auftakte. 0,05 ist so bemessen, dass die vier Auftaktfassungen konkurrieren,
+ * ein wirklich schlechter Ausschnitt (0,2 und mehr) aber trotzdem verliert.
+ */
 function pickChapterCover(
   chapter: Chapter,
   photos: ReadonlyMap<PhotoId, Photo>,
   profile: PrintProfile,
-): PhotoId | undefined {
-  const template = chapterTemplates().find((t) => t.slots.length > 0);
-  const slot = template?.slots[0];
-  if (!slot) return undefined;
-  const geometry = slotGeometry(slot, profile);
-
-  return chapter.segments
+  rng: () => number,
+): { photoId: PhotoId; templateId: string } | undefined {
+  const kandidatenBilder = chapter.segments
     .flatMap((s) => s.photoIds)
     .map((id) => photos.get(id))
-    .filter((p): p is Photo => p !== undefined)
-    .map((photo) => ({
-      photo,
-      cost: slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' }),
-    }))
-    .filter((c) => c.cost.dpi >= profile.resolution.minDpi)
-    .sort((a, b) => a.cost.total - b.cost.total)[0]?.photo.id;
+    .filter((p): p is Photo => p !== undefined);
+  if (kandidatenBilder.length === 0) return undefined;
+
+  let beste: { photoId: PhotoId; templateId: string; kosten: number } | undefined;
+  for (const template of chapterTemplates()) {
+    const slot = template.slots[0];
+    if (!slot) continue;
+    const geometry = slotGeometry(slot, profile);
+    const streuung = rng() * 0.05;
+
+    let besteImTemplate: { photoId: PhotoId; kosten: number } | undefined;
+    for (const photo of kandidatenBilder) {
+      const cost = slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' });
+      if (cost.dpi < profile.resolution.minDpi) continue;
+      if (!besteImTemplate || cost.total < besteImTemplate.kosten) {
+        besteImTemplate = { photoId: photo.id, kosten: cost.total };
+      }
+    }
+    if (!besteImTemplate) continue;
+
+    const kosten = besteImTemplate.kosten + streuung;
+    if (!beste || kosten < beste.kosten) {
+      beste = { photoId: besteImTemplate.photoId, templateId: template.id, kosten };
+    }
+  }
+  return beste ? { photoId: beste.photoId, templateId: beste.templateId } : undefined;
 }
 
 /** Erzeugt eine Kapitel-Auftaktdoppelseite für ein Jahr. */
@@ -431,46 +459,26 @@ function buildChapterOpener(
   chapter: Chapter,
   photos: ReadonlyMap<PhotoId, Photo>,
   profile: PrintProfile,
-  rng: () => number,
-  /** Vorab bestimmtes Auftaktbild, damit es aus dem Fluss genommen werden kann. */
-  vorgegeben?: PhotoId,
+  /** Vorab bestimmtes Auftaktbild samt Vorlage, damit es aus dem Fluss fällt. */
+  vorgegeben?: { photoId: PhotoId; templateId: string },
   /** Ereignisse des Jahres, je Zeile eines. */
   events?: readonly string[],
 ): { spread: Spread; usedPhotoId?: PhotoId } {
   const templates = chapterTemplates();
-  // Bevorzugt die Variante mit Bild, sofern ein geeignetes Foto vorhanden ist
-  const withImage = templates.filter((t) => t.slots.length > 0);
   const withoutImage = templates.filter((t) => t.slots.length === 0);
-
-  // Kandidat: das Foto mit der höchsten Auflösung im Jahr
-  const candidates = chapter.segments
-    .flatMap((s) => s.photoIds)
-    .map((pid) => photos.get(pid))
-    .filter((p): p is Photo => p !== undefined);
 
   let template = withoutImage[0] ?? templates[0]!;
   let usedPhotoId: PhotoId | undefined;
 
-  if (withImage.length > 0 && candidates.length > 0) {
-    const template2 = withImage[Math.floor(rng() * withImage.length)]!;
-    const slot = template2.slots[0]!;
-    const geometry = slotGeometry(slot, profile);
-
-    const gewaehlt = vorgegeben ? photos.get(vorgegeben) : undefined;
-    const best = gewaehlt
-      ? { photo: gewaehlt }
-      : candidates
-          .map((photo) => ({
-            photo,
-            cost: slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' }),
-          }))
-          .filter((c) => c.cost.dpi >= profile.resolution.minDpi)
-          .sort((a, b) => a.cost.total - b.cost.total)[0];
-
-    if (best) {
-      template = template2;
-      usedPhotoId = best.photo.id;
-    }
+  // Bild und Vorlage kommen als Paar aus `pickChapterCover`; wird nichts
+  // vorgegeben, bleibt der ruhige Auftakt ohne Bild. Eine eigene Zufallszahl
+  // braucht es hier nicht mehr – vorher zog sie die Vorlage, jetzt entscheidet
+  // die Passung zum Bild.
+  const gewaehlt = vorgegeben ? photos.get(vorgegeben.photoId) : undefined;
+  const gewaehlteVorlage = vorgegeben ? templateById(vorgegeben.templateId) : undefined;
+  if (gewaehlt && gewaehlteVorlage) {
+    template = gewaehlteVorlage;
+    usedPhotoId = gewaehlt.id;
   }
 
   const slots = template.slots.map((slot) => {
@@ -620,10 +628,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
    * Auftaktseite steht, soll nicht zwei Seiten später noch einmal klein
    * auftauchen.
    */
-  const jahresBild = new Map<number, PhotoId>();
+  const jahresBild = new Map<number, { photoId: PhotoId; templateId: string }>();
   if (useOpeners && chapterTemplates().some((t) => t.slots.length > 0)) {
     for (const chapter of structure.chapters) {
-      const kandidat = pickChapterCover(chapter, photos, profile);
+      const kandidat = pickChapterCover(chapter, photos, profile, rng);
       if (kandidat) jahresBild.set(chapter.year, kandidat);
     }
   }
@@ -631,7 +639,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Gruppenauftakte danach – und kein Bild zweimal. Ein selbst gewähltes
   // Hauptbild gilt trotzdem: Es dem Jahresauftakt zu überlassen wäre gegen
   // die ausdrückliche Entscheidung des Benutzers.
-  const schonVergeben = new Set(jahresBild.values());
+  const schonVergeben = new Set([...jahresBild.values()].map((j) => j.photoId));
   {
     for (const g of opts.groups ?? []) {
       if (!g.active) continue;
@@ -652,7 +660,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       // Ein gewähltes Hauptbild sticht den Jahresauftakt aus
       if (g.coverPhotoId !== undefined && schonVergeben.has(g.coverPhotoId)) {
         for (const [jahr, bild] of jahresBild) {
-          if (bild === g.coverPhotoId) jahresBild.delete(jahr);
+          if (bild.photoId === g.coverPhotoId) jahresBild.delete(jahr);
         }
       }
 
@@ -661,7 +669,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     }
   }
 
-  const ausDemFluss = new Set([...auftaktBild.values(), ...jahresBild.values()]);
+  const ausDemFluss = new Set([
+    ...auftaktBild.values(),
+    ...[...jahresBild.values()].map((j) => j.photoId),
+  ]);
 
   // Zu welchem Jahr gehört ein Foto? Gebraucht für die Nachlese der Auftakte.
   const jahrVonFoto = new Map<PhotoId, number>();
@@ -707,7 +718,6 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         chapter,
         photos,
         profile,
-        rng,
         jahresBild.get(chapter.year),
         opts.yearEvents?.[chapter.year],
       );
