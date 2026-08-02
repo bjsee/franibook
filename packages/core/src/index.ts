@@ -30,4 +30,9 @@ export * from './layout/rebuild.js';
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
 
+export * from './cover/cover.js';
+export * from './cover/geometry.js';
+export * from './cover/rendered-cover.js';
+export * from './cover/render-cover.js';
+
 export * from './templates/index.js';

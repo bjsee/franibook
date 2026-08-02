@@ -9,5 +9,7 @@
 
 export { renderPdf } from './render-pdf.js';
 export type { RenderPdfOptions, RenderPdfResult, PhotoSource } from './render-pdf.js';
+export { renderCoverPdf } from './render-cover.js';
+export type { RenderCoverPdfOptions, RenderCoverPdfResult } from './render-cover.js';
 export { prepareImage } from './prepare-image.js';
 export type { PreparedImage, PrepareOptions } from './prepare-image.js';
