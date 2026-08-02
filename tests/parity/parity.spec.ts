@@ -54,9 +54,9 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  * Gemessen bei 2424 px Vergleichsbreite, indem ein Versatz von 1 mm im
  * PDF-Renderer absichtlich eingebaut und wieder entfernt wurde:
  *
- *   korrekt, auto-cover:      MESSWERT     mit 1 mm Versatz: MESSWERT
- *   korrekt, manuelle Crops:  MESSWERT     mit 1 mm Versatz: MESSWERT
- *   korrekt, mit Zeitstrahl:  MESSWERT     mit 1 mm Versatz: MESSWERT
+ *   korrekt, auto-cover:      0,242 %      mit 1 mm Versatz: 1,066 %
+ *   korrekt, manuelle Crops:  0,324 %      mit 1 mm Versatz: 1,341 %
+ *   korrekt, mit Zeitstrahl:  0,303 %      mit 1 mm Versatz: 1,127 %
  *
  * Die korrekten Werte lagen früher bei 0,137 % und 0,352 %. Der Anstieg im
  * ersten Fall kommt nicht von der Geometrie, sondern vom Encoder: Seit der
@@ -65,9 +65,13 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  * verbleibende Rauschen sitzt ausschließlich dort, nachgeprüft im Differenzbild.
  *
  * Die Schwelle liegt zwischen dem ungünstigsten korrekten Fall und dem
- * Fehlerfall. Sie anzuheben, weil ein neuer Fall knapp darüber liegt, würde
- * genau die Empfindlichkeit aufgeben, die den Test wertvoll macht – dann lieber
- * die Ursache suchen.
+ * Fehlerfall: 54 % Puffer nach oben, Faktor 2,1 nach unten. Sie anzuheben, weil
+ * ein neuer Fall knapp darüber liegt, würde genau die Empfindlichkeit aufgeben,
+ * die den Test wertvoll macht – dann lieber die Ursache suchen.
+ *
+ * Die Werte sind über den Umbau der Templatebibliothek, den Ausschnitt-Editor
+ * und die bildlose Jahresseite hinweg unverändert geblieben, bis aufs Pixel: Der
+ * Hauptfall vergleicht dieselbe Doppelseite im selben Raster.
  */
 const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
 

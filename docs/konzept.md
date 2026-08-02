@@ -718,8 +718,42 @@ Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. A
 >   beiden größeren (262 und 303 mm) sind `highResOnly`.
 >
 > Am realen Buch dominieren die dichten Raster mit 13 bis 15 Slots und die
-> Jahresauftakte. Ob das gestalterisch trägt, ist noch nicht beurteilt —
-> [#7](https://github.com/bjsee/franibook/issues/7).
+> Jahresauftakte.
+
+> **Korrektur (2. August 2026, nachmittags): Bänder statt Quadratraster
+> ([#7](https://github.com/bjsee/franibook/issues/7))**
+>
+> Die Durchsicht am Bildschirm hat drei messbare Mängel gefunden, alle in den
+> dichten Vorlagen:
+>
+> | Befund                                                       | vorher    | nachher  |
+> | ------------------------------------------------------------ | --------- | -------- |
+> | Beschnittverlust je Bild, gemessen am ganzen Buch            | 26,7 %    | 15,5 %   |
+> | Slots in Hochformat, bei 421 hochformatigen Fotos            | 67        | 291      |
+> | Doppelseiten ohne jeden Größenunterschied zwischen den Slots | 40 von 61 | 7 von 61 |
+> | Breite des größten Bildes je Doppelseite, Median             | 120 mm    | 160 mm   |
+> | Slots unter der Mindestauflösung von 240 dpi                 | 12        | 5        |
+> | Jahresauftakte im Querformat                                 | 19 von 19 | 9 von 19 |
+>
+> Ursache war überall dieselbe: Die Raster `12up`…`24up` bestanden aus nahezu
+> quadratischen Zellen (81 × 79 mm, Seitenverhältnis 1,03), während der Bestand
+> aus 4:3- und 3:4-Bildern besteht. Ein Hochformat in einer quadratischen Zelle
+> verliert 27 % seiner Fläche, meist Kopf und Füße.
+>
+> Sie sind deshalb durch **Mosaikvorlagen** ersetzt: Zellen ausschließlich in 4:3
+> und 3:4, aus Bändern zusammengesetzt, die die 262 mm Nutzbreite genau füllen;
+> je Bilderzahl eine quer- und eine hochformatbetonte Fassung, damit die Engine
+> über `prefers` die zur Gruppe passende wählen kann; und genau ein Ankerslot
+> (162 × 121 mm oder 121 × 161 mm, `prominence` 3) je Doppelseite als Blickfang.
+> Der Bandkatalog steht im `$comment` von `library.json`.
+>
+> Der Jahresauftakt hat eine Hochformatfassung bekommen
+> (`spread.chapter.year-portrait`), und `pickChapterCover` wählt Bild und Vorlage
+> jetzt gemeinsam statt die Vorlage zu würfeln.
+>
+> Offen bleibt, was Geschmack ist und nicht Messung: die Leere der Jahresauftakte
+> (10,7 % Flächenfüllung auf 19 von 80 Doppelseiten), randabfallende Bilder,
+> falzüberspannende Slots und die fehlende Hero-Gewichtung.
 
 Bei 51,6 % Hochformat im Bestand braucht mindestens ein Template je Slotzahl eine hochformatorientierte Variante. Ein Vierer-Raster aus vier Querformaten ist bei diesem Bestand die Ausnahme, nicht die Regel.
 

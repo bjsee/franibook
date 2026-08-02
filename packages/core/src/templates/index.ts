@@ -176,6 +176,22 @@ export function templatesWithTitle(slotCount: number): Template[] {
   );
 }
 
+/**
+ * Templates für eine Gruppe dieser Größe, die keinen Titel erwartet.
+ *
+ * Die `mit-titel`-Fassungen räumen 16 mm am oberen Rand für die Überschrift
+ * frei und setzen die Bilder entsprechend kleiner. Steht dort kein Titel, ist
+ * der Streifen leer und der Verlust umsonst: Im Buch aus dem echten Bestand
+ * traf das 9 von 45 Doppelseiten, deren Bilder dadurch 6 % kleiner standen als
+ * nötig. Bleibt nach dem Filtern nichts übrig, gilt wieder die vollständige
+ * Liste – ein leerer Streifen ist besser als keine Vorlage.
+ */
+export function templatesWithoutTitle(slotCount: number): Template[] {
+  const alle = templatesWithSlotCount(slotCount);
+  const ohne = alle.filter((t) => !t.tags?.includes('mit-titel'));
+  return ohne.length > 0 ? ohne : alle;
+}
+
 /** Auftaktseiten für Fotogruppen. */
 export function groupOpenerTemplates(): Template[] {
   return ALL.filter((t) => t.tags?.includes('gruppenauftakt'));

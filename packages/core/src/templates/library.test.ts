@@ -17,9 +17,11 @@ import {
   TEMPLATE_REFERENCE,
   allTemplates,
   chapterTemplates,
+  requireTemplate,
   supportedSlotCounts,
   templateMeta,
   templatesWithSlotCount,
+  templatesWithoutTitle,
 } from './index.js';
 
 const profile = saal as PrintProfile;
@@ -51,6 +53,23 @@ describe('Bibliothek', () => {
   it('bietet je Gruppengröße mehr als eine Wahl, damit Seiten sich nicht wiederholen', () => {
     for (const n of [1, 2, 3, 4]) {
       expect(templatesWithSlotCount(n).length, `nur eine Vorlage für ${n}`).toBeGreaterThan(1);
+    }
+  });
+
+  it('lässt Vorlagen mit Titelband weg, solange es eine Alternative gibt', () => {
+    // Eine `mit-titel`-Fassung räumt 16 mm für eine Überschrift frei. Steht dort
+    // keine, standen die Bilder 6 % kleiner als nötig – im echten Buch auf
+    // 9 von 45 Doppelseiten.
+    for (const n of supportedSlotCounts()) {
+      const ohne = templatesWithoutTitle(n);
+      expect(ohne.length, `keine Wahl für ${n} Bilder`).toBeGreaterThan(0);
+      const gibtAlternative = templatesWithSlotCount(n).some((t) => !t.tags?.includes('mit-titel'));
+      if (gibtAlternative) {
+        expect(
+          ohne.every((t) => !t.tags?.includes('mit-titel')),
+          `${n} Bilder: Titelfassung trotz Alternative`,
+        ).toBe(true);
+      }
     }
   });
 
@@ -110,6 +129,21 @@ describe('Geometrie', () => {
         const rechterRand = s.x + s.w;
         const kollidiert = rechterRand > 0.5 - gutterSafe && s.x < 0.5 + gutterSafe;
         expect(kollidiert, `${t.id}/${s.id} ragt in die Falzzone`).toBe(false);
+      }
+    }
+  });
+
+  it('lässt unten den Fußraum für den Zeitstrahl frei', () => {
+    // Der Zeitstrahl belegt die 14 mm zwischen 278 und 292 mm. Bisher stand das
+    // nur im Kommentar von `render/timeline.ts`; eine Vorlage, die tiefer
+    // reicht, hätte den Zeitstrahl auf ihrer Doppelseite stillschweigend
+    // verdrängt. Ausnahme ist der randabfallende Gruppenauftakt: Er verzichtet
+    // bewusst auf den Zeitstrahl.
+    const unterkante = (278 + 0.0001) / PAGE_H;
+    for (const t of allTemplates()) {
+      for (const s of [...t.slots, ...(t.textSlots ?? [])]) {
+        if ('bleed' in s && s.bleed) continue;
+        expect(s.y + s.h, `${t.id}/${s.id} ragt in den Fußraum`).toBeLessThanOrEqual(unterkante);
       }
     }
   });
@@ -221,6 +255,97 @@ describe('Druckbarkeit mit dem echten Bestand', () => {
         );
       }
     }
+  });
+});
+
+describe('Mosaikvorlagen', () => {
+  const mosaike = () => allTemplates().filter((t) => t.tags?.includes('mosaik'));
+
+  it('deckt jede Bilderzahl von 10 bis 24 ab', () => {
+    for (let n = 10; n <= 24; n++) {
+      expect(
+        mosaike().filter((t) => t.slots.length === n).length,
+        `keine Mosaikvorlage für ${n} Bilder`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('gibt jeder Mosaikvorlage genau einen Ankerslot', () => {
+    // Ohne Blickfang wirkt eine Doppelseite mit 13 Bildern wie ein Kontaktbogen.
+    // Vor der Umstellung hatten 40 von 61 Doppelseiten des echten Buchs keinen
+    // einzigen Größenunterschied zwischen ihren Slots.
+    for (const t of mosaike()) {
+      const anker = t.slots.filter((s) => s.prominence === 3);
+      expect(anker.length, `${t.id}: ${anker.length} Ankerslots`).toBe(1);
+    }
+  });
+
+  it('setzt jede Zelle auf 4:3 oder 3:4', () => {
+    // Der Bestand besteht aus 4:3- und 3:4-Bildern. Quadratische Zellen haben
+    // im Mittel 26,7 % der Bildfläche weggeschnitten, passende Zellen 5,8 %.
+    for (const t of mosaike()) {
+      for (const s of t.slots) {
+        const ar = slotAspect(s, SPREAD_W, PAGE_H);
+        const soll = ar > 1 ? 4 / 3 : 3 / 4;
+        expect(
+          Math.abs(ar / soll - 1),
+          `${t.id}/${s.id}: Seitenverhältnis ${ar.toFixed(3)}`,
+        ).toBeLessThan(0.02);
+      }
+    }
+  });
+
+  it('reicht mit dem Bilderblock genau bis an den Fußraum', () => {
+    // Halb leere Restreihen waren der auffälligste Mangel der alten Raster:
+    // spread.13up.grid ließ das untere Drittel der rechten Seite frei.
+    for (const t of mosaike()) {
+      const unten = Math.max(...t.slots.map((s) => s.y + s.h));
+      expect(unten * PAGE_H, `${t.id} endet bei ${(unten * PAGE_H).toFixed(1)} mm`).toBeCloseTo(
+        278,
+        1,
+      );
+    }
+  });
+
+  it('bietet für die häufigen Bilderzahlen eine quer- und eine hochformatbetonte Fassung', () => {
+    // Bei 51,3 % Hochformat im Bestand muss die Engine wählen können; sonst
+    // landen Hochformate in Querformatslots und verlieren 44 % ihrer Fläche.
+    for (let n = 11; n <= 24; n++) {
+      const ids = mosaike()
+        .filter((t) => t.slots.length === n)
+        .map((t) => t.id);
+      expect(
+        ids.some((id) => id.includes('mosaic-quer')),
+        `keine querformatbetonte Fassung für ${n}`,
+      ).toBe(true);
+      expect(
+        ids.some((id) => id.includes('mosaic-hoch')),
+        `keine hochformatbetonte Fassung für ${n}`,
+      ).toBe(true);
+    }
+  });
+});
+
+describe('Jahresauftakte', () => {
+  it('nimmt sowohl Quer- als auch Hochformate auf', () => {
+    // Vorher gab es nur eine Fassung mit einem 4:3-Slot: Alle 19 Auftakte des
+    // echten Buchs zeigten ein Querformat, obwohl der Bestand mehrheitlich
+    // hochkant ist.
+    const mitBild = chapterTemplates().filter((t) => t.slots.length > 0);
+    const ausrichtungen = new Set(mitBild.map((t) => t.slots[0]!.prefers));
+    expect(ausrichtungen).toContain('landscape');
+    expect(ausrichtungen).toContain('portrait');
+  });
+
+  it('setzt die Jahreszahl in Quer- und Hochformatfassung an dieselbe Stelle', () => {
+    // Der Leser soll die Jahreszahl im ganzen Buch am gleichen Ort finden; nur
+    // das Bild wechselt die Form. Die gespiegelten Fassungen verlegen sie
+    // absichtlich auf die andere Seite, deshalb bleiben sie hier außen vor.
+    const stelle = (id: string) => {
+      const ts = requireTemplate(id).textSlots?.find((t) => t.role === 'year');
+      return ts ? `${ts.x.toFixed(5)},${ts.y.toFixed(5)},${ts.w.toFixed(5)}` : undefined;
+    };
+    expect(stelle('spread.chapter.year-portrait')).toBe(stelle('spread.chapter.year'));
   });
 });
 

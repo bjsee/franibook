@@ -20,8 +20,8 @@ import {
   supportedSlotCounts,
   templateById,
   groupOpenerTemplates,
-  templatesWithSlotCount,
   templatesWithTitle,
+  templatesWithoutTitle,
 } from '../templates/index.js';
 import {
   type ChapterBudget,
@@ -220,7 +220,7 @@ function chooseTemplate(
   // Titel gesetzt als die Doppelseite umzubauen – der Gruppenname steht dann
   // erst auf der nächsten Seite der Gruppe.
   const mitTitel = needsTitle ? templatesWithTitle(group.length) : [];
-  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithSlotCount(group.length);
+  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithoutTitle(group.length);
   if (candidates.length === 0) return undefined;
 
   const fits: TemplateFit[] = [];
