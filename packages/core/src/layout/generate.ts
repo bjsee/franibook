@@ -19,6 +19,7 @@ import {
   chapterTemplates,
   supportedSlotCounts,
   templateById,
+  groupOpenerTemplates,
   templatesWithSlotCount,
   templatesWithTitle,
 } from '../templates/index.js';
@@ -44,7 +45,23 @@ export interface GenerateOptions {
    * Aktive Fotogruppen. Nur sie gliedern das Buch – abgeschaltete laufen im
    * normalen chronologischen Fluss mit.
    */
-  groups?: readonly { id: string; photoIds: readonly PhotoId[]; active: boolean; title: string }[];
+  groups?: readonly {
+    id: string;
+    photoIds: readonly PhotoId[];
+    active: boolean;
+    title: string;
+    coverPhotoId?: PhotoId;
+  }[];
+  /**
+   * Ob Gruppen eine eigene Auftaktseite bekommen.
+   *
+   * Jede kostet eine Doppelseite. Bei 61 Gruppen wären das 122 Seiten allein
+   * für Auftakte – deshalb bekommen sie nur Gruppen, die es tragen: solche mit
+   * einem selbst gewählten Hauptbild oder ab `groupOpenerMinPhotos` Fotos.
+   */
+  groupOpeners?: boolean;
+  /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
+  groupOpenerMinPhotos?: number;
   /** Steuert die Auswahl unter gleichwertigen Templates. */
   seed?: number;
 }
@@ -60,6 +77,8 @@ export interface GenerateResult {
     pageCount: number;
     targetPages: number;
     chapterOpeners: number;
+    /** Auftaktseiten für Fotogruppen. */
+    groupOpeners: number;
     /** Fotos, die nicht platziert werden konnten. */
     unplaced: PhotoId[];
     worstDpi: number;
@@ -274,6 +293,84 @@ function buildSpread(
   return spread;
 }
 
+/**
+ * Auftaktdoppelseite einer Fotogruppe.
+ *
+ * Zeigt das Hauptbild groß und den Gruppentitel darunter. Vollflächig
+ * randabfallend nur, wenn das Bild genug Pixel hat – im Zielbestand trifft das
+ * auf 16 von 820 Fotos zu; für alle anderen wird es so groß gesetzt, wie die
+ * Mindestauflösung zulässt.
+ */
+function buildGroupOpener(
+  id: string,
+  index: number,
+  title: string,
+  cover: Photo,
+  profile: PrintProfile,
+): Spread | undefined {
+  const kandidaten = groupOpenerTemplates().filter((t) => {
+    const slot = t.slots[0];
+    if (!slot) return false;
+    const geometry = slotGeometry(slot, profile);
+    const cost = slotCost(cover, slot, geometry, { profile, weightOf: () => 'hero' });
+    return cost.dpi >= profile.resolution.minDpi;
+  });
+
+  if (kandidaten.length === 0) return undefined;
+
+  // Größtes Bild gewinnt: vollflächig, wenn die Auflösung reicht.
+  const template = kandidaten.sort(
+    (a, b) => b.slots[0]!.w * b.slots[0]!.h - a.slots[0]!.w * a.slots[0]!.h,
+  )[0]!;
+
+  const slot = template.slots[0]!;
+  const geometry = slotGeometry(slot, profile);
+  const textSlot = template.textSlots?.find((t) => t.role === 'eventTitle');
+
+  return {
+    id,
+    index,
+    templateId: template.id,
+    slots: [
+      {
+        slotId: slot.id,
+        photoId: cover.id,
+        crop: coverCrop(cover.width / cover.height, geometry.widthMm / geometry.heightMm),
+      },
+    ],
+    ...(textSlot
+      ? {
+          texts: [
+            { id: `${id}-title`, role: 'eventTitle' as const, content: title, slotId: textSlot.id },
+          ],
+        }
+      : {}),
+  };
+}
+
+/** Bestes Bild eines Jahres für dessen Auftaktseite. */
+function pickChapterCover(
+  chapter: Chapter,
+  photos: ReadonlyMap<PhotoId, Photo>,
+  profile: PrintProfile,
+): PhotoId | undefined {
+  const template = chapterTemplates().find((t) => t.slots.length > 0);
+  const slot = template?.slots[0];
+  if (!slot) return undefined;
+  const geometry = slotGeometry(slot, profile);
+
+  return chapter.segments
+    .flatMap((s) => s.photoIds)
+    .map((id) => photos.get(id))
+    .filter((p): p is Photo => p !== undefined)
+    .map((photo) => ({
+      photo,
+      cost: slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' }),
+    }))
+    .filter((c) => c.cost.dpi >= profile.resolution.minDpi)
+    .sort((a, b) => a.cost.total - b.cost.total)[0]?.photo.id;
+}
+
 /** Erzeugt eine Kapitel-Auftaktdoppelseite für ein Jahr. */
 function buildChapterOpener(
   id: string,
@@ -282,6 +379,8 @@ function buildChapterOpener(
   photos: ReadonlyMap<PhotoId, Photo>,
   profile: PrintProfile,
   rng: () => number,
+  /** Vorab bestimmtes Auftaktbild, damit es aus dem Fluss genommen werden kann. */
+  vorgegeben?: PhotoId,
 ): { spread: Spread; usedPhotoId?: PhotoId } {
   const templates = chapterTemplates();
   // Bevorzugt die Variante mit Bild, sofern ein geeignetes Foto vorhanden ist
@@ -302,14 +401,16 @@ function buildChapterOpener(
     const slot = template2.slots[0]!;
     const geometry = slotGeometry(slot, profile);
 
-    // Bestes Foto für diesen Slot
-    const best = candidates
-      .map((photo) => ({
-        photo,
-        cost: slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' }),
-      }))
-      .filter((c) => c.cost.dpi >= profile.resolution.minDpi)
-      .sort((a, b) => a.cost.total - b.cost.total)[0];
+    const gewaehlt = vorgegeben ? photos.get(vorgegeben) : undefined;
+    const best = gewaehlt
+      ? { photo: gewaehlt }
+      : candidates
+          .map((photo) => ({
+            photo,
+            cost: slotCost(photo, slot, geometry, { profile, weightOf: () => 'normal' }),
+          }))
+          .filter((c) => c.cost.dpi >= profile.resolution.minDpi)
+          .sort((a, b) => a.cost.total - b.cost.total)[0];
 
     if (best) {
       template = template2;
@@ -379,7 +480,68 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     titelVonGruppe.set(g.id, g.title);
     for (const id of g.photoIds) groupOf.set(id, g.id);
   }
+  const coverVonGruppe = new Map<string, PhotoId>();
+  const groesseVonGruppe = new Map<string, number>();
+  for (const g of opts.groups ?? []) {
+    if (!g.active) continue;
+    groesseVonGruppe.set(g.id, g.photoIds.length);
+    if (g.coverPhotoId) coverVonGruppe.set(g.id, g.coverPhotoId);
+  }
+  const openerMinPhotos = opts.groupOpenerMinPhotos ?? 6;
   const gruppenGesehen = new Set<string>();
+  const useGroupOpeners = opts.groupOpeners ?? false;
+  let groupOpenerCount = 0;
+
+  /**
+   * Welches Bild eröffnet welche Gruppe?
+   *
+   * Muss vor der Gruppierung feststehen: Das Auftaktbild wird aus dem Fluss
+   * genommen, sonst stünde es zweimal im Buch – einmal groß auf der
+   * Auftaktseite und gleich darauf noch einmal klein.
+   */
+  const auftaktBild = new Map<string, PhotoId>();
+  /**
+   * Auftaktbilder der Jahre.
+   *
+   * Dieselbe Überlegung wie bei den Gruppen: Ein Bild, das groß auf der
+   * Auftaktseite steht, soll nicht zwei Seiten später noch einmal klein
+   * auftauchen.
+   */
+  const jahresBild = new Map<number, PhotoId>();
+  if (useOpeners) {
+    for (const chapter of structure.chapters) {
+      const kandidat = pickChapterCover(chapter, photos, profile);
+      if (kandidat) jahresBild.set(chapter.year, kandidat);
+    }
+  }
+
+  // Gruppenauftakte danach – und kein Bild zweimal. Ein selbst gewähltes
+  // Hauptbild gilt trotzdem: Es dem Jahresauftakt zu überlassen wäre gegen
+  // die ausdrückliche Entscheidung des Benutzers.
+  const schonVergeben = new Set(jahresBild.values());
+  if (useGroupOpeners) {
+    for (const g of opts.groups ?? []) {
+      if (!g.active) continue;
+      const verdient = g.coverPhotoId !== undefined || g.photoIds.length >= openerMinPhotos;
+      if (!verdient) continue;
+
+      const cover =
+        g.coverPhotoId ?? g.photoIds.find((id) => !schonVergeben.has(id)) ?? g.photoIds[0];
+      if (cover === undefined) continue;
+
+      // Ein gewähltes Hauptbild sticht den Jahresauftakt aus
+      if (g.coverPhotoId !== undefined && schonVergeben.has(g.coverPhotoId)) {
+        for (const [jahr, bild] of jahresBild) {
+          if (bild === g.coverPhotoId) jahresBild.delete(jahr);
+        }
+      }
+
+      auftaktBild.set(g.id, cover);
+      schonVergeben.add(cover);
+    }
+  }
+
+  const ausDemFluss = new Set([...auftaktBild.values(), ...jahresBild.values()]);
 
   const budgets = distributeBudget(structure.chapters, {
     targetPages,
@@ -402,12 +564,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         photos,
         profile,
         rng,
+        jahresBild.get(chapter.year),
       );
       spreads.push(spread);
       chapterOpenerCount++;
-      // Das Auftaktfoto bleibt im Fluss – es doppelt zu zeigen ist gewollter
-      // Wiedererkennungswert, kein Fehler.
-      void usedPhotoId;
+      if (usedPhotoId) placed.add(usedPhotoId);
     }
 
     // Über das ganze Jahr gruppieren, nicht je Monat: Monatsgrenzen sind
@@ -416,6 +577,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       slotCounts,
       targetSpreads: spreadsPerYear.get(chapter.year) ?? 1,
       ...(groupOf.size > 0 ? { groupOf } : {}),
+      ...(ausDemFluss.size > 0 ? { exclude: ausDemFluss } : {}),
     });
 
     for (const group of groups) {
@@ -428,8 +590,32 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       // Titel – und braucht eine Vorlage, die Platz dafür hat.
       const gruppenId = groupOf.get(groupPhotos[0]!.id);
       const eroeffnet = gruppenId !== undefined && !gruppenGesehen.has(gruppenId);
-      const gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
+      let gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
       if (gruppenId !== undefined) gruppenGesehen.add(gruppenId);
+
+      // Eigene Auftaktseite, sofern gewünscht und ein Hauptbild vorliegt.
+      const coverId = gruppenId !== undefined ? auftaktBild.get(gruppenId) : undefined;
+
+      if (eroeffnet && gruppenTitel && coverId !== undefined) {
+        const cover = photos.get(coverId);
+        const opener = cover
+          ? buildGroupOpener(
+              `spread-${spreads.length}`,
+              spreads.length,
+              gruppenTitel,
+              cover,
+              profile,
+            )
+          : undefined;
+        if (opener && cover) {
+          spreads.push(opener);
+          groupOpenerCount++;
+          placed.add(cover.id);
+          // Der Titel steht jetzt auf dem Auftakt; die folgende Doppelseite
+          // braucht ihn nicht noch einmal.
+          gruppenTitel = undefined;
+        }
+      }
 
       const fit = chooseTemplate(
         groupPhotos,
@@ -506,6 +692,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       pageCount: spreads.length * 2,
       targetPages,
       chapterOpeners: chapterOpenerCount,
+      groupOpeners: groupOpenerCount,
       unplaced,
       worstDpi: Number.isFinite(worstDpi) ? worstDpi : 0,
       belowTargetDpi: belowTarget,

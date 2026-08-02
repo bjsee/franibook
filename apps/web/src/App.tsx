@@ -20,7 +20,13 @@ interface Report {
 
 interface ProjectInfo {
   sourceRoot: string;
-  settings: { targetPages: number; chapterOpeners: boolean; seed: number; birthDate?: string };
+  settings: {
+    targetPages: number;
+    chapterOpeners: boolean;
+    groupOpeners: boolean;
+    seed: number;
+    birthDate?: string;
+  };
   photoCount: number;
   spreadCount: number;
   skippedVideos: string[];

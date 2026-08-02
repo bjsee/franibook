@@ -8,6 +8,7 @@
 import type { NaiveDateTime, PhotoId } from '../model/photo.js';
 import type { PhotoGroup } from './groups.js';
 import { makeGroupId } from './groups.js';
+import { type DetectionContext, easterSunday } from './detectors.js';
 
 export interface GroupCandidate {
   photoId: PhotoId;
@@ -291,4 +292,111 @@ export function mergeSuggestions(
     .filter((g) => g.photoIds.length > 0);
 
   return [...manuell, ...uebernommen];
+}
+
+/**
+ * Anlass eines einzelnen Tages, sofern der Kalender einen kennt.
+ *
+ * Macht aus „18. April 2020" ein „12. Geburtstag" – der Unterschied
+ * entscheidet darüber, ob ein Gruppentitel im Buch etwas erzählt oder nur
+ * eine Datumsangabe wiederholt.
+ */
+export function occasionOfDay(date: NaiveDateTime, ctx: DetectionContext = {}): string | undefined {
+  const jahr = Number(date.slice(0, 4));
+  const monat = Number(date.slice(5, 7));
+  const tag = Number(date.slice(8, 10));
+
+  if (ctx.birthDate) {
+    const gMonat = Number(ctx.birthDate.slice(5, 7));
+    const gTag = Number(ctx.birthDate.slice(8, 10));
+    const gJahr = Number(ctx.birthDate.slice(0, 4));
+    if (monat === gMonat && Math.abs(tag - gTag) <= 3) {
+      const alter = jahr - gJahr;
+      if (alter === 0) return 'Geburt';
+      if (alter > 0 && alter <= 120) return `${alter}. Geburtstag`;
+    }
+  }
+
+  if (monat === 12 && tag >= 24 && tag <= 26) return `Weihnachten ${jahr}`;
+  if (monat === 12 && tag === 31) return `Silvester ${jahr}`;
+  if (monat === 1 && tag === 1) return `Neujahr ${jahr}`;
+
+  const ostern = easterSunday(jahr);
+  if (monat === ostern.month && tag >= ostern.day - 2 && tag <= ostern.day + 1) {
+    return `Ostern ${jahr}`;
+  }
+
+  return undefined;
+}
+
+/** Lesbares Tagesdatum, etwa „18. Juni 2016". */
+function dayLabel(date: NaiveDateTime): string {
+  const jahr = date.slice(0, 4);
+  const monat = MONATE[Number(date.slice(5, 7)) - 1];
+  const tag = Number(date.slice(8, 10));
+  return `${tag}. ${monat} ${jahr}`;
+}
+
+export interface DayGroupOptions {
+  /** Ab wie vielen Fotos ein Tag eine eigene Gruppe wird. */
+  minPhotos?: number;
+  /** Fotos, die schon einer Gruppe angehören und übergangen werden. */
+  taken?: ReadonlySet<PhotoId>;
+  /** Für die Anlasserkennung. */
+  detection?: DetectionContext;
+}
+
+/**
+ * Schlägt Gruppen für Tage mit mehreren Aufnahmen vor.
+ *
+ * Wer an einem Tag mehr als zwei Fotos macht, war meist bei etwas – einer
+ * Feier, einem Ausflug, einem Besuch. Der Ort verrät das oft nicht, weil nur
+ * jedes vierte Foto Koordinaten trägt und der Anlass ohnehin zu Hause
+ * stattgefunden haben kann.
+ *
+ * Läuft nach der Ortserkennung: Wo ein Ort schon eine Gruppe gebildet hat, ist
+ * er die bessere Auskunft.
+ */
+export function suggestDayGroups(
+  candidates: readonly GroupCandidate[],
+  opts: DayGroupOptions = {},
+): PhotoGroup[] {
+  const minPhotos = opts.minPhotos ?? 3;
+  const taken = opts.taken ?? new Set<PhotoId>();
+
+  const jeTag = new Map<string, GroupCandidate[]>();
+  for (const c of candidates) {
+    if (taken.has(c.photoId)) continue;
+    const tag = c.date.slice(0, 10);
+    const list = jeTag.get(tag) ?? [];
+    list.push(c);
+    jeTag.set(tag, list);
+  }
+
+  const ids = new Set<string>();
+  const groups: PhotoGroup[] = [];
+
+  for (const [tag, fotos] of [...jeTag.entries()].sort()) {
+    if (fotos.length < minPhotos) continue;
+
+    const sortiert = [...fotos].sort((a, b) => a.date.localeCompare(b.date));
+    const anlass = occasionOfDay(sortiert[0]!.date, opts.detection);
+    const titel = anlass ?? dayLabel(sortiert[0]!.date);
+
+    const id = makeGroupId(titel, ids);
+    ids.add(id);
+
+    groups.push({
+      id,
+      title: titel,
+      photoIds: sortiert.map((f) => f.photoId),
+      origin: 'calendar',
+      active: true,
+      reason: anlass
+        ? `${fotos.length} Fotos an einem Tag mit Kalenderbezug`
+        : `${fotos.length} Fotos an einem Tag (${tag})`,
+    });
+  }
+
+  return groups;
 }

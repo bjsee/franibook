@@ -40,6 +40,7 @@ import {
   sortKey,
   removeGroup,
   sortGroupsChronologically,
+  suggestDayGroups,
   suggestPlaceGroups,
   suggestTitles,
   ungroupPhotos,
@@ -53,6 +54,10 @@ const SCHEMA_VERSION = 1;
 export interface ProjectSettings {
   targetPages: number;
   chapterOpeners: boolean;
+  /** Eigene Auftaktseite je Fotogruppe, mit Hauptbild und Titel. */
+  groupOpeners: boolean;
+  /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
+  groupOpenerMinPhotos: number;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -89,7 +94,13 @@ export class Project {
   settings: ProjectSettings = {
     targetPages: 200,
     chapterOpeners: true,
+    groupOpeners: true,
+    groupOpenerMinPhotos: 6,
     seed: 1,
+    // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
+    // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
+    birthDate: '1999-09-11',
+    subjectName: 'Frani',
   };
 
   skippedVideos: string[] = [];
@@ -179,6 +190,8 @@ export class Project {
       seed: this.settings.seed,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
       groups: this.groups,
+      groupOpeners: this.settings.groupOpeners,
+      groupOpenerMinPhotos: this.settings.groupOpenerMinPhotos,
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
@@ -213,10 +226,22 @@ export class Project {
       .filter((c): c is NonNullable<typeof c> => c !== undefined);
 
     const mitOrt = propagatePlaces(kandidaten);
-    const vorschlaege = suggestPlaceGroups(mitOrt);
-    const vorher = this.groups.length;
 
-    this.groups = mergeSuggestions(this.groups, vorschlaege);
+    // Zuerst die Orte: Ein Ortsname sagt mehr als ein Datum. Was dabei keiner
+    // Gruppe zufällt, wird anschließend nach Tagen geprüft – wer an einem Tag
+    // mehr als zwei Fotos macht, war meist bei etwas.
+    const orte = suggestPlaceGroups(mitOrt);
+    const vergeben = new Set(orte.flatMap((g) => g.photoIds));
+    const tage = suggestDayGroups(mitOrt, {
+      taken: vergeben,
+      detection: {
+        ...(this.settings.birthDate ? { birthDate: this.settings.birthDate } : {}),
+        ...(this.settings.subjectName ? { name: this.settings.subjectName } : {}),
+      },
+    });
+
+    const vorher = this.groups.length;
+    this.groups = mergeSuggestions(this.groups, [...orte, ...tage]);
     return { groups: this.groups, added: this.groups.length - vorher };
   }
 

@@ -33,6 +33,11 @@ export interface TemplateSlot {
    * fällt bei diesem Bestand schnell unter die Mindestauflösung.
    */
   prefers?: 'landscape' | 'portrait' | 'any';
+  /**
+   * Randabfallend: Der Slot reicht über die Endformatkante hinaus in den
+   * Beschnitt. Solche Slots liegen absichtlich außerhalb von 0..1.
+   */
+  bleed?: boolean;
 }
 
 export interface TemplateTextSlot {
@@ -44,6 +49,8 @@ export interface TemplateTextSlot {
   h: number;
   style: string;
   optional: boolean;
+  /** Ausrichtung im Textfeld. Ohne Angabe linksbündig. */
+  align?: 'left' | 'center' | 'right';
 }
 
 export interface Template {

@@ -181,7 +181,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       // Vorläufig aus der Slothöhe abgeleitet; echte Textstile mit Schriftwahl
       // und Sicherheitsbereichsprüfung folgen in Phase 9.
       fontSizePt: (rect.hMm / 25.4) * 72 * 0.7,
-      align: 'left',
+      align: textSlot.align ?? 'left',
       color: '#000000',
     });
   }

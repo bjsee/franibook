@@ -2284,6 +2284,124 @@
           "optional": false
         }
       ]
+    },
+    {
+      "id": "spread.group.opener",
+      "name": "Gruppenauftakt, Querformat",
+      "tags": ["gruppenauftakt", "auftakt", "ruhig"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 339,
+          "y": 78,
+          "w": 216,
+          "h": 121,
+          "prominence": 3,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 316,
+          "y": 224,
+          "w": 262,
+          "h": 18,
+          "style": "groupTitle",
+          "align": "center",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.group.opener-portrait",
+      "name": "Gruppenauftakt, Hochformat",
+      "tags": ["gruppenauftakt", "auftakt", "ruhig"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 387,
+          "y": 30,
+          "w": 120,
+          "h": 216,
+          "prominence": 3,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 316,
+          "y": 256,
+          "w": 262,
+          "h": 18,
+          "style": "groupTitle",
+          "align": "center",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.group.opener-full",
+      "name": "Gruppenauftakt, vollflächig",
+      "tags": ["gruppenauftakt", "auftakt", "groß"],
+      "highResOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 300,
+          "y": -3,
+          "w": 303,
+          "h": 306,
+          "prominence": 3,
+          "prefers": "any",
+          "bleed": true
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 132,
+          "w": 262,
+          "h": 20,
+          "style": "groupTitle",
+          "align": "center",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "id": "spread.group.opener-portrait-large",
+      "name": "Gruppenauftakt, Hochformat groß",
+      "tags": ["gruppenauftakt", "auftakt", "ruhig"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 366,
+          "y": 24,
+          "w": 162,
+          "h": 216,
+          "prominence": 3,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 316,
+          "y": 252,
+          "w": 262,
+          "h": 18,
+          "style": "groupTitle",
+          "align": "center",
+          "optional": false
+        }
+      ]
     }
   ]
 }

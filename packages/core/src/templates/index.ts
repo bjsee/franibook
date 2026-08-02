@@ -19,6 +19,7 @@ interface RawSlot {
   h: number;
   prominence: number;
   prefers?: string;
+  bleed?: boolean;
 }
 
 interface RawTextSlot {
@@ -30,6 +31,7 @@ interface RawTextSlot {
   h: number;
   style: string;
   optional: boolean;
+  align?: string;
 }
 
 interface RawTemplate {
@@ -53,6 +55,7 @@ function normalize(raw: RawTemplate): Template {
     h: s.h / REF.heightMm,
     prominence: s.prominence as 1 | 2 | 3,
     ...(s.prefers ? { prefers: s.prefers as 'landscape' | 'portrait' | 'any' } : {}),
+    ...(s.bleed ? { bleed: true } : {}),
   });
 
   return {
@@ -72,6 +75,7 @@ function normalize(raw: RawTemplate): Template {
             h: t.h / REF.heightMm,
             style: t.style,
             optional: t.optional,
+            ...(t.align ? { align: t.align as 'left' | 'center' | 'right' } : {}),
           })),
         }
       : {}),
@@ -168,6 +172,11 @@ export function templatesWithTitle(slotCount: number): Template[] {
   return templatesWithSlotCount(slotCount).filter((t) =>
     t.textSlots?.some((ts) => ts.role === 'eventTitle'),
   );
+}
+
+/** Auftaktseiten für Fotogruppen. */
+export function groupOpenerTemplates(): Template[] {
+  return ALL.filter((t) => t.tags?.includes('gruppenauftakt'));
 }
 
 /** Kapitelauftakte. */
