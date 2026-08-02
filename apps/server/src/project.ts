@@ -46,6 +46,7 @@ import {
   ungroupPhotos,
   updateGroup,
 } from '@franibook/core';
+import type { DecodeCache } from './decode.js';
 import { importFolder } from './import.js';
 import type { PreviewCache } from './previews.js';
 
@@ -113,13 +114,14 @@ export class Project {
   constructor(
     readonly sourceRoot: string,
     readonly previews: PreviewCache,
+    readonly decodes: DecodeCache,
     private readonly projectPath: string,
   ) {}
 
   // ---------------------------------------------------------------- Import
 
   async importPhotos(limit?: number): Promise<void> {
-    const result = await importFolder(this.sourceRoot, limit);
+    const result = await importFolder(this.sourceRoot, this.decodes, limit);
     this.photos.clear();
     for (const p of result.photos) this.photos.set(p.id, p);
     this.skippedVideos = result.skippedVideos;

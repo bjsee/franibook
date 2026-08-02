@@ -15,6 +15,7 @@ import { exiftool } from 'exiftool-vendored';
 import sharp from 'sharp';
 import type { NaiveDateTime, Photo } from '@franibook/core';
 import { lookupPlace } from '@franibook/geo';
+import type { DecodeCache } from './decode.js';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
 const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
@@ -112,7 +113,11 @@ async function mapLimit<T, R>(
   return results;
 }
 
-export async function importFolder(root: string, limit?: number): Promise<ImportResult> {
+export async function importFolder(
+  root: string,
+  decodes: DecodeCache,
+  limit?: number,
+): Promise<ImportResult> {
   const entries = await readdir(root);
   const images: string[] = [];
   const skippedVideos: string[] = [];
@@ -133,10 +138,19 @@ export async function importFolder(root: string, limit?: number): Promise<Import
   const results = await mapLimit(selected, concurrency, async (fileName): Promise<Photo | null> => {
     const path = join(root, fileName);
     try {
-      const [st, tags, meta] = await Promise.all([
-        stat(path),
+      // Der Inhaltshash muss vor den Pixeln bekannt sein: Er benennt das
+      // Konvertat im Decode-Cache. Die verlorene Nebenläufigkeit sind 128 KB
+      // Lesen je Datei, gegen 2,4 s Metadatenlauf über den ganzen Bestand
+      // nicht messbar.
+      const st = await stat(path);
+      const id = await contentHash(path, st.size);
+
+      const [tags, meta] = await Promise.all([
         exiftool.read(path),
-        sharp(path).metadata(),
+        // Metadaten liest exiftool immer aus dem Original – die Konvertierung
+        // betrifft nur die Pixel. Nur die Pixelmaße kommen bei einer für
+        // libvips unlesbaren Datei aus dem Konvertat, und `sips` ist maßhaltig.
+        decodes.withFallback(id, fileName, (p) => sharp(p).metadata()),
       ]);
 
       // Pixelmaße sofort orientierungsnormalisieren. Alles Nachgelagerte –
@@ -174,7 +188,7 @@ export async function importFolder(root: string, limit?: number): Promise<Import
         .trim();
 
       return {
-        id: await contentHash(path, st.size),
+        id,
         relPath: fileName,
         fileName,
         bytes: st.size,
