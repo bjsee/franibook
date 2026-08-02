@@ -173,6 +173,28 @@ describe('distributeBudget', () => {
     expect(summe).toBe(40); // 80 Seiten = 40 Doppelseiten
   });
 
+  it('gibt keinem Jahr mehr Doppelseiten als Fotos', () => {
+    // Eine Doppelseite ohne Foto lässt sich nicht füllen; das Budget würde
+    // verfallen und das Buch bliebe unter der Zielzahl.
+    const { dated } = buildBestand({ 2012: 3, 2024: 200 });
+    const s = buildStructure(dated);
+    const budgets = distributeBudget(s.chapters, { targetPages: 200, chapterSpreads: 0 });
+    expect(budgets[0]!.spreads).toBeLessThanOrEqual(3);
+    expect(budgets.reduce((n, b) => n + b.spreads, 0)).toBe(100);
+  });
+
+  it('gibt einem Jahr so viele Doppelseiten, wie die größte Vorlage verlangt', () => {
+    // 111 Fotos brauchen bei höchstens 24 Slots je Doppelseite mindestens fünf.
+    const { dated } = buildBestand({ 2012: 4, 2024: 111 });
+    const s = buildStructure(dated);
+    const budgets = distributeBudget(s.chapters, {
+      targetPages: 24,
+      chapterSpreads: 0,
+      maxPhotosPerSpread: 24,
+    });
+    expect(budgets[1]!.spreads).toBeGreaterThanOrEqual(5);
+  });
+
   it('kommt mit einem leeren Bestand zurecht', () => {
     expect(distributeBudget([], { targetPages: 100 })).toEqual([]);
   });
@@ -199,13 +221,47 @@ describe('groupChapter', () => {
     }
   });
 
-  it('trifft das Seitenbudget', () => {
+  it('trifft das Seitenbudget genau', () => {
     const { dated } = buildBestand({ 2015: 24 });
     const s = buildStructure(dated);
     const groups = groupChapter(s.chapters[0]!, { slotCounts, targetSpreads: 4 });
-    // 24 Fotos auf angestrebt 4 Doppelseiten → im Mittel 6 je Seite
-    expect(groups.length).toBeGreaterThanOrEqual(3);
-    expect(groups.length).toBeLessThanOrEqual(5);
+    // 24 Fotos auf 4 Doppelseiten → im Mittel 6 je Seite
+    expect(groups).toHaveLength(4);
+  });
+
+  it('hält das Budget auch bei benannten Gruppen und Monatswechseln ein', () => {
+    // Die Kostenterme für Gruppen und Monate konnten die Zielgröße vorher
+    // überstimmen; jetzt ist die Zahl der Doppelseiten Nebenbedingung.
+    const { dated } = buildBestand({ 2015: 60 });
+    const s = buildStructure(dated);
+    const ids = dated.map((d) => d.id);
+    const groupOf = new Map(ids.slice(10, 20).map((id) => [id, 'reise']));
+    const groups = groupChapter(s.chapters[0]!, {
+      slotCounts,
+      targetSpreads: 7,
+      groupOf,
+      groupSizes: new Map([['reise', 10]]),
+    });
+    expect(groups).toHaveLength(7);
+    expect(groups.flatMap((g) => g.photoIds)).toHaveLength(60);
+  });
+
+  it('weicht nur ab, wenn die Vorgabe unerfüllbar ist', () => {
+    // Fünf Fotos lassen sich nicht auf zehn Doppelseiten verteilen, ohne dass
+    // eine leer bliebe.
+    const { dated } = buildBestand({ 2015: 5 });
+    const s = buildStructure(dated);
+    const groups = groupChapter(s.chapters[0]!, { slotCounts, targetSpreads: 10 });
+    expect(groups).toHaveLength(5);
+  });
+
+  it('verliert kein Foto, wenn die Bibliothek keine passende Größe kennt', () => {
+    // Nur Fünfergruppen, aber sieben Fotos: Dann gibt es keine gültige
+    // Zerlegung. Eine unpassende Gruppe ist besser als zwei verlorene Fotos.
+    const { dated } = buildBestand({ 2015: 7 });
+    const s = buildStructure(dated);
+    const groups = groupChapter(s.chapters[0]!, { slotCounts: [5], targetSpreads: 2 });
+    expect(groups.flatMap((g) => g.photoIds)).toHaveLength(7);
   });
 
   it('gruppiert über Monatsgrenzen hinweg, wenn das Budget es verlangt', () => {
@@ -277,12 +333,29 @@ describe('generateBook', () => {
     expect(result.report.placedCount).toBe(result.report.photoCount);
   });
 
-  it('trifft die Zielseitenzahl ungefähr', () => {
-    const result = generate({ targetPages: 200 });
-    // Die Gruppierung kann nicht beliebig genau treffen, weil nur bestimmte
-    // Gruppengrößen zur Verfügung stehen.
-    expect(result.report.pageCount).toBeGreaterThan(160);
-    expect(result.report.pageCount).toBeLessThan(260);
+  it('trifft die Zielseitenzahl exakt', () => {
+    // Am echten Bestand kamen vorher 172 Seiten heraus, zwölf über der
+    // Saal-Grenze von 160.
+    const result = generate({ targetPages: 160 });
+    expect(result.report.pageCount).toBe(160);
+  });
+
+  it('rastet die Zielseitenzahl auf das Druckprofil ein', () => {
+    // 200 Seiten bindet Saal nicht (pageCount.max = 160), 161 ist kein
+    // Vielfaches von 2. Beides landet auf 160.
+    expect(generate({ targetPages: 200 }).report.effectiveTargetPages).toBe(160);
+    expect(generate({ targetPages: 200 }).report.pageCount).toBe(160);
+    expect(generate({ targetPages: 161 }).report.pageCount).toBe(160);
+  });
+
+  it('trifft auch ein kürzeres Buch genau', () => {
+    const result = generate({ targetPages: 140 });
+    expect(result.report.pageCount).toBe(140);
+  });
+
+  it('überschreitet die Zielseitenzahl auch ohne Kapitelauftakte nicht', () => {
+    const result = generate({ targetPages: 120, chapterOpeners: false });
+    expect(result.report.pageCount).toBe(120);
   });
 
   it('meldet, wenn die Zielseitenzahl gar nicht erreichbar ist', () => {
