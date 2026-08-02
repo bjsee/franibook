@@ -15,6 +15,7 @@ import Fastify from 'fastify';
 import {
   BACKGROUND_COLORS,
   BACKGROUND_MIN_DPI,
+  MAX_TILT_DEG,
   type CoverDesign,
   type MoveSource,
   type MoveTarget,
@@ -269,12 +270,20 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
  * jede handgemachte Korrektur im Buch verwerfen, nur um eine Linie ein- oder
  * auszublenden.
  */
-app.patch<{ Body: { timeline?: boolean; background?: string } }>('/api/settings', async (req) => {
-  if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
-  if (req.body.background !== undefined) project.settings.background = req.body.background;
-  await project.save();
-  return { settings: project.settings };
-});
+app.patch<{ Body: { timeline?: boolean; background?: string; tilt?: number } }>(
+  '/api/settings',
+  async (req) => {
+    if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
+    if (req.body.background !== undefined) project.settings.background = req.body.background;
+    // Die Neigung gehört aus demselben Grund hierher wie der Zeitstrahl: Sie
+    // entsteht beim Rendern und rührt die Fotoverteilung nicht an.
+    if (req.body.tilt !== undefined && Number.isFinite(req.body.tilt)) {
+      project.settings.tilt = Math.min(MAX_TILT_DEG, Math.max(0, req.body.tilt));
+    }
+    await project.save();
+    return { settings: project.settings };
+  },
+);
 
 /**
  * Ereignisse eines Jahres für den Kapitelauftakt.
@@ -444,6 +453,25 @@ app.patch<{
 
   void project.save();
   return { ok: true, spread: project.render(Number(req.params.index)) };
+});
+
+/**
+ * Neigt ein einzelnes Bild oder gibt es an die Automatik zurück.
+ *
+ * `deg: null` heißt „wieder automatisch", `deg: 0` heißt „geradestellen" –
+ * die Unterscheidung ist der Zweck des Endpunkts. Kein Neugenerieren: Die
+ * Neigung entsteht beim Rendern und rührt die Fotoverteilung nicht an.
+ */
+app.patch<{
+  Params: { index: string; slotId: string };
+  Body: { deg: number | null };
+}>('/api/spreads/:index/slots/:slotId/rotate', async (req, reply) => {
+  const index = Number(req.params.index);
+  const result = project.setSlotRotation(index, req.params.slotId, req.body.deg);
+  if (!result.ok) return reply.code(404).send({ error: result.error });
+
+  void project.save();
+  return { ok: true, spread: project.render(index) };
 });
 
 /** Stellt den Ausschnitt auf automatisch zurück. */

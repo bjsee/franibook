@@ -13,8 +13,18 @@
  * ein Schreibvorgang auf das ganze Projekt-JSON.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Crop, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
-import { dpiInSlot, imageBoxes, panCrop, photoPixelsOf, withCrop, zoomCrop } from '@franibook/core';
+import type { Crop, ImageBox, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
+import {
+  MAX_TILT_DEG,
+  dpiInSlot,
+  imageBoxes,
+  panCrop,
+  photoPixelsOf,
+  randabfallend,
+  withCrop,
+  withRotation,
+  zoomCrop,
+} from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 
@@ -95,6 +105,8 @@ export function SpreadEditor({
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(1200);
   const [pendingCrop, setPendingCrop] = useState<Crop | null>(null);
+  /** Stellung des Neigungsreglers, solange sie noch nicht beim Server ist. */
+  const [pendingTilt, setPendingTilt] = useState<number | null>(null);
   const [zug, setZug] = useState<Zug | null>(null);
   const [pool, setPool] = useState<PoolPhoto[] | null>(null);
   const [poolOffen, setPoolOffen] = useState(false);
@@ -113,9 +125,13 @@ export function SpreadEditor({
     return () => ro.disconnect();
   }, []);
 
-  // Ein Ausschnitt gehört zu genau einem Slot einer Doppelseite. Wechselt die
-  // Auswahl oder die Seite, ist ein noch nicht gespeicherter Rest hinfällig.
-  useEffect(() => setPendingCrop(null), [index, selectedSlotId]);
+  // Ausschnitt und Neigung gehören zu genau einem Slot einer Doppelseite.
+  // Wechselt die Auswahl oder die Seite, ist ein noch nicht gespeicherter Rest
+  // hinfällig.
+  useEffect(() => {
+    setPendingCrop(null);
+    setPendingTilt(null);
+  }, [index, selectedSlotId]);
 
   const poolLaden = useCallback(() => {
     fetch('/api/book/unplaced')
@@ -143,11 +159,14 @@ export function SpreadEditor({
   const infoVon = (photoId: string): PhotoInfo | undefined => infos.get(photoId);
   const dateiname = (photoId: string): string => infoVon(photoId)?.fileName ?? 'Dieses Foto';
 
-  /** Die Doppelseite, wie sie mit dem noch nicht gespeicherten Ausschnitt aussieht. */
-  const angezeigt = useMemo(
-    () => (pendingCrop && selectedSlotId ? withCrop(spread, selectedSlotId, pendingCrop) : spread),
-    [spread, pendingCrop, selectedSlotId],
-  );
+  /** Die Doppelseite mit noch nicht gespeichertem Ausschnitt und Neigung. */
+  const angezeigt = useMemo(() => {
+    if (!selectedSlotId) return spread;
+    let s = spread;
+    if (pendingCrop) s = withCrop(s, selectedSlotId, pendingCrop);
+    if (pendingTilt !== null) s = withRotation(s, selectedSlotId, pendingTilt);
+    return s;
+  }, [spread, pendingCrop, pendingTilt, selectedSlotId]);
 
   const pxPerMm = stageWidth / spread.widthMm;
   const bildBox = (slotId: string | null) =>
@@ -197,6 +216,65 @@ export function SpreadEditor({
 
     return () => clearTimeout(timer);
   }, [pendingCrop, selectedSlotId, index, onSpread, onChanged]);
+
+  // Dieselbe Verzögerung wie beim Ausschnitt und aus demselben Grund: Jede
+  // Zwischenstellung des Reglers wäre sonst ein Schreibvorgang auf das ganze
+  // Projekt-JSON.
+  const zuletztTilt = useRef<number | null>(null);
+
+  useEffect(() => {
+    zuletztTilt.current = pendingTilt;
+    if (pendingTilt === null || !selectedSlotId) return;
+
+    const gesendet = pendingTilt;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/rotate`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ deg: gesendet }),
+          });
+          const data = await res.json();
+          if (data.spread && zuletztTilt.current === gesendet) {
+            onSpread(data.spread);
+            setPendingTilt(null);
+            onChanged();
+          }
+        } catch (e) {
+          setNote(`Neigung nicht gespeichert: ${String(e)}`);
+        }
+      })();
+    }, SPEICHER_VERZOEGERUNG_MS);
+
+    return () => clearTimeout(timer);
+  }, [pendingTilt, selectedSlotId, index, onSpread, onChanged]);
+
+  /**
+   * Neigung zurück an die Automatik.
+   *
+   * Wie beim Ausschnitt kommt der neue Winkel vom Server: Ihn hier aus Slot,
+   * Foto und Seed nachzurechnen wäre die zweite Rechnung, die es im Projekt
+   * nicht geben soll.
+   */
+  async function neigungZuruecksetzen() {
+    if (!selectedSlotId) return;
+    setPendingTilt(null);
+    try {
+      const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/rotate`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deg: null }),
+      });
+      const data = await res.json();
+      if (data.spread) {
+        onSpread(data.spread);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Neigung nicht zurückgesetzt: ${String(e)}`);
+    }
+  }
 
   /**
    * Zurück auf automatisch.
@@ -459,6 +537,13 @@ export function SpreadEditor({
             <button onClick={() => void ausschnittZuruecksetzen()} style={S.button}>
               Automatisch (0)
             </button>
+            <NeigungsRegler
+              box={gewaehlteBox}
+              flaeche={angezeigt}
+              wert={pendingTilt}
+              onWert={setPendingTilt}
+              onAutomatisch={() => void neigungZuruecksetzen()}
+            />
             <button
               onClick={() =>
                 void verschieben(
@@ -740,6 +825,74 @@ function PhotoInfoZeile({ info }: { info: PhotoInfo | undefined }) {
   );
 }
 
+/**
+ * Neigung des ausgewählten Bildes.
+ *
+ * Der Regler zeigt immer den Winkel, der gerade wirkt – auch den automatisch
+ * bestimmten. Erst wer ihn anfasst, macht daraus eine Handentscheidung; bis
+ * dahin bleibt sie beim Seed. Sichtbar wird der Unterschied nur an „Automatisch",
+ * das nach einem Eingriff verfügbar wird.
+ *
+ * Am Papierrand entfällt der Regler nicht, sondern wird abgeblendet und
+ * begründet: Ein fehlendes Bedienelement liest sich als Fehler, ein
+ * abgeblendetes als Regel.
+ */
+function NeigungsRegler({
+  box,
+  flaeche,
+  wert,
+  onWert,
+  onAutomatisch,
+}: {
+  box: ImageBox;
+  flaeche: { widthMm: number; heightMm: number };
+  /** Noch nicht gespeicherte Reglerstellung, sonst `null`. */
+  wert: number | null;
+  onWert: (deg: number) => void;
+  onAutomatisch: () => void;
+}) {
+  const gesperrt = randabfallend(box, flaeche);
+  const aktuell = wert ?? box.rotateDeg ?? 0;
+
+  if (gesperrt) {
+    return (
+      <span style={S.muted} title="Geneigt entstünden weiße Zwickel an der Papierkante.">
+        randabfallend – ohne Neigung
+      </span>
+    );
+  }
+
+  return (
+    <span style={S.neigung}>
+      <label htmlFor="neigung" style={S.muted}>
+        Neigung
+      </label>
+      <input
+        id="neigung"
+        type="range"
+        min={-MAX_TILT_DEG}
+        max={MAX_TILT_DEG}
+        step={0.1}
+        value={aktuell}
+        onChange={(e) => onWert(Number(e.target.value))}
+        style={S.regler}
+        title="Wie schief das Bild auf der Seite liegt"
+      />
+      <span style={S.neigungWert}>{aktuell.toFixed(1)}°</span>
+      <button onClick={() => onWert(0)} style={S.button} title="Dieses Bild geradestellen">
+        Gerade
+      </button>
+      <button
+        onClick={onAutomatisch}
+        style={S.button}
+        title="Winkel wieder aus dem Seed bestimmen lassen"
+      >
+        Automatisch
+      </button>
+    </span>
+  );
+}
+
 function dpiFarbe(dpi: number, minDpi: number, targetDpi: number): string {
   if (dpi < minDpi) return '#dc2626';
   if (dpi < targetDpi) return '#b45309';
@@ -764,6 +917,17 @@ const S = {
   muted: { color: '#6b7280', fontSize: '0.8125rem' },
   hint: { color: '#9ca3af', fontSize: '0.75rem' },
   spacer: { flex: 1 },
+  neigung: { display: 'flex', alignItems: 'center', gap: '0.35rem' },
+  // Schmal genug, dass die Leiste nicht umbricht, breit genug für ein
+  // Zehntelgrad je zwei Pixel.
+  regler: { width: '96px' },
+  neigungWert: {
+    fontSize: '0.8125rem',
+    fontVariantNumeric: 'tabular-nums' as const,
+    color: '#6b7280',
+    minWidth: '2.6rem',
+    textAlign: 'right' as const,
+  },
   button: {
     padding: '0.25rem 0.6rem',
     border: '1px solid #d1d5db',

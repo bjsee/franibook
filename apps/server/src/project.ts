@@ -31,6 +31,8 @@ import {
   bookStats,
   buildStructure,
   DEFAULT_BACKGROUND,
+  DEFAULT_TILT_DEG,
+  MAX_TILT_DEG,
   backgroundFit,
   defaultProfile,
   exportLayout,
@@ -112,6 +114,13 @@ export interface ProjectSettings {
   background: string;
   /** Ob jeder Jahrgang beim Erzeugen eine eigene Hintergrundfarbe bekommt. */
   chapterColors: boolean;
+  /**
+   * Stärkste Neigung der Bilder in Grad. `0` stellt alles gerade.
+   *
+   * Wirkt allein beim Rendern (`render/tilt.ts`) und ändert die
+   * Fotoverteilung nicht – ein Umstellen erfordert deshalb kein Neugenerieren.
+   */
+  tilt: number;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -210,6 +219,9 @@ export class Project {
     // An: Die Farbe wechselt am Jahreswechsel und macht die Kapitelgrenze auch
     // dann sichtbar, wenn man die Jahreszahl überschlägt.
     chapterColors: true,
+    // An: Ein Raster aus exakt waagerechten Kästen sieht gezeichnet aus, nicht
+    // eingeklebt. Der Wert ist bewusst klein – siehe render/tilt.ts.
+    tilt: DEFAULT_TILT_DEG,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
@@ -461,17 +473,21 @@ export class Project {
    * Gezählt, nicht geraten: Der Knopf „Neu anordnen" baut das Buch komplett neu,
    * und was dabei verloren geht, soll vorher dranstehen.
    */
-  handwork(): { crops: number; hintergruende: number; zeitstrahl: number } {
+  handwork(): { crops: number; neigungen: number; hintergruende: number; zeitstrahl: number } {
     let crops = 0;
+    let neigungen = 0;
     let hintergruende = 0;
     let zeitstrahl = 0;
     for (const spread of this.spreads) {
       crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
+      // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
+      // eine Entscheidung, die der Neuaufbau verwirft.
+      neigungen += spread.slots.filter((sl) => sl.rotateDeg !== undefined).length;
       if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
     }
-    return { crops, hintergruende, zeitstrahl };
+    return { crops, neigungen, hintergruende, zeitstrahl };
   }
 
   // ------------------------------------------------------------- Struktur
@@ -878,6 +894,38 @@ export class Project {
     return { ok: true };
   }
 
+  /**
+   * Setzt die Neigung eines Slots oder gibt sie an die Automatik zurück.
+   *
+   * `deg === null` heißt: wieder aus Slot, Foto und Seed berechnen. Eine
+   * gesetzte `0` ist etwas anderes – sie stellt das Bild ausdrücklich gerade
+   * und überlebt damit auch einen Seedwechsel.
+   */
+  setSlotRotation(
+    index: number,
+    slotId: string,
+    deg: number | null,
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const slot = spread.slots.find((s) => s.slotId === slotId);
+    if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
+
+    if (deg === null) {
+      delete slot.rotateDeg;
+      return { ok: true };
+    }
+    if (!Number.isFinite(deg)) return { ok: false, error: 'Neigung ist keine Zahl' };
+
+    // Geklemmt statt abgewiesen, und auf ein Zehntelgrad gerundet wie die
+    // Automatik: Ein von Hand übernommener Wert soll dem berechneten exakt
+    // entsprechen und nicht um 0,03° daneben liegen.
+    const begrenzt = Math.min(MAX_TILT_DEG, Math.max(-MAX_TILT_DEG, deg));
+    slot.rotateDeg = Math.round(begrenzt * 10) / 10;
+    return { ok: true };
+  }
+
   /** Hängt ein einzelnes Foto um: Slot zu Slot, in den Pool oder aus ihm. */
   movePhoto(source: MoveSource, target: MoveTarget): MoveResult {
     const result = movePhoto(this.spreads, source, target);
@@ -948,6 +996,11 @@ export class Project {
       photos: this.photos,
       background: this.settings.background,
       ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
+      // Derselbe Seed wie beim Generieren: Ein neu angeordnetes Buch bekommt
+      // damit auch neue Winkel, ein unverändertes behält seine.
+      ...(this.settings.tilt > 0
+        ? { tilt: { maxDeg: this.settings.tilt, seed: this.settings.seed } }
+        : {}),
     });
   }
 

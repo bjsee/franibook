@@ -41,6 +41,28 @@ export function withCrop(spread: RenderedSpread, slotId: string, crop: Crop): Re
 }
 
 /**
+ * Dieselbe Doppelseite mit einer anderen Neigung in einem Slot.
+ *
+ * Das Gegenstück zu `withCrop`, aus demselben Grund: Der Regler soll sofort
+ * zeigen, wie das Bild steht, und der Server erst gefragt werden, wenn der
+ * Wert steht. `undefined` heißt hier wie im Modell „automatisch"; welchen
+ * Winkel die Automatik wählt, weiß nur `renderSpread` – deshalb kommt für
+ * diesen Fall die verbindliche Fassung vom Server.
+ */
+export function withRotation(
+  spread: RenderedSpread,
+  slotId: string,
+  rotateDeg: number,
+): RenderedSpread {
+  return {
+    ...spread,
+    boxes: spread.boxes.map((box) =>
+      box.kind === 'image' && box.slotId === slotId ? { ...box, rotateDeg } : box,
+    ),
+  };
+}
+
+/**
  * Auflösung nach einer Ausschnittsänderung.
  *
  * Die Slotbreite in Millimetern ist unverändert, sichtbar sind aber

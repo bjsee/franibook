@@ -12,6 +12,17 @@ export interface SlotAssignment {
   /** `null` bedeutet: bewusst leer gelassen, nicht "noch nicht befüllt". */
   photoId: PhotoId | null;
   crop: Crop;
+  /**
+   * Von Hand gesetzte Neigung in Grad, im Uhrzeigersinn.
+   *
+   * Fehlt der Wert, bestimmt ihn `render/tilt.ts` aus Slot, Foto und Seed. Der
+   * Unterschied zu einer gesetzten `0` ist deshalb bedeutsam: `undefined`
+   * heißt „automatisch", `0` heißt „ausdrücklich geradestellt". Genau dafür
+   * ist das Feld da – die Automatik wird auf einzelnen Seiten unglücklich, und
+   * dann will man ein Bild geraderücken, ohne den Seed des ganzen Buchs
+   * anzufassen.
+   */
+  rotateDeg?: number;
 }
 
 export interface TextElement {

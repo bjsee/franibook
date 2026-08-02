@@ -268,6 +268,7 @@ interface SlotAssignment {
   slotId: string;                 // Referenz in das Template
   photoId: PhotoId | null;        // null = bewusst leer gelassen
   crop: Crop;
+  rotateDeg?: number;             // von Hand: fehlt = automatisch, 0 = geradestellt
 }
 
 /** Bildausschnitt normiert auf das orientierungskorrigierte Bild. */
@@ -841,6 +842,26 @@ Weiß und die beiden dunklen Töne gehören nicht zur Kapitelpalette: Ein weiße
 
 **Hintergrundbild.** Ein Foto kann die Doppelseite randabfallend füllen (`Spread.backgroundPhotoId`); technisch ist es eine gewöhnliche Bildbox über die ganze Beschnittfläche, als erste der Liste. Die Auflösung reicht dafür aber fast nie: 606 × 306 mm verlangen bei 150 dpi eine lange Kante von 3579 px, bei 240 dpi wie für Motive 5726 px. Am Zielbestand gemessen (820 Fotos, Median 2048 px) erreichen **zwei** Fotos 150 dpi und **keines** 240 dpi. Deshalb prüft `backgroundFit` und das Modell meldet `background-low-dpi`; gesetzt wird das Bild trotzdem, die Entscheidung bleibt beim Benutzer. Sie soll nur vor dem Druck fallen und nicht danach.
 
+### Neigung der Bilder
+
+Ein Raster aus exakt waagerechten Kästen sieht gezeichnet aus, nicht eingeklebt. Jedes Bild bekommt deshalb eine kleine Drehung um seinen eigenen Mittelpunkt — Vorgabe 1,2°, umschaltbar bis 4°, `0` stellt das ganze Buch gerade.
+
+Der Winkel ist **eine reine Funktion aus Slot, Foto und Seed** (`render/tilt.ts`), nicht gewürfelt und nirgends gespeichert. Das hat drei Folgen, die den Entwurf tragen:
+
+- Die Generierung bleibt deterministisch, ohne dass ein weiteres Feld persistiert werden müsste.
+- Ein bestehendes Buch bekommt die Neigung ohne Neuaufbau — sie entsteht erst beim Rendern, wie der Zeitstrahl, und rührt die Fotoverteilung nicht an. Der Regler kostet deshalb keine Handarbeit.
+- Ein Bild behält seinen Winkel, solange es an seinem Platz liegt, und bekommt einen neuen, sobald es umzieht oder das Buch neu angeordnet wird. Zwei getauschte Bilder ständen sonst identisch schief.
+
+Der Betrag liegt zwischen 40 % und 100 % des Höchstwerts. Ohne diese Untergrenze landete ein Teil der Bilder bei 0,1° und stünde zwischen sichtbar geneigten Nachbarn nicht ruhig, sondern schief ausgerichtet.
+
+**`SlotAssignment.rotateDeg` schlägt die Automatik.** Der Unterschied zwischen `undefined` und `0` ist dabei bedeutsam: `undefined` heißt „automatisch", `0` heißt „ausdrücklich geradestellt" und überlebt auch einen Seedwechsel. Genau dafür ist das Feld da — auf einzelnen Seiten fallen die Zufallswinkel unglücklich zusammen, und dann will man ein Bild geraderücken, ohne den Seed des ganzen Buchs anzufassen.
+
+**Randabfallende Bilder werden nie gedreht**, auch nicht von Hand. Sobald ein Bild kippt, das bis an die Beschnittkante reicht, wandert an zwei Ecken der Hintergrund in die Beschnittzone; was im Druck übrig bleibt, sind weiße Zwickel an der Papierkante — kein Effekt, sondern ein Fehler. Verworfen wurde, den Kasten so weit zu vergrößern, dass die Fläche gedeckt bliebe: Das kostete Motiv und Auflösung an genau den Bildern, die großformatig stehen. Geprüft wird die Geometrie und nicht das `bleed`-Flag des Templates — das Flag ist die Absicht, die Lage der Kanten die Wirkung. Dieselbe Funktion (`randabfallend`) beantwortet die Frage in der Engine und in der Oberfläche, damit es die Regel nur einmal gibt.
+
+Im RSM steht die Neigung als `ImageBox.rotateDeg`, in Grad im Uhrzeigersinn um den **Mittelpunkt** der Box — dieselbe Festlegung wie beim Rückentext des Umschlags. Der Drehpunkt ist die Mitte und nicht die obere linke Ecke, weil beide Renderer denselben Punkt treffen müssen: Bei der Mitte genügt dafür in DOM und PDF je eine Transformation (`transform: rotate()` bzw. `doc.rotate(…, { origin })`), bei der Ecke wären es Verschiebung plus Drehung — zwei Gelegenheiten für einen Vorzeichenfehler. Gedreht wird der Kasten samt Inhalt, nie das Foto im Ausschnitt: Der Ausschnitt bleibt unberührt, und die Auflösung ändert sich nicht.
+
+Gemessen kostet die Neigung nichts an Übereinstimmung. Im Parity-Test weichen mit Neigung **0,157 %** der Pixel ab, ohne sie **0,242 %** — die schrägen Kanten sind weichgezeichnet, wo das Millimeterraster der Fixtures sonst harte Ein-Pixel-Versätze erzeugt.
+
 ### Bildquellen
 
 Ein Buch entsteht aus einer **Liste** von Ordnern, nicht aus einem. Der Grundbestand liegt auf dem NAS; was danach dazukommt — ein Kartenexport, ein geteiltes Album, die Bilder aus einer anderen Familie — wird als weitere Quelle aufgenommen, statt in den Bestandsordner kopiert zu werden. Kopieren würde eine zweite Wahrheit auf der Platte erzeugen und die Zusage brechen, dass die Originale ausschließlich gelesen werden.
@@ -890,7 +911,7 @@ Dass die Herkunft danebensteht, ist der eigentliche Zweck: Ein interpoliertes Da
 Zwei Vorgänge, die leicht verwechselt werden und deshalb getrennt sind:
 
 - **Neu einlesen** (`POST /api/import`) liest die Bildquellen erneut und lässt das Buch stehen. Weil die Foto-Kennung der Inhaltshash ist, bleiben unveränderte Dateien dieselben Fotos — auch umbenannt, in einen Unterordner verschoben oder in eine andere Quelle umgezogen. Neue landen im Fotopool, verschwundene werden gemeldet; steht eines noch in einer Doppelseite, bleibt dort der Platz leer (`photo-missing`), statt die Seite umzubauen. `PhotoOverride` bleibt in jedem Fall erhalten.
-- **Neu anordnen** (`POST /api/generate` mit erhöhtem Seed) baut das Buch komplett neu und verwirft jede Handarbeit an den Doppelseiten: manuelle Ausschnitte, verschobene Fotos, Hintergründe, Zeitstrahlausnahmen. `project.handwork()` zählt sie, damit die Oberfläche vorher sagen kann, was verloren geht. Erhalten bleiben Fotos, Korrekturen, Gruppen, Jahresereignisse und die Einstellungen.
+- **Neu anordnen** (`POST /api/generate` mit erhöhtem Seed) baut das Buch komplett neu und verwirft jede Handarbeit an den Doppelseiten: manuelle Ausschnitte, von Hand gesetzte Neigungen, verschobene Fotos, Hintergründe, Zeitstrahlausnahmen. `project.handwork()` zählt sie, damit die Oberfläche vorher sagen kann, was verloren geht. Erhalten bleiben Fotos, Korrekturen, Gruppen, Jahresereignisse und die Einstellungen.
 
 ### Typografie
 

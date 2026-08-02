@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
+import { MAX_TILT_DEG } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
@@ -42,6 +43,8 @@ interface ProjectInfo {
     timeline: boolean;
     background: string;
     chapterColors: boolean;
+    /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
+    tilt: number;
     seed: number;
     birthDate?: string;
   };
@@ -51,7 +54,7 @@ interface ProjectInfo {
   failed: { file: string; reason: string }[];
   report: Report | null;
   /** Was ein Neuanordnen verwerfen würde. */
-  handwork: { crops: number; hintergruende: number; zeitstrahl: number };
+  handwork: { crops: number; neigungen: number; hintergruende: number; zeitstrahl: number };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
   groupMarks: { spreadIndex: number; title: string }[];
   undatedCount: number;
@@ -160,7 +163,7 @@ export function App() {
    * nur neu gezeichnet. Für den Zeitstrahl ist das der Unterschied zwischen
    * einer Linie ein- und ausblenden und dem Verwerfen aller Korrekturen.
    */
-  async function setSetting(patch: { timeline?: boolean }) {
+  async function setSetting(patch: { timeline?: boolean; tilt?: number }) {
     await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -475,6 +478,27 @@ export function App() {
                   Zeitstrahl
                 </label>
                 {/*
+                  Wie der Zeitstrahl eine reine Darstellungssache: Die Neigung
+                  entsteht beim Rendern und rührt die Fotoverteilung nicht an.
+                  Deshalb `setSetting` und nicht `regenerate` – sonst kostete
+                  ein Dreh am Regler jede handgemachte Korrektur im Buch.
+                */}
+                <label style={S.check} title="Wie schief die Bilder auf den Seiten liegen">
+                  Neigung
+                  <input
+                    type="range"
+                    min={0}
+                    max={MAX_TILT_DEG}
+                    step={0.1}
+                    value={info.settings.tilt}
+                    onChange={(e) => void setSetting({ tilt: Number(e.target.value) })}
+                    style={S.regler}
+                  />
+                  <span style={S.reglerWert}>
+                    {info.settings.tilt === 0 ? 'aus' : `${info.settings.tilt.toFixed(1)}°`}
+                  </span>
+                </label>
+                {/*
                   Dreiwertig: „wie Zeitstrahl" ist die Vorgabe und bedeutet das
                   Gegenteil von ihm – trägt der Zeitstrahl den Gruppentitel auf
                   jeder Doppelseite, kostet ein eigener Auftakt nur zwei Seiten,
@@ -507,6 +531,7 @@ export function App() {
                     const h = info.handwork;
                     const verlust = [
                       h.crops > 0 ? `${h.crops} Ausschnitte` : null,
+                      h.neigungen > 0 ? `${h.neigungen} von Hand gesetzte Neigungen` : null,
                       h.hintergruende > 0 ? `${h.hintergruende} Hintergründe` : null,
                       h.zeitstrahl > 0 ? `${h.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
                     ].filter(Boolean);
@@ -525,7 +550,10 @@ export function App() {
                   style={S.button}
                 >
                   Buch neu anordnen
-                  {info.handwork.crops + info.handwork.hintergruende + info.handwork.zeitstrahl >
+                  {info.handwork.crops +
+                    info.handwork.neigungen +
+                    info.handwork.hintergruende +
+                    info.handwork.zeitstrahl >
                     0 && ' ⚠'}
                 </button>
                 <button
@@ -761,6 +789,12 @@ const S = {
     gap: '0.3rem',
     fontSize: '0.8125rem',
     color: '#374151',
+  },
+  regler: { width: '80px' },
+  reglerWert: {
+    fontVariantNumeric: 'tabular-nums' as const,
+    color: '#6b7280',
+    minWidth: '2.4rem',
   },
   note: { fontSize: '0.8125rem', color: '#065f46', fontFamily: 'ui-monospace, monospace' },
   stage: {

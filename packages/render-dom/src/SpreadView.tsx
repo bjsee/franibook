@@ -212,6 +212,10 @@ export function SpreadView({
             style={{
               ...rect(box),
               overflow: 'hidden',
+              // Drehung um den Mittelpunkt – dieselbe Festlegung wie im PDF.
+              // CSS dreht ohne `transform-origin` genau darum, und der Kasten
+              // nimmt das Bild samt Ausschnitt mit.
+              ...(box.rotateDeg ? { transform: `rotate(${box.rotateDeg}deg)` } : {}),
               cursor: selectedSlotId === box.slotId ? 'grab' : onSlotClick ? 'pointer' : undefined,
               // Beim Ziehen des Ausschnitts darf der Browser nicht anfangen,
               // Text zu markieren – sonst reißt die Bewegung ab.
