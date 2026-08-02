@@ -18,12 +18,21 @@ interface Report {
   feasibility: { achievable: boolean; minimumPages: number; maxPerSpread: number; hint?: string };
 }
 
+/**
+ * Antwort auf `/api/spreads/:index`.
+ *
+ * `timelineOverride` gehört nicht zum Rendered Spread Model – es ist die
+ * Entscheidung des Benutzers zu dieser Doppelseite und stellt nur den Schalter.
+ */
+type SpreadResponse = RenderedSpread & { timelineOverride?: boolean | null };
+
 interface ProjectInfo {
   sourceRoot: string;
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
     groupOpeners: boolean;
+    timeline: boolean;
     seed: number;
     birthDate?: string;
   };
@@ -55,7 +64,11 @@ function useImageSrc() {
 
 export function App() {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
-  const [spread, setSpread] = useState<RenderedSpread | null>(null);
+  const [spread, setSpread] = useState<SpreadResponse | null>(null);
+  // Zählt hoch, wenn sich am Rendern etwas ändert, ohne dass das Buch neu
+  // erzeugt wurde. Die Übersicht hält geladene Doppelseiten selbst vor und
+  // wird darüber verworfen.
+  const [renderVersion, setRenderVersion] = useState(0);
   const [index, setIndex] = useState(() => {
     const p = new URLSearchParams(location.search).get('spread');
     return p ? Number(p) : 0;
@@ -76,6 +89,8 @@ export function App() {
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(1200);
 
+  const hatZeitstrahl = spread?.timelineOverride !== false;
+
   const loadInfo = useCallback(() => {
     fetch('/api/project')
       .then((r) => r.json())
@@ -92,7 +107,7 @@ export function App() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(setSpread)
       .catch((e: unknown) => setError(String(e)));
-  }, [index, view, bare]);
+  }, [index, view, bare, renderVersion]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -121,6 +136,35 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [bare, info?.spreadCount, view]);
+
+  /**
+   * Ändert eine Darstellungseinstellung.
+   *
+   * Anders als `regenerate` bleibt die Fotoverteilung unangetastet – es wird
+   * nur neu gezeichnet. Für den Zeitstrahl ist das der Unterschied zwischen
+   * einer Linie ein- und ausblenden und dem Verwerfen aller Korrekturen.
+   */
+  async function setSetting(patch: { timeline?: boolean }) {
+    await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    loadInfo();
+    setSpread(null);
+    setRenderVersion((v) => v + 1);
+  }
+
+  /** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
+  async function setSpreadTimeline(value: boolean | null) {
+    await fetch(`/api/spreads/${index}/timeline`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timeline: value }),
+    });
+    setSpread(null);
+    setRenderVersion((v) => v + 1);
+  }
 
   async function regenerate(patch: Record<string, unknown>) {
     setBusy('Erzeuge Buch neu …');
@@ -252,6 +296,17 @@ export function App() {
                   →
                 </button>
 
+                {info?.settings.timeline && (
+                  <label style={S.check} title="Nur diese Doppelseite">
+                    <input
+                      type="checkbox"
+                      checked={hatZeitstrahl}
+                      onChange={(e) => void setSpreadTimeline(e.target.checked ? null : false)}
+                    />
+                    Zeitstrahl
+                  </label>
+                )}
+
                 {(['trim', 'safety', 'gutter', 'diagnostics'] as const).map((k) => (
                   <label key={k} style={S.check}>
                     <input
@@ -290,6 +345,14 @@ export function App() {
                   />
                   Jahresauftakte
                 </label>
+                <label style={S.check}>
+                  <input
+                    type="checkbox"
+                    checked={info.settings.timeline}
+                    onChange={(e) => void setSetting({ timeline: e.target.checked })}
+                  />
+                  Zeitstrahl
+                </label>
                 <button
                   onClick={() => void regenerate({ seed: info.settings.seed + 1 })}
                   style={S.button}
@@ -315,6 +378,7 @@ export function App() {
           {view === 'overview' && info ? (
             <div style={{ marginTop: '1.5rem' }}>
               <Overview
+                key={renderVersion}
                 spreadCount={info.spreadCount}
                 chapters={info.chapters}
                 imageSrc={imageSrc}

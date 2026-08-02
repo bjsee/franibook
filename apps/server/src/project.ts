@@ -8,6 +8,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   type Chapter,
+  type DateContext,
   type GenerateResult,
   type LayoutDocument,
   type LayoutIssue,
@@ -58,6 +59,8 @@ export interface ProjectSettings {
   groupOpeners: boolean;
   /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
   groupOpenerMinPhotos: number;
+  /** Zeitstrahl am Fuß jeder Doppelseite. */
+  timeline: boolean;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -99,6 +102,9 @@ export class Project {
     // der Gruppe – sichtbar, ohne eine ganze Doppelseite zu verbrauchen.
     groupOpeners: false,
     groupOpenerMinPhotos: 6,
+    // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
+    // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
+    timeline: true,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
@@ -310,6 +316,7 @@ export class Project {
       settings: {
         targetPages: this.settings.targetPages,
         chapterOpeners: this.settings.chapterOpeners,
+        timeline: this.settings.timeline,
       },
       unplaced,
       groups: this.sortedGroups(),
@@ -357,6 +364,7 @@ export class Project {
     if (parsed.settings?.chapterOpeners !== undefined) {
       this.settings.chapterOpeners = parsed.settings.chapterOpeners;
     }
+    if (parsed.settings?.timeline !== undefined) this.settings.timeline = parsed.settings.timeline;
 
     return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
   }
@@ -370,6 +378,7 @@ export class Project {
       profile: this.profile,
       template: requireTemplate(spread.templateId),
       photos: this.photos,
+      ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
     });
   }
 
@@ -377,20 +386,89 @@ export class Project {
     return this.spreads.map((_, i) => this.render(i)).filter((s): s is RenderedSpread => !!s);
   }
 
+  /**
+   * Was der Zeitstrahl über die Doppelseite hinaus braucht.
+   *
+   * Das Ersatzjahr entsteht hier und nicht in der Engine: Nur der Projektstand
+   * kennt die Reihenfolge der Doppelseiten im Buch.
+   */
+  private timelineContext(index: number) {
+    const ctx = this.dateContext();
+    const gruppeVon = new Map<PhotoId, PhotoGroup>();
+    for (const group of this.groups) {
+      if (!group.active) continue;
+      for (const id of group.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, group);
+    }
+
+    const fallbackYear = this.nearestYear(index);
+    return {
+      dateOf: (id: PhotoId) => {
+        const photo = this.photos.get(id);
+        return photo ? resolveEffectiveDate(photo, this.overrides[id], ctx) : undefined;
+      },
+      groupOf: (id: PhotoId) => {
+        const group = gruppeVon.get(id);
+        return group ? { id: group.id, title: group.title } : undefined;
+      },
+      ...(fallbackYear !== undefined ? { fallbackYear } : {}),
+    };
+  }
+
+  /**
+   * Jahr der nächstgelegenen Doppelseite mit belastbarem Datum.
+   *
+   * Trägt eine Doppelseite selbst kein solches Datum, bleibt der Zeitstrahl
+   * damit an der richtigen Stelle stehen, statt zu verschwinden – nur der
+   * Marker entfällt.
+   */
+  private nearestYear(index: number): number | undefined {
+    const ctx = this.dateContext();
+    const jahrVon = (i: number): number | undefined => {
+      const spread = this.spreads[i];
+      if (!spread) return undefined;
+      const daten = spread.slots
+        .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
+        .filter((p): p is Photo => p !== undefined)
+        .map((p) => resolveEffectiveDate(p, this.overrides[p.id], ctx))
+        .filter((e) => e.value && (e.confidence === 'high' || e.confidence === 'medium'))
+        .map((e) => Number(e.value!.slice(0, 4)))
+        .sort((a, b) => a - b);
+      return daten[Math.floor(daten.length / 2)];
+    };
+
+    for (let abstand = 0; abstand < this.spreads.length; abstand++) {
+      const jahr = jahrVon(index - abstand) ?? jahrVon(index + abstand);
+      if (jahr !== undefined) return jahr;
+    }
+    return undefined;
+  }
+
   photo(id: PhotoId): Photo | undefined {
     return this.photos.get(id);
   }
 
-  /** Fotos mit Datumsangabe und Befunden, für Timeline und Problemliste. */
-  photoViews(onlyProblems = false): PhotoView[] {
-    const bulkSeconds = findBulkSeconds([...this.photos.values()]);
-    const ctx = {
+  /**
+   * Kontext der Datumskaskade.
+   *
+   * Bewusst bei jedem Aufruf neu und ohne Zwischenspeicher: Der teure Teil ist
+   * `findBulkSeconds` über alle Fotos – ein einzelner Durchlauf über Zahlen –,
+   * ein Zwischenspeicher bräuchte dagegen eine Ungültigkeitsregel für Import,
+   * Korrekturen und Gruppenänderungen. Genau die Klasse Fehler, die sich später
+   * als veraltetes Datum in der Vorschau zeigt.
+   */
+  private dateContext(): DateContext {
+    return {
       importedAt: this.importedAt.slice(0, 19) as NaiveDateTime,
-      bulkSeconds,
+      bulkSeconds: findBulkSeconds([...this.photos.values()]),
       ...(this.settings.birthDate
         ? { earliestPlausible: `${this.settings.birthDate}T00:00:00` as NaiveDateTime }
         : {}),
     };
+  }
+
+  /** Fotos mit Datumsangabe und Befunden, für Timeline und Problemliste. */
+  photoViews(onlyProblems = false): PhotoView[] {
+    const ctx = this.dateContext();
 
     const views: PhotoView[] = [];
     for (const photo of this.photos.values()) {
