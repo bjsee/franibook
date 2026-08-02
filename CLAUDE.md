@@ -116,6 +116,19 @@ Datum entsteht in `model/date.ts` über eine Kaskade
 `Photo` (Importergebnis) und `PhotoOverride` (Benutzerkorrektur) sind strikt getrennt:
 Ein erneuter Import überschreibt `Photo`, niemals `PhotoOverride`.
 
+### Text und Schrift
+
+Die Buchschrift ist **Franibook Sans** (abgeleitet von Source Sans 3, OFL 1.1), zwei
+Schnitte in `packages/fonts/files/`. Dieselben Dateien werden ins PDF eingebettet
+(`doc.registerFont`) und in der Vorschau per `@font-face` geladen
+(`apps/web/src/fonts.css`) — eine zweite Fassung wäre eine Parity-Abweichung mit
+Ansage. Herkunft und verworfene Alternativen: `packages/fonts/HERKUNFT.md`.
+
+Schnitt, Farbe und Größe kommen aus `core/render/typography.ts`
+(`TEXT_STYLES`, Versalhöhe als Anteil der Kastenhöhe), die Grundlinie aus
+`textBaselineOffsetMm`. Kein Renderer bestimmt Schrift, Größe oder Zeilenlage
+selbst: pdfkit setzt mit `baseline: 'alphabetic'`, die Vorschau als SVG-`<text>`.
+
 ### Server
 
 `apps/server/src/project.ts` hält genau ein Projekt im Speicher (Fotos, Overrides,

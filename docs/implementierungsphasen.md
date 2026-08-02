@@ -410,16 +410,16 @@ Die optionalen Textelemente und die Jahresgliederung.
 > **Stand: angefangen**
 >
 > Jahresauftakte und Gruppentitel erscheinen im Buch und stehen in Vorschau und PDF
-> an derselben Stelle. Sie werden allerdings in der pdfkit-Standardschrift gesetzt
-> und nicht eingebettet, was Saal verlangt —
-> [#5](https://github.com/bjsee/franibook/issues/5). Textstile, Bildunterschriften,
-> Inline-Bearbeitung, `none`/`subtle`/`full` je Jahreswechsel und der Cover-Editor
-> fehlen.
+> an derselben Stelle – seit [#5](https://github.com/bjsee/franibook/issues/5) in
+> der eigenen Schrift Franibook Sans, ins PDF eingebettet, mit den Stilen
+> `yearLarge` und `groupTitle`. Bildunterschriften, Ort und Freitext,
+> Inline-Bearbeitung, `none`/`subtle`/`full` je Jahreswechsel, die
+> Sicherheitsbereichsprüfung und der Cover-Editor fehlen.
 
 **Inhalt**
 
-- Schriftauswahl mit einbettungsfähiger Lizenz, Einbettung ins PDF
-- Textstile: Jahreszahl, Ereignistitel, Bildunterschrift, Ort, Freitext
+- ~~Schriftauswahl mit einbettungsfähiger Lizenz, Einbettung ins PDF~~ ✅
+- Textstile: ✅ Jahreszahl, Ereignistitel — Bildunterschrift, Ort, Freitext fehlen
 - Textslots in Templates, Inline-Bearbeitung in der Vorschau
 - Jahreskapitel: `none` / `subtle` / `full` je Jahreswechsel konfigurierbar
 - Automatische Übernahme von Ereignistiteln und Ortsnamen als Vorschlag
@@ -475,7 +475,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 | 6     | Buch komfortabel korrigierbar                 | teilweise, JSON statt Direktgriff    | 4–5 d |
 | 7     | Persistenz belastbar                          | offen                                | 2–3 d |
 | 8     | **Druckfertiges PDF**                         | teilweise, Innenteil läuft           | 3–4 d |
-| 9     | Texte, Kapitel, Cover                         | angefangen, ohne eigene Schrift      | 3–4 d |
+| 9     | Texte, Kapitel, Cover                         | angefangen, Schrift steht            | 3–4 d |
 | 10    | Politur                                       | offen                                | 3–4 d |
 
 Der in der Anforderung beschriebene MVP ist nach Phase 8 vollständig erfüllt – Phase 9 und 10 sind Ausbau.

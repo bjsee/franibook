@@ -21,6 +21,7 @@ import type {
   RenderWarning,
   RenderedSpread,
 } from './rendered-spread.js';
+import { textFontSizePt, textStyle } from './typography.js';
 
 export interface RenderContext {
   profile: PrintProfile;
@@ -173,16 +174,18 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     const text = byTextSlotId.get(textSlot.id);
     if (!text?.content) continue;
     const rect = toMm(textSlot, profile);
+    const style = textStyle(textSlot.style);
     boxes.push({
       kind: 'text',
       ...rect,
       slotId: textSlot.id,
       content: text.content,
-      // Vorläufig aus der Slothöhe abgeleitet; echte Textstile mit Schriftwahl
-      // und Sicherheitsbereichsprüfung folgen in Phase 9.
-      fontSizePt: (rect.hMm / 25.4) * 72 * 0.7,
+      // Größe, Schnitt und Farbe kommen aus dem Textstil (render/typography.ts);
+      // die Renderer bekommen fertige Werte, keine Regeln.
+      fontSizePt: textFontSizePt(rect.hMm, style),
+      weight: style.weight,
       align: textSlot.align ?? 'left',
-      color: '#000000',
+      color: style.color,
     });
   }
 

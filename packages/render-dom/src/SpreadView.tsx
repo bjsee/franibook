@@ -4,9 +4,24 @@
  * Projiziert ein RenderedSpread auf den Bildschirm. Enthält bewusst keine
  * Layoutlogik – jede Position stammt aus dem Modell, umgerechnet über genau
  * einen Skalierungsfaktor.
+ *
+ * Die Buchschrift muss die Anwendung selbst laden (`apps/web/src/fonts.css`);
+ * eine Komponente hat keinen Ort, an dem sie ein `@font-face` unterbringen
+ * könnte. Fehlt es, zeigt die Vorschau eine Systemschrift – auffällig genug,
+ * und der Parity-Test schlägt an.
  */
 import type { CSSProperties, ReactNode } from 'react';
-import type { Crop, Guide, ImageBox, RenderBox, RenderedSpread } from '@franibook/core';
+import {
+  BOOK_FONT_FAMILY,
+  CSS_FONT_WEIGHT,
+  type Crop,
+  type Guide,
+  type ImageBox,
+  type RenderBox,
+  type RenderedSpread,
+  ptToMm,
+  textBaselineOffsetMm,
+} from '@franibook/core';
 
 export interface GuideVisibility {
   bleed?: boolean;
@@ -190,29 +205,46 @@ export function SpreadView({
           />
         );
 
-      case 'text':
+      /**
+       * Text steckt in einem SVG, weil dort die Grundlinie eine Koordinate ist.
+       *
+       * Vorher war es ein `div` mit `align-items: center` und `line-height: 1`.
+       * Das sieht harmlos aus, verlegt die Entscheidung über die Höhe der Zeile
+       * aber in den Halbdurchschuss der CSS-Zeilenbox – und der leitet sich je
+       * nach Plattform aus hhea oder den OS/2-Typo-Metriken ab. Im SVG steht
+       * schlicht `y = Grundlinie`, genau wie im PDF `baseline: 'alphabetic'`.
+       */
+      case 'text': {
+        // Die Grundlinie kommt aus dem Modell; hier wird sie nur getroffen.
+        const baselineMm = textBaselineOffsetMm(box.hMm, box.fontSizePt);
+        const anchor = box.align === 'center' ? 'middle' : box.align === 'right' ? 'end' : 'start';
+        const xMm = box.align === 'center' ? box.wMm / 2 : box.align === 'right' ? box.wMm : 0;
         return (
-          <div
+          <svg
             key={box.slotId}
-            style={{
-              ...rect(box),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent:
-                box.align === 'center'
-                  ? 'center'
-                  : box.align === 'right'
-                    ? 'flex-end'
-                    : 'flex-start',
-              fontSize: `${(box.fontSizePt / 72) * 25.4 * pxPerMm}px`,
-              color: box.color,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-            }}
+            // Die Größe steht wie bei jeder anderen Box in `rect`; der viewBox
+            // macht daraus Millimeter als Zeichenkoordinaten.
+            viewBox={`0 0 ${box.wMm} ${box.hMm}`}
+            // Ober- und Unterlängen dürfen über den Kasten hinausreichen; ein
+            // SVG beschneidet am viewBox, wenn man es nicht abstellt.
+            style={{ ...rect(box), overflow: 'visible' }}
           >
-            {box.content}
-          </div>
+            <text
+              x={xMm}
+              y={baselineMm}
+              textAnchor={anchor}
+              // Alle vier Werte stammen aus dem RSM. Die Größe steht in Punkt,
+              // im viewBox sind die Einheiten Millimeter.
+              fontFamily={BOOK_FONT_FAMILY}
+              fontWeight={CSS_FONT_WEIGHT[box.weight]}
+              fontSize={ptToMm(box.fontSizePt)}
+              fill={box.color}
+            >
+              {box.content}
+            </text>
+          </svg>
         );
+      }
 
       case 'rect':
         return <div key={`rect-${i}`} style={{ ...rect(box), background: box.fill }} />;
