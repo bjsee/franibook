@@ -1,0 +1,24 @@
+{
+  "id": "spread.4up.grid",
+  "name": "Vier Fotos, ruhiges Raster",
+  "pageSpan": 2,
+  "tags": ["ruhig", "ausgewogen"],
+  "slots": [
+    { "id": "a", "x": 0.0366667, "y": 0.3, "w": 0.2, "h": 0.4, "prominence": 2 },
+    { "id": "b", "x": 0.27, "y": 0.3, "w": 0.2, "h": 0.4, "prominence": 2 },
+    { "id": "c", "x": 0.53, "y": 0.3, "w": 0.2, "h": 0.4, "prominence": 2 },
+    { "id": "d", "x": 0.7633333, "y": 0.3, "w": 0.2, "h": 0.4, "prominence": 2 }
+  ],
+  "textSlots": [
+    {
+      "id": "t-year",
+      "role": "year",
+      "x": 0.0366667,
+      "y": 0.0733333,
+      "w": 0.15,
+      "h": 0.0533333,
+      "style": "yearSubtle",
+      "optional": true
+    }
+  ]
+}

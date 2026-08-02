@@ -41,10 +41,41 @@ Apples Kachelstruktur – `sips` wird Primärpfad statt Rückfallebene.
 .Aufwand
 1–2 Tage
 
-== Phase 1 — Vertikaler Prototyp
+== Phase 1 — Vertikaler Prototyp ✅
 
 .Ziel
 Der in der Anforderung ausdrücklich geforderte Durchstich: Fotos importieren → automatische Doppelseite → im Browser anzeigen → dieselbe Doppelseite als PDF. Mit automatisiertem Nachweis, dass beide übereinstimmen.
+
+[NOTE]
+====
+Abgeschlossen am 2. August 2026. Der Parity-Test ist grün und, was wichtiger
+ist, nachweislich empfindlich: Ein absichtlich eingebauter Versatz von einem
+Millimeter treibt die Abweichung von 0,137 % auf 0,992 %, also um den Faktor
+7,2. Die Schwelle liegt bei 0,5 %.
+
+Gemessene Werte bei 2424 px Vergleichsbreite (rund 102 dpi):
+
+[cols="2,1"]
+!===
+! Fall ! abweichende Pixel
+
+! korrekt, auto-cover ! 0,137 %
+! korrekt, manuelle Ausschnitte ! 0,352 %
+! 1 mm Versatz im PDF ! 0,992 %
+!===
+
+Der zweite Fall ist der eigentlich aussagekräftige: Bei zentrierten
+Ausschnitten liefern eine korrekte Ausschnittsberechnung und der naive Weg
+über `object-position: center` zufällig dasselbe Ergebnis. Erst verschobene
+Ausschnitte trennen beide – und genau diese Fehlerklasse rechtfertigt den
+Test.
+
+Das verbleibende Rauschen sitzt ausschließlich auf Kanten, geprüft im
+Differenzbild. Ein echter Versatz erzeugt dort doppelte, parallel versetzte
+Gitterlinien; die sind nicht vorhanden.
+
+Ausführen: `pnpm test:parity`. Playwright startet Server und Vite selbst.
+====
 
 .Inhalt
 * Minimales Datenmodell: `Photo`, `Spread`, `SlotAssignment`, `Crop`
@@ -262,7 +293,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 | Phase | Ergebnis | Aufwand | Risiko
 
 | 0 ✅ | Gerüst, Umgebungsannahmen geprüft | erledigt | —
-| 1 | *Vertikaler Durchstich mit Parity-Nachweis* | 3–4 d | hoch
+| 1 ✅ | *Vertikaler Durchstich mit Parity-Nachweis* | erledigt | —
 | 2 | 900 Fotos belastbar importiert | 4–5 d | mittel
 | 3 | Chronologie korrigierbar | 5–6 d | mittel
 | 4 | Ereignisse erkannt und editierbar | 4–5 d | mittel
