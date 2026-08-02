@@ -51,6 +51,8 @@ app.get('/api/project', async () => ({
   sourceRoot: project.sourceRoot,
   profile: project.profile,
   settings: project.settings,
+  // Was ein Neugenerieren verwerfen würde – die Oberfläche schreibt es an den Knopf.
+  handwork: project.handwork(),
   photoCount: project.photos.size,
   spreadCount: project.spreads.length,
   skippedVideos: project.skippedVideos,
@@ -266,6 +268,22 @@ app.put<{ Params: { year: string }; Body: { events: string[] } }>(
 );
 
 app.get('/api/chapters/events', async () => ({ yearEvents: project.yearEvents }));
+
+/**
+ * Liest den Quellordner erneut ein.
+ *
+ * Das Buch bleibt stehen. Neue Fotos landen im Fotopool, verschwundene werden
+ * gemeldet – auch solche, die noch in einer Doppelseite stehen.
+ */
+app.post<{ Body?: { limit?: number } }>('/api/import', async (req) => {
+  const ergebnis = await project.reimport(req.body?.limit ?? IMPORT_LIMIT);
+  await project.save();
+  return {
+    ...ergebnis,
+    photoCount: project.photos.size,
+    handwork: project.handwork(),
+  };
+});
 
 /** Wählbare Hintergrundfarben und die Fotos, die als Hintergrund taugen. */
 app.get('/api/background', async () => ({

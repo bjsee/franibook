@@ -47,6 +47,8 @@ interface ProjectInfo {
   skippedVideos: string[];
   failed: { file: string; reason: string }[];
   report: Report | null;
+  /** Was ein Neuanordnen verwerfen würde. */
+  handwork: { crops: number; hintergruende: number; zeitstrahl: number };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
   groupMarks: { spreadIndex: number; title: string }[];
   undatedCount: number;
@@ -164,6 +166,46 @@ export function App() {
     loadInfo();
     setSpread(null);
     setRenderVersion((v) => v + 1);
+  }
+
+  /**
+   * Liest den Quellordner erneut ein.
+   *
+   * Das Buch bleibt stehen – neue Fotos stehen danach im Fotopool. Ein
+   * Neuanordnen ist ausdrücklich nicht Teil davon.
+   */
+  async function reimport() {
+    setBusy('Lese Bilder neu ein …');
+    setNote(null);
+    try {
+      const res = await fetch('/api/import', { method: 'POST' });
+      const d = (await res.json()) as {
+        neu: string[];
+        verschwunden: string[];
+        unveraendert: number;
+        imBuchVerschwunden: string[];
+        photoCount: number;
+      };
+      loadInfo();
+      setSpread(null);
+      setRenderVersion((v) => v + 1);
+      const teile = [
+        `${d.photoCount} Fotos`,
+        `${d.neu.length} neu`,
+        `${d.unveraendert} unverändert`,
+      ];
+      if (d.verschwunden.length > 0) teile.push(`${d.verschwunden.length} verschwunden`);
+      if (d.imBuchVerschwunden.length > 0) {
+        teile.push(
+          `davon ${d.imBuchVerschwunden.length} noch im Buch – dort bleibt der Platz leer`,
+        );
+      }
+      setNote(teile.join(', '));
+    } catch (e: unknown) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
@@ -413,11 +455,44 @@ export function App() {
                     <option value="false">nie</option>
                   </select>
                 </label>
+                {/*
+                  Der Knopf hieß „Anders anordnen", was zu harmlos klang: Er baut
+                  das ganze Buch neu und verwirft dabei jede Handarbeit an den
+                  Doppelseiten. Was verloren geht, steht jetzt daneben.
+                */}
                 <button
-                  onClick={() => void regenerate({ seed: info.settings.seed + 1 })}
+                  onClick={() => {
+                    const h = info.handwork;
+                    const verlust = [
+                      h.crops > 0 ? `${h.crops} Ausschnitte` : null,
+                      h.hintergruende > 0 ? `${h.hintergruende} Hintergründe` : null,
+                      h.zeitstrahl > 0 ? `${h.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
+                    ].filter(Boolean);
+                    if (
+                      verlust.length > 0 &&
+                      !window.confirm(
+                        `Das Buch wird komplett neu gebaut. Verworfen werden: ${verlust.join(', ')}.\n\n` +
+                          'Fotos, Datumskorrekturen, Gruppen und Jahresereignisse bleiben erhalten.',
+                      )
+                    ) {
+                      return;
+                    }
+                    void regenerate({ seed: info.settings.seed + 1 });
+                  }}
+                  title="Baut das Buch neu und wählt andere Vorlagen. Bilder werden nicht neu eingelesen."
                   style={S.button}
                 >
-                  Anders anordnen
+                  Buch neu anordnen
+                  {info.handwork.crops + info.handwork.hintergruende + info.handwork.zeitstrahl >
+                    0 && ' ⚠'}
+                </button>
+                <button
+                  onClick={() => void reimport()}
+                  disabled={!!busy}
+                  title="Liest den Quellordner erneut ein. Das Buch bleibt stehen, neue Fotos landen im Fotopool."
+                  style={S.button}
+                >
+                  Bilder neu einlesen
                 </button>
               </>
             )}
