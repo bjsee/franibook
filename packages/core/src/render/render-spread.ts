@@ -205,7 +205,10 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     // selbst bestimmen – CSS `line-height` gegen pdfkit `lineGap` –, und genau
     // das wäre eine Layoutentscheidung im Renderer, die der Parity-Test
     // aufdecken soll. Der Zeilenabstand steckt deshalb in der Geometrie.
-    const zeilenHoeheMm = zeilen.length > 1 ? rect.hMm / zeilen.length : rect.hMm;
+    // Die Zeilenhöhe folgt der Absicht des Templates, nicht der Zahl der
+    // gesetzten Zeilen: Drei Ereignisse sollen so groß stehen wie fünf.
+    const zeilenZahl = Math.max(textSlot.lines ?? zeilen.length, zeilen.length, 1);
+    const zeilenHoeheMm = zeilenZahl > 1 ? rect.hMm / zeilenZahl : rect.hMm;
     // Größe, Schnitt und Farbe kommen aus dem Textstil (render/typography.ts);
     // die Renderer bekommen fertige Werte, keine Regeln.
     const fontSizePt = textFontSizePt(zeilenHoeheMm, style);

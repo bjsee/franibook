@@ -51,6 +51,14 @@ export interface TemplateTextSlot {
   optional: boolean;
   /** Ausrichtung im Textfeld. Ohne Angabe linksbündig. */
   align?: 'left' | 'center' | 'right';
+  /**
+   * Für wie viele Zeilen dieser Platz gedacht ist.
+   *
+   * Bestimmt die Zeilenhöhe und damit die Schriftgröße. Ohne die Angabe hinge
+   * beides an der Zahl der tatsächlich gesetzten Zeilen: Drei Jahresereignisse
+   * stünden dann viel größer da als fünf, obwohl derselbe Platz gemeint ist.
+   */
+  lines?: number;
 }
 
 export interface Template {

@@ -778,7 +778,12 @@ Geschaltet wird über `settings.timeline` (Vorgabe an) und `Spread.timeline` fü
 
 Zwei Arten, unterschiedlich geregelt:
 
-- **Jahresauftakt** (`settings.chapterOpeners`, Vorgabe an) gliedert das Buch in Kapitel und trägt neben der Jahreszahl drei bis fünf **Jahresereignisse** – weltpolitisch, sportlich, kulturell. Sie werden von Hand gepflegt (`PUT /api/chapters/:year/events`, im Layout-Dokument unter `yearEvents`) und ordnen die privaten Fotos in ihre Zeit ein. Bewusst Daten und keine Abfrage: Ein Wikipedia-Abruf beim Erzeugen wäre netzabhängig und bräche den Determinismus, ein von einem Sprachmodell erfundenes Datum stünde gedruckt im Buch. Vorschlagswerkzeuge können darüber liegen; gespeichert wird nur Bestätigtes.
+- **Jahresauftakt** (`settings.chapterOpeners`, Vorgabe an) gliedert das Buch in Kapitel und trägt **kein Foto**: links die Jahreszahl, rechts drei bis fünf **Jahresereignisse** – weltpolitisch, sportlich, kulturell. Sie werden von Hand gepflegt (`PUT /api/chapters/:year/events`, im Layout-Dokument unter `yearEvents`) und ordnen die privaten Fotos in ihre Zeit ein. Bewusst Daten und keine Abfrage: Ein Wikipedia-Abruf beim Erzeugen wäre netzabhängig und bräche den Determinismus, ein von einem Sprachmodell erfundenes Datum stünde gedruckt im Buch. Vorschlagswerkzeuge können darüber liegen; gespeichert wird nur Bestätigtes.
+
+  Das große Foto, das die Auftaktseite früher zeigte, ist bewusst entfallen: Es fügte dem Jahr nichts hinzu, was die folgenden Doppelseiten nicht besser zeigen, und kostete jedes Jahr ein Bild aus dem Fluss — bei neunzehn Jahrgängen also neunzehn Fotos. Die Vorlage mit Bildplatz bleibt in der Bibliothek, damit gespeicherte Projekte weiter rendern; gewählt wird sie nicht mehr.
+
+  Wie groß die Ereigniszeilen stehen, bestimmt nicht ihre Anzahl, sondern das Feld `lines` des Textplatzes: Drei Ereignisse sollen so groß gesetzt sein wie fünf.
+
 - **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
 ### Typografie

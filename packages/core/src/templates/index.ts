@@ -32,6 +32,7 @@ interface RawTextSlot {
   style: string;
   optional: boolean;
   align?: string;
+  lines?: number;
 }
 
 interface RawTemplate {
@@ -76,6 +77,7 @@ function normalize(raw: RawTemplate): Template {
             style: t.style,
             optional: t.optional,
             ...(t.align ? { align: t.align as 'left' | 'center' | 'right' } : {}),
+            ...(t.lines !== undefined ? { lines: t.lines } : {}),
           })),
         }
       : {}),
