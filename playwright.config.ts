@@ -42,9 +42,12 @@ export default defineConfig({
         // Eigener Projektstand, sonst schreibt der Testserver in denselben
         // Ordner wie der echte Betrieb und ersetzt 820 importierte Fotos samt
         // bestätigten Gruppen durch die vier Fixtures.
+        //
+        // Und bei jedem Lauf neu importieren: Seit der Ausschnitt-Editor jede
+        // Änderung speichert, hinterlässt der Fall mit manuellen Ausschnitten
+        // sonst einen Stand, den der nächste Lauf einliest – der Hauptfall
+        // würde dann verschobene statt automatischer Ausschnitte vergleichen.
         FRANIBOOK_PROJECT: PROJECT,
-        // Immer frisch importieren: Der Test soll die Fixtures messen, nicht
-        // einen Stand von vorgestern.
         FRANIBOOK_FRESH: '1',
         PORT: '5174',
       },

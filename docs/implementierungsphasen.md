@@ -308,16 +308,25 @@ Den Entwurf komfortabel korrigieren können.
 > Jahr und Gruppenmarke, schaltbare Hilfslinien, Diagnose-Layer mit DPI je Bild,
 > Buchübersicht als Kachelraster.
 >
-> An die Stelle der geplanten Direktmanipulation ist ein **Layout-Editor über
-> JSON** getreten: Die Buchaufteilung lässt sich herunterladen, bearbeiten und
-> zurückspielen (`GET`/`POST /api/book/layout`), Fotos werden über den Dateinamen
-> referenziert. Für großflächige Umbauten ist das der schnellere Weg, für einzelne
-> Griffe der umständlichere.
+> Für großflächige Umbauten gibt es zusätzlich einen **Layout-Editor über JSON**:
+> Die Buchaufteilung lässt sich herunterladen, bearbeiten und zurückspielen
+> (`GET`/`POST /api/book/layout`), Fotos werden über den Dateinamen referenziert.
+> Er bleibt der schnellere Weg, wenn viel umzuhängen ist.
 >
-> Offen: Drag-and-drop zwischen Slots und Fotopool
-> ([#9](https://github.com/bjsee/franibook/issues/9)), Crop-Editor
-> ([#8](https://github.com/bjsee/franibook/issues/8)), Layoutwechsel über eine
-> Kandidatenliste, „anders generieren", Gewichtung setzen, Doppelseite sperren.
+> Für einzelne Griffe gibt es seit [#8](https://github.com/bjsee/franibook/issues/8)
+> und [#9](https://github.com/bjsee/franibook/issues/9) die Direktmanipulation in
+> der Doppelseitenansicht: Slot anklicken und den Ausschnitt ziehen, zoomen, mit
+> Pfeiltasten justieren oder auf automatisch zurücksetzen; Fotos per
+> Drag-and-drop von Slot zu Slot tauschen; ausklappbarer Fotopool für alles, was
+> nicht im Buch liegt. Die Auflösung steht dabei immer daneben — beim Ziehen je
+> Zielslot, beim Zuschneiden laufend, und die Kennzahlen der Kopfzeile werden nach
+> jeder Änderung nachgezogen.
+>
+> Umgesetzt ist das ohne dnd-kit und ohne Undo; die Gründe stehen in
+> [Zustandsverwaltung, Undo und Drag-and-drop](konzept.md#zustandsverwaltung-undo-und-drag-and-drop).
+>
+> Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste, „anders
+> generieren", Gewichtung setzen, Doppelseite sperren, Undo/Redo.
 
 **Inhalt**
 

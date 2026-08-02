@@ -54,9 +54,9 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  * Gemessen bei 2424 px Vergleichsbreite, indem ein Versatz von 1 mm im
  * PDF-Renderer absichtlich eingebaut und wieder entfernt wurde:
  *
- *   korrekt, auto-cover:      0,242 %      mit 1 mm Versatz: 1,066 %
- *   korrekt, manuelle Crops:  0,324 %      mit 1 mm Versatz: 1,341 %
- *   korrekt, mit Zeitstrahl:  0,303 %      mit 1 mm Versatz: 1,127 %
+ *   korrekt, auto-cover:      MESSWERT     mit 1 mm Versatz: MESSWERT
+ *   korrekt, manuelle Crops:  MESSWERT     mit 1 mm Versatz: MESSWERT
+ *   korrekt, mit Zeitstrahl:  MESSWERT     mit 1 mm Versatz: MESSWERT
  *
  * Die korrekten Werte lagen früher bei 0,137 % und 0,352 %. Der Anstieg im
  * ersten Fall kommt nicht von der Geometrie, sondern vom Encoder: Seit der
@@ -65,9 +65,9 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  * verbleibende Rauschen sitzt ausschließlich dort, nachgeprüft im Differenzbild.
  *
  * Die Schwelle liegt zwischen dem ungünstigsten korrekten Fall und dem
- * Fehlerfall: 54 % Puffer nach oben, Faktor 2,1 nach unten. Sie anzuheben, weil
- * ein neuer Fall knapp darüber liegt, würde genau die Empfindlichkeit aufgeben,
- * die den Test wertvoll macht – dann lieber die Ursache suchen.
+ * Fehlerfall. Sie anzuheben, weil ein neuer Fall knapp darüber liegt, würde
+ * genau die Empfindlichkeit aufgeben, die den Test wertvoll macht – dann lieber
+ * die Ursache suchen.
  */
 const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
 
@@ -136,6 +136,15 @@ test.beforeAll(async ({ playwright }) => {
   await rm(ARTIFACTS, { recursive: true, force: true });
   await mkdir(ARTIFACTS, { recursive: true });
 
+  // Ausgangslage ausdrücklich herstellen: vier Fotos auf genau einer
+  // Doppelseite im Raster `spread.4up.grid`, auf das dieser Test gebaut ist.
+  //
+  // Vorher hing das am Zufall. Ein Kaltstart verteilt vier Fotos bei 160
+  // Zielseiten auf vier Doppelseiten – der Test kam nur durch, weil er ein
+  // gespeichertes Projekt aus einem früheren Lauf vorfand. Seit der
+  // Ausschnitt-Editor jede Änderung speichert, wäre dieser Stand ohnehin nicht
+  // mehr verlässlich (siehe FRANIBOOK_FRESH in playwright.config.ts).
+  //
   // `request` ist an einen Test gebunden und in beforeAll nicht verfügbar.
   const request = await playwright.request.newContext();
   await eineDoppelseite(request);
@@ -226,6 +235,29 @@ test.describe('Vorschau und PDF stimmen überein', () => {
       `Vorschau und PDF weichen um ${(ratio * 100).toFixed(2)} % ab. ` +
         `Vergleichsbilder in ${ARTIFACTS}`,
     ).toBeLessThan(MAX_DIFF_RATIO);
+  });
+
+  /**
+   * Die Bearbeitung darf die nackte Vorschau nicht anfassen.
+   *
+   * Ausschnitt-Editor und Drag-and-drop hängen an Ereignissen, die `?bare`
+   * nicht setzt. Bekäme die Vorschau sie doch – etwa weil jemand die
+   * Interaktion in `SpreadView` verdrahtet statt sie hineinzugeben –, würde der
+   * Vergleich Bedienelemente gegen PDF messen. Das fällt in den
+   * Pixelvergleichen erst auf, wenn etwas sichtbar wird; hier fällt es sofort
+   * auf.
+   */
+  test('die nackte Vorschau trägt keine Bedienelemente', async ({ page }) => {
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    await expect(page.getByTestId('spread')).toBeVisible();
+
+    // Keine Werkzeugleiste, kein Fotopool
+    expect(await page.locator('button').count()).toBe(0);
+
+    // Und kein Slot ist ziehbar: Ohne `slotDrag` setzt die Vorschau das Attribut
+    // nicht, der Screenshot bleibt frei von Ziehbildern des Browsers.
+    const ziehbar = await page.locator('[data-testid^="slot-"][draggable="true"]').count();
+    expect(ziehbar).toBe(0);
   });
 
   /**

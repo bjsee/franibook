@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coverCrop, cropLoss, cropToPixels, panCrop } from './crop.js';
+import { MIN_CROP_EDGE, coverCrop, cropLoss, cropToPixels, panCrop, zoomCrop } from './crop.js';
 
 describe('coverCrop', () => {
   it('lässt ein passendes Bild unbeschnitten', () => {
@@ -113,5 +113,52 @@ describe('panCrop', () => {
     const c = panCrop({ x: 0.4, y: 0, w: 0.5, h: 1, mode: 'manual' }, 0.5, 0);
     expect(c.x).toBeCloseTo(0.5, 10);
     expect(c.w).toBe(0.5);
+  });
+});
+
+describe('zoomCrop', () => {
+  it('zoomt um die Mitte hinein', () => {
+    const c = zoomCrop({ x: 0.25, y: 0.25, w: 0.5, h: 0.5, mode: 'auto-cover' }, 0.5);
+    expect(c.w).toBeCloseTo(0.25, 10);
+    expect(c.h).toBeCloseTo(0.25, 10);
+    // Mittelpunkt bleibt bei 0,5 / 0,5
+    expect(c.x + c.w / 2).toBeCloseTo(0.5, 10);
+    expect(c.y + c.h / 2).toBeCloseTo(0.5, 10);
+    expect(c.mode).toBe('manual');
+  });
+
+  it('behält beim Zoomen das Seitenverhältnis des Ausschnitts', () => {
+    // Der eigentliche Zweck: der Ausschnitt muss weiter genau in den Slot
+    // passen, sonst verzerrt eines der beiden Rendering-Ziele.
+    const vorher = { x: 0.1, y: 0.2, w: 0.6, h: 0.3, mode: 'manual' as const };
+    const nachher = zoomCrop(vorher, 1.3);
+    expect(nachher.w / nachher.h).toBeCloseTo(vorher.w / vorher.h, 10);
+  });
+
+  it('zoomt höchstens bis zum vollen Bild heraus', () => {
+    const c = zoomCrop({ x: 0.2, y: 0, w: 0.5, h: 1, mode: 'manual' }, 4);
+    expect(c.w).toBeCloseTo(0.5, 10); // Höhe war schon voll, also kein Spielraum
+    expect(c.h).toBe(1);
+  });
+
+  it('zoomt nicht unter die kleinste zulässige Kante hinein', () => {
+    const c = zoomCrop({ x: 0.4, y: 0.4, w: 0.2, h: 0.1, mode: 'manual' }, 0.01);
+    expect(Math.min(c.w, c.h)).toBeCloseTo(MIN_CROP_EDGE, 10);
+  });
+
+  it('bleibt bei jedem Faktor innerhalb des Bildes', () => {
+    for (const f of [0.1, 0.5, 0.9, 1, 1.1, 2, 10]) {
+      const c = zoomCrop({ x: 0.6, y: 0.05, w: 0.35, h: 0.7, mode: 'manual' }, f);
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+      expect(c.x + c.w).toBeLessThanOrEqual(1.0000001);
+      expect(c.y + c.h).toBeLessThanOrEqual(1.0000001);
+    }
+  });
+
+  it('lässt unsinnige Faktoren unbeachtet', () => {
+    const vorher = { x: 0.1, y: 0.1, w: 0.5, h: 0.5, mode: 'manual' as const };
+    expect(zoomCrop(vorher, 0)).toBe(vorher);
+    expect(zoomCrop(vorher, NaN)).toBe(vorher);
   });
 });

@@ -166,13 +166,20 @@ Grenze von 16). Primärpfad ist deshalb macOS `sips`. Details in
 screenshottet eine Doppelseite (`?bare&original=1`), exportiert denselben Spread als
 PDF, rastert ihn mit `pdftoppm` und vergleicht mit `pixelmatch`.
 
-Die Schwellen sind gemessen, nicht geraten: korrekt 0,137 %, mit manuellen Crops
-0,352 %, bei 1 mm eingebautem Versatz 0,992 % — Schwelle 0,5 %. Wer sie anfasst, hebt
-die Empfindlichkeit auf, die den Test überhaupt wertvoll macht. Überschreibbar über
-`PARITY_WIDTH`, `PARITY_THRESHOLD`, `PARITY_MAX_DIFF`.
+Die Schwellen sind gemessen, nicht geraten: korrekt 0,222 %, mit manuellen Crops
+0,425 %, bei 1 mm eingebautem Versatz 1,018 % bzw. 1,388 % — Schwelle 0,5 %. Wer sie
+anfasst, hebt die Empfindlichkeit auf, die den Test überhaupt wertvoll macht.
+Überschreibbar über `PARITY_WIDTH`, `PARITY_THRESHOLD`, `PARITY_MAX_DIFF`.
 
 Verglichen wird gegen die Originale (`/api/photos/:id/original`), nicht gegen die
 WebP-Vorschauen — sonst misst der Test Kompression statt Geometrie.
+
+Die Ausgangslage stellt der Test selbst her: eigenes Projektverzeichnis,
+`FRANIBOOK_FRESH` und ein `POST /api/generate` mit `targetPages: 2` ohne
+Jahresauftakte ergeben reproduzierbar die eine Doppelseite mit den Slots `a` bis
+`d`. Vorher hing das an einem gespeicherten Projekt aus einem früheren Lauf —
+seit der Ausschnitt-Editor jede Änderung speichert, wäre das keine Grundlage
+mehr.
 
 Jede Änderung an Templates, Geometrie oder einem der beiden Renderer gehört mit
 `pnpm test:parity` abgesichert.

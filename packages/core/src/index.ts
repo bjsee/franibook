@@ -26,11 +26,14 @@ export * from './layout/grouping.js';
 export * from './layout/generate.js';
 export * from './layout/document.js';
 export * from './layout/rebuild.js';
+export * from './layout/move.js';
+export * from './layout/stats.js';
 
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
 export * from './render/timeline.js';
 export * from './render/typography.js';
+export * from './render/inspect.js';
 
 export * from './cover/cover.js';
 export * from './cover/geometry.js';
