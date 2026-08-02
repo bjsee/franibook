@@ -172,7 +172,9 @@ async function main() {
   console.log(
     `${PAGES} Seiten à ${IMAGES_PER_PAGE} Bilder = ${PAGES * IMAGES_PER_PAGE} Einbettungen`,
   );
-  console.log(`Seitenformat ${PAGE_MM}×${PAGE_MM} mm (${TRIM_MM} mm Endformat + ${BLEED_MM} mm Beschnitt)`);
+  console.log(
+    `Seitenformat ${PAGE_MM}×${PAGE_MM} mm (${TRIM_MM} mm Endformat + ${BLEED_MM} mm Beschnitt)`,
+  );
   console.log(`Zielauflösung ${DPI} dpi, JPEG-Qualität ${JPEG_QUALITY}`);
   console.log(`Quellbilder: ${srcs.length} × 6000×4000`);
 
@@ -184,7 +186,9 @@ async function main() {
   );
 
   console.log('\n=== Vergleich ===');
-  console.log(`  Speicher:  pdfkit ${kit.peakMb.toFixed(0)} MB vs. pdf-lib ${lib.peakMb.toFixed(0)} MB`);
+  console.log(
+    `  Speicher:  pdfkit ${kit.peakMb.toFixed(0)} MB vs. pdf-lib ${lib.peakMb.toFixed(0)} MB`,
+  );
   console.log(`  Laufzeit:  pdfkit ${fmtMs(kit.ms)} vs. pdf-lib ${fmtMs(lib.ms)}`);
   console.log(`  Größe:     pdfkit ${fmtMb(kit.size)} vs. pdf-lib ${fmtMb(lib.size)}`);
 

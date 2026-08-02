@@ -52,8 +52,8 @@ async function noiseJpeg(width: number, height: number, seed: number, quality: n
 /** Streut die Aufnahmedaten über 2008–2026, wie im echten Bestand. */
 function exifDate(seed: number): string {
   const year = 2008 + (seed % 19);
-  const month = 1 + (seed * 7) % 12;
-  const day = 1 + (seed * 13) % 28;
+  const month = 1 + ((seed * 7) % 12);
+  const day = 1 + ((seed * 13) % 28);
   const hour = (seed * 5) % 24;
   const minute = (seed * 11) % 60;
   const p = (n: number) => String(n).padStart(2, '0');

@@ -133,7 +133,9 @@ async function main() {
   ]);
   const [hW, hH, hOrient] = heicTags.stdout.trim().split('\n');
   console.log(`  HEIC:  ${hW}×${hH}, Orientation ${hOrient ?? '—'}`);
-  console.log(`  JPEG:  ${jpgMeta.width}×${jpgMeta.height}, Orientation ${jpgMeta.orientation ?? '—'}`);
+  console.log(
+    `  JPEG:  ${jpgMeta.width}×${jpgMeta.height}, Orientation ${jpgMeta.orientation ?? '—'}`,
+  );
   console.log(`  Maße erhalten: ${jpgMeta.width === Number(hW) && jpgMeta.height === Number(hH)}`);
   console.log(`  EXIF im Konvertat: ${jpgTags.stdout.trim().split('\n').join(' | ') || '—'}`);
 }
