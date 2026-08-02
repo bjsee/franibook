@@ -702,6 +702,91 @@
       ]
     },
     {
+      "id": "spread.chapter.6up",
+      "name": "Jahresauftakt, links das Jahr, rechts sechs Bilder",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 316,
+          "y": 46,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 405,
+          "y": 46,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 494,
+          "y": 46,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 316,
+          "y": 162,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 405,
+          "y": 162,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 494,
+          "y": 162,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
       "id": "spread.chapter.2up",
       "name": "Jahresauftakt, links das Jahr, rechts zwei Bilder",
       "tags": ["kapitel", "auftakt"],
@@ -716,7 +801,15 @@
           "prominence": 3,
           "prefers": "portrait"
         },
-        { "id": "b", "x": 449, "y": 66, "w": 121, "h": 161, "prominence": 3, "prefers": "portrait" }
+        {
+          "id": "b",
+          "x": 449,
+          "y": 66,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        }
       ],
       "textSlots": [
         {
@@ -748,9 +841,33 @@
       "tags": ["kapitel", "auftakt"],
       "chapterOnly": true,
       "slots": [
-        { "id": "a", "x": 316, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" },
-        { "id": "b", "x": 405, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" },
-        { "id": "c", "x": 494, "y": 90, "w": 84, "h": 112, "prominence": 2, "prefers": "portrait" }
+        {
+          "id": "a",
+          "x": 316,
+          "y": 90,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 405,
+          "y": 90,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 494,
+          "y": 90,
+          "w": 84,
+          "h": 112,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
       ],
       "textSlots": [
         {
@@ -939,9 +1056,9 @@
         {
           "id": "t-year",
           "role": "year",
-          "x": 45,
-          "y": 100,
-          "w": 220,
+          "x": 22,
+          "y": 44,
+          "w": 200,
           "h": 54,
           "style": "yearLarge",
           "optional": false
@@ -949,9 +1066,9 @@
         {
           "id": "t-events",
           "role": "freeText",
-          "x": 330,
-          "y": 106,
-          "w": 225,
+          "x": 22,
+          "y": 110,
+          "w": 250,
           "h": 32,
           "style": "body",
           "optional": true,
