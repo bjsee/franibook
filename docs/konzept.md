@@ -824,6 +824,27 @@ Zwei Arten, unterschiedlich geregelt:
 
 - **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
+### Seitenhintergrund
+
+Weiß ist die sichere Vorgabe und über achtzig Doppelseiten hinweg leer. Wählbar sind neun gedeckte Töne (`render/background.ts`) — global über `settings.background`, abweichend je Doppelseite über `Spread.background`.
+
+Bewusst eine Palette und kein Farbwähler: Ein kräftiger Ton hinter Fotos ist in einem Fotobuch fast immer ein Fehler, und eine Palette macht ihn unmöglich, statt ihn zu erlauben und dann zu bereuen.
+
+**Farbe je Jahrgang.** Beim Erzeugen bekommt jeder Jahrgang einen Ton, der am Jahreswechsel wechselt; benachbarte Jahre sind nie gleich. Die Kapitelgrenze wird damit sichtbar, ohne dass man die Jahreszahl liest. Die Folge läuft mit einer zur Palettengröße teilerfremden Schrittweite durch alle sechs Kapitelfarben, bevor sich eine wiederholt; `settings.seed` verschiebt den Anfang, sodass „Buch neu anordnen" auch farblich etwas ändert und dasselbe Buch zweimal dieselben Farben bekommt (Regel 4). Verworfen: Zufall je Doppelseite — über achtzig Doppelseiten wirkt er beliebig, und ein harter Farbsprung zwischen linker und rechter Seite fällt auf.
+
+Weiß und die beiden dunklen Töne gehören nicht zur Kapitelpalette: Ein weißer Jahrgang zwischen farbigen sieht nach Versehen aus, und über einen ganzen Jahrgang getragen kippt Anthrazit von ruhig nach Trauerband. Für die Handauswahl je Doppelseite stehen alle neun bereit.
+
+**Textfarbe.** Sobald der Hintergrund dunkel ist, entscheidet der Kern über die Schriftfarbe (`textColorOn`): Auf Anthrazit stünde die Jahreszahl sonst schwarz auf dunkelgrau. Gewichtet wird nach WCAG-Luminanz — ein Mittelwert der Kanäle würde Salbei und Anthrazit gleich behandeln. Der Zeitstrahl folgt derselben Regel.
+
+**Hintergrundbild.** Ein Foto kann die Doppelseite randabfallend füllen (`Spread.backgroundPhotoId`); technisch ist es eine gewöhnliche Bildbox über die ganze Beschnittfläche, als erste der Liste. Die Auflösung reicht dafür aber fast nie: 606 × 306 mm verlangen bei 150 dpi eine lange Kante von 3579 px, bei 240 dpi wie für Motive 5726 px. Am Zielbestand gemessen (820 Fotos, Median 2048 px) erreichen **zwei** Fotos 150 dpi und **keines** 240 dpi. Deshalb prüft `backgroundFit` und das Modell meldet `background-low-dpi`; gesetzt wird das Bild trotzdem, die Entscheidung bleibt beim Benutzer. Sie soll nur vor dem Druck fallen und nicht danach.
+
+### Neu einlesen und neu anordnen
+
+Zwei Vorgänge, die leicht verwechselt werden und deshalb getrennt sind:
+
+- **Neu einlesen** (`POST /api/import`) liest den Quellordner erneut und lässt das Buch stehen. Weil die Foto-Kennung der Inhaltshash ist, bleiben unveränderte Dateien dieselben Fotos — auch umbenannt oder verschoben. Neue landen im Fotopool, verschwundene werden gemeldet; steht eines noch in einer Doppelseite, bleibt dort der Platz leer (`photo-missing`), statt die Seite umzubauen. `PhotoOverride` bleibt in jedem Fall erhalten.
+- **Neu anordnen** (`POST /api/generate` mit erhöhtem Seed) baut das Buch komplett neu und verwirft jede Handarbeit an den Doppelseiten: manuelle Ausschnitte, verschobene Fotos, Hintergründe, Zeitstrahlausnahmen. `project.handwork()` zählt sie, damit die Oberfläche vorher sagen kann, was verloren geht. Erhalten bleiben Fotos, Korrekturen, Gruppen, Jahresereignisse und die Einstellungen.
+
 ### Typografie
 
 Eine Familie, zwei Schnitte: **Franibook Sans**, abgeleitet von Source Sans 3 (Adobe, SIL Open Font License 1.1), Regular und SemiBold, je 37 KB. Die Dateien liegen in `packages/fonts/files/`; Herkunft, verworfene Alternativen und die Befehle zur Reproduktion stehen in `packages/fonts/HERKUNFT.md`. Umbenannt wurde sie, weil „Source“ ein Reserved Font Name der OFL ist und wir eine geänderte Fassung ausliefern.

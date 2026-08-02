@@ -325,8 +325,16 @@ Den Entwurf komfortabel korrigieren können.
 > Umgesetzt ist das ohne dnd-kit und ohne Undo; die Gründe stehen in
 > [Zustandsverwaltung, Undo und Drag-and-drop](konzept.md#zustandsverwaltung-undo-und-drag-and-drop).
 >
-> Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste, „anders
-> generieren", Gewichtung setzen, Doppelseite sperren, Undo/Redo.
+> Dazugekommen: **Hintergrundfarben** je Doppelseite und für das ganze Buch, mit
+> einer Farbe je Jahrgang beim Erzeugen; wahlweise ein **Hintergrundbild**, dessen
+> Auflösung geprüft wird (beim Zielbestand reicht sie praktisch nie, siehe
+> [Seitenhintergrund](konzept.md#seitenhintergrund)). Der Reiter **Jahre** pflegt
+> die Jahresereignisse aller Jahrgänge in einem Zug. Und **Bilder neu einlesen**
+> gibt es jetzt im laufenden Betrieb, ohne das Buch zu verwerfen — der Knopf zum
+> Neuanordnen sagt umgekehrt vorher an, welche Handarbeit er kostet.
+>
+> Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste,
+> Gewichtung setzen, Doppelseite sperren, Undo/Redo.
 
 **Inhalt**
 
