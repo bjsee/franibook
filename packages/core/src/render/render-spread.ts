@@ -196,16 +196,33 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     const text = byTextSlotId.get(textSlot.id);
     if (!text?.content) continue;
     const rect = toMm(textSlot, profile);
-    boxes.push({
-      kind: 'text',
-      ...rect,
-      slotId: textSlot.id,
-      content: text.content,
-      // Vorläufig aus der Slothöhe abgeleitet; echte Textstile mit Schriftwahl
-      // und Sicherheitsbereichsprüfung folgen in Phase 9.
-      fontSizePt: (rect.hMm / 25.4) * 72 * 0.7,
-      align: textSlot.align ?? 'left',
-      color: '#000000',
+    const zeilen = text.content.split('\n').filter((z) => z.trim().length > 0);
+
+    // Mehrzeilige Texte werden hier in einzelne Boxen zerlegt, statt sie einem
+    // Renderer zu überlassen. Sonst müsste jeder Adapter den Zeilenabstand
+    // selbst bestimmen – CSS `line-height` gegen pdfkit `lineGap` –, und genau
+    // das wäre eine Layoutentscheidung im Renderer, die der Parity-Test
+    // aufdecken soll. Der Zeilenabstand steckt deshalb in der Geometrie.
+    const zeilenHoeheMm = zeilen.length > 1 ? rect.hMm / zeilen.length : rect.hMm;
+    const fontSizePt =
+      // Vorläufig aus der Zeilenhöhe abgeleitet; echte Textstile mit
+      // Schriftwahl folgen in Phase 9. Der Faktor 0,62 bei mehreren Zeilen
+      // lässt Platz zwischen ihnen, 0,7 füllt eine einzelne Zeile aus.
+      (zeilenHoeheMm / 25.4) * 72 * (zeilen.length > 1 ? 0.62 : 0.7);
+
+    zeilen.forEach((zeile, i) => {
+      boxes.push({
+        kind: 'text',
+        xMm: rect.xMm,
+        yMm: rect.yMm + i * zeilenHoeheMm,
+        wMm: rect.wMm,
+        hMm: zeilenHoeheMm,
+        slotId: zeilen.length > 1 ? `${textSlot.id}-${i}` : textSlot.id,
+        content: zeile,
+        fontSizePt,
+        align: textSlot.align ?? 'left',
+        color: '#000000',
+      });
     });
   }
 

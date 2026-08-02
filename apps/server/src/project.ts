@@ -82,6 +82,7 @@ interface PersistedProject {
   overrides: Record<PhotoId, PhotoOverride>;
   book: { spreads: Spread[] };
   groups: PhotoGroup[];
+  yearEvents?: Record<string, string[]>;
   importedAt: string;
 }
 
@@ -119,6 +120,14 @@ export class Project {
     birthDate: '2008-09-11',
     subjectName: 'Franziska',
   };
+
+  /**
+   * Ereignisse je Jahr für die Kapitelauftakte, von Hand gepflegt.
+   *
+   * Schlüssel ist das Jahr als Zeichenkette, weil JSON keine Zahlenschlüssel
+   * kennt und der Wert unverändert durch die Persistenz laufen soll.
+   */
+  yearEvents: Record<string, string[]> = {};
 
   skippedVideos: string[] = [];
   failed: { file: string; reason: string }[] = [];
@@ -212,6 +221,9 @@ export class Project {
       groupOpenerMinPhotos: this.settings.groupOpenerMinPhotos,
       // Löst `groupOpeners: 'auto'` auf.
       timeline: this.settings.timeline,
+      yearEvents: Object.fromEntries(
+        Object.entries(this.yearEvents).map(([jahr, zeilen]) => [Number(jahr), zeilen]),
+      ),
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
@@ -351,6 +363,7 @@ export class Project {
         timeline: this.settings.timeline,
         groupOpeners: this.settings.groupOpeners,
       },
+      yearEvents: this.yearEvents,
       unplaced,
       groups: this.sortedGroups(),
     });
@@ -401,6 +414,10 @@ export class Project {
     if (parsed.settings?.groupOpeners !== undefined) {
       this.settings.groupOpeners = parsed.settings.groupOpeners;
     }
+    // Ereignisse dürfen im Dokument bearbeitet werden. Sie wirken erst beim
+    // nächsten Erzeugen, weil sie auf der Auftaktseite stehen, die der
+    // Neuaufbau nicht anfasst.
+    if (parsed.yearEvents) this.yearEvents = parsed.yearEvents;
 
     return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
   }
@@ -594,6 +611,7 @@ export class Project {
       photos: [...this.photos.values()],
       overrides: this.overrides,
       groups: this.groups,
+      yearEvents: this.yearEvents,
       book: { spreads: this.spreads },
       importedAt: this.importedAt,
     };
@@ -621,6 +639,7 @@ export class Project {
       for (const p of data.photos) this.photos.set(p.id, p);
       this.overrides = data.overrides ?? {};
       this.groups = data.groups ?? [];
+      this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
       this.settings = { ...this.settings, ...data.settings };
       this.importedAt = data.importedAt ?? this.importedAt;

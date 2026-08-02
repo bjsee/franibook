@@ -72,6 +72,16 @@ export interface GenerateOptions {
   timeline?: boolean;
   /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
   groupOpenerMinPhotos?: number;
+  /**
+   * Ereignisse je Jahr, die auf dem Jahresauftakt stehen – drei bis fünf
+   * Zeilen, von Hand gepflegt.
+   *
+   * Bewusst Daten und keine Abfrage: Ein Wikipedia-Abruf beim Erzeugen wäre
+   * netzabhängig und würde den Determinismus brechen, ein erfundener Satz stünde
+   * gedruckt im Buch. Vorschlagswerkzeuge können darüber liegen – gespeichert
+   * wird nur, was der Benutzer bestätigt hat.
+   */
+  yearEvents?: Readonly<Record<number, readonly string[]>>;
   /** Steuert die Auswahl unter gleichwertigen Templates. */
   seed?: number;
 }
@@ -424,6 +434,8 @@ function buildChapterOpener(
   rng: () => number,
   /** Vorab bestimmtes Auftaktbild, damit es aus dem Fluss genommen werden kann. */
   vorgegeben?: PhotoId,
+  /** Ereignisse des Jahres, je Zeile eines. */
+  events?: readonly string[],
 ): { spread: Spread; usedPhotoId?: PhotoId } {
   const templates = chapterTemplates();
   // Bevorzugt die Variante mit Bild, sofern ein geeignetes Foto vorhanden ist
@@ -479,6 +491,33 @@ function buildChapterOpener(
   });
 
   const yearSlot = template.textSlots?.find((t) => t.role === 'year');
+  const eventSlot = template.textSlots?.find((t) => t.id === 't-events');
+
+  // Ereignisse des Jahres als ein Textelement mit Zeilenumbrüchen. Die Zerlegung
+  // in Zeilen und deren Abstände rechnet der Renderer nicht selbst, sondern
+  // `renderSpread` – siehe dort.
+  const texts = [
+    ...(yearSlot
+      ? [
+          {
+            id: `${id}-year`,
+            role: 'year' as const,
+            content: String(chapter.year),
+            slotId: yearSlot.id,
+          },
+        ]
+      : []),
+    ...(eventSlot && events && events.length > 0
+      ? [
+          {
+            id: `${id}-events`,
+            role: 'freeText' as const,
+            content: events.join('\n'),
+            slotId: eventSlot.id,
+          },
+        ]
+      : []),
+  ];
 
   return {
     spread: {
@@ -486,18 +525,7 @@ function buildChapterOpener(
       index,
       templateId: template.id,
       slots,
-      ...(yearSlot
-        ? {
-            texts: [
-              {
-                id: `${id}-year`,
-                role: 'year' as const,
-                content: String(chapter.year),
-                slotId: yearSlot.id,
-              },
-            ],
-          }
-        : {}),
+      ...(texts.length > 0 ? { texts } : {}),
     },
     ...(usedPhotoId ? { usedPhotoId } : {}),
   };
@@ -681,6 +709,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         profile,
         rng,
         jahresBild.get(chapter.year),
+        opts.yearEvents?.[chapter.year],
       );
       spreads.push(spread);
       chapterOpenerCount++;

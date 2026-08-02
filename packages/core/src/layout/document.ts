@@ -88,6 +88,12 @@ export interface LayoutDocument {
     photos: number;
     photosPerSpread: number;
   };
+  /**
+   * Ereignisse je Jahr, wie sie auf dem Kapitelauftakt stehen.
+   *
+   * Von Hand zu pflegen: Schlüssel ist das Jahr, Wert eine Liste von Zeilen.
+   */
+  yearEvents?: Record<string, string[]>;
   /** Benannte Fotogruppen. Sie gliedern das Buch, sofern aktiv. */
   groups: LayoutGroupEntry[];
   spreads: LayoutSpreadEntry[];
@@ -156,6 +162,8 @@ export interface ExportOptions {
   };
   /** Fotos, die in keiner Doppelseite stehen. */
   unplaced?: readonly PhotoId[];
+  /** Ereignisse je Jahr, zur Bearbeitung im Dokument. */
+  yearEvents?: Record<string, string[]>;
   /** Benannte Fotogruppen, zur Orientierung im Dokument. */
   groups?: readonly {
     id: string;
@@ -237,6 +245,9 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
       photos: placed,
       photosPerSpread: entries.length > 0 ? Number((placed / entries.length).toFixed(1)) : 0,
     },
+    ...(opts.yearEvents && Object.keys(opts.yearEvents).length > 0
+      ? { yearEvents: opts.yearEvents }
+      : {}),
     groups: (opts.groups ?? []).map((g) => ({
       id: g.id,
       title: g.title,
@@ -270,6 +281,8 @@ export interface ParsedLayout {
     timeline?: boolean;
     groupOpeners?: boolean | 'auto';
   };
+  /** Ereignisse je Jahr, sofern im Dokument angegeben. */
+  yearEvents?: Record<string, string[]>;
   issues: LayoutIssue[];
   /** Ob das Dokument übernommen werden kann. */
   ok: boolean;
@@ -418,6 +431,7 @@ export function parseLayout(raw: unknown, photos: ReadonlyMap<PhotoId, Photo>): 
   return {
     spreads,
     ...(doc.settings ? { settings: doc.settings } : {}),
+    ...(doc.yearEvents ? { yearEvents: doc.yearEvents } : {}),
     issues,
     ok: !issues.some((i) => i.severity === 'error') && spreads.length > 0,
   };
