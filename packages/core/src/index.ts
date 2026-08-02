@@ -22,6 +22,8 @@ export * from './structure/detectors.js';
 export * from './layout/scoring.js';
 export * from './layout/grouping.js';
 export * from './layout/generate.js';
+export * from './layout/document.js';
+export * from './layout/rebuild.js';
 
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';

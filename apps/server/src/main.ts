@@ -58,6 +58,23 @@ app.post<{ Body?: Partial<typeof project.settings> }>('/api/generate', async (re
   return { settings: project.settings, report: result.report, budgets: result.budgets };
 });
 
+/**
+ * Die Buchaufteilung als lesbares JSON.
+ *
+ * Gedacht zum Herunterladen, Bearbeiten und Zurückspielen. Referenziert Fotos
+ * über den Dateinamen statt über den Inhaltshash – von Hand ist nur der
+ * brauchbar.
+ */
+app.get('/api/book/layout', async () => project.exportLayout());
+
+/** Nimmt ein bearbeitetes Layout entgegen. */
+app.post<{ Body: unknown }>('/api/book/layout', async (req, reply) => {
+  const result = project.applyLayout(req.body);
+  if (!result.ok) return reply.code(422).send(result);
+  void project.save();
+  return result;
+});
+
 /** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
 app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
   const views = project.photoViews(req.query.problems !== undefined);
