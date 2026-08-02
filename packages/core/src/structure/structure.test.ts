@@ -175,7 +175,7 @@ describe('Titelvorschläge', () => {
   it('verändert die übergebenen Segmente nicht', () => {
     const s = buildStructure([p('a', '2015-12-24T18:00:00')]);
     const original = allSegments(s);
-    const kopie = structuredClone(original);
+    const kopie = JSON.parse(JSON.stringify(original));
     suggestTitles(original, ctx);
     expect(original).toEqual(kopie);
   });

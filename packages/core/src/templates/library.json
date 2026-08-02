@@ -26,16 +26,25 @@
     "gut die halbe Seitenbreite mit großzügigem Rand – bei Fotobüchern ein",
     "Qualitätsmerkmal, keine Verlegenheit."
   ],
-
-  "reference": { "widthMm": 600, "heightMm": 300 },
-
+  "reference": {
+    "widthMm": 600,
+    "heightMm": 300
+  },
   "templates": [
     {
       "id": "spread.1up.hero-left",
       "name": "Ein großes Foto, ruhige Gegenseite",
       "tags": ["ruhig", "auftakt"],
       "slots": [
-        { "id": "a", "x": 73, "y": 90, "w": 160, "h": 120, "prominence": 3, "prefers": "landscape" }
+        {
+          "id": "a",
+          "x": 73,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 3,
+          "prefers": "landscape"
+        }
       ]
     },
     {
@@ -43,7 +52,15 @@
       "name": "Ein Hochformat, ruhige Gegenseite",
       "tags": ["ruhig", "auftakt"],
       "slots": [
-        { "id": "a", "x": 386, "y": 69, "w": 121, "h": 161, "prominence": 3, "prefers": "portrait" }
+        {
+          "id": "a",
+          "x": 386,
+          "y": 69,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        }
       ]
     },
     {
@@ -76,8 +93,24 @@
       "name": "Zwei Hochformate",
       "tags": ["ruhig", "symmetrisch"],
       "slots": [
-        { "id": "a", "x": 94, "y": 71, "w": 118, "h": 157, "prominence": 2, "prefers": "portrait" },
-        { "id": "b", "x": 388, "y": 71, "w": 118, "h": 157, "prominence": 2, "prefers": "portrait" }
+        {
+          "id": "a",
+          "x": 94,
+          "y": 71,
+          "w": 118,
+          "h": 157,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 388,
+          "y": 71,
+          "w": 118,
+          "h": 157,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
       ]
     },
     {
@@ -178,10 +211,42 @@
       "name": "Vier Fotos, ruhiges Raster",
       "tags": ["ruhig", "ausgewogen"],
       "slots": [
-        { "id": "a", "x": 22, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
-        { "id": "b", "x": 162, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
-        { "id": "c", "x": 318, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" },
-        { "id": "d", "x": 458, "y": 90, "w": 120, "h": 120, "prominence": 2, "prefers": "any" }
+        {
+          "id": "a",
+          "x": 22,
+          "y": 90,
+          "w": 120,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "any"
+        },
+        {
+          "id": "b",
+          "x": 162,
+          "y": 90,
+          "w": 120,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "any"
+        },
+        {
+          "id": "c",
+          "x": 318,
+          "y": 90,
+          "w": 120,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "any"
+        },
+        {
+          "id": "d",
+          "x": 458,
+          "y": 90,
+          "w": 120,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "any"
+        }
       ]
     },
     {
@@ -189,7 +254,15 @@
       "name": "Vier Hochformate",
       "tags": ["rhythmisch"],
       "slots": [
-        { "id": "a", "x": 22, "y": 69, "w": 121, "h": 161, "prominence": 2, "prefers": "portrait" },
+        {
+          "id": "a",
+          "x": 22,
+          "y": 69,
+          "w": 121,
+          "h": 161,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
         {
           "id": "b",
           "x": 163,
@@ -208,7 +281,15 @@
           "prominence": 2,
           "prefers": "portrait"
         },
-        { "id": "d", "x": 457, "y": 69, "w": 121, "h": 161, "prominence": 2, "prefers": "portrait" }
+        {
+          "id": "d",
+          "x": 457,
+          "y": 69,
+          "w": 121,
+          "h": 161,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
       ]
     },
     {
@@ -243,7 +324,15 @@
           "prominence": 1,
           "prefers": "landscape"
         },
-        { "id": "d", "x": 465, "y": 97, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" }
+        {
+          "id": "d",
+          "x": 465,
+          "y": 97,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
       ]
     },
     {
@@ -303,7 +392,15 @@
       "name": "Sechs, dicht links",
       "tags": ["dicht"],
       "slots": [
-        { "id": "a", "x": 45, "y": 60, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" },
+        {
+          "id": "a",
+          "x": 45,
+          "y": 60,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
         {
           "id": "b",
           "x": 160,
@@ -356,7 +453,15 @@
       "name": "Dichte Collage",
       "tags": ["dicht", "fotoreich"],
       "slots": [
-        { "id": "a", "x": 30, "y": 50, "w": 105, "h": 79, "prominence": 1, "prefers": "landscape" },
+        {
+          "id": "a",
+          "x": 30,
+          "y": 50,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
         {
           "id": "b",
           "x": 145,
@@ -476,7 +581,421 @@
       "tags": ["reserve", "groß"],
       "highResOnly": true,
       "slots": [
-        { "id": "a", "x": 316, "y": 22, "w": 262, "h": 256, "prominence": 3, "prefers": "any" }
+        {
+          "id": "a",
+          "x": 316,
+          "y": 22,
+          "w": 262,
+          "h": 256,
+          "prominence": 3,
+          "prefers": "any"
+        }
+      ]
+    },
+    {
+      "id": "spread.10up.dense",
+      "name": "Zehn, dicht",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 32,
+          "y": 60,
+          "w": 118,
+          "h": 88,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 166,
+          "y": 60,
+          "w": 118,
+          "h": 88,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 32,
+          "y": 164,
+          "w": 118,
+          "h": 88,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 166,
+          "y": 164,
+          "w": 118,
+          "h": 88,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 350,
+          "y": 32,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 469,
+          "y": 32,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 350,
+          "y": 120,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 469,
+          "y": 120,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 350,
+          "y": 208,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 469,
+          "y": 208,
+          "w": 105,
+          "h": 74,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.12up.mosaic",
+      "name": "Zwölf im Mosaik",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 30,
+          "y": 30,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 144,
+          "y": 30,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 30,
+          "y": 119,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 144,
+          "y": 119,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 30,
+          "y": 208,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 144,
+          "y": 208,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 356,
+          "y": 30,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 470,
+          "y": 30,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 356,
+          "y": 119,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 470,
+          "y": 119,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "k",
+          "x": 356,
+          "y": 208,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l",
+          "x": 470,
+          "y": 208,
+          "w": 100,
+          "h": 75,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.12up.rows",
+      "name": "Zwölf in Reihen",
+      "tags": ["dicht", "fotoreich"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 113,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 204,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 22,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 113,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 204,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 316,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 407,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 498,
+          "y": 80,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 316,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "k",
+          "x": 407,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l",
+          "x": 498,
+          "y": 160,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "spread.8up.staggered",
+      "name": "Acht, rechte Seite versetzt",
+      "tags": ["dicht", "rhythmisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 30,
+          "y": 45,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 147,
+          "y": 45,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 30,
+          "y": 138,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 147,
+          "y": 138,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 350,
+          "y": 78,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 467,
+          "y": 78,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 350,
+          "y": 171,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 467,
+          "y": 171,
+          "w": 105,
+          "h": 79,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
       ]
     }
   ]
