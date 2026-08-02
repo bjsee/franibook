@@ -850,3 +850,46 @@ describe('Jahresauftakt auf einer Seite', () => {
     expect(new Set(alle).size).toBe(2);
   });
 });
+
+describe('Hintergrundfarbe der Jahrgänge', () => {
+  it('gibt allen Doppelseiten eines Jahres dieselbe Farbe und wechselt am Jahreswechsel', () => {
+    const { photos, dated } = buildBestand({ 2015: 40, 2016: 40 });
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 40,
+      chapterOpeners: true,
+    });
+
+    const farbeVonJahr = new Map<string, Set<string | undefined>>();
+    let aktuellesJahr = '';
+    for (const spread of result.spreads) {
+      const jahr = spread.texts?.find((t) => t.role === 'year')?.content;
+      if (jahr) aktuellesJahr = jahr;
+      const menge = farbeVonJahr.get(aktuellesJahr) ?? new Set();
+      menge.add(spread.background);
+      farbeVonJahr.set(aktuellesJahr, menge);
+    }
+
+    // Je Jahrgang genau ein Ton …
+    for (const [, farben] of farbeVonJahr) expect(farben.size).toBe(1);
+    // … und die beiden Jahre unterscheiden sich.
+    const [a, b] = [...farbeVonJahr.values()].map((s) => [...s][0]);
+    expect(a).toBeDefined();
+    expect(a).not.toBe(b);
+  });
+
+  it('lässt die Farben weg, wenn sie abgeschaltet sind', () => {
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 30,
+      chapterOpeners: true,
+      chapterColors: false,
+    });
+    expect(result.spreads.every((s) => s.background === undefined)).toBe(true);
+  });
+});

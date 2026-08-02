@@ -21,6 +21,8 @@ export interface RebuildInput {
   text?: string;
   /** Abweichende Entscheidung zum Zeitstrahl, die den Neuaufbau übersteht. */
   timeline?: boolean;
+  /** Hintergrundfarbe, die den Neuaufbau übersteht. */
+  background?: string;
 }
 
 export interface RebuildOptions {
@@ -133,6 +135,7 @@ export function rebuildSpreads(opts: RebuildOptions): RebuildResult {
       templateId: bestTemplateId,
       slots,
       ...(input.timeline !== undefined ? { timeline: input.timeline } : {}),
+      ...(input.background !== undefined ? { background: input.background } : {}),
       ...(input.text && textSlot
         ? {
             texts: [

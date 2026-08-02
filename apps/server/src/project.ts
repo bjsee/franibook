@@ -82,6 +82,8 @@ export interface ProjectSettings {
   timeline: boolean;
   /** Hintergrundfarbe aller Doppelseiten, sofern keine eigene gesetzt ist. */
   background: string;
+  /** Ob jeder Jahrgang beim Erzeugen eine eigene Hintergrundfarbe bekommt. */
+  chapterColors: boolean;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -142,6 +144,9 @@ export class Project {
     // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
     // deshalb die Palette in render/background.ts.
     background: DEFAULT_BACKGROUND,
+    // An: Die Farbe wechselt am Jahreswechsel und macht die Kapitelgrenze auch
+    // dann sichtbar, wenn man die Jahreszahl überschlägt.
+    chapterColors: true,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
@@ -421,6 +426,7 @@ export class Project {
       groupOpenerMinPhotos: this.settings.groupOpenerMinPhotos,
       // Löst `groupOpeners: 'auto'` auf.
       timeline: this.settings.timeline,
+      chapterColors: this.settings.chapterColors,
       yearEvents: Object.fromEntries(
         Object.entries(this.yearEvents).map(([jahr, zeilen]) => [Number(jahr), zeilen]),
       ),
