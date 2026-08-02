@@ -413,6 +413,72 @@ describe('generateBook', () => {
     expect(auftakt!.texts![0]!.content).toBe('2008');
   });
 
+  it('zeigt das Auftaktbild einer Gruppe nur einmal', () => {
+    // Ohne diesen Ausschluss stünde es zweimal im Buch: groß auf der
+    // Auftaktseite und gleich darauf noch einmal klein im Fluss.
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      groupOpeners: true,
+      groups: [{ id: 'reise', title: 'Reise', photoIds: ids, active: true, coverPhotoId: ids[5]! }],
+    });
+
+    const platziert = result.spreads.flatMap((s) =>
+      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+    );
+    const wieOft = platziert.filter((id) => id === ids[5]).length;
+    expect(wieOft, 'Auftaktbild kommt mehrfach vor').toBe(1);
+    // Und kein Foto geht dabei verloren
+    expect(new Set(platziert).size).toBe(ids.length);
+  });
+
+  it('gibt kleinen Gruppen keinen Auftakt', () => {
+    // Bei 61 Gruppen wären 122 Seiten allein für Auftakte draufgegangen.
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      groupOpeners: true,
+      groupOpenerMinPhotos: 6,
+      groups: [{ id: 'klein', title: 'Klein', photoIds: ids.slice(0, 3), active: true }],
+    });
+    expect(result.report.groupOpeners).toBe(0);
+  });
+
+  it('gibt einer kleinen Gruppe mit gewähltem Hauptbild trotzdem einen Auftakt', () => {
+    // Ein gesetztes Hauptbild ist eine Entscheidung des Benutzers.
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      groupOpeners: true,
+      groupOpenerMinPhotos: 6,
+      groups: [
+        {
+          id: 'klein',
+          title: 'Klein',
+          photoIds: ids.slice(0, 3),
+          active: true,
+          coverPhotoId: ids[0]!,
+        },
+      ],
+    });
+    expect(result.report.groupOpeners).toBe(1);
+  });
+
   it('kommt mit einem leeren Bestand zurecht', () => {
     const result = generateBook({
       structure: buildStructure([]),

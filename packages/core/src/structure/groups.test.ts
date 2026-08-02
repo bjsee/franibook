@@ -14,7 +14,9 @@ import type { PhotoGroup } from './groups.js';
 import {
   type GroupCandidate,
   mergeSuggestions,
+  occasionOfDay,
   propagatePlaces,
+  suggestDayGroups,
   suggestPlaceGroups,
 } from './suggest-groups.js';
 
@@ -345,5 +347,94 @@ describe('mergeSuggestions', () => {
       [group('auto', ['a'], { origin: 'place' })],
     );
     expect(zusammen.map((g) => g.id)).toEqual(['meine']);
+  });
+});
+
+describe('suggestDayGroups', () => {
+  function amTag(tag: string, n: number, prefix = 'p'): GroupCandidate[] {
+    return Array.from({ length: n }, (_, i) => ({
+      photoId: `${prefix}${i}`,
+      date: `${tag}T${String(9 + i).padStart(2, '0')}:00:00`,
+    }));
+  }
+
+  it('macht aus einem Tag mit drei Fotos eine Gruppe', () => {
+    const g = suggestDayGroups(amTag('2016-06-18', 3));
+    expect(g).toHaveLength(1);
+    expect(g[0]!.title).toBe('18. Juni 2016');
+    expect(g[0]!.photoIds).toHaveLength(3);
+  });
+
+  it('übergeht Tage mit nur zwei Fotos', () => {
+    // Zwei Bilder sind noch kein Ereignis.
+    expect(suggestDayGroups(amTag('2016-06-18', 2))).toHaveLength(0);
+  });
+
+  it('respektiert eine abweichende Mindestzahl', () => {
+    expect(suggestDayGroups(amTag('2016-06-18', 4), { minPhotos: 5 })).toHaveLength(0);
+    expect(suggestDayGroups(amTag('2016-06-18', 5), { minPhotos: 5 })).toHaveLength(1);
+  });
+
+  it('lässt bereits vergebene Fotos außen vor', () => {
+    // Die Ortserkennung läuft zuerst; wo sie schon gruppiert hat, ist der Ort
+    // die bessere Auskunft.
+    const fotos = amTag('2016-06-18', 4);
+    const g = suggestDayGroups(fotos, { taken: new Set(['p0', 'p1']) });
+    expect(g).toHaveLength(0); // nur noch zwei übrig
+  });
+
+  it('benennt einen Geburtstag statt des Datums', () => {
+    const g = suggestDayGroups(amTag('2020-04-18', 3), {
+      detection: { birthDate: '2008-04-18' },
+    });
+    expect(g[0]!.title).toBe('12. Geburtstag');
+  });
+
+  it('erkennt Weihnachten', () => {
+    expect(suggestDayGroups(amTag('2019-12-24', 3))[0]!.title).toBe('Weihnachten 2019');
+  });
+
+  it('erkennt Silvester und Neujahr', () => {
+    expect(suggestDayGroups(amTag('2019-12-31', 3))[0]!.title).toBe('Silvester 2019');
+    expect(suggestDayGroups(amTag('2020-01-01', 3))[0]!.title).toBe('Neujahr 2020');
+  });
+
+  it('erkennt Ostern', () => {
+    // Ostersonntag 2015 war der 5. April
+    expect(suggestDayGroups(amTag('2015-04-05', 3))[0]!.title).toBe('Ostern 2015');
+  });
+
+  it('sortiert die Fotos innerhalb des Tages chronologisch', () => {
+    const g = suggestDayGroups([
+      { photoId: 'spaet', date: '2016-06-18T18:00:00' },
+      { photoId: 'frueh', date: '2016-06-18T08:00:00' },
+      { photoId: 'mittag', date: '2016-06-18T12:00:00' },
+    ]);
+    expect(g[0]!.photoIds).toEqual(['frueh', 'mittag', 'spaet']);
+  });
+
+  it('liefert die Tage in zeitlicher Reihenfolge', () => {
+    const g = suggestDayGroups([...amTag('2016-08-01', 3, 'b'), ...amTag('2016-06-18', 3, 'a')]);
+    expect(g.map((x) => x.title)).toEqual(['18. Juni 2016', '1. August 2016']);
+  });
+});
+
+describe('occasionOfDay', () => {
+  const ctx = { birthDate: '2008-04-18' };
+
+  it('rechnet das Alter aus', () => {
+    expect(occasionOfDay('2026-04-18T12:00:00', ctx)).toBe('18. Geburtstag');
+  });
+
+  it('gilt auch für die Feier am Wochenende daneben', () => {
+    expect(occasionOfDay('2026-04-20T12:00:00', ctx)).toBe('18. Geburtstag');
+  });
+
+  it('nennt den Geburtstag nicht ohne Geburtsdatum', () => {
+    expect(occasionOfDay('2026-04-18T12:00:00')).toBeUndefined();
+  });
+
+  it('liefert für einen gewöhnlichen Tag nichts', () => {
+    expect(occasionOfDay('2016-09-08T12:00:00', ctx)).toBeUndefined();
   });
 });

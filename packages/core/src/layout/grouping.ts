@@ -109,6 +109,11 @@ export interface GroupingOptions {
    * mit fünf leeren Plätzen erzwingt.
    */
   groupOf?: ReadonlyMap<string, string>;
+  /**
+   * Fotos, die nicht in den Fluss gehören – etwa weil sie eine Gruppe
+   * eröffnen und dort bereits groß erscheinen.
+   */
+  exclude?: ReadonlySet<string>;
 }
 
 export interface SpreadGroup {
@@ -133,7 +138,9 @@ export interface SpreadGroup {
  * gierig, und bei einigen hundert Fotos je Jahr in Millisekunden erledigt.
  */
 export function groupChapter(chapter: Chapter, opts: GroupingOptions): SpreadGroup[] {
-  const photoIds = chapter.segments.flatMap((s) => s.photoIds);
+  const photoIds = opts.exclude
+    ? chapter.segments.flatMap((s) => s.photoIds.filter((id) => !opts.exclude!.has(id)))
+    : chapter.segments.flatMap((s) => s.photoIds);
   const n = photoIds.length;
   if (n === 0) return [];
 

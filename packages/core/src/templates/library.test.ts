@@ -75,6 +75,8 @@ describe('Geometrie', () => {
   it('hält alle Slots innerhalb des Endformats', () => {
     for (const t of allTemplates()) {
       for (const s of t.slots) {
+        // Randabfallende Slots liegen absichtlich darüber hinaus.
+        if (s.bleed) continue;
         expect(s.x, `${t.id}/${s.id} links`).toBeGreaterThanOrEqual(0);
         expect(s.y, `${t.id}/${s.id} oben`).toBeGreaterThanOrEqual(0);
         expect(s.x + s.w, `${t.id}/${s.id} rechts`).toBeLessThanOrEqual(1.0001);
@@ -88,6 +90,7 @@ describe('Geometrie', () => {
     const safetyY = profile.page.safetyMm / PAGE_H;
     for (const t of allTemplates()) {
       for (const s of [...t.slots, ...(t.textSlots ?? [])]) {
+        if ('bleed' in s && s.bleed) continue;
         expect(s.x, `${t.id}/${s.id}`).toBeGreaterThanOrEqual(safetyX - 0.0001);
         expect(s.y, `${t.id}/${s.id}`).toBeGreaterThanOrEqual(safetyY - 0.0001);
         expect(s.x + s.w, `${t.id}/${s.id}`).toBeLessThanOrEqual(1 - safetyX + 0.0001);
@@ -102,6 +105,7 @@ describe('Geometrie', () => {
     const gutterSafe = profile.page.gutterSafeMm / SPREAD_W;
     for (const t of allTemplates()) {
       for (const s of t.slots) {
+        if (s.bleed) continue; // randabfallend, reicht bis an den Falz
         if (crossesGutter(s)) continue; // bewusst überspannende Slots wären erlaubt
         const rechterRand = s.x + s.w;
         const kollidiert = rechterRand > 0.5 - gutterSafe && s.x < 0.5 + gutterSafe;
@@ -132,10 +136,17 @@ describe('Druckbarkeit mit dem echten Bestand', () => {
   it('hält für jeden Slot mit passend ausgerichtetem Foto die Mindestauflösung', () => {
     for (const t of allTemplates()) {
       if (templateMeta(t.id).highResOnly) continue;
+      // Gruppenauftakte werden am konkreten Hauptbild geprüft, nicht pauschal:
+      // Es gibt sie in mehreren Größen, und die Engine nimmt die größte, deren
+      // Auflösung für dieses eine Bild reicht. Der Test dafür steht unten.
+      if (t.tags?.includes('gruppenauftakt')) continue;
 
       for (const s of t.slots) {
         const wMm = s.w * SPREAD_W;
         const hMm = s.h * PAGE_H;
+        // Randabfallende Slots stehen nur hochauflösenden Bildern offen; das
+        // prüft der nachfolgende Test.
+        if (s.bleed) continue;
 
         // Welche Bildformate darf dieser Slot erwarten?
         const kandidaten = BESTAND.filter((b) => {
@@ -164,6 +175,36 @@ describe('Druckbarkeit mit dem echten Bestand', () => {
       if (templateMeta(t.id).highResOnly) continue;
       for (const s of t.slots) {
         expect(s.w * SPREAD_W, `${t.id}/${s.id}`).toBeLessThanOrEqual(maxMm);
+      }
+    }
+  });
+
+  it('prüft Gruppenauftakte am konkreten Bild statt pauschal', () => {
+    // Die Bibliothek bietet mehrere Auftaktgrößen. Für jedes im Bestand
+    // vorkommende Format muss mindestens eine davon die Mindestauflösung
+    // halten – sonst bekäme eine Gruppe gar keinen Auftakt.
+    const auftakte = allTemplates().filter(
+      (t) => t.tags?.includes('gruppenauftakt') && !templateMeta(t.id).highResOnly,
+    );
+    expect(auftakte.length).toBeGreaterThan(0);
+
+    for (const foto of BESTAND) {
+      const passend = auftakte.filter((t) => {
+        const s = t.slots[0]!;
+        return dpiIn(foto, s.w * SPREAD_W, s.h * PAGE_H) >= profile.resolution.minDpi;
+      });
+      expect(passend.length, `kein Auftakt für ${foto.label}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('markiert randabfallende Slots als hochauflösend', () => {
+    // Ein Slot, der über die Endformatkante reicht, ist zwangsläufig größer
+    // als eine Seite und damit nur für die wenigen großen Bilder brauchbar.
+    for (const t of allTemplates()) {
+      if (t.slots.some((s) => s.bleed)) {
+        expect(templateMeta(t.id).highResOnly, `${t.id} blutet, ist aber nicht markiert`).toBe(
+          true,
+        );
       }
     }
   });
