@@ -54,6 +54,7 @@ interface ProjectInfo {
     chapterOpeners: boolean;
     groupOpeners: boolean | 'auto';
     timeline: boolean;
+    timelineStyle: 'foot' | 'side';
     background: string;
     chapterColors: boolean;
     /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
@@ -67,7 +68,14 @@ interface ProjectInfo {
   failed: { file: string; reason: string }[];
   report: Report | null;
   /** Was ein Neuanordnen verwerfen würde. */
-  handwork: { crops: number; neigungen: number; hintergruende: number; zeitstrahl: number };
+  handwork: {
+    crops: number;
+    neigungen: number;
+    hintergruende: number;
+    zeitstrahl: number;
+    /** Von Hand gesetzte Bildpositionen. */
+    positionen: number;
+  };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
   groupMarks: { spreadIndex: number; id: string; title: string }[];
   /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
@@ -180,7 +188,11 @@ export function App() {
    * nur neu gezeichnet. Für den Zeitstrahl ist das der Unterschied zwischen
    * einer Linie ein- und ausblenden und dem Verwerfen aller Korrekturen.
    */
-  async function setSetting(patch: { timeline?: boolean; tilt?: number }) {
+  async function setSetting(patch: {
+    timeline?: boolean;
+    timelineStyle?: 'foot' | 'side';
+    tilt?: number;
+  }) {
     await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -523,6 +535,24 @@ export function App() {
                   Zeitstrahl
                 </label>
                 {/*
+                  Zwei Achsen, zwei Fragen: Der Fuß sagt, wie weit es seit der
+                  letzten Seite ist, der Rand, wo man im Buch steht. Beides
+                  entsteht beim Rendern – deshalb `setSetting`, kein Neuaufbau.
+                */}
+                {info.settings.timeline && (
+                  <label style={S.check} title="Achse am Seitenfuß oder am äußeren Rand">
+                    <select
+                      value={info.settings.timelineStyle}
+                      onChange={(e) =>
+                        void setSetting({ timelineStyle: e.target.value as 'foot' | 'side' })
+                      }
+                    >
+                      <option value="foot">im Fuß, mit Gruppentitel</option>
+                      <option value="side">am Rand, über alle Jahre</option>
+                    </select>
+                  </label>
+                )}
+                {/*
                   Wie der Zeitstrahl eine reine Darstellungssache: Die Neigung
                   entsteht beim Rendern und rührt die Fotoverteilung nicht an.
                   Deshalb `setSetting` und nicht `regenerate` – sonst kostete
@@ -579,6 +609,7 @@ export function App() {
                       h.neigungen > 0 ? `${h.neigungen} von Hand gesetzte Neigungen` : null,
                       h.hintergruende > 0 ? `${h.hintergruende} Hintergründe` : null,
                       h.zeitstrahl > 0 ? `${h.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
+                      h.positionen > 0 ? `${h.positionen} frei gesetzte Bilder` : null,
                     ].filter(Boolean);
                     if (
                       verlust.length > 0 &&
@@ -598,7 +629,8 @@ export function App() {
                   {info.handwork.crops +
                     info.handwork.neigungen +
                     info.handwork.hintergruende +
-                    info.handwork.zeitstrahl >
+                    info.handwork.zeitstrahl +
+                    info.handwork.positionen >
                     0 && ' ⚠'}
                 </button>
                 <button

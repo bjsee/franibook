@@ -41,6 +41,29 @@ export function withCrop(spread: RenderedSpread, slotId: string, crop: Crop): Re
 }
 
 /**
+ * Dieselbe Doppelseite mit einem verschobenen oder skalierten Bildkasten.
+ *
+ * Wie `withCrop` nur für die Vorschau während des Ziehens: Der Kasten folgt der
+ * Hand, gespeichert wird beim Loslassen. Die Auflösung wird mitgerechnet – ein
+ * größer gezogenes Bild verliert dpi, und das soll man sehen, bevor man
+ * loslässt und nicht erst im Prüfbericht.
+ */
+export function withRect(
+  spread: RenderedSpread,
+  slotId: string,
+  rect: { xMm: number; yMm: number; wMm: number; hMm: number },
+): RenderedSpread {
+  return {
+    ...spread,
+    boxes: spread.boxes.map((box) => {
+      if (box.kind !== 'image' || box.slotId !== slotId) return box;
+      const px = box.effectiveDpi * (box.wMm / 25.4);
+      return { ...box, ...rect, effectiveDpi: px / (rect.wMm / 25.4) };
+    }),
+  };
+}
+
+/**
  * Dieselbe Doppelseite mit einer anderen Neigung in einem Slot.
  *
  * Das Gegenstück zu `withCrop`, aus demselben Grund: Der Regler soll sofort

@@ -812,6 +812,16 @@ In die Spanne gehen nur Daten der Konfidenz `high` oder `medium` ein – ein Dat
 
 Geschaltet wird über `settings.timeline` (Vorgabe an) und `Spread.timeline` für die einzelne Doppelseite. Der globale Schalter läuft über `PATCH /api/settings` und löst bewusst kein Neugenerieren aus – der Zeitstrahl ändert das RSM, nicht die Fotoverteilung.
 
+**Zwei Achsen zur Wahl** (`settings.timelineStyle`). Der Fußstrahl beantwortet
+„wie weit ist es seit der letzten Seite"; die **Randachse** (`side-timeline.ts`)
+beantwortet „wo im Leben stehe ich". Sie steht senkrecht im äußeren
+Sicherheitsrand der linken Seite — der ist ohnehin frei, sie kostet also keinen
+Bildplatz — und zeigt alle Jahrgänge des Buches, den zurückgelegten Teil kräftig,
+den Rest still. Beschriftet ist sie nicht: 19 Jahrgänge auf 240 mm sind gut 12 mm
+im Jahr, zwei aufeinanderfolgende Doppelseiten liegen knapp 3 mm auseinander. Sie
+zeigt eine Stelle, sie erklärt keinen Kalender — deshalb ersetzt sie den
+Fußstrahl nicht, sondern steht zur Wahl.
+
 **Beschriftung.** Das Label am Zeitstrahl ist die einzige Beschriftung im Innenteil: Doppelseiten tragen keine Überschrift mehr. Eine Überschrift stand nur auf der ersten Doppelseite einer Gruppe – auf allen folgenden fehlte der Name, und auf der ersten stand er doppelt, sobald der Zeitstrahl lief. Drei Folgen hat der Wechsel:
 
 - **Alle Vorlagen im Fluss sind titellos.** Die `mit-titel`-Fassungen räumten 16 mm am oberen Rand frei; am echten Bestand standen die Bilder dadurch auf 9 von 45 Doppelseiten 6 % kleiner als nötig.
@@ -1459,6 +1469,24 @@ Händen. Der Zug wird dann abgelehnt.
 
 Als Ablagefläche dient ein Streifen mit den zwei Nachbarseiten in jede Richtung
 (`SpreadNeighbors`). Weiter zu springen ist selten und geht über den Fotopool.
+
+### Bilder von Hand setzen
+
+`SlotAssignment.rect` überschreibt den Platz aus der Vorlage: Ein Bild lässt sich
+aus dem Raster ziehen und frei setzen und skalieren. Normiert wie ein
+Templateslot und nicht in Millimetern, damit ein Wechsel des Druckprofils die
+Handarbeit nicht zerreißt; am Slot und nicht als eigene Boxart, weil es derselbe
+Platz mit demselben Foto, Ausschnitt und Winkel bleibt — nur an anderer Stelle.
+
+Geklemmt wird auf die Beschnittfläche: Über die Endformatkante hinaus ist
+gewollt (dafür ist der Beschnitt da), ganz aus dem Blatt heraus wäre ein
+verlorenes Foto. Auflösung und Falzwarnung rechnen mit dem tatsächlichen
+Rechteck, nicht mit dem der Vorlage. Eine so gesetzte Position zählt als
+Handarbeit und geht beim Neuanordnen verloren.
+
+In der Doppelseiten-Ansicht schaltet ein Knopf am gewählten Bild zwischen
+**Ausschnitt** und **Position** um: Zwei Werkzeuge auf derselben Maustaste
+brauchen einen sichtbaren Umschalter, eine Zusatztaste fände niemand.
 
 ### Anordnung von Hand wählen
 

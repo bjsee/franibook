@@ -23,6 +23,20 @@ export interface SlotAssignment {
    * anzufassen.
    */
   rotateDeg?: number;
+  /**
+   * Von Hand gesetzte Position und Größe, normiert wie ein Templateslot.
+   *
+   * Ohne Angabe gilt der Platz aus der Vorlage. Mit Angabe verlässt das Bild
+   * das Raster: Es steht dort, wo jemand es hingezogen hat, in der Größe, die
+   * er ihm gegeben hat.
+   *
+   * Bewusst normiert und nicht in Millimetern – dieselbe Rechnung wie bei den
+   * Vorlagen, damit ein Wechsel des Druckprofils von 30×30 auf 21×21 cm die
+   * Handarbeit nicht zerreißt. Und bewusst am Slot und nicht als eigene
+   * Boxart: Es bleibt derselbe Platz mit demselben Foto, demselben Ausschnitt
+   * und derselben Neigung, nur an einer anderen Stelle.
+   */
+  rect?: { x: number; y: number; w: number; h: number };
 }
 
 export interface TextElement {

@@ -31,6 +31,7 @@ import type {
   RenderWarning,
   RenderedSpread,
 } from './rendered-spread.js';
+import { sideTimelineBoxes } from './side-timeline.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
 import { randabfallend, tiltDeg } from './tilt.js';
 import { textFontSizePt, textStyle } from './typography.js';
@@ -52,6 +53,20 @@ export interface TimelineContext {
    */
   fallbackYear?: number;
   accentColor?: string;
+  /**
+   * Welche Achse gezeichnet wird.
+   *
+   * `foot` ist der Zeitstrahl am Seitenfuß: achtzehn Monate um das Kapiteljahr,
+   * mit Gruppentitel – er beantwortet „wie weit ist es seit der letzten Seite".
+   * `side` ist die Lebensachse am äußeren Rand über alle Jahrgänge des Buches;
+   * sie beantwortet „wo im Leben stehe ich" und schweigt sonst.
+   */
+  style?: 'foot' | 'side';
+  /**
+   * Erstes und letztes Jahr des Buches – der Maßstab der Randachse. Nur der
+   * Aufrufer kennt sie; die Engine sieht immer nur eine Doppelseite.
+   */
+  bookYears?: { from: number; to: number };
 }
 
 /**
@@ -159,7 +174,10 @@ function buildImageBox(
   ctx: RenderContext,
 ): ImageBox {
   const { profile } = ctx;
-  const rect = toMm(slot, profile);
+  // Von Hand gesetzte Position schlägt den Platz der Vorlage. Alles Weitere –
+  // Ausschnitt, Auflösung, Neigung, Warnungen – rechnet danach mit demselben
+  // Rechteck weiter; sonst stünde das Bild woanders, als die Zahlen sagen.
+  const rect = toMm(assignment.rect ?? slot, profile);
   const slotAr = rect.wMm / rect.hMm;
 
   // Ein `auto-cover`-Ausschnitt wird für die aktuellen Slotmaße neu gerechnet;
@@ -182,7 +200,9 @@ function buildImageBox(
   } else if (dpi < profile.resolution.targetDpi) {
     warnings.push({ code: 'below-target-dpi', dpi, targetDpi: profile.resolution.targetDpi });
   }
-  if (crossesGutter(slot)) warnings.push({ code: 'crosses-gutter' });
+  // Auf das tatsächliche Rechteck geprüft: Wer ein Bild von Hand in den Falz
+  // zieht, soll dieselbe Warnung bekommen wie eine Vorlage, die es täte.
+  if (crossesGutter(assignment.rect ?? slot)) warnings.push({ code: 'crosses-gutter' });
 
   const drehung = tiltOf(assignment, rect, photo.id, ctx);
 
@@ -194,6 +214,7 @@ function buildImageBox(
     crop,
     effectiveDpi: dpi,
     ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
+    ...(assignment.rect ? { manualRect: true as const } : {}),
     warnings,
   };
 }
@@ -338,16 +359,6 @@ function buildTimeline(
 ): RenderBox[] {
   const { profile, template } = ctx;
 
-  // Reicht ein Slot in den Fußraum, entfällt der Strahl. Die Regel ist aus der
-  // Geometrie abgeleitet und gilt damit auch für künftige Vorlagen; heute
-  // betrifft sie allein den randabfallenden Gruppenauftakt.
-  const footTop = timelineFootTopMm(profile);
-  const belegt = template.slots.some((slot) => {
-    const rect = toMm(slot, profile);
-    return rect.yMm + rect.hMm > footTop;
-  });
-  if (belegt) return [];
-
   const photoIds = spread.slots
     .map((s) => s.photoId)
     .filter((id): id is PhotoId => id !== null && ctx.photos.has(id));
@@ -359,6 +370,37 @@ function buildTimeline(
     .filter((e): e is EffectiveDate => e !== undefined)
     .filter((e) => e.value !== null && (e.confidence === 'high' || e.confidence === 'medium'))
     .map((e) => e.value as NaiveDateTime);
+
+  // Die Randachse liegt im äußeren Sicherheitsrand und kommt deshalb keinem
+  // Slot in die Quere – auch nicht dem randabfallenden Gruppenauftakt, den der
+  // Fußstrahl meiden muss.
+  if (tl.style === 'side') {
+    if (!tl.bookYears) return [];
+    const sortiertSeitlich = [...dates].sort();
+    const mitte = sortiertSeitlich[Math.floor(sortiertSeitlich.length / 2)];
+    return sideTimelineBoxes(
+      {
+        background,
+        fromYear: tl.bookYears.from,
+        toYear: tl.bookYears.to,
+        // Kapitelauftakte tragen keinen Marker: Ihr Bild wird nach Auflösung
+        // gewählt, nicht nach Datum – dieselbe Regel wie am Fuß.
+        ...(mitte && !templateMeta(template.id).chapterOnly ? { at: mitte } : {}),
+        accentColor: tl.accentColor ?? accentOn(background),
+      },
+      profile,
+    );
+  }
+
+  // Reicht ein Slot in den Fußraum, entfällt der Strahl. Die Regel ist aus der
+  // Geometrie abgeleitet und gilt damit auch für künftige Vorlagen; heute
+  // betrifft sie allein den randabfallenden Gruppenauftakt.
+  const footTop = timelineFootTopMm(profile);
+  const belegt = template.slots.some((slot) => {
+    const rect = toMm(slot, profile);
+    return rect.yMm + rect.hMm > footTop;
+  });
+  if (belegt) return [];
 
   // Umfasst die Doppelseite mehrere Gruppen, gewinnt die mit den meisten Fotos.
   // Bei Gleichstand die zuerst auftretende – sonst wäre das Ergebnis von der

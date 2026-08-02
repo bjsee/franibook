@@ -22,6 +22,7 @@ import {
   photoPixelsOf,
   randabfallend,
   withCrop,
+  withRect,
   withRotation,
   zoomCrop,
 } from '@franibook/core';
@@ -129,6 +130,21 @@ export function SpreadEditor({
    * einem Umzug stimmt die Miniatur der Zielseite nicht mehr.
    */
   const [buchVersion, setBuchVersion] = useState(0);
+  /**
+   * Was die Maus im gewählten Slot tut.
+   *
+   * Ausschnitt ist die Vorgabe: Ihn justiert man an fast jedem Bild, die
+   * Position an wenigen. Beide auf derselben Taste brauchen einen sichtbaren
+   * Umschalter — eine Zusatztaste fände niemand.
+   */
+  const [werkzeug, setWerkzeug] = useState<'ausschnitt' | 'position'>('ausschnitt');
+  /** Position und Größe, solange sie noch nicht beim Server sind. */
+  const [pendingRect, setPendingRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -146,6 +162,7 @@ export function SpreadEditor({
   useEffect(() => {
     setPendingCrop(null);
     setPendingTilt(null);
+    setPendingRect(null);
   }, [index, selectedSlotId]);
 
   const poolLaden = useCallback(() => {
@@ -180,10 +197,23 @@ export function SpreadEditor({
     let s = spread;
     if (pendingCrop) s = withCrop(s, selectedSlotId, pendingCrop);
     if (pendingTilt !== null) s = withRotation(s, selectedSlotId, pendingTilt);
+    if (pendingRect) {
+      s = withRect(s, selectedSlotId, {
+        xMm: spread.bleedMm + pendingRect.x * (spread.widthMm - 2 * spread.bleedMm),
+        yMm: spread.bleedMm + pendingRect.y * (spread.heightMm - 2 * spread.bleedMm),
+        wMm: pendingRect.w * (spread.widthMm - 2 * spread.bleedMm),
+        hMm: pendingRect.h * (spread.heightMm - 2 * spread.bleedMm),
+      });
+    }
     return s;
-  }, [spread, pendingCrop, pendingTilt, selectedSlotId]);
+  }, [spread, pendingCrop, pendingTilt, pendingRect, selectedSlotId]);
 
   const pxPerMm = stageWidth / spread.widthMm;
+  // Normierte Koordinaten beziehen sich auf das Endformat, nicht auf die
+  // Beschnittfläche – dieselbe Bezugsgröße wie in den Vorlagen.
+  const beschnittMm = spread.bleedMm;
+  const trimBreiteMm = spread.widthMm - 2 * beschnittMm;
+  const trimHoeheMm = spread.heightMm - 2 * beschnittMm;
   const bildBox = (slotId: string | null) =>
     slotId === null ? undefined : imageBoxes(angezeigt).find((b) => b.slotId === slotId);
   const slotRect = (slotId: string): Rect | undefined =>
@@ -192,6 +222,8 @@ export function SpreadEditor({
     ) as Rect | undefined;
 
   const gewaehlteBox = bildBox(selectedSlotId);
+  /** Ob dieses Bild seinen Platz nicht mehr aus der Vorlage hat. */
+  const istFreiGesetzt = gewaehlteBox?.manualRect === true || pendingRect !== null;
 
   // --------------------------------------------------------- Speichern
 
@@ -331,6 +363,14 @@ export function SpreadEditor({
     const box = bildBox(slotId);
     if (!box) return;
 
+    // Im Positionsmodus bewegt dieselbe Geste den ganzen Kasten statt des
+    // Ausschnitts darin. Zwei Werkzeuge auf einer Maustaste brauchen einen
+    // sichtbaren Umschalter – eine Zusatztaste fände niemand.
+    if (werkzeug === 'position') {
+      positionZiehen(slotId, e);
+      return;
+    }
+
     e.preventDefault();
     gezogen.current = false;
     const startX = e.clientX;
@@ -353,6 +393,99 @@ export function SpreadEditor({
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Den Bildkasten selbst verschieben.
+   *
+   * Gerechnet wird in normierten Koordinaten des Endformats – dieselbe Einheit,
+   * in der auch die Vorlagen stehen. Gespeichert wird erst beim Loslassen: Ein
+   * Schreibvorgang je Mausbewegung wäre das ganze Projekt-JSON, hundertmal in
+   * der Sekunde.
+   */
+  function positionZiehen(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
+    const box = bildBox(slotId);
+    if (!box) return;
+
+    e.preventDefault();
+    gezogen.current = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = normiert(box);
+
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 3) {
+        gezogen.current = true;
+      }
+      setPendingRect({
+        ...start,
+        x: start.x + (ev.clientX - startX) / pxPerMm / trimBreiteMm,
+        y: start.y + (ev.clientY - startY) / pxPerMm / trimHoeheMm,
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setPendingRect((r) => {
+        if (r) void rechteckSpeichern(slotId, r);
+        return r;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Ändert die Größe um den Mittelpunkt.
+   *
+   * Um die Mitte und nicht um die obere linke Ecke: Wer ein Bild größer macht,
+   * meint „mehr Bild an dieser Stelle" und nicht „nach rechts unten wachsen".
+   */
+  async function groesseAendern(faktor: number) {
+    if (!gewaehlteBox) return;
+    const jetzt = pendingRect ?? normiert(gewaehlteBox);
+    const w = jetzt.w / faktor;
+    const h = jetzt.h / faktor;
+    const neu = {
+      x: jetzt.x + (jetzt.w - w) / 2,
+      y: jetzt.y + (jetzt.h - h) / 2,
+      w,
+      h,
+    };
+    setPendingRect(neu);
+    await rechteckSpeichern(gewaehlteBox.slotId, neu);
+  }
+
+  /** Rechnet eine Box des RSM zurück in normierte Endformatkoordinaten. */
+  function normiert(box: { xMm: number; yMm: number; wMm: number; hMm: number }) {
+    return {
+      x: (box.xMm - beschnittMm) / trimBreiteMm,
+      y: (box.yMm - beschnittMm) / trimHoeheMm,
+      w: box.wMm / trimBreiteMm,
+      h: box.hMm / trimHoeheMm,
+    };
+  }
+
+  async function rechteckSpeichern(
+    slotId: string,
+    rect: { x: number; y: number; w: number; h: number } | null,
+  ) {
+    try {
+      const res = await fetch(`/api/spreads/${index}/slots/${slotId}/rect`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rect }),
+      });
+      const data = await res.json();
+      if (data.spread) {
+        onSpread(data.spread);
+        setPendingRect(null);
+        setBuchVersion((v) => v + 1);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Position nicht gespeichert: ${String(e)}`);
+    }
   }
 
   /**
@@ -531,10 +664,38 @@ export function SpreadEditor({
             >
               {Math.round(gewaehlteBox.effectiveDpi)} dpi
             </span>
+            {/*
+              Der Umschalter zwischen den beiden Werkzeugen auf derselben
+              Maustaste: Ausschnitt bewegt das Bild im Kasten, Position den
+              Kasten auf der Seite.
+            */}
+            {(
+              [
+                ['ausschnitt', 'Ausschnitt'],
+                ['position', 'Position'],
+              ] as const
+            ).map(([wert, text]) => (
+              <button
+                key={wert}
+                onClick={() => setWerkzeug(wert)}
+                style={werkzeug === wert ? S.buttonAn : S.button}
+                title={
+                  wert === 'ausschnitt'
+                    ? 'Ziehen verschiebt den Bildausschnitt'
+                    : 'Ziehen verschiebt das Bild auf der Seite'
+                }
+              >
+                {text}
+              </button>
+            ))}
             <span style={S.muted}>
-              {(pendingCrop ?? gewaehlteBox.crop).mode === 'manual'
-                ? 'Ausschnitt von Hand'
-                : 'Ausschnitt automatisch'}
+              {werkzeug === 'position'
+                ? istFreiGesetzt
+                  ? 'frei gesetzt'
+                  : 'im Raster der Vorlage'
+                : (pendingCrop ?? gewaehlteBox.crop).mode === 'manual'
+                  ? 'Ausschnitt von Hand'
+                  : 'Ausschnitt automatisch'}
             </span>
             <button
               onClick={() =>
@@ -554,9 +715,36 @@ export function SpreadEditor({
             >
               Weiter (−)
             </button>
-            <button onClick={() => void ausschnittZuruecksetzen()} style={S.button}>
-              Automatisch (0)
-            </button>
+            {werkzeug === 'position' ? (
+              <>
+                <button
+                  onClick={() => void groesseAendern(1 / ZOOM_SCHRITT)}
+                  style={S.button}
+                  title="Das Bild größer setzen"
+                >
+                  Größer
+                </button>
+                <button
+                  onClick={() => void groesseAendern(ZOOM_SCHRITT)}
+                  style={S.button}
+                  title="Das Bild kleiner setzen"
+                >
+                  Kleiner
+                </button>
+                <button
+                  onClick={() => void rechteckSpeichern(gewaehlteBox.slotId, null)}
+                  disabled={!istFreiGesetzt}
+                  style={S.button}
+                  title="Zurück auf den Platz aus der Vorlage"
+                >
+                  Ins Raster
+                </button>
+              </>
+            ) : (
+              <button onClick={() => void ausschnittZuruecksetzen()} style={S.button}>
+                Automatisch (0)
+              </button>
+            )}
             <NeigungsRegler
               box={gewaehlteBox}
               flaeche={angezeigt}

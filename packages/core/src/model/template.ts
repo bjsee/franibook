@@ -84,7 +84,7 @@ export function slotAspect(
  * Ob der Slot die Falzachse schneidet. Wird aus der Geometrie abgeleitet statt
  * im Template gepflegt – so kann es nicht auseinanderlaufen.
  */
-export function crossesGutter(slot: TemplateSlot): boolean {
+export function crossesGutter(slot: Pick<TemplateSlot, 'x' | 'w'>): boolean {
   return slot.x < 0.5 && slot.x + slot.w > 0.5;
 }
 
