@@ -526,6 +526,27 @@ Bei maximal einigen hundert Fotos je Ereignis und acht Gruppengrößen ist das i
 > Achterbibliothek wäre die Zielseitenzahl rechnerisch unerreichbar. `groupChapter`
 > arbeitet außerdem über das ganze Jahr, nicht über einzelne Monate.
 
+> **Korrektur (2. August 2026): die Seitenzahl ist Nebenbedingung, kein Kostenterm**
+>
+> Als bloßer Term unter mehreren wurde die Budgettreue von Serien-, Monats- und
+> Gruppenstrafen überstimmt: Am echten Bestand kamen 86 statt der budgetierten 80
+> Doppelseiten heraus, also 172 Seiten bei einem Maximum von 160
+> ([#4](https://github.com/bjsee/franibook/issues/4)).
+>
+> Die dynamische Programmierung läuft deshalb über zwei Dimensionen —
+> `bestCost[i][j]` sind die minimalen Kosten für die ersten `i` Fotos in _genau_ `j`
+> Doppelseiten. Gesucht wird `j = targetSpreads`; ist das unerfüllbar (fünf Fotos
+> lassen sich nicht auf zehn Doppelseiten verteilen), gilt die nächstkleinere Zahl,
+> denn die Obergrenze des Druckprofils ist hart, das Erreichen der Zielzahl nicht.
+> `distributeBudget` teilt dazu nur noch Doppelseiten zu, die ein Jahr auch füllen
+> kann — höchstens eine je Foto, mindestens eine je 24 Fotos —, und `generateBook`
+> rastet die Vorgabe über `nextValidPageCount()` auf das Profil ein. Ergebnis: exakt
+> 160 Seiten, 10,25 Bilder je Doppelseite, Laufzeit unverändert bei ~30 ms.
+>
+> Ein Nachlauf, der die dünnsten Doppelseiten zusammenlegt, wäre die einfachere
+> Alternative gewesen, hätte aber eine zweite Heuristik neben die Kostenfunktion
+> gestellt; die exakte Rechnung kostet nur den Faktor `targetSpreads`.
+
 ### Templatewahl und Slot-Zuordnung
 
 Für eine Gruppe kommen alle Templates mit passender Slotzahl in Frage. Jedes wird bewertet; für jedes wird zunächst die optimale Zuordnung Foto→Slot bestimmt. Bei bis zu acht Slots ist das ein kleines Zuordnungsproblem, gelöst per Ungarischer Methode über die Kostenmatrix `kosten[foto][slot]`:

@@ -238,7 +238,7 @@ Aus Ereignissen ein vollständiges Buch erzeugen. Das Herzstück.
 
 > **Stand: erledigt ✅**
 >
-> 820 Fotos ergeben 86 Doppelseiten mit im Schnitt 9,5 Bildern, alle 820 sind
+> 820 Fotos ergeben genau 80 Doppelseiten mit im Schnitt 10,25 Bildern, alle 820 sind
 > platziert. Budgetverteilung, DP-Gruppierung, Templatewahl mit Wiederholungsstrafe,
 > Slot-Zuordnung per Ungarischer Methode und seedbasierter Determinismus laufen.
 >
@@ -255,8 +255,12 @@ Aus Ereignissen ein vollständiges Buch erzeugen. Das Herzstück.
 > - **Die Gewichtung wird nie gesetzt.** `hero`/`normal`/`filler` sind implementiert
 >   und fließen ins Scoring, aber kein Foto ist je etwas anderes als `normal` —
 >   [#7](https://github.com/bjsee/franibook/issues/7).
-> - Die Seitenzahl wird überschritten statt getroffen (172 statt 160) —
->   [#4](https://github.com/bjsee/franibook/issues/4).
+>
+> Behoben: Die Seitenzahl wird jetzt exakt getroffen statt überschritten (160 statt
+> 172, [#4](https://github.com/bjsee/franibook/issues/4)). Die DP-Gruppierung rechnet
+> über zwei Dimensionen — Präfixlänge und Zahl der Doppelseiten —, die Seitenzahl ist
+> damit Nebenbedingung statt Kostenterm. Die Zielvorgabe rastet über
+> `nextValidPageCount()` auf das Druckprofil ein.
 
 **Inhalt**
 
@@ -364,7 +368,7 @@ Ein PDF, das bei Saal Digital tatsächlich hochgeladen werden kann.
 > 31 Sekunden, MediaBox, TrimBox und BleedBox gesetzt, Seitenaufteilung `single`
 > und `spread` implementiert, Bilder auf genau die nötige Pixelzahl skaliert.
 >
-> Offen — vier davon blockieren den ersten Druckauftrag:
+> Offen — drei davon blockieren den ersten Druckauftrag:
 >
 > - **Maße unverifiziert** ([#1](https://github.com/bjsee/franibook/issues/1)),
 >   `provenance.verifiedAt` steht weiterhin auf `null`
@@ -372,8 +376,6 @@ Ein PDF, das bei Saal Digital tatsächlich hochgeladen werden kann.
 >   Rückenformel in `profile.ts` gibt es, den Renderer nicht
 > - **404 MB Dateigröße** bei 153 Doppelseiten gemessen
 >   ([#3](https://github.com/bjsee/franibook/issues/3))
-> - **172 statt 160 Seiten** ([#4](https://github.com/bjsee/franibook/issues/4));
->   `nextValidPageCount()` existiert, wird aber nicht verwendet
 > - Kein ICC-Profil und kein OutputIntent, kein Preflight, kein
 >   `export-report.json`, kein SSE-Fortschritt. Der Export meldet übersprungene
 >   Bilder immerhin im Ergebnis — aktuell genau eines
@@ -471,7 +473,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 | 2     | 900 Fotos belastbar importiert                | ✅ weitgehend, 820 Fotos             | ~1 d  |
 | 3     | Chronologie korrigierbar                      | offen, am Bestand kaum nötig         | 5–6 d |
 | 4     | Ereignisse erkannt und editierbar             | ✅ anders gelöst: Kalender + Gruppen | ~1 d  |
-| 5     | **Vollständiger automatischer Buchentwurf**   | ✅ erledigt, 86 Doppelseiten         | ~1 d  |
+| 5     | **Vollständiger automatischer Buchentwurf**   | ✅ erledigt, 80 Doppelseiten         | ~1 d  |
 | 6     | Buch komfortabel korrigierbar                 | teilweise, JSON statt Direktgriff    | 4–5 d |
 | 7     | Persistenz belastbar                          | offen                                | 2–3 d |
 | 8     | **Druckfertiges PDF**                         | teilweise, Innenteil läuft           | 3–4 d |
