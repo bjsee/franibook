@@ -10,6 +10,7 @@
 import type { Template, TemplateId, TemplateSlot } from '../model/template.js';
 import { mirrorTemplate } from '../model/template.js';
 import library from './library.json' with { type: 'json' };
+import { PAIR_PREFIX, pairTemplate } from './halves.js';
 
 interface RawSlot {
   id: string;
@@ -137,12 +138,33 @@ export function allTemplates(): readonly Template[] {
   return ALL;
 }
 
+/**
+ * Vorlage zu einer Kennung.
+ *
+ * Neben den Vorlagen der Bibliothek löst sie auch **zusammengesetzte**
+ * Doppelseiten auf: `paar:<links>+<rechts>` entsteht, wenn jemand die Anordnung
+ * je Seite von Hand wählt. Sie steht nicht in der Bibliothek, weil es davon
+ * 126 × 126 gäbe – sie wird aus ihrer Kennung gebaut, und weil das
+ * deterministisch geschieht, überlebt sie Speichern und Laden wie jede andere.
+ *
+ * Der Zwischenspeicher hält, was einmal zusammengesetzt wurde: Ein Buch mit
+ * achtzig Doppelseiten fragt beim Rendern jede Vorlage mehrfach ab.
+ */
 export function templateById(id: TemplateId): Template | undefined {
-  return BY_ID.get(id);
+  const bekannt = BY_ID.get(id);
+  if (bekannt) return bekannt;
+
+  if (!id.startsWith(PAIR_PREFIX)) return undefined;
+  const zusammengesetzt = PAIRS.get(id) ?? pairTemplate(id);
+  if (zusammengesetzt) PAIRS.set(id, zusammengesetzt);
+  return zusammengesetzt;
 }
 
+/** Zusammengesetzte Doppelseiten, einmal gebaut und dann behalten. */
+const PAIRS = new Map<TemplateId, Template>();
+
 export function requireTemplate(id: TemplateId): Template {
-  const t = BY_ID.get(id);
+  const t = templateById(id);
   if (!t) throw new Error(`Template nicht gefunden: ${id}`);
   return t;
 }

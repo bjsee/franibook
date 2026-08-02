@@ -108,6 +108,53 @@ function cropStyle(crop: Crop): CSSProperties {
   };
 }
 
+/**
+ * Das Zeichen, das beim Ziehen am Zeiger hängt.
+ *
+ * Der Browser nimmt sonst ein halbdurchsichtiges Abbild des gezogenen Elements –
+ * bei einem Bild von 120 mm Kantenlänge ist das ein Schatten, der genau die
+ * Stelle verdeckt, an der man das Ziel sucht. Ein kleines Quadrat am Zeiger
+ * lässt die Doppelseite frei.
+ *
+ * Der Knoten wird einmal erzeugt und behalten: `setDragImage` braucht ein
+ * Element, das im Dokument steht und beim Aufruf schon gezeichnet ist. Er sitzt
+ * außerhalb des sichtbaren Bereichs statt auf `display: none` – ein
+ * ausgeblendetes Element nimmt der Browser nicht an.
+ */
+let DRAG_BILD: HTMLElement | undefined;
+
+export function dragBild(): HTMLElement {
+  if (DRAG_BILD?.isConnected) return DRAG_BILD;
+
+  const el = document.createElement('div');
+  el.setAttribute('aria-hidden', 'true');
+  Object.assign(el.style, {
+    position: 'fixed',
+    top: '-100px',
+    left: '-100px',
+    width: '28px',
+    height: '28px',
+    borderRadius: '5px',
+    background: '#1d4ed8',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  } satisfies Partial<CSSStyleDeclaration>);
+  // Ein Bildsymbol: Rahmen mit Horizont und Sonne, in Weiß auf dem Blau.
+  el.innerHTML =
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="4" width="18" height="16" rx="2"/>' +
+    '<circle cx="8.5" cy="9.5" r="1.5"/>' +
+    '<path d="M21 16l-5-5-4 4-2-2-4 4"/></svg>';
+
+  document.body.appendChild(el);
+  DRAG_BILD = el;
+  return el;
+}
+
 function severityOf(box: ImageBox): 'none' | 'warn' | 'error' {
   if (box.warnings.some((w) => w.code === 'below-min-dpi' || w.code === 'photo-missing')) {
     return 'error';
@@ -182,6 +229,10 @@ export function SpreadView({
         e.dataTransfer.effectAllowed = 'move';
         // Ohne Nutzlast bricht Firefox den Zug sofort ab.
         e.dataTransfer.setData('text/plain', slotId);
+        // Statt des halbdurchsichtigen Abbilds des ganzen Slots ein kleines
+        // Zeichen am Zeiger: Ein 120-mm-Bild als Schatten verdeckt beim Ziehen
+        // genau die Stelle, an der man das Ziel sucht.
+        e.dataTransfer.setDragImage(dragBild(), 14, 14);
         slotDrag.onDragStart(slotId);
       },
       onDragOver: (e: DragEvent<HTMLDivElement>) => {

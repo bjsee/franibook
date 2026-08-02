@@ -25,7 +25,7 @@ import {
   withRotation,
   zoomCrop,
 } from '@franibook/core';
-import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
+import { SpreadView, dragBild, type GuideVisibility } from '@franibook/render-dom';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 import { SpreadNeighbors } from './SpreadNeighbors.js';
 import { TemplatePicker } from './TemplatePicker.js';
@@ -745,6 +745,8 @@ export function SpreadEditor({
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = 'move';
                   e.dataTransfer.setData('text/plain', p.id);
+                  // Dasselbe Zeichen wie beim Ziehen aus der Doppelseite.
+                  e.dataTransfer.setDragImage(dragBild(), 14, 14);
                   setZug({
                     source: { kind: 'pool', photoId: p.id },
                     photo: { width: p.width, height: p.height },

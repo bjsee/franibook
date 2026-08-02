@@ -40,6 +40,8 @@ import {
   findBulkSeconds,
   FULL_CROP,
   generateBook,
+  halfPages,
+  halvesOfTemplate,
   layoutSpread,
   movePhoto,
   addToGroup,
@@ -1076,6 +1078,46 @@ export class Project {
     spread.slots = angeordnet.slots;
     this.refreshReport();
     return { ok: true, leftover: angeordnet.leftover };
+  }
+
+  /**
+   * Die Anordnungen, unter denen eine einzelne Seite wählen kann.
+   *
+   * Der Vorlagenwechsel betrifft sonst beide Seiten, und das hilft nicht: Man
+   * will die eine Seite ändern, auf der das Bild falsch steht. Zurückgegeben
+   * werden alle Halbseiten in Linksform samt Slotgeometrie; für die rechte
+   * Seite spiegelt sie die Oberfläche beim Zeichnen, so wie es die Engine beim
+   * Zusammensetzen tut.
+   */
+  halfChoices(index: number): {
+    halves: {
+      id: string;
+      slotCount: number;
+      slots: { x: number; y: number; w: number; h: number }[];
+    }[];
+    current: { left?: string; right?: string };
+    /** Bilder auf der linken und rechten Seite dieser Doppelseite. */
+    counts: { left: number; right: number };
+  } {
+    const spread = this.spreads[index];
+    if (!spread) return { halves: [], current: {}, counts: { left: 0, right: 0 } };
+
+    const template = templateById(spread.templateId);
+    const belegt = (pruefe: (x: number, w: number) => boolean) =>
+      (template?.slots ?? []).filter((s, i) => pruefe(s.x, s.w) && spread.slots[i]?.photoId).length;
+
+    return {
+      halves: halfPages().map((h) => ({
+        id: h.id,
+        slotCount: h.slots.length,
+        slots: h.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
+      })),
+      current: template ? halvesOfTemplate(template) : {},
+      counts: {
+        left: belegt((x, w) => x + w <= 0.5001),
+        right: belegt((x) => x >= 0.4999),
+      },
+    };
   }
 
   /**

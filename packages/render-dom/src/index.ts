@@ -6,7 +6,7 @@
  * berechneten Modells, kein eigenständiges Layout.
  */
 
-export { SpreadView } from './SpreadView.js';
+export { dragBild, SpreadView } from './SpreadView.js';
 export type { SpreadViewProps, GuideVisibility, SlotDragHandlers } from './SpreadView.js';
 export { CoverView } from './CoverView.js';
 export type { CoverViewProps, CoverGuideVisibility } from './CoverView.js';
