@@ -51,11 +51,53 @@ const HOME_COUNTRIES = new Set(['DE']);
 const CITY_THRESHOLD = 100_000;
 
 /**
+ * Einzelne Inseln über ihren groben Umriss.
+ *
+ * Wird vor allen anderen Regeln geprüft. Nötig für Inseln, deren
+ * Verwaltungsregion mehrere umfasst: Kos, Rhodos, Santorini und Mykonos liegen
+ * alle in der „Südägäis" – als Gruppenname wäre das unbrauchbar, und der
+ * nächstgelegene Ort trifft je nach Aufnahmeort mal die Insel, mal einen
+ * Nachbarort auf dem Festland.
+ *
+ * Die Kästen sind absichtlich etwas größer als die Insel. Eine Verwechslung
+ * mit dem Festland ist ausgeschlossen, weil Meer dazwischenliegt.
+ */
+const ISLAND_BOXES: { label: string; south: number; north: number; west: number; east: number }[] =
+  [
+    // Dodekanes und Ägäis
+    { label: 'Kos', south: 36.68, north: 36.96, west: 26.86, east: 27.36 },
+    { label: 'Rhodos', south: 35.83, north: 36.49, west: 27.66, east: 28.28 },
+    { label: 'Santorin', south: 36.31, north: 36.49, west: 25.3, east: 25.52 },
+    { label: 'Mykonos', south: 37.38, north: 37.52, west: 25.25, east: 25.45 },
+    { label: 'Naxos', south: 36.92, north: 37.18, west: 25.3, east: 25.63 },
+    { label: 'Paros', south: 36.96, north: 37.15, west: 25.07, east: 25.33 },
+    { label: 'Samos', south: 37.62, north: 37.85, west: 26.5, east: 27.08 },
+    { label: 'Lesbos', south: 38.92, north: 39.45, west: 25.82, east: 26.63 },
+    { label: 'Karpathos', south: 35.4, north: 35.78, west: 27.06, east: 27.25 },
+    { label: 'Patmos', south: 37.28, north: 37.4, west: 26.5, east: 26.61 },
+    // Ionische Inseln – dort ist die Region „Ionische Inseln" zu grob
+    { label: 'Korfu', south: 39.33, north: 39.85, west: 19.6, east: 20.15 },
+    { label: 'Zakynthos', south: 37.66, north: 37.97, west: 20.56, east: 21.0 },
+    { label: 'Kefalonia', south: 38.05, north: 38.5, west: 20.3, east: 20.85 },
+    { label: 'Lefkada', south: 38.55, north: 38.87, west: 20.5, east: 20.78 },
+    // Balearen – Region „Balearen" nennt die Insel nicht
+    { label: 'Mallorca', south: 39.25, north: 39.98, west: 2.3, east: 3.5 },
+    { label: 'Menorca', south: 39.79, north: 40.11, west: 3.78, east: 4.35 },
+    { label: 'Ibiza', south: 38.63, north: 39.13, west: 1.19, east: 1.65 },
+    // Kanaren
+    { label: 'Teneriffa', south: 27.99, north: 28.61, west: -16.94, east: -16.1 },
+    { label: 'Gran Canaria', south: 27.71, north: 28.19, west: -15.85, east: -15.34 },
+    { label: 'Fuerteventura', south: 28.02, north: 28.77, west: -14.55, east: -13.79 },
+    { label: 'Lanzarote', south: 28.83, north: 29.26, west: -13.88, east: -13.4 },
+    { label: 'La Palma', south: 28.44, north: 28.87, west: -18.03, east: -17.71 },
+  ];
+
+/**
  * Regionen, die als Insel benannt werden.
  *
  * Bewusst kuratiert statt automatisch: Nur wo der Regionsname tatsächlich der
  * gebräuchliche Inselname ist, ergibt er als Gruppenname Sinn. „Südägäis"
- * würde niemand sagen – dort greift die Stadt- oder Länderregel.
+ * würde niemand sagen – dort greifen die Umrisse oben.
  */
 const ISLAND_REGIONS: Record<string, string> = {
   'GR.ESYE43': 'Kreta',
@@ -167,6 +209,12 @@ function distanceKm(aLat: number, aLon: number, bLat: number, bLon: number): num
 export function lookupPlace(lat: number, lon: number): PlaceLookup | undefined {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
 
+  // Namentlich erfasste Inseln haben Vorrang. Sonst entschiede der nächste
+  // Ort, und der liegt auf einer kleinen Insel schnell woanders.
+  const insel = ISLAND_BOXES.find(
+    (b) => lat >= b.south && lat <= b.north && lon >= b.west && lon <= b.east,
+  );
+
   const coslat = Math.cos((lat * Math.PI) / 180);
   let nearestIndex = -1;
   let nearestSq = Number.POSITIVE_INFINITY;
@@ -209,6 +257,10 @@ export function lookupPlace(lat: number, lon: number): PlaceLookup | undefined {
     distanceKm: Math.round(km * 10) / 10,
     ...(region ? { region } : {}),
   };
+
+  if (insel) {
+    return { ...base, label: insel.label, kind: 'island' };
+  }
 
   if (HOME_COUNTRIES.has(cc)) {
     return { ...base, label: cityName(city), kind: 'city' };
