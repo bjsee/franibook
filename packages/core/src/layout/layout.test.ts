@@ -310,9 +310,30 @@ describe('generateBook', () => {
   });
 
   it('hält überall die Mindestauflösung ein', () => {
-    // Die eigentliche Zusage an den Druck.
+    // Die eigentliche Zusage an den Druck – gilt für alle Fotos, die groß
+    // genug sind.
     const result = generate({ targetPages: 200 });
     expect(result.report.worstDpi).toBeGreaterThanOrEqual(profile.resolution.minDpi);
+    expect(result.report.belowMinDpi).toEqual([]);
+  });
+
+  it('meldet Fotos, die für jeden Slot zu klein sind, statt sie zu verstecken', () => {
+    // Im echten Bestand gibt es Bilder mit 348 px langer Kante. Die passen in
+    // keinen Slot der Bibliothek; sie werden platziert und gemeldet.
+    const { photos, dated } = buildBestand({ 2015: 12 });
+    photos.set('winzig', photo('winzig', 348, 261));
+    const structure = buildStructure([...dated, { id: 'winzig', date: '2015-06-15T12:00:00' }]);
+    const result = generateBook({
+      structure,
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+    });
+    expect(result.report.belowMinDpi.length).toBeGreaterThan(0);
+    expect(result.report.belowMinDpi[0]!.photoId).toBe('winzig');
+    // Trotzdem platziert
+    expect(result.report.placedCount).toBe(13);
   });
 
   it('gibt jedem Jahr einen Kapitelauftakt', () => {

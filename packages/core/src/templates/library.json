@@ -178,31 +178,31 @@
       "tags": ["rhythmisch"],
       "slots": [
         {
-          "id": "a",
           "x": 22,
-          "y": 104,
-          "w": 123,
-          "h": 92,
+          "y": 90,
+          "w": 120,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 161,
-          "y": 104,
-          "w": 123,
-          "h": 92,
+          "x": 164,
+          "y": 90,
+          "w": 120,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 385,
-          "y": 104,
-          "w": 123,
-          "h": 92,
+          "x": 367,
+          "y": 90,
+          "w": 160,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "c"
         }
       ]
     },
@@ -212,40 +212,40 @@
       "tags": ["ruhig", "ausgewogen"],
       "slots": [
         {
-          "id": "a",
           "x": 22,
-          "y": 90,
+          "y": 68,
           "w": 120,
           "h": 120,
           "prominence": 2,
-          "prefers": "any"
+          "prefers": "any",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 162,
-          "y": 90,
+          "x": 164,
+          "y": 68,
           "w": 120,
           "h": 120,
           "prominence": 2,
-          "prefers": "any"
+          "prefers": "any",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 318,
-          "y": 90,
+          "x": 316,
+          "y": 68,
           "w": 120,
           "h": 120,
           "prominence": 2,
-          "prefers": "any"
+          "prefers": "any",
+          "id": "c"
         },
         {
-          "id": "d",
           "x": 458,
-          "y": 90,
+          "y": 68,
           "w": 120,
           "h": 120,
           "prominence": 2,
-          "prefers": "any"
+          "prefers": "any",
+          "id": "d"
         }
       ]
     },
@@ -255,40 +255,40 @@
       "tags": ["rhythmisch"],
       "slots": [
         {
-          "id": "a",
           "x": 22,
-          "y": 69,
+          "y": 60,
           "w": 121,
           "h": 161,
           "prominence": 2,
-          "prefers": "portrait"
+          "prefers": "portrait",
+          "id": "a"
         },
         {
-          "id": "b",
           "x": 163,
-          "y": 69,
+          "y": 60,
           "w": 121,
           "h": 161,
           "prominence": 2,
-          "prefers": "portrait"
+          "prefers": "portrait",
+          "id": "b"
         },
         {
-          "id": "c",
           "x": 316,
-          "y": 69,
+          "y": 60,
           "w": 121,
           "h": 161,
           "prominence": 2,
-          "prefers": "portrait"
+          "prefers": "portrait",
+          "id": "c"
         },
         {
-          "id": "d",
           "x": 457,
-          "y": 69,
+          "y": 60,
           "w": 121,
           "h": 161,
           "prominence": 2,
-          "prefers": "portrait"
+          "prefers": "portrait",
+          "id": "d"
         }
       ]
     },
@@ -341,49 +341,49 @@
       "tags": ["dicht", "rhythmisch"],
       "slots": [
         {
-          "id": "a",
-          "x": 30,
-          "y": 45,
-          "w": 140,
-          "h": 105,
+          "x": 22,
+          "y": 22,
+          "w": 160,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 182,
-          "y": 45,
-          "w": 100,
-          "h": 133,
+          "x": 194,
+          "y": 22,
+          "w": 90,
+          "h": 120,
           "prominence": 1,
-          "prefers": "portrait"
+          "prefers": "portrait",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 30,
-          "y": 165,
-          "w": 110,
-          "h": 83,
-          "prominence": 1,
-          "prefers": "landscape"
-        },
-        {
-          "id": "d",
-          "x": 336,
-          "y": 55,
-          "w": 110,
-          "h": 83,
-          "prominence": 1,
-          "prefers": "landscape"
-        },
-        {
-          "id": "e",
-          "x": 336,
-          "y": 152,
-          "w": 140,
-          "h": 105,
+          "x": 73,
+          "y": 158,
+          "w": 160,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "c"
+        },
+        {
+          "x": 367,
+          "y": 22,
+          "w": 160,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "d"
+        },
+        {
+          "x": 367,
+          "y": 158,
+          "w": 160,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "landscape",
+          "id": "e"
         }
       ]
     },
@@ -393,58 +393,58 @@
       "tags": ["dicht"],
       "slots": [
         {
-          "id": "a",
-          "x": 45,
-          "y": 60,
-          "w": 105,
-          "h": 79,
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 160,
-          "y": 60,
-          "w": 105,
-          "h": 79,
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 45,
-          "y": 155,
-          "w": 105,
-          "h": 79,
+          "x": 22,
+          "y": 161,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "c"
         },
         {
-          "id": "d",
-          "x": 160,
-          "y": 155,
-          "w": 105,
-          "h": 79,
+          "x": 164,
+          "y": 161,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "d"
         },
         {
-          "id": "e",
-          "x": 385,
-          "y": 52,
-          "w": 123,
-          "h": 92,
+          "x": 367,
+          "y": 22,
+          "w": 160,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "e"
         },
         {
-          "id": "f",
-          "x": 385,
+          "x": 367,
           "y": 158,
-          "w": 123,
-          "h": 92,
+          "w": 160,
+          "h": 120,
           "prominence": 2,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "f"
         }
       ]
     },
@@ -598,94 +598,94 @@
       "tags": ["dicht", "fotoreich"],
       "slots": [
         {
-          "id": "a",
-          "x": 32,
-          "y": 60,
-          "w": 118,
-          "h": 88,
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 166,
-          "y": 60,
-          "w": 118,
-          "h": 88,
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 32,
-          "y": 164,
-          "w": 118,
-          "h": 88,
+          "x": 22,
+          "y": 161,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "c"
         },
         {
-          "id": "d",
-          "x": 166,
-          "y": 164,
-          "w": 118,
-          "h": 88,
+          "x": 164,
+          "y": 161,
+          "w": 120,
+          "h": 117,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "d"
         },
         {
-          "id": "e",
-          "x": 350,
-          "y": 32,
-          "w": 105,
+          "x": 316,
+          "y": 22,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "e"
         },
         {
-          "id": "f",
-          "x": 469,
-          "y": 32,
-          "w": 105,
+          "x": 458,
+          "y": 22,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "f"
         },
         {
-          "id": "g",
-          "x": 350,
-          "y": 120,
-          "w": 105,
+          "x": 316,
+          "y": 113,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "g"
         },
         {
-          "id": "h",
-          "x": 469,
-          "y": 120,
-          "w": 105,
+          "x": 458,
+          "y": 113,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "h"
         },
         {
-          "id": "i",
-          "x": 350,
-          "y": 208,
-          "w": 105,
+          "x": 316,
+          "y": 204,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "i"
         },
         {
-          "id": "j",
-          "x": 469,
-          "y": 208,
-          "w": 105,
+          "x": 458,
+          "y": 204,
+          "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "j"
         }
       ]
     },
@@ -695,112 +695,112 @@
       "tags": ["dicht", "fotoreich"],
       "slots": [
         {
-          "id": "a",
-          "x": 30,
-          "y": 30,
-          "w": 100,
-          "h": 75,
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 144,
-          "y": 30,
-          "w": 100,
-          "h": 75,
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 30,
-          "y": 119,
-          "w": 100,
-          "h": 75,
+          "x": 22,
+          "y": 113,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "c"
         },
         {
-          "id": "d",
-          "x": 144,
-          "y": 119,
-          "w": 100,
-          "h": 75,
+          "x": 164,
+          "y": 113,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "d"
         },
         {
-          "id": "e",
-          "x": 30,
-          "y": 208,
-          "w": 100,
-          "h": 75,
+          "x": 22,
+          "y": 204,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "e"
         },
         {
-          "id": "f",
-          "x": 144,
-          "y": 208,
-          "w": 100,
-          "h": 75,
+          "x": 164,
+          "y": 204,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "f"
         },
         {
-          "id": "g",
-          "x": 356,
-          "y": 30,
-          "w": 100,
-          "h": 75,
+          "x": 316,
+          "y": 22,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "g"
         },
         {
-          "id": "h",
-          "x": 470,
-          "y": 30,
-          "w": 100,
-          "h": 75,
+          "x": 458,
+          "y": 22,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "h"
         },
         {
-          "id": "i",
-          "x": 356,
-          "y": 119,
-          "w": 100,
-          "h": 75,
+          "x": 316,
+          "y": 113,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "i"
         },
         {
-          "id": "j",
-          "x": 470,
-          "y": 119,
-          "w": 100,
-          "h": 75,
+          "x": 458,
+          "y": 113,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "j"
         },
         {
-          "id": "k",
-          "x": 356,
-          "y": 208,
-          "w": 100,
-          "h": 75,
+          "x": 316,
+          "y": 204,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "k"
         },
         {
-          "id": "l",
-          "x": 470,
-          "y": 208,
-          "w": 100,
-          "h": 75,
+          "x": 458,
+          "y": 204,
+          "w": 120,
+          "h": 74,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "landscape",
+          "id": "l"
         }
       ]
     },
@@ -810,112 +810,112 @@
       "tags": ["dicht", "fotoreich"],
       "slots": [
         {
-          "id": "a",
           "x": 22,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "a"
         },
         {
-          "id": "b",
           "x": 113,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "b"
         },
         {
-          "id": "c",
           "x": 204,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "c"
         },
         {
-          "id": "d",
           "x": 22,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "d"
         },
         {
-          "id": "e",
           "x": 113,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "e"
         },
         {
-          "id": "f",
           "x": 204,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "f"
         },
         {
-          "id": "g",
           "x": 316,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "g"
         },
         {
-          "id": "h",
           "x": 407,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "h"
         },
         {
-          "id": "i",
           "x": 498,
-          "y": 80,
+          "y": 22,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "i"
         },
         {
-          "id": "j",
           "x": 316,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "j"
         },
         {
-          "id": "k",
           "x": 407,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "k"
         },
         {
-          "id": "l",
           "x": 498,
-          "y": 160,
+          "y": 178,
           "w": 80,
-          "h": 60,
+          "h": 100,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "portrait",
+          "id": "l"
         }
       ]
     },
@@ -925,76 +925,76 @@
       "tags": ["dicht", "rhythmisch"],
       "slots": [
         {
-          "id": "a",
-          "x": 30,
-          "y": 45,
-          "w": 105,
-          "h": 79,
+          "x": 22,
+          "y": 22,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "a"
         },
         {
-          "id": "b",
-          "x": 147,
-          "y": 45,
-          "w": 105,
-          "h": 79,
+          "x": 164,
+          "y": 22,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "b"
         },
         {
-          "id": "c",
-          "x": 30,
-          "y": 138,
-          "w": 105,
-          "h": 79,
+          "x": 22,
+          "y": 156,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "c"
         },
         {
-          "id": "d",
-          "x": 147,
-          "y": 138,
-          "w": 105,
-          "h": 79,
+          "x": 164,
+          "y": 156,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "d"
         },
         {
-          "id": "e",
-          "x": 350,
-          "y": 78,
-          "w": 105,
-          "h": 79,
+          "x": 316,
+          "y": 34,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "e"
         },
         {
-          "id": "f",
-          "x": 467,
-          "y": 78,
-          "w": 105,
-          "h": 79,
+          "x": 458,
+          "y": 34,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "f"
         },
         {
-          "id": "g",
-          "x": 350,
-          "y": 171,
-          "w": 105,
-          "h": 79,
+          "x": 316,
+          "y": 168,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "g"
         },
         {
-          "id": "h",
-          "x": 467,
-          "y": 171,
-          "w": 105,
-          "h": 79,
+          "x": 458,
+          "y": 168,
+          "w": 120,
+          "h": 110,
           "prominence": 1,
-          "prefers": "landscape"
+          "prefers": "any",
+          "id": "h"
         }
       ]
     }

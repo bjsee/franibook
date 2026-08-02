@@ -30,19 +30,39 @@ const IMPORT_LIMIT = process.env['FRANIBOOK_LIMIT']
 
 const app = Fastify({ logger: { level: 'warn' } });
 
+const PROJECT_DIR = resolve(process.env['FRANIBOOK_PROJECT'] ?? '.franibook-project');
+
 const previews = new PreviewCache(CACHE_DIR, SOURCE_ROOT);
-const project = new Project(SOURCE_ROOT, previews);
+const project = new Project(SOURCE_ROOT, previews, PROJECT_DIR);
 
 app.get('/api/health', async () => ({ status: 'ok' }));
 
 app.get('/api/project', async () => ({
   sourceRoot: project.sourceRoot,
   profile: project.profile,
+  settings: project.settings,
   photoCount: project.photos.size,
   spreadCount: project.spreads.length,
   skippedVideos: project.skippedVideos,
   failed: project.failed,
+  report: project.lastReport,
+  chapters: project.chapters(),
+  undatedCount: project.structure.undated.length,
 }));
+
+/** Erzeugt das Buch neu, etwa nach geänderter Seitenzahl. */
+app.post<{ Body?: Partial<typeof project.settings> }>('/api/generate', async (req) => {
+  if (req.body) project.settings = { ...project.settings, ...req.body };
+  const result = project.generate();
+  void project.save();
+  return { settings: project.settings, report: result.report, budgets: result.budgets };
+});
+
+/** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
+app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
+  const views = project.photoViews(req.query.problems !== undefined);
+  return { count: views.length, photos: views };
+});
 
 app.get('/api/spreads', async () => ({
   count: project.spreads.length,
@@ -146,18 +166,43 @@ app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
 
 async function start(): Promise<void> {
   const t0 = Date.now();
-  process.stdout.write(
-    `Importiere ${SOURCE_ROOT}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `,
-  );
-  await project.load(IMPORT_LIMIT);
-  process.stdout.write(
-    `${project.photos.size} Fotos, ${project.spreads.length} Doppelseiten (${Date.now() - t0} ms)\n`,
-  );
-  if (project.skippedVideos.length) {
-    process.stdout.write(`  ${project.skippedVideos.length} Videos übersprungen\n`);
-  }
-  if (project.failed.length) {
-    process.stdout.write(`  ${project.failed.length} Dateien fehlerhaft\n`);
+
+  // Ein gespeichertes Projekt hat Vorrang: Es enthält die Korrekturen des
+  // Benutzers, die ein erneuter Import nicht wiederherstellen könnte.
+  const geladen = process.env['FRANIBOOK_FRESH'] ? false : await project.load();
+
+  if (geladen) {
+    process.stdout.write(
+      `Projekt geladen: ${project.photos.size} Fotos, ${project.spreads.length} Doppelseiten\n`,
+    );
+  } else {
+    process.stdout.write(
+      `Importiere ${SOURCE_ROOT}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `,
+    );
+    await project.importPhotos(IMPORT_LIMIT);
+    process.stdout.write(`${project.photos.size} Fotos (${Date.now() - t0} ms)\n`);
+
+    if (project.skippedVideos.length) {
+      process.stdout.write(`  ${project.skippedVideos.length} Videos übersprungen\n`);
+    }
+    if (project.failed.length) {
+      process.stdout.write(`  ${project.failed.length} Dateien fehlerhaft\n`);
+    }
+
+    const r = project.generate().report;
+    process.stdout.write(
+      `Buch erzeugt: ${r.spreadCount} Doppelseiten, ${r.pageCount} Seiten, ` +
+        `${r.photosPerSpread.toFixed(1)} Fotos je Doppelseite\n`,
+    );
+    process.stdout.write(
+      `  Auflösung: schlechtester Slot ${Math.round(r.worstDpi)} dpi, ` +
+        `${r.belowTargetDpi} Slots unter Zielauflösung\n`,
+    );
+    if (!r.feasibility.achievable) process.stdout.write(`  Hinweis: ${r.feasibility.hint}\n`);
+    if (project.structure.undated.length) {
+      process.stdout.write(`  ${project.structure.undated.length} Fotos ohne Datum\n`);
+    }
+    await project.save();
   }
 
   // Vorschauen im Hintergrund aufwärmen, damit die Oberfläche sofort nutzbar

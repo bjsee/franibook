@@ -58,6 +58,16 @@ export interface GenerateResult {
     unplaced: PhotoId[];
     worstDpi: number;
     belowTargetDpi: number;
+    /**
+     * Slots unterhalb der Mindestauflösung.
+     *
+     * Sie entstehen, wenn ein Foto für jeden verfügbaren Slot zu klein ist –
+     * im Zielbestand gibt es Bilder mit 348 px langer Kante, die selbst in den
+     * kleinsten Slot nicht mit 240 dpi passen. Die Engine platziert sie
+     * trotzdem und meldet sie; sie stillschweigend wegzulassen wäre die
+     * schlechtere Entscheidung.
+     */
+    belowMinDpi: { photoId: PhotoId; spreadIndex: number; slotId: string; dpi: number }[];
     /** Durchschnittliche Fotodichte je Doppelseite. */
     photosPerSpread: number;
     feasibility: Feasibility;
@@ -415,6 +425,8 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
   let worstDpi = Number.POSITIVE_INFINITY;
   let belowTarget = 0;
+  const belowMinDpi: { photoId: PhotoId; spreadIndex: number; slotId: string; dpi: number }[] = [];
+
   for (const spread of spreads) {
     const template = templateById(spread.templateId);
     if (!template) continue;
@@ -427,6 +439,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       const cost = slotCost(photo, slot, geometry, { profile, weightOf });
       worstDpi = Math.min(worstDpi, cost.dpi);
       if (cost.dpi < profile.resolution.targetDpi) belowTarget++;
+      if (cost.dpi < profile.resolution.minDpi) {
+        belowMinDpi.push({
+          photoId: photo.id,
+          spreadIndex: spread.index,
+          slotId: slot.id,
+          dpi: cost.dpi,
+        });
+      }
     }
   }
 
@@ -445,6 +465,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       unplaced,
       worstDpi: Number.isFinite(worstDpi) ? worstDpi : 0,
       belowTargetDpi: belowTarget,
+      belowMinDpi,
       photosPerSpread: spreads.length > 0 ? placed.size / spreads.length : 0,
       feasibility: checkFeasibility(
         platzierbar,
