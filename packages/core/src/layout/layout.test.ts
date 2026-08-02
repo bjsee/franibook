@@ -830,7 +830,8 @@ describe('Jahresauftakt auf einer Seite', () => {
 
   it('nimmt die bildlose Fassung, wenn das Jahr dafür zu wenige Fotos hat', () => {
     // Zwei Fotos: Die kleinste Auftaktvorlage will zwei Bilder, dann bliebe für
-    // den Fluss des Jahres nichts übrig.
+    // den Fluss des Jahres nichts übrig. Dann bleibt die rechte Seite leer –
+    // besser, als eine Vorlage mit leeren Plätzen zu setzen.
     const { photos, dated } = buildBestand({ 2019: 2 });
     const result = generateBook({
       structure: buildStructure(dated),
