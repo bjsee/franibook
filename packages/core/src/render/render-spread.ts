@@ -19,6 +19,7 @@ import { templateMeta } from '../templates/index.js';
 import {
   BACKGROUND_MIN_DPI,
   DEFAULT_BACKGROUND,
+  accentOn,
   backgroundFit,
   textColorOn,
 } from './background.js';
@@ -392,7 +393,11 @@ function buildTimeline(
       markerless: templateMeta(template.id).chapterOnly,
       ...(label && !hatUeberschrift ? { label } : {}),
       ...(tl.fallbackYear !== undefined ? { fallbackYear: tl.fallbackYear } : {}),
-      ...(tl.accentColor ? { accentColor: tl.accentColor } : {}),
+      // Der Akzent kommt aus dem Hintergrund dieser Doppelseite, nicht aus dem
+      // Projekt: Nur hier ist bekannt, welche Jahresfarbe die Seite trägt, und
+      // der Marker soll zu ihr gehören statt auf ihr zu liegen. Ein Aufrufer
+      // kann ihn weiterhin übersteuern.
+      accentColor: tl.accentColor ?? accentOn(background),
     },
     profile,
   );

@@ -58,11 +58,36 @@ export interface TextBox extends Rect {
   weight: FontWeight;
   align: 'left' | 'center' | 'right';
   color: string;
+  /**
+   * Sperrung: zusätzlicher Abstand nach jedem Zeichen, in Millimetern.
+   *
+   * In Millimetern und nicht in Em, weil das ganze Modell in Millimetern rechnet
+   * und beide Adapter dieselbe Zahl treffen müssen – pdfkit erwartet Punkt, das
+   * SVG Benutzereinheiten, und die Umrechnung gehört in den Adapter.
+   *
+   * Beide fügen den Abstand **nach jedem** Zeichen ein, auch nach dem letzten.
+   * Bei zentriertem Text steht der Satz dadurch um eine halbe Sperrung zu weit
+   * links. Ausgeglichen wird das dort, wo die Sperrung gesetzt wird – in der
+   * Box selbst –, nicht in den Adaptern: Beide zeichnen weiterhin nur nach, was
+   * im Modell steht, und können deshalb gar nicht auseinanderlaufen.
+   */
+  letterSpacingMm?: number;
 }
 
 export interface RectBox extends Rect {
   kind: 'rect';
   fill: string;
+  /**
+   * Eckenradius in Millimetern. Ohne Angabe scharfe Ecken.
+   *
+   * Eingeführt für den Spannbalken des Zeitstrahls: Ein Balken mit runden Enden
+   * und einer Perle am Median liest sich als eine Form, ein Rechteck mit
+   * aufgesetztem Dreieck als zwei. Ein Radius von der halben Höhe ergibt die
+   * Kapsel, einer von der halben Kantenlänge bei quadratischer Box den Kreis –
+   * eine eigene Boxart für Kreise wäre eine zweite Wahrheit über dieselbe
+   * Geometrie.
+   */
+  rxMm?: number;
 }
 
 /** Ein leerer Slot. Wird nur in der Vorschau dargestellt, nie im PDF. */

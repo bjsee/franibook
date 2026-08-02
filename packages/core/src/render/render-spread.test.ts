@@ -260,13 +260,17 @@ describe('Zeitstrahl auf der Doppelseite', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), timelineCtx);
     const achse = rsm.boxes.filter((b) => b.kind === 'rect' && b.hMm === 0.3);
     expect(achse).toHaveLength(3);
-    expect(rsm.boxes.filter((b) => b.kind === 'polygon')).toHaveLength(1);
+    // Die Perle am Median: quadratisch, mit vollem Eckenradius.
+    const perlen = rsm.boxes.filter(
+      (b) => b.kind === 'rect' && b.rxMm !== undefined && b.wMm === b.hMm,
+    );
+    expect(perlen).toHaveLength(1);
   });
 
   it('weicht der Entscheidung der einzelnen Doppelseite', () => {
     const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), timeline: false };
     const rsm = renderSpread(spread, timelineCtx);
-    expect(rsm.boxes.some((b) => b.kind === 'polygon')).toBe(false);
+    expect(rsm.boxes.some((b) => b.kind === 'rect' && b.hMm === 0.3)).toBe(false);
   });
 
   it('entfällt, wo ein Bild in den Fußraum reicht', () => {
@@ -297,7 +301,9 @@ describe('Zeitstrahl auf der Doppelseite', () => {
       },
     });
     const label = rsm.boxes.find((b) => b.kind === 'text' && b.slotId === 'timeline-label');
-    expect(label?.kind === 'text' && label.content).toBe('Deichbrand 2017');
+    // In Versalien: Das Label ist die einzige Stelle im Innenteil, die etwas
+    // benennt, und trägt deshalb die kräftigste Stimme.
+    expect(label?.kind === 'text' && label.content).toBe('DEICHBRAND 2017');
   });
 
   it('verzichtet auf das Label, wenn die Vorlage den Titel schon als Überschrift trägt', () => {
