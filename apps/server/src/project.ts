@@ -8,9 +8,13 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   type Chapter,
+  type Crop,
   type GenerateResult,
   type LayoutDocument,
   type LayoutIssue,
+  type MoveResult,
+  type MoveSource,
+  type MoveTarget,
   type NaiveDateTime,
   type Photo,
   type PhotoId,
@@ -21,11 +25,14 @@ import {
   type Spread,
   type Structure,
   allSegments,
+  bookStats,
   buildStructure,
   defaultProfile,
   exportLayout,
   findBulkSeconds,
+  FULL_CROP,
   generateBook,
+  movePhoto,
   addToGroup,
   createGroup,
   mergeGroups,
@@ -359,6 +366,87 @@ export class Project {
     }
 
     return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
+  }
+
+  // ------------------------------------------------- Punktuelle Änderungen
+
+  /**
+   * Setzt den Ausschnitt eines Slots oder stellt ihn auf automatisch zurück.
+   *
+   * `crop === null` heißt zurücksetzen: Der gespeicherte Wert wird durch den
+   * vollen Bereich im Modus `auto-cover` ersetzt, den `renderSpread` beim
+   * nächsten Rendern für die aktuellen Slotmaße neu berechnet. Ein Fokuspunkt
+   * fällt dabei weg – „automatisch" heißt Bildmitte.
+   */
+  setSlotCrop(index: number, slotId: string, crop: Crop | null): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const slot = spread.slots.find((s) => s.slotId === slotId);
+    if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
+
+    slot.crop = crop ?? { ...FULL_CROP };
+    this.refreshReport();
+    return { ok: true };
+  }
+
+  /** Hängt ein einzelnes Foto um: Slot zu Slot, in den Pool oder aus ihm. */
+  movePhoto(source: MoveSource, target: MoveTarget): MoveResult {
+    const result = movePhoto(this.spreads, source, target);
+    if (result.ok) {
+      this.spreads = result.spreads;
+      this.refreshReport();
+    }
+    return result;
+  }
+
+  /**
+   * Fotos, die derzeit in keinem Slot liegen – der Fotopool.
+   *
+   * Keine eigene Liste, sondern die Differenz zum Bestand. Ein Foto aus dem
+   * Buch zu nehmen kann es damit nicht verlieren, und ein erneuter Import
+   * bringt es von allein wieder in den Pool.
+   */
+  unplacedPhotos(): {
+    id: PhotoId;
+    fileName: string;
+    date: string | null;
+    /** Pixelmaße: Die Oberfläche rechnet daraus die Auflösung je Zielslot. */
+    width: number;
+    height: number;
+  }[] {
+    const platziert = new Set<PhotoId>();
+    for (const spread of this.spreads) {
+      for (const slot of spread.slots) if (slot.photoId) platziert.add(slot.photoId);
+    }
+
+    return (
+      [...this.photos.values()]
+        .filter((photo) => !platziert.has(photo.id))
+        .map((photo) => ({
+          id: photo.id,
+          fileName: photo.fileName,
+          date: resolveEffectiveDate(photo, this.overrides[photo.id]).value,
+          width: photo.width,
+          height: photo.height,
+        }))
+        // Undatierte ans Ende: Sie sind der Grund, weshalb die meisten Fotos
+        // überhaupt im Pool liegen, und sortieren sich sonst zufällig ein.
+        .sort((a, b) => (a.date ?? '￿').localeCompare(b.date ?? '￿'))
+    );
+  }
+
+  /**
+   * Zieht die Kennzahlen nach einer punktuellen Änderung nach.
+   *
+   * Ohne das zeigte die Übersicht nach jedem Umhängen einen veralteten Stand.
+   * Neu generiert wird dabei nichts – Seitenzahl, Auftakte und Machbarkeit
+   * hängen an der Generierung und bleiben, wie sie waren.
+   */
+  private refreshReport(): void {
+    if (!this.lastReport) return;
+    const stats = bookStats({ spreads: this.spreads, photos: this.photos, profile: this.profile });
+    this.lastReport = { ...this.lastReport, ...stats };
   }
 
   // -------------------------------------------------------------- Rendern

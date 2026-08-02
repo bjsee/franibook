@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
+import { SpreadEditor } from './SpreadEditor.js';
 
 interface Report {
   photoCount: number;
@@ -20,6 +21,8 @@ interface Report {
 
 interface ProjectInfo {
   sourceRoot: string;
+  /** Nur die Auflösungsschwellen: Der Editor bewertet damit jede Änderung sofort. */
+  profile: { resolution: { minDpi: number; targetDpi: number } };
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
@@ -66,6 +69,12 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /**
+   * Ausgewählter Slot. Liegt hier und nicht im Editor, weil er die
+   * Tastenbelegung umschaltet: Solange ein Slot gewählt ist, justieren die
+   * Pfeiltasten den Ausschnitt statt zu blättern.
+   */
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
   const bare = new URLSearchParams(location.search).has('bare');
   const [guides, setGuides] = useState<GuideVisibility>(() =>
@@ -73,8 +82,6 @@ export function App() {
   );
 
   const imageSrc = useImageSrc();
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [stageWidth, setStageWidth] = useState(1200);
 
   const loadInfo = useCallback(() => {
     fetch('/api/project')
@@ -94,23 +101,24 @@ export function App() {
       .catch((e: unknown) => setError(String(e)));
   }, [index, view, bare]);
 
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const measure = () => setStageWidth(el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [spread, view]);
+  // Beim Blättern gilt die Auswahl nicht weiter: Slotkennungen wiederholen
+  // sich zwar von Doppelseite zu Doppelseite, gemeint war aber dieses Bild.
+  useEffect(() => setSelectedSlotId(null), [index]);
 
   useEffect(() => {
     if (bare) return;
     const onKey = (e: KeyboardEvent) => {
       if (view === 'spread') {
-        if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1));
-        if (e.key === 'ArrowLeft') setIndex((i) => Math.max(0, i - 1));
-        if (e.key === 'Escape') setView('overview');
+        // Ist ein Slot gewählt, gehören die Pfeiltasten dem Ausschnitt-Editor.
+        if (!selectedSlotId) {
+          if (e.key === 'ArrowRight')
+            setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1));
+          if (e.key === 'ArrowLeft') setIndex((i) => Math.max(0, i - 1));
+        }
+        if (e.key === 'Escape') {
+          if (selectedSlotId) setSelectedSlotId(null);
+          else setView('overview');
+        }
       }
       if (e.key === 'g') {
         setGuides((g) =>
@@ -120,7 +128,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [bare, info?.spreadCount, view]);
+  }, [bare, info?.spreadCount, view, selectedSlotId]);
 
   async function regenerate(patch: Record<string, unknown>) {
     setBusy('Erzeuge Buch neu …');
@@ -326,18 +334,24 @@ export function App() {
             </div>
           ) : (
             <>
-              <div ref={stageRef} style={S.stage}>
-                {spread ? (
-                  <SpreadView
-                    spread={spread}
-                    widthPx={stageWidth}
-                    imageSrc={imageSrc}
-                    guides={guides}
-                  />
-                ) : (
+              {spread && info ? (
+                <SpreadEditor
+                  index={index}
+                  spread={spread}
+                  onSpread={setSpread}
+                  imageSrc={imageSrc}
+                  guides={guides}
+                  minDpi={info.profile.resolution.minDpi}
+                  targetDpi={info.profile.resolution.targetDpi}
+                  selectedSlotId={selectedSlotId}
+                  onSelect={setSelectedSlotId}
+                  onChanged={loadInfo}
+                />
+              ) : (
+                <div style={S.stage}>
                   <p style={S.muted}>Lade Doppelseite …</p>
-                )}
-              </div>
+                </div>
+              )}
               <p style={S.muted}>
                 Pfeiltasten blättern, <kbd>g</kbd> schaltet die Hilfslinien, <kbd>Esc</kbd> zur
                 Übersicht.

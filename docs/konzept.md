@@ -1116,14 +1116,23 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 > geht als eigener Aufruf an den Server, der sein Projekt danach vollständig
 > schreibt.
 >
-> Statt Drag-and-drop gibt es den Layout-Editor über JSON. Die drei beschriebenen
-> Kontexte sind als [#9](https://github.com/bjsee/franibook/issues/9) (Fotos
-> verschieben) und [#8](https://github.com/bjsee/franibook/issues/8)
-> (Ausschnitt-Editor) erfasst; die Entscheidung für dnd-kit steht damit weiterhin,
-> ist aber nicht erprobt.
+> Kontext 1 (Fotos zwischen Slots) und Kontext 3 (Fotopool) sind inzwischen
+> umgesetzt, Kontext 2 (Timeline) nicht — **allerdings ohne dnd-kit**. Die
+> Bibliothek hätte `render-dom` von einer UI-Abhängigkeit abhängig gemacht,
+> obwohl die Vorschau nichts weiter braucht als „hier begann der Zug, hier endet
+> er": Sie gibt Ziehen und Ablegen als Ereignisse nach außen (`slotDrag`), die
+> Bedeutung entscheidet allein die Oberfläche. Umgesetzt ist das mit
+> HTML5-Drag-and-drop. Die Kehrseite ist die Tastaturbedienung, die dnd-kit
+> mitgebracht hätte: Sie läuft stattdessen über die Slotauswahl (Ausschnitt mit
+> Pfeiltasten) und über Anklicken im Fotopool. Kopieren mit Alt, Auto-Scroll am
+> Seitenrand und die Ausschnittsvorschau im Zielslot fehlen; angezeigt wird beim
+> Ziehen die zu erwartende Auflösung je Slot.
 >
-> Auch die beiden Zeilen „State" und „Drag-and-drop" in der
-> [Technologieauswahl](#technologieauswahl) sind bisher Absicht, keine Tatsache.
+> Damit bleibt von der Zeile „Drag-and-drop" in der
+> [Technologieauswahl](#technologieauswahl) die Anforderung, nicht die
+> Bibliothek. Die Zeile „State" ist weiterhin Absicht: Eine Ausschnittsänderung
+> geht verzögert (250 ms) als eigener Aufruf an den Server, ein Undo gibt es
+> nicht — „Automatisch" stellt nur den berechneten Ausschnitt wieder her.
 
 ### Zustandsmodell
 
@@ -1201,8 +1210,10 @@ Der Server bindet ausschließlich an `127.0.0.1` und legt keine Authentifizierun
 > | `/api/groups`, `/api/groups/:id`            | POST/PATCH/DELETE | anlegen, ändern, löschen                |
 > | `/api/groups/:id/merge`, `/add`, `/ungroup` | POST              | zusammenführen, zuordnen, herauslösen   |
 > | `/api/photos`                               | GET               | Fotos mit Datum, `?problems` filtert    |
+> | `/api/book/unplaced`                        | GET               | Fotopool: Fotos in keinem Slot          |
+> | `/api/book/move`                            | POST              | ein Foto umhängen, Slot oder Pool       |
 > | `/api/spreads`, `/api/spreads/:index`       | GET               | gerenderte Doppelseiten (RSM)           |
-> | `/api/spreads/:i/slots/:slotId/crop`        | PATCH             | Ausschnitt setzen                       |
+> | `/api/spreads/:i/slots/:slotId/crop`        | PATCH/DELETE      | Ausschnitt setzen, zurücksetzen         |
 > | `/api/photos/:id/preview`                   | GET               | WebP-Vorschau                           |
 > | `/api/photos/:id/original`                  | GET               | Original, nur für den Parity-Test       |
 > | `/api/export/pdf`                           | POST              | Innenteil exportieren, synchron         |

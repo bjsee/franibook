@@ -7,4 +7,4 @@
  */
 
 export { SpreadView } from './SpreadView.js';
-export type { SpreadViewProps, GuideVisibility } from './SpreadView.js';
+export type { SpreadViewProps, GuideVisibility, SlotDragHandlers } from './SpreadView.js';

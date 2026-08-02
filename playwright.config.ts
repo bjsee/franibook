@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const FIXTURES = resolve('tests/parity/fixtures');
 const CACHE = resolve('tests/parity/.cache');
 const OUT = resolve('tests/parity/.out');
+const PROJECT = resolve('tests/parity/.project');
 
 /**
  * Der Parity-Test braucht beide Prozesse: den Server, der importiert und
@@ -38,6 +39,13 @@ export default defineConfig({
         FRANIBOOK_SOURCE: FIXTURES,
         FRANIBOOK_CACHE: CACHE,
         FRANIBOOK_OUT: OUT,
+        // Eigenes Projektverzeichnis, und bei jedem Lauf neu importieren:
+        // Seit der Ausschnitt-Editor jede Änderung speichert, hinterlässt der
+        // Test mit manuellen Ausschnitten sonst einen Stand, den der nächste
+        // Lauf einliest – der Hauptfall würde dann nicht mehr automatische,
+        // sondern verschobene Ausschnitte vergleichen.
+        FRANIBOOK_PROJECT: PROJECT,
+        FRANIBOOK_FRESH: '1',
         PORT: '5174',
       },
     },
