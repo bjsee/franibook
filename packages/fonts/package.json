@@ -1,0 +1,17 @@
+{
+  "name": "@franibook/fonts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Die Schriftdateien des Buchs. Bewusst ein eigenes Paket: Der PDF-Renderer braucht einen Dateipfad, der Browser eine URL auf dieselbe Datei — und core darf nichts von Dateien wissen.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./files/*": "./files/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@franibook/core": "workspace:*"
+  }
+}

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@franibook/core": "workspace:*",
+    "@franibook/fonts": "workspace:*",
     "pdfkit": "^0.19.1",
     "sharp": "^0.35.3"
   },

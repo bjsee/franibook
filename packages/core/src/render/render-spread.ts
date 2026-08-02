@@ -24,6 +24,7 @@ import type {
   RenderedSpread,
 } from './rendered-spread.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
+import { textFontSizePt, textStyle } from './typography.js';
 
 /**
  * Was der Zeitstrahl über die Doppelseite hinaus wissen muss.
@@ -196,6 +197,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     const text = byTextSlotId.get(textSlot.id);
     if (!text?.content) continue;
     const rect = toMm(textSlot, profile);
+    const style = textStyle(textSlot.style);
     const zeilen = text.content.split('\n').filter((z) => z.trim().length > 0);
 
     // Mehrzeilige Texte werden hier in einzelne Boxen zerlegt, statt sie einem
@@ -204,11 +206,9 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     // das wäre eine Layoutentscheidung im Renderer, die der Parity-Test
     // aufdecken soll. Der Zeilenabstand steckt deshalb in der Geometrie.
     const zeilenHoeheMm = zeilen.length > 1 ? rect.hMm / zeilen.length : rect.hMm;
-    const fontSizePt =
-      // Vorläufig aus der Zeilenhöhe abgeleitet; echte Textstile mit
-      // Schriftwahl folgen in Phase 9. Der Faktor 0,62 bei mehreren Zeilen
-      // lässt Platz zwischen ihnen, 0,7 füllt eine einzelne Zeile aus.
-      (zeilenHoeheMm / 25.4) * 72 * (zeilen.length > 1 ? 0.62 : 0.7);
+    // Größe, Schnitt und Farbe kommen aus dem Textstil (render/typography.ts);
+    // die Renderer bekommen fertige Werte, keine Regeln.
+    const fontSizePt = textFontSizePt(zeilenHoeheMm, style);
 
     zeilen.forEach((zeile, i) => {
       boxes.push({
@@ -220,8 +220,9 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
         slotId: zeilen.length > 1 ? `${textSlot.id}-${i}` : textSlot.id,
         content: zeile,
         fontSizePt,
+        weight: style.weight,
         align: textSlot.align ?? 'left',
-        color: '#000000',
+        color: style.color,
       });
     });
   }

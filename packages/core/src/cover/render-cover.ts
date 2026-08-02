@@ -15,6 +15,7 @@ import type { Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
 import type { ImageBox, Rect, RenderWarning } from '../render/rendered-spread.js';
+import { type TextStyleName, textFontSizePt, textStyle } from '../render/typography.js';
 import type { CoverDesign } from './cover.js';
 import { withCoverDefaults } from './cover.js';
 import type { CoverGeometry, CoverPanelKind } from './geometry.js';
@@ -67,10 +68,6 @@ export interface CoverRenderContext {
 }
 
 /** Schriftgrad aus der Zeilenhöhe – dieselbe Näherung wie im Innenteil. */
-function fontSizeFor(hMm: number): number {
-  return (hMm / 25.4) * 72 * 0.7;
-}
-
 /**
  * Umschließendes Rechteck einer möglicherweise gedrehten Textbox.
  *
@@ -141,13 +138,20 @@ function textBox(
   content: string,
   color: string,
   rotateDeg?: number,
+  /** Textstil aus `render/typography.ts`. */
+  styleName: TextStyleName = 'body',
 ): CoverTextBox {
+  // Größe und Schnitt kommen aus demselben Stilsatz wie im Innenteil – zwei
+  // eigene Regeln für dieselbe Frage laufen auseinander. Die Farbe bleibt ein
+  // Argument: Auf dem Titelbalken steht der Text hell, nicht in Stilfarbe.
+  const style = textStyle(styleName);
   return {
     kind: 'text',
     ...rect,
     slotId,
     content,
-    fontSizePt: fontSizeFor(rect.hMm),
+    fontSizePt: textFontSizePt(rect.hMm, style),
+    weight: style.weight,
     align: 'left',
     color,
     ...(rotateDeg !== undefined ? { rotateDeg } : {}),
@@ -254,7 +258,16 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
     const wMm = front.wMm - 2 * geo.safetyMm;
 
     if (d.title) {
-      boxes.push(textBox('front-title', { xMm, yMm: titelY, wMm, hMm: titleH }, d.title, farbe));
+      boxes.push(
+        textBox(
+          'front-title',
+          { xMm, yMm: titelY, wMm, hMm: titleH },
+          d.title,
+          farbe,
+          undefined,
+          'groupTitle',
+        ),
+      );
     }
     if (d.subtitle) {
       const yMm = unten - subH;
