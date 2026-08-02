@@ -120,9 +120,10 @@ Ein `pnpm dev` startet Backend und Frontend. Das Backend hält genau ein geöffn
 >   [Ortsauflösung und Fotogruppen](#ortsauflösung-und-fotogruppen).
 > - **`Spread`** trägt weder `eventId` noch den `generation`-Block; `TextElement`
 >   kennt nur `slotId`, keinen absoluten Anker und keinen `TextStyleRef`.
-> - **`Book`**, `Chapter` als Datentyp und `CoverDesign` existieren nicht — der
->   Server hält schlicht eine Liste `Spread[]`, Kapitel werden aus der Struktur
->   abgeleitet, das Cover fehlt noch ganz
+> - **`Book`** und `Chapter` als Datentyp existieren nicht — der Server hält
+>   schlicht eine Liste `Spread[]`, Kapitel werden aus der Struktur abgeleitet.
+>   `CoverDesign` gibt es (`cover/cover.ts`), aber nicht als Teil eines `Book`:
+>   Der Server hält es neben den Spreads
 >   ([#2](https://github.com/bjsee/franibook/issues/2)).
 > - **`PhotoOverride`** ist wie beschrieben, ohne `note`.
 >
@@ -1089,13 +1090,26 @@ coverWidthMm = 2 * (trimWidthMm + wrapMm) + spineMm + 2 * hingeMm + 2 * bleedMm
 
 Die Coverbreite ändert sich also mit jeder Änderung der Seitenzahl. Die Coveransicht zeigt die berechnete Rückenbreite an und warnt, wenn Elemente in die Gelenkzone ragen – dort verschwindet bei der Bindung real Fläche.
 
-> **Korrektur (2. August 2026): die Formeln stehen, das Cover fehlt**
+> **Nachtrag (2. August 2026): das Cover steht**
 >
-> `spineWidthMm()`, `coverWidthMm()` und `coverHeightMm()` sind implementiert und
-> getestet. Ein Cover-Datenmodell, einen Renderer und eine Coveransicht gibt es
-> nicht — [#2](https://github.com/bjsee/franibook/issues/2). Beides hängt an der
-> endgültigen Seitenzahl ([#4](https://github.com/bjsee/franibook/issues/4)) und an
-> den verifizierten Maßen ([#1](https://github.com/bjsee/franibook/issues/1)).
+> `packages/core/src/cover/` setzt die Formeln in ein Modell um, das dem
+> Innenteil nachgebaut ist: `coverGeometry()` liefert die fünf Felder des Bogens
+> (Rückseite, Gelenk, Rücken, Gelenk, Vorderseite), die Falzlinien und die
+> Sicherheitsbereiche; `renderCover()` erzeugt daraus ein **Rendered Cover
+> Model** mit denselben Boxtypen wie das RSM. Darüber liegen zwei dünne Adapter,
+> `CoverView` (Vorschau mit Gelenkzonenwarnung) und `renderCoverPdf` (eigene
+> PDF-Datei, wie der Anbieter es verlangt). Bedient wird beides über
+> `/api/cover` und `/api/export/cover`.
+>
+> Am Rücken gilt als Toleranz `cover.bleedMm` (3 mm) statt `cover.safetyMm`
+> (10 mm): Zehn Millimeter je Seite wären auf einem 6 mm breiten Rücken sinnlos.
+> Ist der Rücken für Text zu schmal, entfällt der Rückentitel mit einem Befund.
+>
+> Zwei Abhängigkeiten bleiben offen und werden in der Ansicht wie im Export
+> ausgewiesen: die endgültige Seitenzahl
+> ([#4](https://github.com/bjsee/franibook/issues/4)) und die verifizierten Maße
+> ([#1](https://github.com/bjsee/franibook/issues/1)) — solange
+> `provenance.verifiedAt` null ist, weist jeder Coverexport darauf hin.
 
 > **Wichtig: Zu den Zahlenwerten des Saal-Profils**
 >
