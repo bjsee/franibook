@@ -30,4 +30,12 @@ export interface Spread {
   texts?: TextElement[];
   /** Von "Buch neu generieren" ausgenommen. */
   locked?: boolean;
+  /**
+   * Zeitstrahl auf dieser Doppelseite. Ohne Angabe gilt die globale Vorgabe.
+   *
+   * Übersteht den Neuaufbau und ein handbearbeitetes Layout-Dokument, geht beim
+   * vollen Neugenerieren aber verloren – wie jede andere Eigenschaft einer
+   * Doppelseite, die die Engine neu erzeugt.
+   */
+  timeline?: boolean;
 }

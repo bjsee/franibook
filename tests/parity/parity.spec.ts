@@ -20,7 +20,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, test } from '@playwright/test';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
@@ -68,6 +68,20 @@ const PIXEL_THRESHOLD = Number(process.env['PARITY_THRESHOLD'] ?? 0.25);
  */
 const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
 
+/**
+ * Schwelle für den Fall mit Zeitstrahl.
+ *
+ * Getrennt gemessen und getrennt geprüft, damit der Hauptfall weiter die
+ * Fotogeometrie misst: Der Zeitstrahl bringt eine 0,3 mm dünne Achse, siebzehn
+ * Ticks und zwei Textzeilen mit – bei gut vier Pixeln je Millimeter sind das
+ * subpixelbreite Formen, die Browser und pdfkit unterschiedlich glätten. Diesen
+ * Beitrag in die 0,5 % des Hauptfalls einzurechnen hieße, dessen
+ * Empfindlichkeit für Geometriefehler aufzugeben.
+ *
+ * Gemessener Wert siehe unten in der Testausgabe.
+ */
+const MAX_DIFF_TIMELINE = Number(process.env['PARITY_MAX_DIFF_TIMELINE'] ?? 0.005);
+
 async function toPng(buffer: Buffer, width: number, height: number): Promise<PNG> {
   const normalized = await sharp(buffer)
     // Beide Bilder exakt gleich groß machen. Browser und pdftoppm runden die
@@ -81,9 +95,52 @@ async function toPng(buffer: Buffer, width: number, height: number): Promise<PNG
   return PNG.sync.read(normalized);
 }
 
-test.beforeAll(async () => {
+/** Die vier Fixtures, in der Reihenfolge, in der sie im Buch stehen sollen. */
+const FIXTURE_FILES = [
+  '2017-06-05-grid-4x3.png',
+  '2017-06-12-grid-3x4.png',
+  '2017-06-19-grid-16x9.png',
+  '2017-06-26-grid-1x1.png',
+];
+
+/**
+ * Stellt genau eine Doppelseite mit allen vier Bildern her.
+ *
+ * Bewusst über das Layout-Dokument und nicht über `POST /api/generate`: Die
+ * gemessenen Schwellen beziehen sich auf diese eine Doppelseite im Raster
+ * `spread.4up.grid`. Der Generator dagegen darf seine Meinung ändern – sobald
+ * die Fixtures ein Datum tragen, verteilt das Seitenbudget sie auf vier
+ * Doppelseiten, und der Test würde etwas anderes messen als gedacht. Setzt
+ * zugleich alle Ausschnitte auf `auto-cover` zurück.
+ */
+async function eineDoppelseite(request: APIRequestContext): Promise<void> {
+  const res = await request.post('http://127.0.0.1:5174/api/book/layout', {
+    data: {
+      version: 1,
+      spreads: [
+        {
+          n: 1,
+          template: 'spread.4up.grid',
+          photos: FIXTURE_FILES.map((file) => ({ file })),
+        },
+      ],
+    },
+  });
+  expect(res.ok()).toBe(true);
+}
+
+test.beforeAll(async ({ playwright }) => {
   await rm(ARTIFACTS, { recursive: true, force: true });
   await mkdir(ARTIFACTS, { recursive: true });
+
+  // `request` ist an einen Test gebunden und in beforeAll nicht verfügbar.
+  const request = await playwright.request.newContext();
+  await eineDoppelseite(request);
+  // Ohne Zeitstrahl messen die beiden Hauptfälle weiterhin allein die
+  // Fotogeometrie; der Zeitstrahl bekommt seinen eigenen Fall mit eigener
+  // Schwelle.
+  await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+  await request.dispose();
 });
 
 test.describe('Vorschau und PDF stimmen überein', () => {
@@ -233,6 +290,97 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     const ratio = differing / (width * height);
     console.log(`Parity (manuelle Ausschnitte): ${(ratio * 100).toFixed(3)} % abweichend`);
     expect(ratio).toBeLessThan(MAX_DIFF_RATIO);
+  });
+
+  /**
+   * Der Zeitstrahl im Fußraum: Achse, Ticks, zwei Jahreszahlen und die
+   * Markerspitze als einzige nicht rechteckige Form des Buches.
+   *
+   * Eigener Fall mit eigener Schwelle, statt ihn dem Hauptfall zuzuschlagen.
+   * Vorher wird neu erzeugt, damit die manuellen Ausschnitte des vorigen Tests
+   * das Ergebnis nicht mitfärben – die Differenz zum Hauptfall ist damit der
+   * Beitrag des Zeitstrahls allein.
+   */
+  test('Zeitstrahl deckt sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    const settings = await request.patch('http://127.0.0.1:5174/api/settings', {
+      data: { timeline: true },
+    });
+    expect(settings.ok()).toBe(true);
+
+    // Der Zeitstrahl muss im Modell auch tatsächlich angekommen sein: Die
+    // Fixtures tragen ihr Datum im Dateinamen, und ohne belastbares Datum gäbe
+    // es keinen Marker – der Test wäre grün, ohne etwas zu prüfen.
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const polygone = rsm.boxes.filter((b: { kind: string }) => b.kind === 'polygon');
+    const jahreszahlen = rsm.boxes.filter(
+      (b: { kind: string; slotId?: string }) =>
+        b.kind === 'text' && b.slotId?.startsWith('timeline-year'),
+    );
+    expect(polygone).toHaveLength(1);
+    expect(jahreszahlen).toHaveLength(2);
+
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    const stage = page.getByTestId('spread');
+    await expect(stage).toBeVisible();
+    await page.waitForFunction(() => {
+      const imgs = Array.from(document.images);
+      return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    const shot = await stage.screenshot({ type: 'png' });
+    await writeFile(join(ARTIFACTS, 'preview-timeline.png'), shot);
+
+    const exportRes = await request.post('http://127.0.0.1:5174/api/export/pdf', {
+      data: { spreadIndex: 0, fileName: 'parity-timeline.pdf' },
+    });
+    expect(exportRes.ok()).toBe(true);
+
+    const rasterPrefix = join(ARTIFACTS, 'pdf-timeline');
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r',
+      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      '-singlefile',
+      join(OUT, 'parity-timeline.pdf'),
+      rasterPrefix,
+    ]);
+
+    const meta = await sharp(shot).metadata();
+    const width = meta.width ?? COMPARE_WIDTH;
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+
+    const a = await toPng(shot, width, height);
+    const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
+    const diff = new PNG({ width, height });
+    const differing = pixelmatch(a.data, b.data, diff.data, width, height, {
+      threshold: PIXEL_THRESHOLD,
+      includeAA: false,
+    });
+    await writeFile(join(ARTIFACTS, 'diff-timeline.png'), PNG.sync.write(diff));
+
+    const ratio = differing / (width * height);
+    console.log(`Parity (Zeitstrahl): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    // Zusätzlich der Fußraum allein: Dort sitzt der Zeitstrahl, und nur dort
+    // darf er etwas verändert haben. Ein Ausschlag oberhalb wäre ein Hinweis,
+    // dass er ins Layout hineinragt.
+    const fussOben = Math.round((281 / 306) * height);
+    let imFuss = 0;
+    for (let y = fussOben; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        if (diff.data[i] !== 0 || diff.data[i + 1] !== 0 || diff.data[i + 2] !== 0) imFuss++;
+      }
+    }
+    console.log(
+      `  davon im Fußraum: ${imFuss} Pixel (${((imFuss / differing) * 100).toFixed(1)} %)`,
+    );
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit Zeitstrahl um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_TIMELINE);
   });
 
   test('PDF trägt die richtigen Boxen', async () => {

@@ -147,6 +147,15 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
               mmToPt(box.hMm),
             )
             .fill(box.fill);
+        } else if (box.kind === 'polygon') {
+          const [first, ...rest] = box.pointsMm;
+          if (first) {
+            doc.moveTo(mmToPt(first.xMm + slice.offsetXMm), mmToPt(first.yMm));
+            for (const point of rest) {
+              doc.lineTo(mmToPt(point.xMm + slice.offsetXMm), mmToPt(point.yMm));
+            }
+            doc.closePath().fill(box.fill);
+          }
         }
         // 'empty' erscheint bewusst nicht im PDF – ein leerer Slot ist im
         // Druck schlicht Hintergrund.

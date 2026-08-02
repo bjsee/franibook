@@ -19,6 +19,8 @@ export interface RebuildInput {
   /** Bereits festgelegte Vorlage. Ohne Angabe wird die beste gewählt. */
   templateId?: string;
   text?: string;
+  /** Abweichende Entscheidung zum Zeitstrahl, die den Neuaufbau übersteht. */
+  timeline?: boolean;
 }
 
 export interface RebuildOptions {
@@ -126,6 +128,7 @@ export function rebuildSpreads(opts: RebuildOptions): RebuildResult {
       index: spreads.length,
       templateId: bestTemplateId,
       slots,
+      ...(input.timeline !== undefined ? { timeline: input.timeline } : {}),
       ...(input.text && textSlot
         ? {
             texts: [

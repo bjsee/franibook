@@ -29,5 +29,6 @@ export * from './layout/rebuild.js';
 
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
+export * from './render/timeline.js';
 
 export * from './templates/index.js';

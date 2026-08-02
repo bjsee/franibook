@@ -21,6 +21,7 @@ spikes/out/
 .franibook-cache/
 .franibook-out/
 tests/parity/.cache/
+tests/parity/.project/
 tests/parity/.out/
 tests/parity/.artifacts/
 test-results/
@@ -29,4 +30,7 @@ apps/server/.franibook-cache/
 apps/server/.franibook-out/
 .franibook-project/
 apps/server/.franibook-project/
+# Arbeitskopien paralleler Agenten
+.claude/worktrees/
+
 entwuerfe/

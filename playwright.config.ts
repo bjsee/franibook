@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const FIXTURES = resolve('tests/parity/fixtures');
 const CACHE = resolve('tests/parity/.cache');
 const OUT = resolve('tests/parity/.out');
+const PROJECT = resolve('tests/parity/.project');
 
 /**
  * Der Parity-Test braucht beide Prozesse: den Server, der importiert und
@@ -38,6 +39,13 @@ export default defineConfig({
         FRANIBOOK_SOURCE: FIXTURES,
         FRANIBOOK_CACHE: CACHE,
         FRANIBOOK_OUT: OUT,
+        // Eigener Projektstand, sonst schreibt der Testserver in denselben
+        // Ordner wie der echte Betrieb und ersetzt 820 importierte Fotos samt
+        // bestätigten Gruppen durch die vier Fixtures.
+        FRANIBOOK_PROJECT: PROJECT,
+        // Immer frisch importieren: Der Test soll die Fixtures messen, nicht
+        // einen Stand von vorgestern.
+        FRANIBOOK_FRESH: '1',
         PORT: '5174',
       },
     },

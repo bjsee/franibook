@@ -164,10 +164,44 @@ app.get('/api/spreads', async () => ({
 }));
 
 app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
-  const rendered = project.render(Number(req.params.index));
+  const index = Number(req.params.index);
+  const rendered = project.render(index);
   if (!rendered) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
-  return rendered;
+  // `timelineOverride` ist kein Teil des Rendered Spread Model, sondern die
+  // Entscheidung des Benutzers zu dieser Doppelseite. Die Oberfläche braucht
+  // sie, um den Schalter richtig zu stellen; die Renderer sehen sie nie.
+  return { ...rendered, timelineOverride: project.spreads[index]?.timeline ?? null };
 });
+
+/**
+ * Ändert Einstellungen, die nur die Darstellung betreffen.
+ *
+ * Getrennt von `/api/generate`: Der Zeitstrahl ändert das Rendered Spread
+ * Model, nicht die Fotoverteilung. Ihn über ein Neugenerieren zu schalten würde
+ * jede handgemachte Korrektur im Buch verwerfen, nur um eine Linie ein- oder
+ * auszublenden.
+ */
+app.patch<{ Body: { timeline?: boolean } }>('/api/settings', async (req) => {
+  if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
+  await project.save();
+  return { settings: project.settings };
+});
+
+/** Zeitstrahl einer einzelnen Doppelseite, abweichend von der Vorgabe. */
+app.patch<{ Params: { index: string }; Body: { timeline: boolean | null } }>(
+  '/api/spreads/:index/timeline',
+  async (req, reply) => {
+    const spread = project.spreads[Number(req.params.index)];
+    if (!spread) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
+
+    // `null` heißt: zurück zur globalen Vorgabe.
+    if (req.body.timeline === null) delete spread.timeline;
+    else spread.timeline = req.body.timeline;
+
+    await project.save();
+    return { ok: true, timeline: spread.timeline ?? null };
+  },
+);
 
 /**
  * Setzt den Bildausschnitt eines Slots.

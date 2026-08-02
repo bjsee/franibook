@@ -34,7 +34,7 @@ const PHOTOS = new Map<string, Photo>([
   ['h5', photo('h5', 'winzig.jpeg', { width: 348, height: 261 })],
 ]);
 
-const settings = { targetPages: 200, chapterOpeners: true };
+const settings = { targetPages: 200, chapterOpeners: true, timeline: true };
 
 function spreadOf(templateId: string, photoIds: (string | null)[]): Spread {
   const template = requireTemplate(templateId);

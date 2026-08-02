@@ -62,6 +62,11 @@ export interface LayoutSpreadEntry {
   text?: string;
   /** Fotogruppe, zu der diese Doppelseite gehört. */
   group?: string;
+  /**
+   * Zeitstrahl auf dieser Doppelseite. Steht nur da, wenn er von der globalen
+   * Vorgabe abweicht – ein Dokument voller `timeline: true` wäre nur Rauschen.
+   */
+  timeline?: boolean;
   photos: LayoutPhotoEntry[];
 }
 
@@ -72,6 +77,8 @@ export interface LayoutDocument {
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
+    /** Zeitstrahl am Fuß jeder Doppelseite. */
+    timeline: boolean;
   };
   summary: {
     spreads: number;
@@ -139,7 +146,7 @@ export interface ExportOptions {
   spreads: readonly Spread[];
   photos: ReadonlyMap<PhotoId, Photo>;
   profile: PrintProfile;
-  settings: { targetPages: number; chapterOpeners: boolean };
+  settings: { targetPages: number; chapterOpeners: boolean; timeline: boolean };
   /** Fotos, die in keiner Doppelseite stehen. */
   unplaced?: readonly PhotoId[];
   /** Benannte Fotogruppen, zur Orientierung im Dokument. */
@@ -205,6 +212,7 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
       template: spread.templateId,
       ...(text ? { text } : {}),
       ...(group ? { group } : {}),
+      ...(spread.timeline !== undefined ? { timeline: spread.timeline } : {}),
       photos: photoEntries,
     };
   });
@@ -248,8 +256,8 @@ export interface LayoutIssue {
 
 export interface ParsedLayout {
   /** Je Doppelseite die Fotokennungen in der gewünschten Reihenfolge. */
-  spreads: { photoIds: PhotoId[]; templateId?: string; text?: string }[];
-  settings?: { targetPages?: number; chapterOpeners?: boolean };
+  spreads: { photoIds: PhotoId[]; templateId?: string; text?: string; timeline?: boolean }[];
+  settings?: { targetPages?: number; chapterOpeners?: boolean; timeline?: boolean };
   issues: LayoutIssue[];
   /** Ob das Dokument übernommen werden kann. */
   ok: boolean;
@@ -372,6 +380,7 @@ export function parseLayout(raw: unknown, photos: ReadonlyMap<PhotoId, Photo>): 
       photoIds,
       ...(templateId ? { templateId } : {}),
       ...(entry.text ? { text: entry.text } : {}),
+      ...(typeof entry.timeline === 'boolean' ? { timeline: entry.timeline } : {}),
     });
   });
 

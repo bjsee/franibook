@@ -216,6 +216,34 @@ export function SpreadView({
 
       case 'rect':
         return <div key={`rect-${i}`} style={{ ...rect(box), background: box.fill }} />;
+
+      case 'polygon': {
+        if (box.pointsMm.length === 0) return null;
+        // Die viewBox ist in Millimetern aufgespannt, deshalb wandern die Punkte
+        // unverändert aus dem Modell in das SVG – keine zweite Umrechnung, die
+        // von der des PDF-Renderers abweichen könnte. Über CSS clip-path wäre
+        // dieselbe Form möglich, rundet aber anders als pdfkit.
+        return (
+          <svg
+            key={`poly-${i}`}
+            aria-hidden
+            viewBox={`0 0 ${spread.widthMm} ${spread.heightMm}`}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: mm(spread.widthMm),
+              height: mm(spread.heightMm),
+              pointerEvents: 'none',
+            }}
+          >
+            <polygon
+              points={box.pointsMm.map((p) => `${p.xMm},${p.yMm}`).join(' ')}
+              fill={box.fill}
+            />
+          </svg>
+        );
+      }
     }
   }
 }

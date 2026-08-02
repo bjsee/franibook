@@ -7,13 +7,15 @@
  */
 import { effectiveDpi } from '../geometry/units.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
-import type { Photo, PhotoId } from '../model/photo.js';
+import type { EffectiveDate } from '../model/date.js';
+import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { SlotAssignment, Spread } from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { spreadHeightMm, spreadWidthMm } from '../print/profile.js';
+import { templateMeta } from '../templates/index.js';
 import type {
   Guide,
   ImageBox,
@@ -21,6 +23,26 @@ import type {
   RenderWarning,
   RenderedSpread,
 } from './rendered-spread.js';
+import { timelineBoxes, timelineFootTopMm } from './timeline.js';
+
+/**
+ * Was der Zeitstrahl über die Doppelseite hinaus wissen muss.
+ *
+ * Fehlt er im Kontext, entsteht kein Zeitstrahl – der globale Schalter lebt
+ * damit beim Aufrufer, nicht in der Engine.
+ */
+export interface TimelineContext {
+  /** Effektives Datum eines Fotos. */
+  dateOf: (photoId: PhotoId) => EffectiveDate | undefined;
+  /** Aktive Fotogruppe eines Fotos, sofern es zu einer gehört. */
+  groupOf?: (photoId: PhotoId) => { id: string; title: string } | undefined;
+  /**
+   * Jahr für Doppelseiten ohne belastbares Datum. Der Aufrufer kennt die
+   * Reihenfolge im Buch und kann es aus den Nachbarseiten ableiten.
+   */
+  fallbackYear?: number;
+  accentColor?: string;
+}
 
 export interface RenderContext {
   profile: PrintProfile;
@@ -28,6 +50,7 @@ export interface RenderContext {
   photos: ReadonlyMap<PhotoId, Photo>;
   /** Hintergrund der Doppelseite. Weiß, solange nichts anderes gesetzt ist. */
   background?: string;
+  timeline?: TimelineContext;
 }
 
 /**
@@ -186,6 +209,12 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     });
   }
 
+  // Der Zeitstrahl kommt zuletzt: Er liegt im Fußraum, den kein Slot belegt,
+  // und soll auch in der Zeichenreihenfolge nichts überdecken.
+  if (ctx.timeline && spread.timeline !== false) {
+    boxes.push(...buildTimeline(spread, ctx, ctx.timeline));
+  }
+
   return {
     spreadId: spread.id,
     widthMm: spreadWidthMm(profile),
@@ -196,4 +225,73 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     boxes,
     guides: buildGuides(profile),
   };
+}
+
+/**
+ * Sammelt aus der Doppelseite, was der Zeitstrahl braucht.
+ *
+ * Die Auswahl der Daten steckt hier und nicht im Zeitstrahl selbst: Sie ist
+ * eine Aussage über den Bestand, keine Geometrie.
+ */
+function buildTimeline(spread: Spread, ctx: RenderContext, tl: TimelineContext): RenderBox[] {
+  const { profile, template } = ctx;
+
+  // Reicht ein Slot in den Fußraum, entfällt der Strahl. Die Regel ist aus der
+  // Geometrie abgeleitet und gilt damit auch für künftige Vorlagen; heute
+  // betrifft sie allein den randabfallenden Gruppenauftakt.
+  const footTop = timelineFootTopMm(profile);
+  const belegt = template.slots.some((slot) => {
+    const rect = toMm(slot, profile);
+    return rect.yMm + rect.hMm > footTop;
+  });
+  if (belegt) return [];
+
+  const photoIds = spread.slots
+    .map((s) => s.photoId)
+    .filter((id): id is PhotoId => id !== null && ctx.photos.has(id));
+
+  // Nur belastbare Daten: Ein Dateidatum ist oft das Kopierdatum und würde den
+  // Spannbalken über Jahre aufziehen.
+  const dates = photoIds
+    .map((id) => tl.dateOf(id))
+    .filter((e): e is EffectiveDate => e !== undefined)
+    .filter((e) => e.value !== null && (e.confidence === 'high' || e.confidence === 'medium'))
+    .map((e) => e.value as NaiveDateTime);
+
+  // Umfasst die Doppelseite mehrere Gruppen, gewinnt die mit den meisten Fotos.
+  // Bei Gleichstand die zuerst auftretende – sonst wäre das Ergebnis von der
+  // Reihenfolge einer Map abhängig und damit nicht mehr deterministisch.
+  let label: string | undefined;
+  if (tl.groupOf) {
+    const counts = new Map<string, { title: string; n: number }>();
+    for (const id of photoIds) {
+      const group = tl.groupOf(id);
+      if (!group) continue;
+      const bestand = counts.get(group.id);
+      if (bestand) bestand.n++;
+      else counts.set(group.id, { title: group.title, n: 1 });
+    }
+    let best: { title: string; n: number } | undefined;
+    for (const eintrag of counts.values()) {
+      if (!best || eintrag.n > best.n) best = eintrag;
+    }
+    label = best?.title;
+  }
+
+  // Trägt die Vorlage den Gruppentitel schon als Überschrift, wäre das Label
+  // eine Dopplung auf derselben Seite.
+  const hatUeberschrift = (spread.texts ?? []).some(
+    (t) => t.role === 'eventTitle' && t.content.length > 0,
+  );
+
+  return timelineBoxes(
+    {
+      dates,
+      markerless: templateMeta(template.id).chapterOnly,
+      ...(label && !hatUeberschrift ? { label } : {}),
+      ...(tl.fallbackYear !== undefined ? { fallbackYear: tl.fallbackYear } : {}),
+      ...(tl.accentColor ? { accentColor: tl.accentColor } : {}),
+    },
+    profile,
+  );
 }

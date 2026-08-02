@@ -55,7 +55,25 @@ export interface EmptyBox extends Rect {
   slotId: string;
 }
 
-export type RenderBox = ImageBox | TextBox | RectBox | EmptyBox;
+/**
+ * Fläche aus Eckpunkten, absolut in Millimetern.
+ *
+ * Eingeführt für die Markerspitze des Zeitstrahls – die einzige Form im Buch,
+ * die kein Rechteck ist. Bewusst ohne umschließendes Rechteck: Zwei Wahrheiten
+ * über dieselbe Geometrie laufen auseinander, und keine Stelle im System
+ * braucht die Hülle. Die Renderer zeichnen die Punkte unmittelbar.
+ *
+ * Verworfen wurde eine semantische `TimelineBox`, aus der jeder Renderer den
+ * Zeitstrahl selbst zeichnet: Das wären genau die zwei unabhängigen
+ * Zeichenroutinen, die der Parity-Test verhindern soll.
+ */
+export interface PolygonBox {
+  kind: 'polygon';
+  pointsMm: readonly { xMm: number; yMm: number }[];
+  fill: string;
+}
+
+export type RenderBox = ImageBox | TextBox | RectBox | EmptyBox | PolygonBox;
 
 export type RenderWarning =
   | { code: 'below-target-dpi'; dpi: number; targetDpi: number }

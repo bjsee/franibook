@@ -18,12 +18,21 @@ import sharp from 'sharp';
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const FIXTURE_DIR = join(HERE, 'fixtures');
 
-/** Vier Bilder in den Seitenverhältnissen, die im echten Bestand vorkommen. */
+/**
+ * Vier Bilder in den Seitenverhältnissen, die im echten Bestand vorkommen.
+ *
+ * Das Datum steht im Dateinamen, weil ein PNG kein EXIF-Aufnahmedatum trägt.
+ * Die Datumskaskade erkennt es als Quelle `filename` mit Konfidenz `medium` –
+ * belastbar genug für den Zeitstrahl, der Daten geringer Konfidenz verwirft.
+ * Alle vier liegen im selben Monat: Der Zeitstrahl bekommt dadurch einen
+ * sichtbaren Spannbalken von gut drei Wochen, der die Falzachse überquert, und
+ * die Bilder bleiben trotzdem eine zusammengehörige Serie.
+ */
 const SPECS = [
-  { name: 'grid-4x3.png', width: 2048, height: 1536, hue: 210 },
-  { name: 'grid-3x4.png', width: 1536, height: 2048, hue: 140 },
-  { name: 'grid-16x9.png', width: 2048, height: 1152, hue: 30 },
-  { name: 'grid-1x1.png', width: 1536, height: 1536, hue: 320 },
+  { name: '2017-06-05-grid-4x3.png', width: 2048, height: 1536, hue: 210 },
+  { name: '2017-06-12-grid-3x4.png', width: 1536, height: 2048, hue: 140 },
+  { name: '2017-06-19-grid-16x9.png', width: 2048, height: 1152, hue: 30 },
+  { name: '2017-06-26-grid-1x1.png', width: 1536, height: 1536, hue: 320 },
 ];
 
 function svgPattern(width: number, height: number, hue: number, label: string): string {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
-import type { Photo } from '../model/photo.js';
+import type { NaiveDateTime, Photo } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
@@ -207,5 +207,117 @@ describe('Randfälle', () => {
     const a = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
     const b = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
     expect(a).toEqual(b);
+  });
+});
+
+// ---------------------------------------------------------------- Zeitstrahl
+
+function dateOfFactory(werte: Record<string, [string, 'high' | 'medium' | 'low' | 'none']>) {
+  return (id: string) => {
+    const eintrag = werte[id];
+    if (!eintrag) return undefined;
+    return {
+      value: eintrag[0] as NaiveDateTime,
+      source: 'exif' as const,
+      confidence: eintrag[1],
+      issues: [],
+    };
+  };
+}
+
+const DATEN = dateOfFactory({
+  p1: ['2017-06-10T10:00:00', 'high'],
+  p2: ['2017-06-20T10:00:00', 'high'],
+  p3: ['2017-07-01T10:00:00', 'medium'],
+  // Ein Dateidatum vom Kopiervorgang – es würde die Spanne über Jahre aufziehen.
+  p4: ['2021-01-01T10:00:00', 'low'],
+});
+
+function spreadOfTemplate(templateId: string, photoIds: (string | null)[]): Spread {
+  const t = requireTemplate(templateId);
+  return {
+    id: 's1',
+    index: 0,
+    templateId,
+    slots: t.slots.map((slot, i) => ({
+      slotId: slot.id,
+      photoId: photoIds[i] ?? null,
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+    })),
+  };
+}
+
+const timelineCtx = { ...ctx, timeline: { dateOf: DATEN } };
+
+describe('Zeitstrahl auf der Doppelseite', () => {
+  it('bleibt weg, solange ihn niemand anfordert', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(rsm.boxes.some((b) => b.kind === 'polygon' || b.kind === 'rect')).toBe(false);
+  });
+
+  it('erscheint im Fußraum, wenn der Kontext ihn mitbringt', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), timelineCtx);
+    const achse = rsm.boxes.filter((b) => b.kind === 'rect' && b.hMm === 0.3);
+    expect(achse).toHaveLength(3);
+    expect(rsm.boxes.filter((b) => b.kind === 'polygon')).toHaveLength(1);
+  });
+
+  it('weicht der Entscheidung der einzelnen Doppelseite', () => {
+    const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), timeline: false };
+    const rsm = renderSpread(spread, timelineCtx);
+    expect(rsm.boxes.some((b) => b.kind === 'polygon')).toBe(false);
+  });
+
+  it('entfällt, wo ein Bild in den Fußraum reicht', () => {
+    // Der randabfallende Gruppenauftakt ist heute die einzige solche Vorlage.
+    const template = requireTemplate('spread.group.opener-full');
+    const rsm = renderSpread(spreadOfTemplate(template.id, ['p1']), {
+      ...timelineCtx,
+      template,
+    });
+    expect(rsm.boxes.some((b) => b.kind === 'polygon')).toBe(false);
+  });
+
+  it('lässt Daten geringer Konfidenz aus der Spanne heraus', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), timelineCtx);
+    const balken = rsm.boxes.find((b) => b.kind === 'rect' && b.hMm === 1.2);
+    // 10. Juni bis 1. Juli, nicht bis 2021: gut drei Wochen, also unter 30 mm.
+    if (balken?.kind !== 'rect') throw new Error('kein Spannbalken');
+    expect(balken.wMm).toBeLessThan(30);
+  });
+
+  it('nimmt den Titel der Gruppe mit den meisten Fotos', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), {
+      ...timelineCtx,
+      timeline: {
+        dateOf: DATEN,
+        groupOf: (id: string) =>
+          id === 'p3' ? { id: 'g2', title: 'Ausflug' } : { id: 'g1', title: 'Deichbrand 2017' },
+      },
+    });
+    const label = rsm.boxes.find((b) => b.kind === 'text' && b.slotId === 'timeline-label');
+    expect(label?.kind === 'text' && label.content).toBe('Deichbrand 2017');
+  });
+
+  it('verzichtet auf das Label, wenn die Vorlage den Titel schon als Überschrift trägt', () => {
+    const titled = requireTemplate('spread.5up.offset.titled');
+    const spread = {
+      ...spreadOfTemplate(titled.id, ['p1', 'p2', 'p3', 'p4', null]),
+      texts: [
+        {
+          id: 't1',
+          role: 'eventTitle' as const,
+          content: 'Deichbrand 2017',
+          slotId: titled.textSlots![0]!.id,
+        },
+      ],
+    };
+    const rsm = renderSpread(spread, {
+      ...timelineCtx,
+      template: titled,
+      timeline: { dateOf: DATEN, groupOf: () => ({ id: 'g1', title: 'Deichbrand 2017' }) },
+    });
+    const labels = rsm.boxes.filter((b) => b.kind === 'text' && b.slotId === 'timeline-label');
+    expect(labels).toHaveLength(0);
   });
 });
