@@ -60,7 +60,7 @@ export function distributeBudget(
   const weightSum = weights.reduce((a, b) => a + b, 0);
 
   // Erste Zuteilung proportional zum gedämpften Gewicht
-  const raw = chapters.map((c, i) => (weights[i]! / weightSum) * totalSpreads);
+  const raw = chapters.map((_, i) => (weights[i]! / weightSum) * totalSpreads);
   const budgets: ChapterBudget[] = chapters.map((c, i) => ({
     year: c.year,
     photoCount: c.photoCount,
