@@ -685,6 +685,16 @@
           "h": 44,
           "style": "yearLarge",
           "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 45,
+          "y": 172,
+          "w": 230,
+          "h": 60,
+          "style": "body",
+          "optional": true
         }
       ]
     },
@@ -704,6 +714,16 @@
           "h": 44,
           "style": "yearLarge",
           "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 45,
+          "y": 182,
+          "w": 230,
+          "h": 60,
+          "style": "body",
+          "optional": true
         }
       ]
     },

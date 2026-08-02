@@ -765,3 +765,35 @@ describe('Gruppenauftakte, an den Zeitstrahl gekoppelt', () => {
     expect(mehrheitsGruppe(fotos, new Map())).toBeUndefined();
   });
 });
+
+describe('Jahresereignisse auf dem Kapitelauftakt', () => {
+  function auftaktMitEreignissen(events?: readonly string[]) {
+    const { photos, dated } = buildBestand({ 2017: 12 });
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 60,
+      chapterOpeners: true,
+      ...(events ? { yearEvents: { 2017: events } } : {}),
+    });
+    return result.spreads.find((s) => s.texts?.some((t) => t.role === 'year'));
+  }
+
+  it('setzt die Ereignisse als eigenes Textelement neben die Jahreszahl', () => {
+    const auftakt = auftaktMitEreignissen([
+      'Wahl von Emmanuel Macron',
+      'G20-Gipfel in Hamburg',
+      'Deutschland gewinnt den Confed Cup',
+    ]);
+    const events = auftakt?.texts?.find((t) => t.slotId === 't-events');
+    expect(events).toBeDefined();
+    expect(events!.content.split('\n')).toHaveLength(3);
+    expect(auftakt!.texts!.find((t) => t.role === 'year')!.content).toBe('2017');
+  });
+
+  it('lässt den Textplatz leer, wenn für das Jahr nichts eingetragen ist', () => {
+    const auftakt = auftaktMitEreignissen();
+    expect(auftakt?.texts?.some((t) => t.slotId === 't-events')).toBe(false);
+  });
+});

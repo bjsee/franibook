@@ -199,6 +199,33 @@ app.patch<{ Body: { timeline?: boolean } }>('/api/settings', async (req) => {
   return { settings: project.settings };
 });
 
+/**
+ * Ereignisse eines Jahres für den Kapitelauftakt.
+ *
+ * Von Hand gepflegt: drei bis fünf Zeilen, die das Jahr einordnen. Bewusst
+ * ohne Abruf aus dem Netz und ohne Textgenerierung – ein erfundenes Datum
+ * stünde gedruckt im Buch. Ein Vorschlagswerkzeug kann darüber liegen und
+ * seine Vorschläge hier ablegen, sobald jemand sie bestätigt hat.
+ */
+app.put<{ Params: { year: string }; Body: { events: string[] } }>(
+  '/api/chapters/:year/events',
+  async (req, reply) => {
+    const year = Number(req.params.year);
+    if (!Number.isInteger(year)) return reply.code(400).send({ error: 'Jahr ungültig' });
+
+    const zeilen = (req.body.events ?? []).map((z) => z.trim()).filter((z) => z.length > 0);
+    if (zeilen.length === 0) delete project.yearEvents[String(year)];
+    else project.yearEvents[String(year)] = zeilen;
+
+    // Die Auftaktseite trägt den Text, also muss sie neu entstehen.
+    project.generate();
+    await project.save();
+    return { year, events: zeilen };
+  },
+);
+
+app.get('/api/chapters/events', async () => ({ yearEvents: project.yearEvents }));
+
 /** Zeitstrahl einer einzelnen Doppelseite, abweichend von der Vorgabe. */
 app.patch<{ Params: { index: string }; Body: { timeline: boolean | null } }>(
   '/api/spreads/:index/timeline',

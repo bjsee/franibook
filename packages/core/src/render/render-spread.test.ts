@@ -321,3 +321,48 @@ describe('Zeitstrahl auf der Doppelseite', () => {
     expect(labels).toHaveLength(0);
   });
 });
+
+describe('Mehrzeilige Texte', () => {
+  it('zerlegt Zeilen in eigene Boxen mit gleichem Abstand', () => {
+    // Den Zeilenabstand darf kein Renderer selbst wählen: CSS line-height und
+    // pdfkit lineGap würden auseinanderlaufen, und der Parity-Test müsste es
+    // ausbaden. Deshalb steckt er in der Geometrie.
+    const chapter = requireTemplate('spread.chapter.year');
+    const eventSlot = chapter.textSlots!.find((t) => t.id === 't-events')!;
+    const spread: Spread = {
+      ...spreadOfTemplate(chapter.id, ['p1']),
+      texts: [
+        { id: 't1', role: 'year' as const, content: '2017', slotId: 't-year' },
+        {
+          id: 't2',
+          role: 'freeText' as const,
+          content: 'Erste Zeile\nZweite Zeile\nDritte Zeile',
+          slotId: eventSlot.id,
+        },
+      ],
+    };
+
+    const rsm = renderSpread(spread, { ...ctx, template: chapter });
+    const zeilen = rsm.boxes.filter((b) => b.kind === 'text' && b.slotId.startsWith('t-events'));
+    expect(zeilen).toHaveLength(3);
+
+    const y = zeilen.map((b) => (b.kind === 'text' ? b.yMm : 0));
+    const abstand = y[1]! - y[0]!;
+    expect(y[2]! - y[1]!).toBeCloseTo(abstand, 9);
+    // Alle Zeilen tragen dieselbe Schriftgröße und passen in den Slot.
+    const groessen = new Set(zeilen.map((b) => (b.kind === 'text' ? b.fontSizePt : 0)));
+    expect(groessen.size).toBe(1);
+    expect(abstand * 3).toBeCloseTo((eventSlot.h * profile.page.trimHeightMm) as number, 6);
+  });
+
+  it('behält für einzeilige Texte die Slothöhe', () => {
+    const chapter = requireTemplate('spread.chapter.year');
+    const spread: Spread = {
+      ...spreadOfTemplate(chapter.id, ['p1']),
+      texts: [{ id: 't1', role: 'year' as const, content: '2017', slotId: 't-year' }],
+    };
+    const rsm = renderSpread(spread, { ...ctx, template: chapter });
+    const jahr = rsm.boxes.find((b) => b.kind === 'text' && b.slotId === 't-year');
+    expect(jahr?.kind === 'text' && jahr.content).toBe('2017');
+  });
+});
