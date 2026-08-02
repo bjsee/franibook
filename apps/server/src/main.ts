@@ -154,7 +154,10 @@ app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
 app.get<{ Params: { index: string } }>('/api/spreads/:index/templates', async (req, reply) => {
   const index = Number(req.params.index);
   if (!project.spreads[index]) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
-  return { templates: project.templateChoices(index) };
+  // Beides in einer Antwort: die ganze Doppelseite und die beiden Seiten
+  // einzeln. Die Oberfläche zeigt sie nebeneinander, und ein zweiter Aufruf für
+  // dieselbe Auskunft wäre nur Umstand.
+  return { templates: project.templateChoices(index), ...project.halfChoices(index) };
 });
 
 /** Wechselt die Anordnung einer Doppelseite. */

@@ -1479,6 +1479,25 @@ Gezeigt werden Skizzen aus der Slotgeometrie, keine Vorlagennamen:
 dieselben Koordinaten zeichnet, aus denen das Layout entsteht, kann sie von der
 Vorlage nicht abweichen.
 
+**Je Seite, nicht je Doppelseite.** Gewählt wird die Anordnung einer einzelnen
+Buchseite; die gegenüberliegende bleibt, wie sie ist. Eine Doppelseite über
+beide Seiten zu ändern hilft nicht, wenn nur auf einer das Bild falsch steht.
+
+Möglich ist das ohne neue Vorlagen: Jede Vorlage der Bibliothek zerfällt an der
+Falzachse in zwei Hälften, und am Bestand geprüft liegt **kein einziger Slot**
+über dem Falz — die Templates lassen die Falzzone ohnehin frei. Aus 105 Vorlagen
+des Flusses werden so 63 verschiedene Halbseiten (`templates/halves.ts`), geführt
+in Linksform; für die rechte Seite wird gespiegelt und nicht verschoben, weil
+eine Seite außen mehr Rand hat als am Falz.
+
+Eine so zusammengesetzte Doppelseite trägt die Kennung `paar:<links>+<rechts>`.
+Sie steht nicht in der Bibliothek — es gäbe 63 × 63 —, sondern wird von
+`templateById` aus ihrer Kennung gebaut. Weil das deterministisch geschieht,
+übersteht sie Speichern und Laden wie jede andere Vorlage, und alles, was auf
+`requireTemplate` steht (Rendern, Neuaufbau, Umhängen), arbeitet unverändert
+weiter. Die Slots bekommen dabei Präfixe (`l-a`, `r-b`): Zwei Slots namens `a`
+auf derselben Doppelseite wären für einen Ausschnitt nicht auseinanderzuhalten.
+
 ### Zustandsmodell
 
 Der Frontend-Store hält das gesamte Projekt. Jede Mutation läuft über `produceWithPatches` von Immer und liefert dabei zwei Dinge gleichzeitig:
