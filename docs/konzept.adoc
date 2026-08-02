@@ -376,6 +376,10 @@ Vor jedem Schreiben von `book.json` wandert die vorherige Fassung nach `history/
 [[metadaten]]
 == Metadaten-Strategie
 
+=== Auswahl der Dateien
+
+Importiert werden `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`, `.tif` und `.tiff`. Videodateien (`.mov`, `.mp4`, `.m4v`, `.avi`) werden erkannt und übersprungen – im Zielbestand liegen sechs MOV-Dateien, die weder in der Timeline noch im Buch erscheinen. Der Importbericht nennt sie, damit nicht der Eindruck entsteht, es sei etwas verlorengegangen.
+
 === Auslesen
 
 Ein `exiftool`-Prozess im `-stay_open`-Modus verarbeitet die Dateiliste in Blöcken. Gelesen werden neben den offensichtlichen Feldern gezielt auch `SubSecDateTimeOriginal`, `OffsetTimeOriginal`, `GPSDateStamp`/`GPSTimeStamp`, `CreationDate` (Apple), sowie XMP-`DateCreated`. Parallel liefert `sharp.metadata()` die tatsächlichen Pixelmaße – verlässlicher als die EXIF-Angabe, die bei bearbeiteten Dateien veraltet sein kann.
@@ -621,23 +625,37 @@ Templates sind Daten, kein Code – JSON-Dateien in `packages/core/src/templates
 
 Der Renderer rechnet normierte Koordinaten mit dem Druckprofil in Millimeter um. Ein Slot, dessen Rechteck die Mittelachse (x = 0,5) schneidet, wird beim Laden automatisch als `crossesGutter` markiert; das Feld im JSON ist nur Dokumentation.
 
+=== Gestaltungsrahmen
+
+Die Bestandsanalyse legt den entscheidenden Parameter fest: Bei 2048 px langer Kante und 240 dpi Mindestauflösung ist **216 mm der größte Slot**, den der Bestand füllen kann. Bei einem Buchformat von 30×30 cm sind das 72 % der Seitenbreite.
+
+Das ist keine Notlösung, sondern der Gestaltungsrahmen. Ein 210 mm breites Foto auf einer 300 mm breiten Seite mit 45 mm Rand ist ein ruhiges, hochwertiges Bild – großzügiger Weißraum ist bei Fotobüchern ein Qualitätsmerkmal, keine Verlegenheit. Die Bibliothek nutzt das bewusst aus, statt gegen die Auflösungsgrenze zu arbeiten.
+
+Daraus folgen drei Regeln:
+
+* **Kein Slot der Standardbibliothek überschreitet 216 mm.** Größere Slots existieren nur in Templates, die die Engine erst freischaltet, wenn ein ausreichend aufgelöstes Foto vorliegt (1,6 % des Bestands).
+* **Vollflächige Doppelseiten und Panoramaseiten entfallen.** Sie sind mit diesem Bestand nicht druckbar, und es gibt kein einziges Panorama.
+* **Ränder sind Gestaltungselement, nicht Rest.** Die Templates arbeiten mit einem durchgehenden Außenrand von 18 bis 45 mm.
+
 === Startbibliothek
 
-Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. Aus ihnen ergeben sich durch Spiegelung an der Falzachse effektiv rund 25 Varianten.
+Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. Aus ihnen ergeben sich durch Spiegelung an der Falzachse effektiv rund 25 Varianten. Die Slotbreiten sind auf 30×30 cm gerechnet.
 
-[cols="1,1,3"]
+[cols="1,1,1,3"]
 |===
-| Slots | Templates | Charakter
+| Slots | Templates | größter Slot | Charakter
 
-| 1 | 2 | Vollflächig über die Doppelseite; einseitig groß mit ruhiger Gegenseite
-| 2 | 2 | Symmetrisch je Seite; asymmetrisch mit Hero und Begleiter
-| 3 | 2 | Ein großes plus zwei gestapelt; Dreierreihe mit Rhythmus
-| 4 | 3 | Gleichmäßiges Raster; Hero links; Hero mittig über den Falz
-| 5–6 | 2 | Versetztes Raster; Erzählstreifen
-| 7–8 | 1 | Dichte Collage für fotoreiche Ereignisse
-| Panorama | 1 | Ein Bild über die volle Doppelseite, Falzschutz eingerechnet
-| Kapitel | 2 | Jahresauftakt vollflächig; Ereignisauftakt mit Titel und einem Foto
+| 1 | 2 | 210 mm | Ein Bild je Seite, großzügig gerahmt; einseitig groß mit ruhiger, leerer Gegenseite
+| 2 | 2 | 210 mm | Symmetrisch je Seite; asymmetrisch mit Hauptbild und kleinerem Begleiter
+| 3 | 2 | 180 mm | Ein großes plus zwei gestapelt; Dreierreihe mit Rhythmus
+| 4 | 3 | 165 mm | Gleichmäßiges Raster; Hauptbild links; Hochformat-Variante für den hohen Anteil an Hochkantfotos
+| 5–6 | 2 | 148 mm | Versetztes Raster; Erzählstreifen
+| 7–8 | 1 | 120 mm | Dichte Collage für fotoreiche Monate
+| Kapitel | 2 | 210 mm | Jahresauftakt mit großer Jahreszahl und einem Bild; ruhiger Auftakt ohne Bild
+| Reserve | 1 | 300 mm | Ganzseitig – nur verfügbar, wenn ein Foto die Auflösung hält
 |===
+
+Bei 51,6 % Hochformat im Bestand braucht mindestens ein Template je Slotzahl eine hochformatorientierte Variante. Ein Vierer-Raster aus vier Querformaten ist bei diesem Bestand die Ausnahme, nicht die Regel.
 
 Zusätzlich existiert für den `subtle`-Fall kein eigenes Template: Jedes Template kann einen optionalen `year`-Textslot tragen. Ein Jahreswechsel braucht damit keine eigene Seite, wie gefordert.
 
@@ -687,6 +705,22 @@ interface EventCandidate {
 ----
 
 Mehrere Detektoren laufen unabhängig, ein Merger führt ihre Kandidaten zusammen: Der Zeitlücken-Detektor liefert die Segmentierung, die übrigen liefern überwiegend **Titel und Konfidenzanhebung** für bereits gefundene Segmente. Das hält die Struktur stabil, wenn später semantische Detektoren dazukommen.
+
+[IMPORTANT]
+.Gewichtung nach der Bestandsanalyse
+====
+Das Konzept ging ursprünglich davon aus, dass zeitliche Abstände die Hauptquelle der Gliederung sind. Am echten Bestand trifft das nicht zu: Er ist bereits vorausgewählt, die Median-Lücke zwischen zwei Fotos beträgt 1,2 Tage, und die Zeitlücken-Heuristik zerlegt 831 Fotos in 502 Segmente – 338 davon mit einem einzigen Foto.
+
+*Der Kalender ist die Hauptgliederung, nicht die Zeitlücke.*
+
+* **Jahr = Kapitel.** 19 Kapitel, im Schnitt 44 Fotos, rund 4 bis 5 Doppelseiten je Jahr.
+* **Monat = weiche Gruppierung.** Bestimmt Seitenumbrüche, erzeugt aber keine Überschrift – 167 Monatsgruppen auf etwa 85 Doppelseiten wären zu kleinteilig.
+* **Zeitlücken nur innerhalb eines Tages.** Sie halten weiterhin zusammengehörige Aufnahmen einer Stunde auf derselben Doppelseite, taugen aber nicht als Gliederungsprinzip.
+
+Der Kalender-Detektor gewinnt dadurch erheblich an Gewicht: Geburtstage, Weihnachten und Silvester sind die einzigen inhaltlichen Marken, die sich ohne Bildanalyse verlässlich setzen lassen. Für ein Buch zum 18. Geburtstag liefert allein die Geburtstagserkennung 18 sichere Ankerpunkte.
+
+Die Detektor-Architektur bleibt unverändert – nur die Gewichtung dreht sich um. Messwerte in link:spikes/bestandsanalyse.adoc[spikes/bestandsanalyse.adoc].
+====
 
 === Zeitlücken-Detektor
 
@@ -899,6 +933,35 @@ interface PrintProfile {
   provenance: { source: string; verifiedAt: string | null; notes: string };
 }
 ----
+
+=== Festgelegte Werte für dieses Projekt
+
+[cols="2,1,3"]
+|===
+| Parameter | Wert | Begründung
+
+| Buchformat
+| 30×30 cm
+| entschieden
+
+| `resolution.targetDpi`
+| 300
+| Anstrebenswert; erreichen bei Slots bis 173 mm praktisch alle Fotos
+
+| `resolution.minDpi`
+| *240*
+| Entschieden. Öffnet Slots bis 216 mm für 96 % des Bestands. Unterhalb dieses Werts verweigert die Automatik den Slot; der Benutzer kann bewusst überstimmen
+
+| `encoding.jpegQuality`
+| 92
+| gemessen, siehe <<pdf>>
+
+| `encoding.chromaSubsampling`
+| 4:4:4
+| Fotobuchdruck rechtfertigt volle Chroma-Auflösung; 4:2:0 ist der erste Griff, falls die Datei zu groß wird
+|===
+
+Aus `minDpi` folgt unmittelbar die Obergrenze der Templatebibliothek: 2048 px bei 240 dpi ergeben 216 mm. Diese Zahl ist damit kein Layoutdetail, sondern eine aus Bestand und Druckentscheidung abgeleitete Konstante.
 
 === Buchrücken
 

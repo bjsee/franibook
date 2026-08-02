@@ -7,3 +7,4 @@
  */
 
 export * from './geometry/units.js';
+export * from './print/profile.js';
