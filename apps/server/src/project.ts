@@ -225,6 +225,50 @@ export class Project {
     this.structure = structure;
   }
 
+  // ------------------------------------------------------ Jahresereignisse
+
+  /**
+   * Setzt die Ereignisse eines Jahres und zieht dessen Auftaktseite nach.
+   *
+   * Bewusst ohne Neugenerieren: Die Ereignisse stehen als Text auf einer
+   * einzigen Doppelseite, die Fotoverteilung ändern sie nicht. Ein
+   * `generate()` je Eingabe würde beim Pflegen von neunzehn Jahrgängen
+   * neunzehnmal das Buch umbauen und dabei jede handgemachte Korrektur
+   * verwerfen – Ausschnitte, verschobene Bilder, Zeitstrahlausnahmen.
+   *
+   * @returns ob eine Auftaktseite gefunden wurde. `false` heißt: Die Zeilen
+   * sind gespeichert, erscheinen aber erst beim nächsten Erzeugen – etwa, weil
+   * Jahresauftakte gerade abgeschaltet sind.
+   */
+  setYearEvents(year: number, zeilen: readonly string[]): boolean {
+    const sauber = zeilen.map((z) => z.trim()).filter((z) => z.length > 0);
+    if (sauber.length === 0) delete this.yearEvents[String(year)];
+    else this.yearEvents[String(year)] = [...sauber];
+
+    const auftakt = this.spreads.find((s) =>
+      s.texts?.some((t) => t.role === 'year' && t.content === String(year)),
+    );
+    if (!auftakt) return false;
+
+    const slot = requireTemplate(auftakt.templateId).textSlots?.find((t) => t.id === 't-events');
+    if (!slot) return false;
+
+    const uebrige = (auftakt.texts ?? []).filter((t) => t.slotId !== slot.id);
+    auftakt.texts =
+      sauber.length === 0
+        ? uebrige
+        : [
+            ...uebrige,
+            {
+              id: `${auftakt.id}-events`,
+              role: 'freeText' as const,
+              content: sauber.join('\n'),
+              slotId: slot.id,
+            },
+          ];
+    return true;
+  }
+
   // ------------------------------------------------------------ Generieren
 
   generate(): GenerateResult {

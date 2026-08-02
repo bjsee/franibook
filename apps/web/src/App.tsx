@@ -4,6 +4,7 @@ import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
+import { YearEvents } from './YearEvents.js';
 import { SpreadEditor } from './SpreadEditor.js';
 
 interface Report {
@@ -49,7 +50,7 @@ interface ProjectInfo {
   undatedCount: number;
 }
 
-type View = 'overview' | 'spread' | 'groups' | 'edit';
+type View = 'overview' | 'spread' | 'groups' | 'years' | 'edit';
 
 /**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
@@ -263,6 +264,9 @@ export function App() {
           <button onClick={() => setView('groups')} style={view === 'groups' ? S.tabActive : S.tab}>
             Gruppen
           </button>
+          <button onClick={() => setView('years')} style={view === 'years' ? S.tabActive : S.tab}>
+            Jahre
+          </button>
           <button onClick={() => setView('edit')} style={view === 'edit' ? S.tabActive : S.tab}>
             Aufteilung (JSON)
           </button>
@@ -271,7 +275,18 @@ export function App() {
 
       {report && <ReportBar report={report} undated={info?.undatedCount ?? 0} />}
 
-      {view === 'groups' ? (
+      {view === 'years' && info ? (
+        <YearEvents
+          chapters={info.chapters}
+          onOpen={(i) => {
+            setIndex(i);
+            setView('spread');
+            // Die Auftaktseite hat sich geändert, also neu holen.
+            setSpread(null);
+            setRenderVersion((v) => v + 1);
+          }}
+        />
+      ) : view === 'groups' ? (
         <PhotoGroups onChanged={loadInfo} />
       ) : view === 'edit' ? (
         <LayoutEditor
