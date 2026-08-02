@@ -22,6 +22,20 @@ pnpm test:parity         # Playwright-Parity-Test (startet Server + Vite selbst)
 pnpm test:all            # Vitest + Playwright
 ```
 
+Dieselben Handgriffe gibt es als Justfile, mit den Umgebungsvariablen schon gesetzt;
+`just` ohne Argument zeigt die Liste. Bemerkenswert sind vor allem:
+
+```sh
+just start               # Server und Vorschau
+just probe 50            # schneller Start mit 50 Fotos, in einem Wegwerf-Projektstand
+just parity              # gibt vorher die Ports frei, die der Test exklusiv braucht
+just check               # typecheck, test, lint, prettier
+just stand               # Fotos, Doppelseiten und Gruppen des gespeicherten Projekts
+```
+
+`just probe` und `just neu` schreiben bewusst nach `.franibook-project-probe`: Ein
+Lauf mit Limit würde sonst den echten Stand samt bestätigten Gruppen ersetzen.
+
 Einzelne Testdatei bzw. einzelner Test:
 
 ```sh

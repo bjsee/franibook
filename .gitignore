@@ -30,6 +30,8 @@ apps/server/.franibook-cache/
 apps/server/.franibook-out/
 .franibook-project/
 apps/server/.franibook-project/
+apps/server/.franibook-project-probe/
+apps/server/.franibook-project.bak-*/
 # Arbeitskopien paralleler Agenten
 .claude/worktrees/
 
