@@ -14,6 +14,7 @@ import {
   type NaiveDateTime,
   type Photo,
   type PhotoId,
+  type PhotoGroup,
   type PhotoOverride,
   type PrintProfile,
   type RenderedSpread,
@@ -25,14 +26,22 @@ import {
   exportLayout,
   findBulkSeconds,
   generateBook,
+  createGroup,
+  mergeSuggestions,
   needsAttention,
   parseLayout,
+  propagatePlaces,
   rebuildSpreads,
   renderSpread,
   requireTemplate,
   resolveEffectiveDate,
   sortKey,
+  removeGroup,
+  sortGroupsChronologically,
+  suggestPlaceGroups,
   suggestTitles,
+  ungroupPhotos,
+  updateGroup,
 } from '@franibook/core';
 import { importFolder } from './import.js';
 import type { PreviewCache } from './previews.js';
@@ -55,6 +64,7 @@ interface PersistedProject {
   photos: Photo[];
   overrides: Record<PhotoId, PhotoOverride>;
   book: { spreads: Spread[] };
+  groups: PhotoGroup[];
   importedAt: string;
 }
 
@@ -69,6 +79,7 @@ export class Project {
   readonly profile: PrintProfile = defaultProfile();
   readonly photos = new Map<PhotoId, Photo>();
   overrides: Record<PhotoId, PhotoOverride> = {};
+  groups: PhotoGroup[] = [];
   spreads: Spread[] = [];
   structure: Structure = { chapters: [], undated: [], photoCount: 0 };
   lastReport: GenerateResult['report'] | null = null;
@@ -165,10 +176,74 @@ export class Project {
       chapterOpeners: this.settings.chapterOpeners,
       seed: this.settings.seed,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+      groups: this.groups,
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
     return result;
+  }
+
+  // -------------------------------------------------------------- Gruppen
+
+  /**
+   * Erzeugt Gruppenvorschläge aus den aufgelösten Orten.
+   *
+   * Von Hand angelegte Gruppen bleiben unangetastet; frühere Umbenennungen und
+   * Abschaltungen werden übernommen. Ein erneuter Aufruf darf nichts
+   * überschreiben, was jemand eingerichtet hat.
+   */
+  suggestGroups(): { groups: PhotoGroup[]; added: number } {
+    const kandidaten = [...this.photos.values()]
+      .map((photo) => {
+        const e = resolveEffectiveDate(photo, this.overrides[photo.id]);
+        if (!e.value) return undefined;
+        return {
+          photoId: photo.id,
+          date: e.value,
+          ...(photo.place ? { place: photo.place } : {}),
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== undefined);
+
+    const mitOrt = propagatePlaces(kandidaten);
+    const vorschlaege = suggestPlaceGroups(mitOrt);
+    const vorher = this.groups.length;
+
+    this.groups = mergeSuggestions(this.groups, vorschlaege);
+    return { groups: this.groups, added: this.groups.length - vorher };
+  }
+
+  /** Gruppen in Buchreihenfolge, also nach dem frühesten enthaltenen Foto. */
+  sortedGroups(): PhotoGroup[] {
+    const dateOf = (id: PhotoId) => {
+      const photo = this.photos.get(id);
+      if (!photo) return undefined;
+      return resolveEffectiveDate(photo, this.overrides[id]).value ?? undefined;
+    };
+    return sortGroupsChronologically(this.groups, dateOf);
+  }
+
+  createGroup(title: string, photoIds: PhotoId[]): PhotoGroup[] {
+    this.groups = createGroup(this.groups, title, photoIds);
+    return this.groups;
+  }
+
+  updateGroup(
+    id: string,
+    patch: Partial<Pick<PhotoGroup, 'title' | 'coverPhotoId' | 'active' | 'photoIds'>>,
+  ): PhotoGroup[] {
+    this.groups = updateGroup(this.groups, id, patch);
+    return this.groups;
+  }
+
+  removeGroup(id: string): PhotoGroup[] {
+    this.groups = removeGroup(this.groups, id);
+    return this.groups;
+  }
+
+  ungroupPhotos(photoIds: PhotoId[]): PhotoGroup[] {
+    this.groups = ungroupPhotos(this.groups, photoIds);
+    return this.groups;
   }
 
   // ------------------------------------------------------- Layout-Dokument
@@ -190,6 +265,7 @@ export class Project {
         chapterOpeners: this.settings.chapterOpeners,
       },
       unplaced,
+      groups: this.sortedGroups(),
     });
   }
 
@@ -325,6 +401,7 @@ export class Project {
       settings: this.settings,
       photos: [...this.photos.values()],
       overrides: this.overrides,
+      groups: this.groups,
       book: { spreads: this.spreads },
       importedAt: this.importedAt,
     };
@@ -351,6 +428,7 @@ export class Project {
       this.photos.clear();
       for (const p of data.photos) this.photos.set(p.id, p);
       this.overrides = data.overrides ?? {};
+      this.groups = data.groups ?? [];
       this.spreads = data.book?.spreads ?? [];
       this.settings = { ...this.settings, ...data.settings };
       this.importedAt = data.importedAt ?? this.importedAt;

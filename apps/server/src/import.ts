@@ -14,6 +14,7 @@ import { extname, join } from 'node:path';
 import { exiftool } from 'exiftool-vendored';
 import sharp from 'sharp';
 import type { NaiveDateTime, Photo } from '@franibook/core';
+import { lookupPlace } from '@franibook/geo';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
 const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
@@ -161,6 +162,11 @@ export async function importFolder(root: string, limit?: number): Promise<Import
           ? { lat: tags.GPSLatitude, lon: tags.GPSLongitude }
           : undefined;
 
+      // Ort direkt beim Import auflösen. Die Ortsdatenbank ist 2,4 MB groß
+      // und hat im Browser nichts zu suchen; das Ergebnis dagegen ist ein
+      // kurzer String und wandert mit ins Projekt.
+      const place = gps ? lookupPlace(gps.lat, gps.lon) : undefined;
+
       const camera = [tags.Make, tags.Model]
         .filter((v): v is string => typeof v === 'string' && v.length > 0)
         .join(' ')
@@ -184,6 +190,7 @@ export async function importFolder(root: string, limit?: number): Promise<Import
           ? { fileBirthtime: toNaive(st.birthtime) }
           : {}),
         ...(gps ? { gps } : {}),
+        ...(place ? { place: { key: `${place.kind}:${place.label}`, label: place.label } } : {}),
         ...(camera ? { camera } : {}),
       };
     } catch (err) {

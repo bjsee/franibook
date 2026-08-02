@@ -3,6 +3,7 @@ import type { RenderedSpread } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
+import { PhotoGroups } from './PhotoGroups.js';
 
 interface Report {
   photoCount: number;
@@ -29,7 +30,7 @@ interface ProjectInfo {
   undatedCount: number;
 }
 
-type View = 'overview' | 'spread' | 'edit';
+type View = 'overview' | 'spread' | 'groups' | 'edit';
 
 /**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
@@ -200,15 +201,20 @@ export function App() {
           <button onClick={() => setView('spread')} style={view === 'spread' ? S.tabActive : S.tab}>
             Doppelseite
           </button>
+          <button onClick={() => setView('groups')} style={view === 'groups' ? S.tabActive : S.tab}>
+            Gruppen
+          </button>
           <button onClick={() => setView('edit')} style={view === 'edit' ? S.tabActive : S.tab}>
-            Aufteilung bearbeiten
+            Aufteilung (JSON)
           </button>
         </div>
       </header>
 
       {report && <ReportBar report={report} undated={info?.undatedCount ?? 0} />}
 
-      {view === 'edit' ? (
+      {view === 'groups' ? (
+        <PhotoGroups onChanged={loadInfo} />
+      ) : view === 'edit' ? (
         <LayoutEditor
           imageSrc={imageSrc}
           onApplied={() => {

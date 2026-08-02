@@ -1215,3 +1215,37 @@ Bewusst nicht im Konzept entschieden, weil erst mit echten Daten oder Informatio
 * link:anforderungen.adoc[Anforderungsbeschreibung] – die fachliche Ausgangsbasis
 * link:implementierungsphasen.adoc[Implementierungsphasen] – Zerlegung in einzeln testbare Schritte
 * link:spikes/phase-0.adoc[Phase-0-Spikes] – Messergebnisse zu HEIC, PDF-Speicher und Metadaten-Durchsatz, samt der daraus folgenden Korrekturen an diesem Dokument
+
+== Ortsauflösung und Fotogruppen
+
+Nachgetragen am 2. August 2026, nach der Bestandsanalyse.
+
+=== Ortsauflösung
+
+Ein eigenes Paket `packages/geo` löst GPS-Koordinaten offline in Ortsnamen auf. Grundlage sind die GeoNames-Städtedaten (CC BY 4.0), reduziert auf 58.185 Orte: Deutschland und die Nachbarländer ab 1.000 Einwohnern, der Rest der Welt ab 15.000. Die Datei ist 2,4 MB groß und liegt bewusst nicht in `core` – gebraucht wird sie nur beim Import, im Browser-Bundle hätte sie nichts zu suchen. Gespeichert wird nur das Ergebnis, ein kurzer String.
+
+Die Benennungsregel folgt der Art, wie man über Orte spricht:
+
+[cols="1,1,2"]
+|===
+| Fall | Ergebnis | Beispiel
+
+| Inland | Stadt | Bremerhaven, Dorum
+| bekannte Insel | Insel | Kreta, Mallorca
+| Großstadt ab 100.000 | Stadt | Wien, Paris, London
+| sonstiges Ausland | Land | Dänemark, Niederlande
+|===
+
+Zwei Feinheiten, die erst der Test an echten Koordinaten zeigte: Ohne Einzugsradius gewinnt in Paris der nächstgelegene Stadtteil – gemessen kamen „Paris 16 Passy" und für London „Shadwell" heraus. Der Radius wächst deshalb mit der Wurzel der Einwohnerzahl. Und GeoNames führt Städte unter ihrem englischen Namen; für Länder übersetzt `Intl`, für Städte braucht es eine Liste.
+
+=== Fotogruppen
+
+Eine Gruppe fasst Fotos zu einem Buchabschnitt zusammen. Sie gehört dem Benutzer: Die Automatik schlägt vor, entschieden wird von Hand.
+
+Vorgeschlagen wird anhand der Orte. Weil nur 23 % der Fotos Koordinaten tragen, wird der Ort zuvor auf die Nachbarn übertragen – ein Foto ohne GPS erbt ihn, wenn es zeitlich zwischen zwei Aufnahmen desselben Ortes liegt. Ohne diesen Schritt zerfiele jede Reise in einzelne verortete Bilder.
+
+*Alltag wird erkannt und abgeschaltet.* Der Wohnort taucht über achtzehn Jahre ständig auf und wäre als Abschnitt sinnlos. Die Unterscheidung braucht zwei Merkmale: Ein Ort gilt als Alltag, wenn er in mehr als sechs Monaten *und* bei mehr als fünf getrennten Gelegenheiten vorkommt. Die Monatszahl allein reichte nicht – ein Ferienhaus in Dänemark kommt über Jahre in acht Monaten vor und ist trotzdem kein Alltag.
+
+Abgeschaltete Gruppen bleiben sichtbar und sind mit einem Klick einschaltbar. Am echten Bestand entstanden 25 Gruppen, davon 3 als Alltag abgeschaltet.
+
+In der Layout-Engine wirkt die Gruppe als Trennkraft: Eine Doppelseite, die eine Gruppengrenze überschreitet, ist teuer. Nicht verboten – sonst erzwänge eine Dreiergruppe eine Doppelseite mit fünf leeren Plätzen.

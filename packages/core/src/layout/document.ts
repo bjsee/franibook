@@ -40,6 +40,16 @@ export interface LayoutPhotoEntry {
   warn?: string;
 }
 
+export interface LayoutGroupEntry {
+  id: string;
+  title: string;
+  /** Ob die Gruppe das Buch gliedert. */
+  active: boolean;
+  /** Dateiname des Hauptbilds, sofern eines gewählt wurde. */
+  cover?: string;
+  photoCount: number;
+}
+
 export interface LayoutSpreadEntry {
   /** Fortlaufende Nummer, nur zur Orientierung. Beim Einlesen zählt die Reihenfolge. */
   n: number;
@@ -50,6 +60,8 @@ export interface LayoutSpreadEntry {
   template?: string;
   /** Jahreszahl oder Titel, sofern die Vorlage einen Textplatz hat. */
   text?: string;
+  /** Fotogruppe, zu der diese Doppelseite gehört. */
+  group?: string;
   photos: LayoutPhotoEntry[];
 }
 
@@ -67,6 +79,8 @@ export interface LayoutDocument {
     photos: number;
     photosPerSpread: number;
   };
+  /** Benannte Fotogruppen. Sie gliedern das Buch, sofern aktiv. */
+  groups: LayoutGroupEntry[];
   spreads: LayoutSpreadEntry[];
   /** Fotos, die in keiner Doppelseite vorkommen. */
   unplaced: LayoutPhotoEntry[];
@@ -128,11 +142,26 @@ export interface ExportOptions {
   settings: { targetPages: number; chapterOpeners: boolean };
   /** Fotos, die in keiner Doppelseite stehen. */
   unplaced?: readonly PhotoId[];
+  /** Benannte Fotogruppen, zur Orientierung im Dokument. */
+  groups?: readonly {
+    id: string;
+    title: string;
+    active: boolean;
+    photoIds: readonly PhotoId[];
+    coverPhotoId?: PhotoId;
+  }[];
 }
 
 /** Erzeugt das Layout-Dokument aus der aktuellen Buchstruktur. */
 export function exportLayout(opts: ExportOptions): LayoutDocument {
   const { spreads, photos, profile, settings } = opts;
+
+  // Welche Gruppe gehört zu welchem Foto? Damit trägt jede Doppelseite ihren
+  // Gruppennamen und man sieht beim Bearbeiten sofort, was zusammengehört.
+  const gruppeVon = new Map<PhotoId, string>();
+  for (const g of opts.groups ?? []) {
+    for (const id of g.photoIds) gruppeVon.set(id, g.title);
+  }
 
   const entries: LayoutSpreadEntry[] = spreads.map((spread, i) => {
     const template = templateById(spread.templateId);
@@ -165,10 +194,17 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
 
     const text = spread.texts?.[0]?.content;
 
+    // Nur wenn alle Bilder derselben Gruppe angehören
+    const gruppen = new Set(
+      spread.slots.map((s) => (s.photoId ? gruppeVon.get(s.photoId) : undefined)).filter(Boolean),
+    );
+    const group = gruppen.size === 1 ? [...gruppen][0] : undefined;
+
     return {
       n: i + 1,
       template: spread.templateId,
       ...(text ? { text } : {}),
+      ...(group ? { group } : {}),
       photos: photoEntries,
     };
   });
@@ -186,6 +222,13 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
       photos: placed,
       photosPerSpread: entries.length > 0 ? Number((placed / entries.length).toFixed(1)) : 0,
     },
+    groups: (opts.groups ?? []).map((g) => ({
+      id: g.id,
+      title: g.title,
+      active: g.active,
+      ...(g.coverPhotoId ? { cover: photos.get(g.coverPhotoId)?.fileName ?? g.coverPhotoId } : {}),
+      photoCount: g.photoIds.length,
+    })),
     spreads: entries,
     unplaced: (opts.unplaced ?? [])
       .map((id) => photos.get(id))

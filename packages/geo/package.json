@@ -1,0 +1,13 @@
+{
+  "name": "@franibook/geo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-Ortsauflösung. Bewusst ein eigenes Paket: Die Ortsdatenbank ist 2,4 MB groß und wird nur beim Import gebraucht — im Browser-Bundle hätte sie nichts zu suchen.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
