@@ -51,6 +51,8 @@ export interface GenerateOptions {
     active: boolean;
     title: string;
     coverPhotoId?: PhotoId;
+    /** Auftakt für genau diese Gruppe, unabhängig von der Vorgabe. */
+    opener?: boolean;
   }[];
   /**
    * Ob Gruppen eine eigene Auftaktseite bekommen.
@@ -58,8 +60,16 @@ export interface GenerateOptions {
    * Jede kostet eine Doppelseite. Bei 61 Gruppen wären das 122 Seiten allein
    * für Auftakte – deshalb bekommen sie nur Gruppen, die es tragen: solche mit
    * einem selbst gewählten Hauptbild oder ab `groupOpenerMinPhotos` Fotos.
+   *
+   * `'auto'` bedeutet: das Gegenteil von `timeline`. Trägt der Zeitstrahl den
+   * Gruppentitel auf jeder Doppelseite der Gruppe, ist eine eigene Auftaktseite
+   * dafür entbehrlich – sie benennt dann zum Preis von zwei Seiten, was ohnehin
+   * überall steht. Ohne Zeitstrahl bleibt der Auftakt die einzige Stelle, an der
+   * die Gruppe vorkommt.
    */
-  groupOpeners?: boolean;
+  groupOpeners?: boolean | 'auto';
+  /** Ob der Zeitstrahl läuft. Löst `groupOpeners: 'auto'` auf. */
+  timeline?: boolean;
   /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
   groupOpenerMinPhotos?: number;
   /** Steuert die Auswahl unter gleichwertigen Templates. */
@@ -494,6 +504,34 @@ function buildChapterOpener(
 }
 
 /**
+ * Welche Gruppe stellt die meisten Fotos dieser Doppelseite?
+ *
+ * Bei Gleichstand gewinnt die zuerst auftretende – sonst hinge das Ergebnis an
+ * der Aufzählungsreihenfolge einer Map und das Buch wäre nicht mehr
+ * deterministisch.
+ */
+export function mehrheitsGruppe(
+  fotos: readonly Photo[],
+  groupOf: ReadonlyMap<PhotoId, string>,
+): string | undefined {
+  const zaehler = new Map<string, number>();
+  for (const foto of fotos) {
+    const id = groupOf.get(foto.id);
+    if (id === undefined) continue;
+    zaehler.set(id, (zaehler.get(id) ?? 0) + 1);
+  }
+  let beste: string | undefined;
+  let meiste = 0;
+  for (const [id, n] of zaehler) {
+    if (n > meiste) {
+      meiste = n;
+      beste = id;
+    }
+  }
+  return beste;
+}
+
+/**
  * Erzeugt das komplette Buch.
  */
 export function generateBook(opts: GenerateOptions): GenerateResult {
@@ -527,7 +565,16 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   }
   const openerMinPhotos = opts.groupOpenerMinPhotos ?? 6;
   const gruppenGesehen = new Set<string>();
-  const useGroupOpeners = opts.groupOpeners ?? false;
+  /**
+   * Vorgabe für Gruppenauftakte, aufgelöst.
+   *
+   * Vorrang: Entscheidung der Gruppe über Vorgabe. `'auto'` ist das Gegenteil
+   * des Zeitstrahls.
+   */
+  const globalOpeners = opts.groupOpeners ?? 'auto';
+  const timelineAn = opts.timeline ?? true;
+  const auftaktGewuenscht = (gruppe: { opener?: boolean }): boolean =>
+    gruppe.opener ?? (globalOpeners === 'auto' ? !timelineAn : globalOpeners);
   let groupOpenerCount = 0;
 
   /**
@@ -557,9 +604,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Hauptbild gilt trotzdem: Es dem Jahresauftakt zu überlassen wäre gegen
   // die ausdrückliche Entscheidung des Benutzers.
   const schonVergeben = new Set(jahresBild.values());
-  if (useGroupOpeners) {
+  {
     for (const g of opts.groups ?? []) {
       if (!g.active) continue;
+      if (!auftaktGewuenscht(g)) continue;
       const verdient = g.coverPhotoId !== undefined || g.photoIds.length >= openerMinPhotos;
       if (!verdient) continue;
 
@@ -586,6 +634,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   }
 
   const ausDemFluss = new Set([...auftaktBild.values(), ...jahresBild.values()]);
+
+  // Zu welchem Jahr gehört ein Foto? Gebraucht für die Nachlese der Auftakte.
+  const jahrVonFoto = new Map<PhotoId, number>();
+  for (const c of structure.chapters) {
+    for (const seg of c.segments) {
+      for (const id of seg.photoIds) jahrVonFoto.set(id, c.year);
+    }
+  }
 
   // Auftaktbilder stehen nicht mehr im Fluss. Das Budget muss mit den Fotos
   // rechnen, die wirklich verteilt werden – sonst bekommt ein Jahr eine
@@ -640,6 +696,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       ...(ausDemFluss.size > 0 ? { exclude: ausDemFluss } : {}),
     });
 
+    // Reservierte Auftaktbilder dieses Jahres, die in der Schleife nicht zum
+    // Zuge kamen. Das betrifft Gruppen, deren Fotos vollständig aus dem Fluss
+    // genommen wurden – bei einer Gruppe mit selbst gewähltem Hauptbild und nur
+    // diesem einen Foto. Ohne diese Nachlese wäre das Bild nirgends im Buch.
+    const offeneAuftakte = new Map(
+      [...auftaktBild].filter(([, coverId]) => jahrVonFoto.get(coverId) === chapter.year),
+    );
+
     for (const group of groups) {
       const groupPhotos = group.photoIds
         .map((id) => photos.get(id))
@@ -648,7 +712,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
       // Eröffnet diese Doppelseite eine benannte Gruppe? Dann trägt sie deren
       // Titel – und braucht eine Vorlage, die Platz dafür hat.
-      const gruppenId = groupOf.get(groupPhotos[0]!.id);
+      //
+      // Maßgeblich ist die Gruppe mit den meisten Fotos, nicht die des ersten.
+      // Vorher entschied allein das erste Foto: Lag dort ein Bild einer anderen
+      // Gruppe – oder war das Auftaktbild bereits aus dem Fluss genommen –,
+      // wurde die Gruppe nicht erkannt, ihr reservierter Auftakt nie gebaut und
+      // das reservierte Bild landete in keiner Doppelseite. Gemessen fehlten so
+      // neun Fotos.
+      const gruppenId = mehrheitsGruppe(groupPhotos, groupOf);
       const eroeffnet = gruppenId !== undefined && !gruppenGesehen.has(gruppenId);
       let gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
       if (gruppenId !== undefined) gruppenGesehen.add(gruppenId);
@@ -671,6 +742,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
           spreads.push(opener);
           groupOpenerCount++;
           placed.add(cover.id);
+          offeneAuftakte.delete(gruppenId!);
           // Der Titel steht jetzt auf dem Auftakt; die folgende Doppelseite
           // braucht ihn nicht noch einmal.
           gruppenTitel = undefined;
@@ -706,6 +778,28 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
       recentTemplates.push(fit.templateId);
       if (recentTemplates.length > 4) recentTemplates.shift();
+    }
+
+    // Nachlese: Auftakte, die in der Schleife nicht zum Zuge kamen, weil die
+    // Gruppe im Fluss dieses Jahres gar nicht mehr vorkommt – etwa eine Gruppe
+    // aus einem einzigen Foto, das als Hauptbild reserviert wurde. Sie stehen
+    // am Ende des Jahres statt an ihrer chronologischen Stelle; das ist die
+    // schwächere Lösung, aber ungleich besser, als das Bild zu verlieren.
+    for (const [gruppenId, coverId] of offeneAuftakte) {
+      const cover = photos.get(coverId);
+      const titel = titelVonGruppe.get(gruppenId);
+      if (!cover || titel === undefined || placed.has(coverId)) continue;
+      const opener = buildGroupOpener(
+        `spread-${spreads.length}`,
+        spreads.length,
+        titel,
+        cover,
+        profile,
+      );
+      if (!opener) continue;
+      spreads.push(opener);
+      groupOpenerCount++;
+      placed.add(coverId);
     }
   }
 

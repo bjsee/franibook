@@ -6,7 +6,7 @@ import { buildStructure } from '../structure/segment.js';
 import { requireTemplate, supportedSlotCounts, templateById } from '../templates/index.js';
 import { distributeBudget, groupChapter } from './grouping.js';
 import { assign, slotCost, slotGeometry } from './scoring.js';
-import { generateBook } from './generate.js';
+import { generateBook, mehrheitsGruppe } from './generate.js';
 
 const profile = saal as PrintProfile;
 
@@ -655,5 +655,113 @@ describe('generateBook', () => {
       chapterOpeners: false,
     });
     expect(result.report.placedCount).toBe(1);
+  });
+});
+
+describe('Gruppenauftakte, an den Zeitstrahl gekoppelt', () => {
+  /** Zwanzig Fotos aus 2015, alle in einer tragfähigen Gruppe. */
+  function bestandMitGruppe(extra: Record<string, unknown> = {}) {
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    return generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      groups: [{ id: 'reise', title: 'Reise', photoIds: ids, active: true }],
+      ...extra,
+    });
+  }
+
+  it('lässt den Auftakt weg, solange der Zeitstrahl den Titel trägt', () => {
+    // Vorgabe ist 'auto': Steht der Gruppentitel ohnehin auf jeder Doppelseite
+    // der Gruppe, kostet eine eigene Auftaktseite zwei Seiten für nichts.
+    expect(bestandMitGruppe({ timeline: true }).report.groupOpeners).toBe(0);
+  });
+
+  it('gibt der Gruppe ohne Zeitstrahl wieder einen Auftakt', () => {
+    expect(bestandMitGruppe({ timeline: false }).report.groupOpeners).toBe(1);
+  });
+
+  it('nimmt die Vorgabe wörtlich, wenn sie nicht auf auto steht', () => {
+    expect(bestandMitGruppe({ timeline: true, groupOpeners: true }).report.groupOpeners).toBe(1);
+    expect(bestandMitGruppe({ timeline: false, groupOpeners: false }).report.groupOpeners).toBe(0);
+  });
+
+  it('lässt die Entscheidung der Gruppe über die Vorgabe gehen', () => {
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    const mitOpener = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      timeline: true,
+      groups: [{ id: 'reise', title: 'Reise', photoIds: ids, active: true, opener: true }],
+    });
+    expect(mitOpener.report.groupOpeners).toBe(1);
+
+    const ohneOpener = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      timeline: false,
+      groupOpeners: true,
+      groups: [{ id: 'reise', title: 'Reise', photoIds: ids, active: true, opener: false }],
+    });
+    expect(ohneOpener.report.groupOpeners).toBe(0);
+  });
+
+  it('verliert das Hauptbild einer Gruppe nicht, die im Fluss nicht mehr vorkommt', () => {
+    // Der Fehler, der am echten Bestand neun Fotos verschluckte: Das Hauptbild
+    // wird vorab aus dem Fluss genommen, der Auftakt aber erst gebaut, wenn die
+    // Gruppe eine Doppelseite eröffnet. Besteht die Gruppe nur aus diesem einen
+    // Foto, kommt sie im Fluss überhaupt nicht mehr vor – der Auftakt blieb
+    // ungebaut und das Bild stand in keiner Doppelseite.
+    const { photos, dated } = buildBestand({ 2015: 20 });
+    const ids = dated.map((d) => d.id);
+    const result = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 200,
+      chapterOpeners: false,
+      groupOpeners: true,
+      groups: [
+        {
+          id: 'solo',
+          title: 'Einzelstück',
+          photoIds: [ids[7]!],
+          active: true,
+          coverPhotoId: ids[7]!,
+        },
+      ],
+    });
+
+    const platziert = result.spreads.flatMap((s) =>
+      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+    );
+    expect(platziert, 'Hauptbild fehlt im Buch').toContain(ids[7]);
+    expect(new Set(platziert).size).toBe(ids.length);
+    expect(result.report.groupOpeners).toBe(1);
+  });
+
+  it('bestimmt die Gruppe einer Doppelseite nach der Mehrheit der Fotos', () => {
+    const fotos = [photo('a'), photo('b'), photo('c'), photo('d')];
+    const zuordnung = new Map([
+      ['a', 'eins'],
+      ['b', 'zwei'],
+      ['c', 'zwei'],
+      ['d', 'zwei'],
+    ]);
+    expect(mehrheitsGruppe(fotos, zuordnung)).toBe('zwei');
+    // Bei Gleichstand die zuerst auftretende – sonst hinge das Buch an der
+    // Aufzählungsreihenfolge einer Map.
+    expect(mehrheitsGruppe(fotos.slice(0, 2), zuordnung)).toBe('eins');
+    expect(mehrheitsGruppe(fotos, new Map())).toBeUndefined();
   });
 });

@@ -56,8 +56,14 @@ const SCHEMA_VERSION = 1;
 export interface ProjectSettings {
   targetPages: number;
   chapterOpeners: boolean;
-  /** Eigene Auftaktseite je Fotogruppe, mit Hauptbild und Titel. */
-  groupOpeners: boolean;
+  /**
+   * Eigene Auftaktseite je Fotogruppe, mit Hauptbild und Titel.
+   *
+   * `'auto'` heißt: das Gegenteil von `timeline`. Trägt der Zeitstrahl den
+   * Gruppentitel auf jeder Doppelseite, ist der Auftakt entbehrlich; ohne ihn
+   * ist er die einzige Stelle, an der die Gruppe benannt wird.
+   */
+  groupOpeners: boolean | 'auto';
   /** Ab wie vielen Fotos eine Gruppe ohne Hauptbild einen Auftakt bekommt. */
   groupOpenerMinPhotos: number;
   /** Zeitstrahl am Fuß jeder Doppelseite. */
@@ -98,10 +104,11 @@ export class Project {
   settings: ProjectSettings = {
     targetPages: 160,
     chapterOpeners: true,
-    // Aus: Eine eigene Trennerseite je Gruppe kostet bei 160 Seiten zu viel
-    // Platz. Der Gruppentitel steht stattdessen auf der ersten Doppelseite
-    // der Gruppe – sichtbar, ohne eine ganze Doppelseite zu verbrauchen.
-    groupOpeners: false,
+    // An den Zeitstrahl gekoppelt: Läuft er, benennt er die Gruppe auf jeder
+    // ihrer Doppelseiten, und eine eigene Trennerseite kostet nur zwei Seiten,
+    // ohne etwas hinzuzufügen. Ohne Zeitstrahl bekommen tragfähige Gruppen
+    // wieder ihren Auftakt.
+    groupOpeners: 'auto',
     groupOpenerMinPhotos: 6,
     // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
     // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
@@ -203,6 +210,8 @@ export class Project {
       groups: this.groups,
       groupOpeners: this.settings.groupOpeners,
       groupOpenerMinPhotos: this.settings.groupOpenerMinPhotos,
+      // Löst `groupOpeners: 'auto'` auf.
+      timeline: this.settings.timeline,
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
@@ -271,11 +280,32 @@ export class Project {
     return this.groups;
   }
 
+  /**
+   * Ändert eine Gruppe.
+   *
+   * `opener: null` heißt: zurück zur Vorgabe. Deshalb wird das Feld dann
+   * entfernt und nicht auf `null` gesetzt – ein gesetztes Feld ist eine
+   * Entscheidung, ein fehlendes ist keine, und diese Unterscheidung trägt bis in
+   * die Auflösung von `groupOpeners: 'auto'`.
+   */
   updateGroup(
     id: string,
-    patch: Partial<Pick<PhotoGroup, 'title' | 'coverPhotoId' | 'active' | 'photoIds'>>,
+    patch: Partial<Pick<PhotoGroup, 'title' | 'coverPhotoId' | 'active' | 'photoIds'>> & {
+      opener?: boolean | null;
+    },
   ): PhotoGroup[] {
-    this.groups = updateGroup(this.groups, id, patch);
+    const { opener, ...rest } = patch;
+    this.groups = updateGroup(this.groups, id, rest);
+    if (opener !== undefined) {
+      this.groups = this.groups.map((g) => {
+        if (g.id !== id) return g;
+        if (opener === null) {
+          const { opener: _entfernt, ...ohne } = g;
+          return ohne;
+        }
+        return { ...g, opener };
+      });
+    }
     return this.groups;
   }
 
@@ -319,6 +349,7 @@ export class Project {
         targetPages: this.settings.targetPages,
         chapterOpeners: this.settings.chapterOpeners,
         timeline: this.settings.timeline,
+        groupOpeners: this.settings.groupOpeners,
       },
       unplaced,
       groups: this.sortedGroups(),
@@ -367,6 +398,9 @@ export class Project {
       this.settings.chapterOpeners = parsed.settings.chapterOpeners;
     }
     if (parsed.settings?.timeline !== undefined) this.settings.timeline = parsed.settings.timeline;
+    if (parsed.settings?.groupOpeners !== undefined) {
+      this.settings.groupOpeners = parsed.settings.groupOpeners;
+    }
 
     return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
   }

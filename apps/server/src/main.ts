@@ -108,7 +108,17 @@ app.post<{ Body: { title: string; photoIds: string[] } }>('/api/groups', async (
 
 app.patch<{
   Params: { id: string };
-  Body: { title?: string; coverPhotoId?: string; active?: boolean; photoIds?: string[] };
+  Body: {
+    title?: string;
+    coverPhotoId?: string;
+    active?: boolean;
+    photoIds?: string[];
+    /**
+     * Auftaktseite für diese Gruppe, unabhängig von der Vorgabe.
+     * `null` setzt sie auf die Vorgabe zurück.
+     */
+    opener?: boolean | null;
+  };
 }>('/api/groups/:id', async (req) => {
   project.updateGroup(req.params.id, req.body ?? {});
   void project.save();
