@@ -173,3 +173,77 @@ describe('setSlotRotation', () => {
     expect(projektMitSlot().setSlotRotation(0, 'z', 1).ok).toBe(false);
   });
 });
+
+describe('setSpreadTemplate', () => {
+  /** Ein Projekt mit einer Doppelseite aus drei gleich geformten Bildern. */
+  function projektMitDrei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const id of ['p1', 'p2', 'p3']) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.3up.two-and-one',
+        slots: [
+          { slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } },
+          { slotId: 'b', photoId: 'p2', crop: { ...FULL_CROP } },
+          { slotId: 'c', photoId: 'p3', crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  it('setzt die Vorlage und ordnet die Bilder neu zu', () => {
+    const p = projektMitDrei();
+    const r = p.setSpreadTemplate(0, 'spread.3up.hero-plus-two');
+
+    expect(r.ok).toBe(true);
+    expect(r.leftover).toEqual([]);
+    expect(p.spreads[0]!.templateId).toBe('spread.3up.hero-plus-two');
+    expect(p.spreads[0]!.slots.filter((s) => s.photoId).length).toBe(3);
+  });
+
+  it('schickt überzählige Bilder in den Pool, statt sie zu verlieren', () => {
+    // Der Punkt des Wechsels von Hand: Man will die Seite anders aufteilen,
+    // auch wenn dann weniger Bilder daraufpassen.
+    const p = projektMitDrei();
+    const r = p.setSpreadTemplate(0, 'spread.2up.pair');
+
+    expect(r.ok).toBe(true);
+    expect(r.leftover).toHaveLength(1);
+    expect(p.spreads[0]!.slots.filter((s) => s.photoId).length).toBe(2);
+
+    // Was übrig blieb, ist nicht platziert – und damit im Pool.
+    const imBuch = new Set(p.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)));
+    expect(imBuch.has(r.leftover[0]!)).toBe(false);
+  });
+
+  it('lässt Plätze leer, wenn die Vorlage größer ist', () => {
+    const p = projektMitDrei();
+    const r = p.setSpreadTemplate(0, 'spread.4up.grid');
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.slots).toHaveLength(4);
+    expect(p.spreads[0]!.slots.filter((s) => s.photoId === null)).toHaveLength(1);
+  });
+
+  it('meldet eine unbekannte Vorlage, statt die Seite zu leeren', () => {
+    const p = projektMitDrei();
+    const r = p.setSpreadTemplate(0, 'gibt.es.nicht');
+
+    expect(r.ok).toBe(false);
+    expect(p.spreads[0]!.templateId).toBe('spread.3up.two-and-one');
+  });
+});
