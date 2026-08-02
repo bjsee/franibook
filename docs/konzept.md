@@ -881,8 +881,12 @@ Die Verarbeitung läuft über einen Worker-Pool mit begrenzter Warteschlange; pd
 > Ghostscript-Nachlauf, der Preflight mit `export-report.json` und der
 > SSE-Fortschritt. Übersprungene Bilder meldet der Export immerhin im Ergebnis.
 >
-> Die Dateigröße ist der offene Punkt: **404 MB bei 153 Doppelseiten** gemessen —
-> [#3](https://github.com/bjsee/franibook/issues/3).
+> Die Dateigröße war der offene Punkt: **404 MB bei 153 Doppelseiten** gemessen.
+> Mit den neuen Encoder-Vorgaben (88 / 4:2:0 mit Trellis-Quantisierung) liegt das
+> Buch bei **160 MB für 84 Doppelseiten**, gegen 288 MB bei identischem Layout mit
+> den alten Werten — siehe [Dateigröße](#dateigröße) und
+> [#3](https://github.com/bjsee/franibook/issues/3). Offen bleibt allein die
+> Uploadgrenze bei Saal.
 
 ### Gemessenes Verhalten
 
@@ -910,6 +914,60 @@ Ein Buch dieser Größe erzeugt eine Datei, die man im Blick behalten muss. Die 
 Echte Fotos liegen zwischen beiden Spalten, näher an der rechten; für 900 Fotos ist bei der Vorgabe eine Größenordnung von 400 bis 900 MB zu erwarten.
 
 Die wirksamste Stellschraube ist nicht die Qualität, sondern das Chroma-Subsampling: der Wechsel von 4:4:4 auf 4:2:0 halbiert die Datei bei kaum sichtbarem Unterschied. Vorgabe bleibt **q92 mit 4:4:4**, weil Fotobuchdruck der Fall ist, in dem sich volle Chroma-Auflösung lohnt; 4:2:0 ist der erste Griff, wenn die Datei zu groß wird. Beide Werte stehen im Druckprofil unter `encoding`.
+
+> **Korrektur (2. August 2026): am echten Bestand nachgemessen, Vorgabe geändert**
+>
+> Die Tabelle oben stammt von synthetischen Motiven, und sie führt in die Irre.
+> An echten Fotos ist das Chroma-Subsampling die **schwächste**, nicht die
+> stärkste Stellschraube: Es spart 19 %, nicht die Hälfte. Rauschen hat viel
+> Farbdetail, Fotos haben flächige Farbe — beim Halbieren der Chroma-Auflösung
+> geht dort schlicht weniger verloren.
+>
+> Gemessen an 120 Fotos des Bestands, bezogen auf die alte Vorgabe:
+>
+> | Qualität / Chroma                 | Anteil   |
+> | --------------------------------- | -------- |
+> | 92 / 4:4:4 (alte Vorgabe)         | 100 %    |
+> | 92 / 4:2:0                        | 81 %     |
+> | 88 / 4:2:0                        | 65 %     |
+> | 85 / 4:2:0                        | 56 %     |
+> | **88 / 4:2:0 + Trellis**          | **53 %** |
+> | 85 / 4:2:0 + Trellis              | 45 %     |
+> | 88 / 4:2:0 + mozjpeg (progressiv) | 51 %     |
+>
+> Neue Vorgabe ist **88 / 4:2:0**, ergänzt um Trellis-Quantisierung im Encoder
+> (`prepare-image.ts`, nicht im Profil — es ist keine Anbieterentscheidung).
+> Trellis rechnet die Koeffizienten je Block neu durch und bringt allein zwölf
+> Punkte, ohne die Qualitätsstufe zu senken.
+>
+> Am vollen Buch bestätigt, zweimal exportiert bei identischem Layout (84
+> Doppelseiten, 819 Bilder):
+>
+> |            | vorher | nachher | je Doppelseite |
+> | ---------- | ------ | ------- | -------------- |
+> | Dateigröße | 288 MB | 160 MB  | 3,43 → 1,90 MB |
+> | Laufzeit   | 28 s   | 56 s    | —              |
+>
+> 55 % also, wie die Messreihe vorhergesagt hat. Bezahlt wird mit der doppelten
+> Exportzeit; bei einer Datei, die hochgeladen werden muss, ist das die
+> günstigere Währung. Reicht es nicht, ist die nächste Stufe 85 / 4:2:0 — rund
+> 136 MB.
+>
+> **Nicht angetastet:** die Auflösung. Die eingebetteten Bilder liegen weiter bei
+> 300 dpi, Pixelmaße und Geometrie sind unverändert — mit `pdfimages -list` an
+> beiden PDFs nachgeprüft. An `minDpi` wird zum Sparen nicht gerührt.
+>
+> Progressives JPEG (`mozjpeg: true`) brächte zwei weitere Punkte und bleibt
+> trotzdem aus: Wie ein Druck-RIP einen progressiven DCT-Stream behandelt, ist
+> ohne Testdruck nicht prüfbar. Ein Test hält das Baseline-Format fest.
+>
+> Der Parity-Test bleibt unberührt: Bei seiner Vergleichsauflösung von 102 dpi
+> und einer Farbtoleranz von 0,25 ergibt selbst q20/4:2:0 null abweichende Pixel.
+> Er misst Geometrie, nicht Kompression — genau so ist er gebaut. Ausführen ließ
+> er sich allerdings nicht: Er erwartet die vier Fixtures auf **einer**
+> Doppelseite, die Automatik verteilt sie inzwischen auf vier. Das ist ein eigener
+> Befund, unabhängig von der Kompression, und schlägt auf dem unveränderten Stand
+> genauso an.
 
 ### Seitenaufteilung
 
@@ -989,13 +1047,15 @@ interface PrintProfile {
 
 ### Festgelegte Werte für dieses Projekt
 
-| Parameter                    | Wert     | Begründung                                                                                                                                                  |
-| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Buchformat                   | 30×30 cm | entschieden                                                                                                                                                 |
-| `resolution.targetDpi`       | 300      | Anstrebenswert; erreichen bei Slots bis 173 mm praktisch alle Fotos                                                                                         |
-| `resolution.minDpi`          | **240**  | Entschieden. Öffnet Slots bis 216 mm für 96 % des Bestands. Unterhalb dieses Werts verweigert die Automatik den Slot; der Benutzer kann bewusst überstimmen |
-| `encoding.jpegQuality`       | 92       | gemessen, siehe [PDF-Rendering](#pdf-rendering)                                                                                                             |
-| `encoding.chromaSubsampling` | 4:4:4    | Fotobuchdruck rechtfertigt volle Chroma-Auflösung; 4:2:0 ist der erste Griff, falls die Datei zu groß wird                                                  |
+| Parameter                    | Wert      | Begründung                                                                                                                                                  |
+| ---------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Buchformat                   | 30×30 cm  | entschieden                                                                                                                                                 |
+| `resolution.targetDpi`       | 300       | Anstrebenswert; erreichen bei Slots bis 173 mm praktisch alle Fotos                                                                                         |
+| `resolution.minDpi`          | **240**   | Entschieden. Öffnet Slots bis 216 mm für 96 % des Bestands. Unterhalb dieses Werts verweigert die Automatik den Slot; der Benutzer kann bewusst überstimmen |
+| `encoding.jpegQuality`       | **88**    | am Bestand gemessen, siehe [Dateigröße](#dateigröße). Vorher 92; die Absenkung spart 20 %                                                                   |
+| `encoding.chromaSubsampling` | **4:2:0** | am Bestand gemessen: 19 % kleiner als 4:4:4 (am Rauschen wären es 45 % — die alte Vorgabe stützte sich darauf)                                              |
+
+Die Encoder-Feinheiten stehen bewusst **nicht** im Profil, sondern in `prepare-image.ts`: Trellis-Quantisierung und Baseline-Format sind Eigenschaften des Encoders, keine Vorgaben des Druckdienstleisters. Im Profil steht nur, was ein Anbieterwechsel ändern würde.
 
 Aus `minDpi` folgt unmittelbar die Obergrenze der Templatebibliothek: 2048 px bei 240 dpi ergeben 216 mm. Diese Zahl ist damit kein Layoutdetail, sondern eine aus Bestand und Druckentscheidung abgeleitete Konstante.
 
@@ -1256,15 +1316,15 @@ Ein Skript erzeugt reproduzierbar einen Testbestand: Bilder in verschiedenen For
 
 ## Risiken
 
-| Risiko                                             | Bewertung                | Umgang                                                                                                                                                                                                    |
-| -------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HEIC-Decodierung nicht verfügbar                   | ✅ geklärt in Phase 0    | Trat ein, mit anderer Ursache als vermutet. `sips` trägt zuverlässig und ist jetzt der Primärpfad. Restunsicherheit: Prüfung gegen ein echtes iPhone-Foto in Phase 2                                      |
-| Saal-Maße weichen von den Annahmen ab              | Hoch, geringe Wirkung    | Werte sind Profildaten; Korrektur ist eine Zahlenänderung. `verifiedAt` erzwingt die Prüfung vor dem ersten Druck                                                                                         |
-| Farbabweichung im Druck                            | Mittel, mittlere Wirkung | Testdruck einer einzelnen Doppelseite mit Farbfeldern und Hauttönen, bevor 160 Seiten in Auftrag gehen. Kostet wenig und ist der einzige belastbare Test                                                  |
-| Speicherbedarf beim PDF-Export                     | ✅ geklärt in Phase 0    | 495 MB gemessen, Budget von 1,5 GB deutlich eingehalten. pdf-lib hätte 4,9 GB gebraucht                                                                                                                   |
-| Größe der PDF-Datei                                | ⚠️ eingetreten           | 404 MB bei 153 Doppelseiten gemessen, bei 86 sind rund 230 MB zu erwarten. Chroma-Subsampling auf 4:2:0 halbiert das. Uploadgrenze bei Saal klären — [#3](https://github.com/bjsee/franibook/issues/3)    |
-| Automatik erzeugt langweilige oder unruhige Seiten | ⚠️ offen, zu beurteilen  | Wiederholungsstrafe und 60 Templates sind da; „anders generieren“ und die Fotogewichtung nicht. Bei 9,5 Fotos je Doppelseite dominieren dichte Raster — [#7](https://github.com/bjsee/franibook/issues/7) |
-| Chronologie stimmt in weiten Teilen nicht          | Hoch, hohe Wirkung       | Der gesamte Metadaten- und Timeline-Teil ist genau darauf ausgelegt. Die Massenwerkzeuge (Zeitversatz, Zeitraum zuweisen) sind hier wichtiger als jede Layoutfeinheit                                     |
+| Risiko                                             | Bewertung                | Umgang                                                                                                                                                                                                                                           |
+| -------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| HEIC-Decodierung nicht verfügbar                   | ✅ geklärt in Phase 0    | Trat ein, mit anderer Ursache als vermutet. `sips` trägt zuverlässig und ist jetzt der Primärpfad. Restunsicherheit: Prüfung gegen ein echtes iPhone-Foto in Phase 2                                                                             |
+| Saal-Maße weichen von den Annahmen ab              | Hoch, geringe Wirkung    | Werte sind Profildaten; Korrektur ist eine Zahlenänderung. `verifiedAt` erzwingt die Prüfung vor dem ersten Druck                                                                                                                                |
+| Farbabweichung im Druck                            | Mittel, mittlere Wirkung | Testdruck einer einzelnen Doppelseite mit Farbfeldern und Hauttönen, bevor 160 Seiten in Auftrag gehen. Kostet wenig und ist der einzige belastbare Test                                                                                         |
+| Speicherbedarf beim PDF-Export                     | ✅ geklärt in Phase 0    | 495 MB gemessen, Budget von 1,5 GB deutlich eingehalten. pdf-lib hätte 4,9 GB gebraucht                                                                                                                                                          |
+| Größe der PDF-Datei                                | ⚠️ entschärft            | 404 MB bei 153 Doppelseiten waren zu viel. 88 / 4:2:0 mit Trellis-Quantisierung drückt das Buch auf 55 %: 160 statt 288 MB bei 84 Doppelseiten, gemessen. Uploadgrenze bei Saal weiter offen — [#3](https://github.com/bjsee/franibook/issues/3) |
+| Automatik erzeugt langweilige oder unruhige Seiten | ⚠️ offen, zu beurteilen  | Wiederholungsstrafe und 60 Templates sind da; „anders generieren“ und die Fotogewichtung nicht. Bei 9,5 Fotos je Doppelseite dominieren dichte Raster — [#7](https://github.com/bjsee/franibook/issues/7)                                        |
+| Chronologie stimmt in weiten Teilen nicht          | Hoch, hohe Wirkung       | Der gesamte Metadaten- und Timeline-Teil ist genau darauf ausgelegt. Die Massenwerkzeuge (Zeitversatz, Zeitraum zuweisen) sind hier wichtiger als jede Layoutfeinheit                                                                            |
 
 ## Offene Punkte
 
@@ -1290,7 +1350,8 @@ Bewusst nicht im Konzept entschieden, weil erst mit echten Daten oder Informatio
 >   `n^0,85`.
 >
 > Neu hinzugekommen und noch nicht entschieden: die Uploadgrenze bei Saal
-> ([#3](https://github.com/bjsee/franibook/issues/3)) und die Frage, ob die
+> ([#3](https://github.com/bjsee/franibook/issues/3) — die Datei liegt inzwischen
+> bei 160 MB, die Grenze selbst kennt nur der Anbieter) und die Frage, ob die
 > Gestaltung der dichten Raster trägt
 > ([#7](https://github.com/bjsee/franibook/issues/7)).
 
