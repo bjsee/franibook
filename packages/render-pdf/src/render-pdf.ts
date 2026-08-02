@@ -209,6 +209,14 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   return { pages, images, skipped };
 }
 
+/** Wie weit eine geneigte Box seitlich über ihre eigene Breite hinausragt. */
+function ueberstandMm(box: ImageBox): number {
+  const deg = box.rotateDeg ?? 0;
+  if (deg === 0) return 0;
+  const bogen = (Math.abs(deg) * Math.PI) / 180;
+  return (box.wMm * Math.cos(bogen) + box.hMm * Math.sin(bogen) - box.wMm) / 2;
+}
+
 async function drawImage(
   doc: PDFKit.PDFDocument,
   box: ImageBox,
@@ -224,9 +232,13 @@ async function drawImage(
     return false;
   }
 
-  // Außerhalb dieser Seitenhälfte liegende Boxen überspringen
+  // Außerhalb dieser Seitenhälfte liegende Boxen überspringen. Die Reserve
+  // trägt dem Überstand einer gedrehten Box Rechnung: Ein Bild, das genau an
+  // der Falzachse endet, ragt geneigt in die Nachbarseite hinein und fiele
+  // sonst dort heraus – sichtbar als abgeschnittene Ecke im Falz.
   const xMm = box.xMm + slice.offsetXMm;
-  if (xMm + box.wMm <= 0 || xMm >= slice.widthMm) return false;
+  const reserve = ueberstandMm(box);
+  if (xMm + box.wMm + reserve <= 0 || xMm - reserve >= slice.widthMm) return false;
 
   const place = async (from: PhotoSource): Promise<void> => {
     const prepared = await prepareImage(from.path, {
@@ -237,10 +249,34 @@ async function drawImage(
       profile,
     });
 
-    doc.image(prepared.buffer, mmToPt(xMm), mmToPt(box.yMm), {
-      width: mmToPt(box.wMm),
-      height: mmToPt(box.hMm),
-    });
+    // Drehung um den Mittelpunkt der Box – dieselbe Festlegung, die die
+    // Vorschau über `transform: rotate()` umsetzt. Das Bild wird unverändert
+    // in seinen Kasten gesetzt; gedreht wird das Koordinatensystem.
+    const drehung = box.rotateDeg ?? 0;
+    if (drehung === 0) {
+      doc.image(prepared.buffer, mmToPt(xMm), mmToPt(box.yMm), {
+        width: mmToPt(box.wMm),
+        height: mmToPt(box.hMm),
+      });
+      return;
+    }
+
+    doc.save();
+    try {
+      doc.rotate(drehung, {
+        origin: [mmToPt(xMm + box.wMm / 2), mmToPt(box.yMm + box.hMm / 2)],
+      });
+      doc.image(prepared.buffer, mmToPt(xMm), mmToPt(box.yMm), {
+        width: mmToPt(box.wMm),
+        height: mmToPt(box.hMm),
+      });
+    } finally {
+      // Zwingend auch im Fehlerfall: Ein nicht zurückgenommenes `rotate`
+      // stünde noch im Grafikzustand, wenn der Aufrufer das nächste Bild
+      // zeichnet – ein einziges unlesbares Foto legte die restliche Seite
+      // schief.
+      doc.restore();
+    }
   };
 
   try {

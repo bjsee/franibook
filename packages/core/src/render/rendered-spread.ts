@@ -33,6 +33,19 @@ export interface ImageBox extends Rect {
   crop: Crop;
   /** Auflösung, mit der dieser Bildbereich tatsächlich gedruckt wird. */
   effectiveDpi: number;
+  /**
+   * Neigung in Grad im Uhrzeigersinn, um den Mittelpunkt der Box. Ohne Angabe:
+   * waagerecht.
+   *
+   * Gedreht wird der Kasten samt Inhalt, nicht das Foto im Kasten – der
+   * Ausschnitt bleibt davon unberührt. Drehpunkt ist die Mitte und nicht die
+   * obere linke Ecke, weil beide Renderer denselben Punkt treffen müssen: Bei
+   * der Mitte genügt dafür in DOM und PDF je eine Transformation, bei der Ecke
+   * wären es Verschiebung plus Drehung – zwei Gelegenheiten für einen
+   * Vorzeichenfehler. Dieselbe Festlegung gilt für den Rückentext des
+   * Umschlags (`cover/rendered-cover.ts`).
+   */
+  rotateDeg?: number;
   warnings: RenderWarning[];
 }
 

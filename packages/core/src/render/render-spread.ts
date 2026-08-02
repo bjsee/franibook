@@ -25,11 +25,13 @@ import {
 import type {
   Guide,
   ImageBox,
+  Rect,
   RenderBox,
   RenderWarning,
   RenderedSpread,
 } from './rendered-spread.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
+import { randabfallend, tiltDeg } from './tilt.js';
 import { textFontSizePt, textStyle } from './typography.js';
 
 /**
@@ -51,6 +53,21 @@ export interface TimelineContext {
   accentColor?: string;
 }
 
+/**
+ * Wie stark die Bilder aus der Waagerechten kippen dürfen.
+ *
+ * Fehlt der Kontext, steht alles gerade – wie der Zeitstrahl lebt der globale
+ * Schalter beim Aufrufer, nicht in der Engine. Eine von Hand gesetzte Neigung
+ * an einem Slot gilt trotzdem: Sie ist eine Entscheidung über dieses eine
+ * Bild, keine Voreinstellung des Buchs.
+ */
+export interface TiltContext {
+  /** Stärkste Neigung in Grad. */
+  maxDeg: number;
+  /** Derselbe Seed wie beim Generieren – gleiches Buch, gleiche Winkel. */
+  seed: number;
+}
+
 export interface RenderContext {
   profile: PrintProfile;
   template: Template;
@@ -58,6 +75,7 @@ export interface RenderContext {
   /** Hintergrund der Doppelseite. Weiß, solange nichts anderes gesetzt ist. */
   background?: string;
   timeline?: TimelineContext;
+  tilt?: TiltContext;
 }
 
 /**
@@ -79,6 +97,25 @@ function toMm(
     wMm: slot.w * trimSpreadW,
     hMm: slot.h * trimH,
   };
+}
+
+/**
+ * Neigung dieses Bildes: von Hand gesetzt, sonst aus Slot, Foto und Seed.
+ */
+function tiltOf(assignment: SlotAssignment, rect: Rect, photoId: PhotoId, ctx: RenderContext) {
+  const flaeche = {
+    widthMm: spreadWidthMm(ctx.profile),
+    heightMm: spreadHeightMm(ctx.profile),
+  };
+  // Auch eine von Hand gesetzte Neigung gilt hier nicht: Am Papierrand ist sie
+  // kein Gestaltungsmittel, sondern ein Druckfehler.
+  if (randabfallend(rect, flaeche)) return 0;
+  if (assignment.rotateDeg !== undefined) return assignment.rotateDeg;
+  if (!ctx.tilt) return 0;
+  // Slot *und* Foto im Schlüssel: Ein Bild soll seinen Winkel behalten, wenn
+  // die Nachbarseite umgebaut wird, ihn aber wechseln, wenn es selbst
+  // umzieht – sonst stünden zwei getauschte Bilder identisch schief.
+  return tiltDeg(`${assignment.slotId}:${photoId}`, ctx.tilt.seed, ctx.tilt.maxDeg);
 }
 
 function buildGuides(profile: PrintProfile): Guide[] {
@@ -146,6 +183,8 @@ function buildImageBox(
   }
   if (crossesGutter(slot)) warnings.push({ code: 'crosses-gutter' });
 
+  const drehung = tiltOf(assignment, rect, photo.id, ctx);
+
   return {
     kind: 'image',
     ...rect,
@@ -153,6 +192,7 @@ function buildImageBox(
     photoId: photo.id,
     crop,
     effectiveDpi: dpi,
+    ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
     warnings,
   };
 }

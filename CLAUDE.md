@@ -170,6 +170,14 @@ Resolver. Eine gerade nicht lesbare Quelle wird beim Einlesen übersprungen und
 gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu gelten (ein nicht
 eingehängtes Netzlaufwerk sieht sonst aus wie ein leerer Ordner).
 
+**Neigung** (`core/render/tilt.ts`) dreht jedes Bild leicht aus der Waagerechten,
+damit das Raster nicht gezeichnet wirkt. Der Winkel ist eine reine Funktion aus
+Slot, Foto und Seed — nicht gewürfelt und nirgends gespeichert, damit die
+Generierung deterministisch bleibt und ein bestehendes Buch die Neigung ohne
+Neuaufbau bekommt. `SlotAssignment.rotateDeg` schlägt sie; `undefined` heißt
+„automatisch", `0` heißt „ausdrücklich geradestellt". Randabfallende Bilder
+bleiben immer gerade — geneigt entstünden weiße Zwickel an der Papierkante.
+
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.
 
@@ -183,10 +191,14 @@ Grenze von 16). Primärpfad ist deshalb macOS `sips`. Details in
 screenshottet eine Doppelseite (`?bare&original=1`), exportiert denselben Spread als
 PDF, rastert ihn mit `pdftoppm` und vergleicht mit `pixelmatch`.
 
-Die Schwellen sind gemessen, nicht geraten: korrekt 0,222 %, mit manuellen Crops
-0,425 %, bei 1 mm eingebautem Versatz 1,018 % bzw. 1,388 % — Schwelle 0,5 %. Wer sie
+Die Schwellen sind gemessen, nicht geraten: korrekt 0,157 %, mit manuellen Crops
+0,153 %, bei 1 mm eingebautem Versatz 1,018 % bzw. 1,388 % — Schwelle 0,5 %. Wer sie
 anfasst, hebt die Empfindlichkeit auf, die den Test überhaupt wertvoll macht.
 Überschreibbar über `PARITY_WIDTH`, `PARITY_THRESHOLD`, `PARITY_MAX_DIFF`.
+
+Seit der Bildneigung deckt der Test sie mit ab: Ohne sie liegt derselbe Lauf bei
+0,242 % — die schrägen Kanten sind weichgezeichnet, wo das Millimeterraster der
+Fixtures sonst harte Ein-Pixel-Versätze erzeugt.
 
 Verglichen wird gegen die Originale (`/api/photos/:id/original`), nicht gegen die
 WebP-Vorschauen — sonst misst der Test Kompression statt Geometrie.

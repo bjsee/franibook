@@ -5,6 +5,7 @@ import type { NaiveDateTime, Photo } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
+import { DEFAULT_TILT_DEG } from './tilt.js';
 import { imageBoxes } from './rendered-spread.js';
 
 const profile = saal as PrintProfile;
@@ -421,5 +422,75 @@ describe('Seitenhintergrund', () => {
     if (text?.kind !== 'text') throw new Error('kein Text');
     expect(text.color).not.toBe('#000000');
     expect(text.color.toLowerCase()).toMatch(/^#f/);
+  });
+});
+
+describe('Neigung der Bilder', () => {
+  const geneigt = { ...ctx, tilt: { maxDeg: DEFAULT_TILT_DEG, seed: 1 } };
+
+  it('steht ohne Kontext gerade', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(imageBoxes(rsm).every((b) => b.rotateDeg === undefined)).toBe(true);
+  });
+
+  it('neigt jedes Bild, sobald der Aufrufer es zulässt', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), geneigt);
+    const winkel = imageBoxes(rsm).map((b) => b.rotateDeg);
+    expect(winkel).toHaveLength(4);
+    expect(winkel.every((w) => w !== undefined && w !== 0)).toBe(true);
+    // Vier gleiche Winkel wären kein Zufall, sondern ein Fehler im Schlüssel.
+    expect(new Set(winkel).size).toBeGreaterThan(1);
+  });
+
+  it('gibt derselben Doppelseite zweimal dieselben Winkel', () => {
+    const a = imageBoxes(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), geneigt));
+    const b = imageBoxes(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), geneigt));
+    expect(a.map((x) => x.rotateDeg)).toEqual(b.map((x) => x.rotateDeg));
+  });
+
+  it('lässt eine von Hand gesetzte Neigung vorgehen', () => {
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    spread.slots[0]!.rotateDeg = 2.5;
+    const box = imageBoxes(renderSpread(spread, geneigt))[0];
+    expect(box?.rotateDeg).toBe(2.5);
+  });
+
+  /**
+   * Der eigentliche Zweck des Felds: Eine gesetzte 0 ist etwas anderes als
+   * gar kein Wert – sie stellt das Bild gegen die Automatik gerade.
+   */
+  it('stellt ein Bild mit rotateDeg 0 ausdrücklich gerade', () => {
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    spread.slots[0]!.rotateDeg = 0;
+    const boxen = imageBoxes(renderSpread(spread, geneigt));
+    expect(boxen[0]?.rotateDeg).toBeUndefined();
+    expect(boxen[1]?.rotateDeg).not.toBe(0);
+  });
+
+  /**
+   * Ein gedrehtes randabfallendes Bild zeigt weiße Zwickel an der
+   * Papierkante – ein Druckfehler, kein Effekt.
+   */
+  it('lässt randabfallende Bilder gerade, auch von Hand', () => {
+    const voll = requireTemplate('spread.group.opener-full');
+    const spread = spreadOfTemplate(voll.id, ['p1']);
+    spread.slots[0]!.rotateDeg = 3;
+    const rsm = renderSpread(spread, { ...geneigt, template: voll });
+    expect(imageBoxes(rsm)[0]?.rotateDeg).toBeUndefined();
+  });
+
+  it('lässt ein Hintergrundbild gerade', () => {
+    const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), backgroundPhotoId: 'p1' };
+    const rsm = renderSpread(spread, geneigt);
+    expect(rsm.boxes[0]?.kind === 'image' && rsm.boxes[0].rotateDeg).toBeFalsy();
+  });
+
+  it('rührt den Bildausschnitt nicht an – gedreht wird der Kasten', () => {
+    const ohne = imageBoxes(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx));
+    const mit = imageBoxes(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), geneigt));
+    expect(mit.map((b) => b.crop)).toEqual(ohne.map((b) => b.crop));
+    expect(mit.map((b) => [b.xMm, b.yMm, b.wMm, b.hMm])).toEqual(
+      ohne.map((b) => [b.xMm, b.yMm, b.wMm, b.hMm]),
+    );
   });
 });

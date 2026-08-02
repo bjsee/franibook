@@ -33,6 +33,7 @@ export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
 export * from './render/background.js';
 export * from './render/timeline.js';
+export * from './render/tilt.js';
 export * from './render/typography.js';
 export * from './render/inspect.js';
 
