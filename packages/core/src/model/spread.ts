@@ -31,6 +31,18 @@ export interface Spread {
   /** Von "Buch neu generieren" ausgenommen. */
   locked?: boolean;
   /**
+   * Hintergrundfarbe dieser Doppelseite. Ohne Angabe gilt die globale Vorgabe.
+   */
+  background?: string;
+  /**
+   * Foto als randabfallender Hintergrund. Schlägt die Farbe.
+   *
+   * Ob die Auflösung dafür reicht, prüft `backgroundFit`; sie tut es bei diesem
+   * Bestand fast nie. Das Feld bleibt trotzdem eine Entscheidung des Benutzers –
+   * die Engine setzt sie um und meldet, was sie davon hält.
+   */
+  backgroundPhotoId?: PhotoId;
+  /**
    * Zeitstrahl auf dieser Doppelseite. Ohne Angabe gilt die globale Vorgabe.
    *
    * Übersteht den Neuaufbau und ein handbearbeitetes Layout-Dokument, geht beim

@@ -5,6 +5,7 @@ import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
 import { YearEvents } from './YearEvents.js';
+import { BackgroundPicker } from './BackgroundPicker.js';
 import { SpreadEditor } from './SpreadEditor.js';
 
 interface Report {
@@ -37,6 +38,7 @@ interface ProjectInfo {
     chapterOpeners: boolean;
     groupOpeners: boolean | 'auto';
     timeline: boolean;
+    background: string;
     seed: number;
     birthDate?: string;
   };
@@ -318,6 +320,18 @@ export function App() {
                 >
                   →
                 </button>
+
+                {info && (
+                  <BackgroundPicker
+                    spreadIndex={index}
+                    global={info.settings.background}
+                    onChanged={() => {
+                      loadInfo();
+                      setSpread(null);
+                      setRenderVersion((v) => v + 1);
+                    }}
+                  />
+                )}
 
                 {info?.settings.timeline && (
                   <label style={S.check} title="Nur diese Doppelseite">

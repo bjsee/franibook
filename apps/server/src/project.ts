@@ -30,6 +30,8 @@ import {
   allSegments,
   bookStats,
   buildStructure,
+  DEFAULT_BACKGROUND,
+  backgroundFit,
   defaultProfile,
   exportLayout,
   findBulkSeconds,
@@ -78,6 +80,8 @@ export interface ProjectSettings {
   groupOpenerMinPhotos: number;
   /** Zeitstrahl am Fuß jeder Doppelseite. */
   timeline: boolean;
+  /** Hintergrundfarbe aller Doppelseiten, sofern keine eigene gesetzt ist. */
+  background: string;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -135,6 +139,9 @@ export class Project {
     // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
     // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
     timeline: true,
+    // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
+    // deshalb die Palette in render/background.ts.
+    background: DEFAULT_BACKGROUND,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
@@ -223,6 +230,72 @@ export class Project {
     }
 
     this.structure = structure;
+  }
+
+  // ------------------------------------------------------------ Hintergrund
+
+  /**
+   * Setzt Farbe oder Bild als Hintergrund einer Doppelseite.
+   *
+   * `null` heißt jeweils: zurück zur Vorgabe. Ein Bild schlägt die Farbe, und
+   * ein zu grobes Bild wird gesetzt, aber gemeldet – die Entscheidung bleibt
+   * beim Benutzer, die Warnung erscheint in der Vorschau und im Export.
+   */
+  setSpreadBackground(
+    index: number,
+    patch: { color?: string | null; photoId?: PhotoId | null },
+  ): { ok: boolean; hinweis?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false };
+
+    if (patch.color !== undefined) {
+      if (patch.color === null) delete spread.background;
+      else spread.background = patch.color;
+    }
+
+    if (patch.photoId !== undefined) {
+      if (patch.photoId === null) {
+        delete spread.backgroundPhotoId;
+      } else {
+        const photo = this.photos.get(patch.photoId);
+        if (!photo) return { ok: false };
+        spread.backgroundPhotoId = patch.photoId;
+        const fit = backgroundFit(photo, this.profile);
+        if (!fit.taugt) {
+          return {
+            ok: true,
+            hinweis:
+              `Das Bild deckt die Doppelseite nur mit ${Math.round(fit.dpi)} dpi ab. ` +
+              `Für einen Hintergrund sind ${fit.benoetigtPx} px lange Kante nötig, ` +
+              `dieses hat ${Math.max(photo.width, photo.height)} px.`,
+          };
+        }
+      }
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Fotos, die als Hintergrund taugen – die besten zuerst.
+   *
+   * Bei diesem Bestand ist die Liste meist leer; das ist die Antwort, nicht ein
+   * Fehler. Deshalb wird auch die Auflösung mitgeliefert: Wer trotzdem eines
+   * setzen will, sieht, wie weit es fehlt.
+   */
+  backgroundCandidates(
+    limit = 24,
+  ): { photoId: PhotoId; fileName: string; dpi: number; taugt: boolean }[] {
+    return [...this.photos.values()]
+      .map((p) => ({ photo: p, fit: backgroundFit(p, this.profile) }))
+      .sort((a, b) => b.fit.dpi - a.fit.dpi)
+      .slice(0, limit)
+      .map(({ photo, fit }) => ({
+        photoId: photo.id,
+        fileName: photo.fileName,
+        dpi: Math.round(fit.dpi),
+        taugt: fit.taugt,
+      }));
   }
 
   // ------------------------------------------------------ Jahresereignisse
@@ -577,6 +650,7 @@ export class Project {
       profile: this.profile,
       template: requireTemplate(spread.templateId),
       photos: this.photos,
+      background: this.settings.background,
       ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
     });
   }

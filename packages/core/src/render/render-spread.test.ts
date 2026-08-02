@@ -371,3 +371,55 @@ describe('Mehrzeilige Texte', () => {
     expect(jahr?.kind === 'text' && jahr.content).toBe('2017');
   });
 });
+
+describe('Seitenhintergrund', () => {
+  it('nimmt die Farbe der Doppelseite vor der globalen Vorgabe', () => {
+    const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), background: '#eae5db' };
+    const rsm = renderSpread(spread, { ...ctx, background: '#faf7f2' });
+    expect(rsm.background).toBe('#eae5db');
+  });
+
+  it('legt ein Hintergrundbild randabfallend über die ganze Fläche', () => {
+    const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), backgroundPhotoId: 'p1' };
+    const rsm = renderSpread(spread, ctx);
+    const hintergrund = rsm.boxes[0];
+    if (hintergrund?.kind !== 'image') throw new Error('kein Hintergrundbild');
+    expect(hintergrund.slotId).toBe('background');
+    expect(hintergrund.xMm).toBe(0);
+    expect(hintergrund.yMm).toBe(0);
+    expect(hintergrund.wMm).toBe(rsm.widthMm);
+    expect(hintergrund.hMm).toBe(rsm.heightMm);
+    // Es liegt vor allem anderen, damit die Fotos darüber stehen.
+    expect(rsm.boxes.filter((b) => b.kind === 'image').indexOf(hintergrund)).toBe(0);
+  });
+
+  it('meldet ein zu grobes Hintergrundbild, setzt es aber trotzdem', () => {
+    const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), backgroundPhotoId: 'p1' };
+    const rsm = renderSpread(spread, ctx);
+    const hintergrund = rsm.boxes[0];
+    if (hintergrund?.kind !== 'image') throw new Error('kein Hintergrundbild');
+    // p1 hat 2048 px – der Median des Bestands, und damit zu wenig.
+    expect(hintergrund.warnings.map((w) => w.code)).toContain('background-low-dpi');
+  });
+
+  it('macht Text auf dunklem Hintergrund hell', () => {
+    const titled = requireTemplate('spread.5up.offset.titled');
+    const spread = {
+      ...spreadOfTemplate(titled.id, ['p1', 'p2', 'p3', 'p4', null]),
+      background: '#1c1917',
+      texts: [
+        {
+          id: 't1',
+          role: 'eventTitle' as const,
+          content: 'Deichbrand',
+          slotId: titled.textSlots![0]!.id,
+        },
+      ],
+    };
+    const rsm = renderSpread(spread, { ...ctx, template: titled });
+    const text = rsm.boxes.find((b) => b.kind === 'text');
+    if (text?.kind !== 'text') throw new Error('kein Text');
+    expect(text.color).not.toBe('#000000');
+    expect(text.color.toLowerCase()).toMatch(/^#f/);
+  });
+});

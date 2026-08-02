@@ -28,6 +28,7 @@
  */
 import type { NaiveDateTime } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
+import { DEFAULT_BACKGROUND, textColorOn } from './background.js';
 import type { RenderBox } from './rendered-spread.js';
 import { textFontSizePt, textStyle } from './typography.js';
 
@@ -83,6 +84,11 @@ const COLOR_MARGIN = '#a1a1aa';
 const COLOR_ACCENT = '#1d4ed8';
 
 export interface TimelineInput {
+  /**
+   * Hintergrund der Doppelseite. Auf dunklem Grund kehren Achse, Ticks und
+   * Beschriftung ihre Helligkeit um, sonst wäre der Zeitstrahl unsichtbar.
+   */
+  background?: string;
   /**
    * Aufnahmedaten der Doppelseite – nur belastbare, also `high` oder `medium`.
    * Ein Dateidatum ist häufig das Kopierdatum und würde den Spannbalken über
@@ -159,6 +165,7 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   const yearEnd = x(LEAD_MONTHS + 12);
 
   const boxes: RenderBox[] = [];
+  const auf = (farbe: string) => textColorOn(input.background ?? DEFAULT_BACKGROUND, farbe);
 
   // Achse in drei Segmenten: Vorlauf, Kapiteljahr, Nachlauf. Die Randmonate
   // sind schwächer gezeichnet – so ist zu sehen, wo das Jahr beginnt und
@@ -174,9 +181,9 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       fill,
     });
   };
-  axis(axisX0, yearStart, COLOR_MARGIN);
-  axis(yearStart, yearEnd, COLOR_CHAPTER);
-  axis(yearEnd, axisX1, COLOR_MARGIN);
+  axis(axisX0, yearStart, auf(COLOR_MARGIN));
+  axis(yearStart, yearEnd, auf(COLOR_CHAPTER));
+  axis(yearEnd, axisX1, auf(COLOR_MARGIN));
 
   // Monatsticks, ohne Beschriftung: abzählbar, aber ruhig. 18 Kürzel je
   // Doppelseite wären auf 85 Seiten zu geschwätzig. Im Falzband entfallen sie –
@@ -192,7 +199,7 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       yMm: top + LAYOUT.tickTop,
       wMm: LAYOUT.tickWidth,
       hMm: LAYOUT.tickHeight,
-      fill: imKapiteljahr ? COLOR_CHAPTER : COLOR_MARGIN,
+      fill: imKapiteljahr ? auf(COLOR_CHAPTER) : auf(COLOR_MARGIN),
     });
   }
 
@@ -251,7 +258,7 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       fontSizePt: yearSize,
       weight: yearStyle.weight,
       align: 'left',
-      color: yearStyle.color,
+      color: auf(yearStyle.color),
     });
   }
 
@@ -288,7 +295,7 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       fontSizePt: size,
       weight: labelStyle.weight,
       align,
-      color: labelStyle.color,
+      color: auf(labelStyle.color),
     });
   }
 
