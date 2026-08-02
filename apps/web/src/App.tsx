@@ -23,13 +23,26 @@ interface Report {
   feasibility: { achievable: boolean; minimumPages: number; maxPerSpread: number; hint?: string };
 }
 
+/** Eine Fotogruppe, soweit die Doppelseite sie betrifft. */
+interface SpreadGroup {
+  id: string;
+  title: string;
+  active: boolean;
+  /** Fotos dieser Gruppe auf dieser Doppelseite. */
+  count: number;
+}
+
 /**
  * Antwort auf `/api/spreads/:index`.
  *
- * `timelineOverride` gehört nicht zum Rendered Spread Model – es ist die
- * Entscheidung des Benutzers zu dieser Doppelseite und stellt nur den Schalter.
+ * `timelineOverride` und `groups` gehören nicht zum Rendered Spread Model – das
+ * eine ist die Entscheidung des Benutzers zu dieser Doppelseite und stellt nur
+ * den Schalter, das andere sagt, welche Gruppen hier liegen.
  */
-type SpreadResponse = RenderedSpread & { timelineOverride?: boolean | null };
+type SpreadResponse = RenderedSpread & {
+  timelineOverride?: boolean | null;
+  groups?: SpreadGroup[];
+};
 
 interface ProjectInfo {
   /** Die Ordner, aus denen das Buch gespeist wird. */
@@ -56,7 +69,9 @@ interface ProjectInfo {
   /** Was ein Neuanordnen verwerfen würde. */
   handwork: { crops: number; neigungen: number; hintergruende: number; zeitstrahl: number };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
-  groupMarks: { spreadIndex: number; title: string }[];
+  groupMarks: { spreadIndex: number; id: string; title: string }[];
+  /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
+  groupsPending: boolean;
   undatedCount: number;
 }
 
@@ -99,6 +114,8 @@ export function App() {
    * Pfeiltasten den Ausschnitt statt zu blättern.
    */
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  /** Gruppe, auf die die Gruppenansicht beim Wechsel dorthin springen soll. */
+  const [gruppenFokus, setGruppenFokus] = useState<string | null>(null);
 
   const bare = new URLSearchParams(location.search).has('bare');
   const [guides, setGuides] = useState<GuideVisibility>(() =>
@@ -358,7 +375,22 @@ export function App() {
           }}
         />
       ) : view === 'groups' ? (
-        <PhotoGroups onChanged={loadInfo} />
+        <PhotoGroups
+          focusGroupId={gruppenFokus}
+          onOpenSpread={(i) => {
+            setIndex(i);
+            setView('spread');
+          }}
+          onChanged={() => {
+            loadInfo();
+            // Der Zeitstrahl holt seine Beschriftung bei jedem Rendern aus den
+            // Gruppen. Eine aufgelöste oder umbenannte Gruppe wirkt damit
+            // sofort – aber nur, wenn die gerenderte Doppelseite im Speicher
+            // nicht weitergilt.
+            setSpread(null);
+            setRenderVersion((v) => v + 1);
+          }}
+        />
       ) : view === 'sources' ? (
         <PhotoSources
           onChanged={() => {
@@ -422,6 +454,19 @@ export function App() {
                     Zeitstrahl
                   </label>
                 )}
+
+                {/*
+                  Welche Gruppen hier liegen – und ein Weg zu ihnen. Der Name im
+                  Zeitstrahl kam bislang von irgendwoher; wer ihn ändern wollte,
+                  musste ihn in einer Liste von sechzig Gruppen suchen.
+                */}
+                <SpreadGroups
+                  groups={spread?.groups ?? []}
+                  onOpen={(id) => {
+                    setGruppenFokus(id);
+                    setView('groups');
+                  }}
+                />
 
                 {(['trim', 'safety', 'gutter', 'diagnostics'] as const).map((k) => (
                   <label key={k} style={S.check}>
@@ -580,12 +625,31 @@ export function App() {
 
           {(busy || note) && <p style={S.note}>{busy ?? note}</p>}
 
+          {/*
+            Was an einer Gruppenänderung sofort wirkt, wirkt schon: Der
+            Zeitstrahl liest die Gruppen beim Rendern. Wie die Fotos auf die
+            Doppelseiten verteilt sind und wo Auftaktseiten stehen, entsteht
+            dagegen beim Erzeugen – und das verwirft jede Handarbeit. Deshalb
+            der Hinweis statt eines stillen Neuaufbaus.
+          */}
+          {info?.groupsPending && (
+            <p style={S.pending}>
+              Die Gruppen haben sich geändert. Beschriftungen im Zeitstrahl sind schon aktuell; die
+              Aufteilung der Fotos und die Auftaktseiten folgen erst beim{' '}
+              <button onClick={() => void regenerate({})} disabled={!!busy} style={S.pendingButton}>
+                Neuanordnen
+              </button>{' '}
+              — das verwirft handgemachte Ausschnitte.
+            </p>
+          )}
+
           {view === 'overview' && info ? (
             <div style={{ marginTop: '1.5rem' }}>
               <Overview
                 key={renderVersion}
                 spreadCount={info.spreadCount}
                 chapters={info.chapters}
+                groupMarks={info.groupMarks}
                 imageSrc={imageSrc}
                 onOpen={(i) => {
                   setIndex(i);
@@ -622,6 +686,54 @@ export function App() {
         </>
       )}
     </main>
+  );
+}
+
+/**
+ * Die Gruppen einer Doppelseite als Sprungmarken.
+ *
+ * Die erste aktive Gruppe ist die, deren Titel im Zeitstrahl steht – dieselbe
+ * Rangfolge wie dort: die mit den meisten Fotos. Abgeschaltete Gruppen stehen
+ * blass daneben; sie gliedern das Buch nicht, erklären aber, wohin die Bilder
+ * gehören.
+ */
+function SpreadGroups({
+  groups,
+  onOpen,
+}: {
+  groups: readonly SpreadGroup[];
+  onOpen: (id: string) => void;
+}) {
+  if (groups.length === 0) return null;
+
+  const beschriftend = groups.find((g) => g.active);
+
+  return (
+    <span style={S.gruppen}>
+      <span style={S.gruppenLabel}>Gruppe</span>
+      {groups.map((g) => (
+        <button
+          key={g.id}
+          onClick={() => onOpen(g.id)}
+          title={
+            (g.active
+              ? g.id === beschriftend?.id
+                ? 'Steht im Zeitstrahl dieser Doppelseite'
+                : 'Gliedert das Buch'
+              : 'Abgeschaltet — gliedert das Buch nicht') +
+            ` · ${g.count} ${g.count === 1 ? 'Foto' : 'Fotos'} hier · in der Gruppenansicht öffnen`
+          }
+          style={{
+            ...S.gruppenLink,
+            ...(g.id === beschriftend?.id ? S.gruppenLinkAktiv : {}),
+            ...(g.active ? {} : S.gruppenLinkAus),
+          }}
+        >
+          {g.active ? '' : '○ '}
+          {g.title} ↗
+        </button>
+      ))}
+    </span>
   );
 }
 
@@ -797,6 +909,42 @@ const S = {
     minWidth: '2.4rem',
   },
   note: { fontSize: '0.8125rem', color: '#065f46', fontFamily: 'ui-monospace, monospace' },
+  pending: {
+    fontSize: '0.8125rem',
+    color: '#78350f',
+    background: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '6px',
+    padding: '0.4rem 0.6rem',
+    margin: '0.5rem 0 0',
+    lineHeight: 1.5,
+  },
+  pendingButton: {
+    padding: 0,
+    border: 'none',
+    background: 'none',
+    color: '#b45309',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    font: 'inherit',
+  },
+  gruppen: { display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' as const },
+  gruppenLabel: { fontSize: '0.7rem', color: '#9ca3af' },
+  gruppenLink: {
+    padding: '0.1rem 0.4rem',
+    border: '1px solid #e5e7eb',
+    borderRadius: '4px',
+    background: '#fff',
+    color: '#374151',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+    maxWidth: '14rem',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  gruppenLinkAktiv: { borderColor: '#bfdbfe', background: '#eff6ff', color: '#1d4ed8' },
+  gruppenLinkAus: { opacity: 0.55 },
   stage: {
     margin: '1.5rem 0',
     boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08)',

@@ -8,7 +8,7 @@
 import type { NaiveDateTime, PhotoId } from '../model/photo.js';
 import type { PhotoGroup } from './groups.js';
 import { makeGroupId } from './groups.js';
-import { type DetectionContext, easterSunday } from './detectors.js';
+import { type DetectionContext, occasionOfDay } from './occasions.js';
 
 export interface GroupCandidate {
   photoId: PhotoId;
@@ -262,6 +262,12 @@ export function suggestPlaceGroups(
  * Vom Benutzer bearbeitete Gruppen bleiben unangetastet, und ihre Fotos werden
  * aus den Vorschlägen entfernt – sonst würde eine Neuberechnung stillschweigend
  * überschreiben, was jemand von Hand eingerichtet hat.
+ *
+ * Unter den Vorschlägen gewinnt der frühere: Die Reihenfolge der Liste ist die
+ * Rangfolge der Quellen (Anlass vor Ort vor Tag), und ein Foto gehört zu
+ * höchstens einer Gruppe. Ebenso bekommt eine Kennung, die schon vergeben ist,
+ * eine neue – zwei Gruppen mit derselben `id` wären für Umbenennen, Auflösen
+ * und Zusammenführen nicht auseinanderzuhalten.
  */
 export function mergeSuggestions(
   existing: readonly PhotoGroup[],
@@ -269,64 +275,36 @@ export function mergeSuggestions(
 ): PhotoGroup[] {
   const manuell = existing.filter((g) => g.origin === 'manual');
   const belegt = new Set(manuell.flatMap((g) => g.photoIds));
+  const kennungen = new Set(manuell.map((g) => g.id));
 
   // Frühere Entscheidungen zu Titel und Aktivierung übernehmen
   const frueher = new Map(existing.map((g) => [g.id, g]));
 
-  const uebernommen = suggestions
-    .map((s) => {
-      const photoIds = s.photoIds.filter((id) => !belegt.has(id));
-      const alt = frueher.get(s.id);
-      return {
-        ...s,
-        photoIds,
-        ...(alt
-          ? {
-              title: alt.title,
-              active: alt.active,
-              ...(alt.coverPhotoId ? { coverPhotoId: alt.coverPhotoId } : {}),
-            }
-          : {}),
-      };
-    })
-    .filter((g) => g.photoIds.length > 0);
+  const uebernommen: PhotoGroup[] = [];
+  for (const s of suggestions) {
+    const photoIds = s.photoIds.filter((id) => !belegt.has(id));
+    if (photoIds.length === 0) continue;
+
+    const alt = frueher.get(s.id);
+    const id = kennungen.has(s.id) ? makeGroupId(s.title, kennungen) : s.id;
+    kennungen.add(id);
+    for (const photoId of photoIds) belegt.add(photoId);
+
+    uebernommen.push({
+      ...s,
+      id,
+      photoIds,
+      ...(alt
+        ? {
+            title: alt.title,
+            active: alt.active,
+            ...(alt.coverPhotoId ? { coverPhotoId: alt.coverPhotoId } : {}),
+          }
+        : {}),
+    });
+  }
 
   return [...manuell, ...uebernommen];
-}
-
-/**
- * Anlass eines einzelnen Tages, sofern der Kalender einen kennt.
- *
- * Macht aus „18. April 2020" ein „12. Geburtstag" – der Unterschied
- * entscheidet darüber, ob ein Gruppentitel im Buch etwas erzählt oder nur
- * eine Datumsangabe wiederholt.
- */
-export function occasionOfDay(date: NaiveDateTime, ctx: DetectionContext = {}): string | undefined {
-  const jahr = Number(date.slice(0, 4));
-  const monat = Number(date.slice(5, 7));
-  const tag = Number(date.slice(8, 10));
-
-  if (ctx.birthDate) {
-    const gMonat = Number(ctx.birthDate.slice(5, 7));
-    const gTag = Number(ctx.birthDate.slice(8, 10));
-    const gJahr = Number(ctx.birthDate.slice(0, 4));
-    if (monat === gMonat && Math.abs(tag - gTag) <= 3) {
-      const alter = jahr - gJahr;
-      if (alter === 0) return 'Geburt';
-      if (alter > 0 && alter <= 120) return `${alter}. Geburtstag`;
-    }
-  }
-
-  if (monat === 12 && tag >= 24 && tag <= 26) return `Weihnachten ${jahr}`;
-  if (monat === 12 && tag === 31) return `Silvester ${jahr}`;
-  if (monat === 1 && tag === 1) return `Neujahr ${jahr}`;
-
-  const ostern = easterSunday(jahr);
-  if (monat === ostern.month && tag >= ostern.day - 2 && tag <= ostern.day + 1) {
-    return `Ostern ${jahr}`;
-  }
-
-  return undefined;
 }
 
 /** Lesbares Tagesdatum, etwa „18. Juni 2016". */
@@ -335,6 +313,86 @@ function dayLabel(date: NaiveDateTime): string {
   const monat = MONATE[Number(date.slice(5, 7)) - 1];
   const tag = Number(date.slice(8, 10));
   return `${tag}. ${monat} ${jahr}`;
+}
+
+export interface OccasionGroupOptions {
+  /** Mindestzahl Fotos, damit ein Anlass eine Gruppe wird. */
+  minPhotos?: number;
+  /** Fotos, die schon einer Gruppe angehören und übergangen werden. */
+  taken?: ReadonlySet<PhotoId>;
+  /** Geburtsdatum und Name, für die Anlasserkennung. */
+  detection?: DetectionContext;
+}
+
+/**
+ * Schlägt Gruppen für Tage vor, die der Kalender kennt.
+ *
+ * Läuft vor der Ortserkennung, und das ist die eigentliche Aussage dieser
+ * Funktion: Ein Anlass sagt mehr als ein Ortsname. Wer am zwölften Geburtstag
+ * zufällig in Paris war, hat Fotos vom Geburtstag, nicht von Paris – und der
+ * Ort steht ohnehin noch an jedem einzelnen Bild.
+ *
+ * Gruppiert wird nach dem Anlass, nicht nach dem Kalendertag. Damit fallen die
+ * drei Weihnachtstage und die Geburtstagsfeier am Wochenende daneben von selbst
+ * zusammen: `occasionOfDay` liefert für sie denselben Titel. Ein Anlass, der
+ * das Jahr nicht im Titel trägt, kommt im Leben genau einmal vor („Geburt",
+ * „12. Geburtstag") – eine Kollision über Jahrgänge hinweg ist damit
+ * ausgeschlossen.
+ *
+ * Die Mindestzahl liegt niedriger als bei den Tagesgruppen: Dort trägt allein
+ * die Fotodichte die Vermutung, dass etwas los war, hier belegt es der
+ * Kalender.
+ */
+export function suggestOccasionGroups(
+  candidates: readonly GroupCandidate[],
+  opts: OccasionGroupOptions = {},
+): PhotoGroup[] {
+  const minPhotos = opts.minPhotos ?? 2;
+  const taken = opts.taken ?? new Set<PhotoId>();
+
+  const jeAnlass = new Map<string, GroupCandidate[]>();
+  for (const c of candidates) {
+    if (taken.has(c.photoId)) continue;
+    const anlass = occasionOfDay(c.date, opts.detection);
+    if (!anlass) continue;
+    const list = jeAnlass.get(anlass) ?? [];
+    list.push(c);
+    jeAnlass.set(anlass, list);
+  }
+
+  const ids = new Set<string>();
+  const groups: PhotoGroup[] = [];
+
+  // Nach dem frühesten Foto sortiert, nicht nach dem Titel: Die Liste soll in
+  // Buchreihenfolge stehen.
+  const anlaesse = [...jeAnlass.entries()]
+    .map(([titel, fotos]) => ({
+      titel,
+      fotos: [...fotos].sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .sort((a, b) => a.fotos[0]!.date.localeCompare(b.fotos[0]!.date));
+
+  for (const { titel, fotos } of anlaesse) {
+    if (fotos.length < minPhotos) continue;
+
+    const id = makeGroupId(titel, ids);
+    ids.add(id);
+
+    const tage = new Set(fotos.map((f) => f.date.slice(0, 10))).size;
+    groups.push({
+      id,
+      title: titel,
+      photoIds: fotos.map((f) => f.photoId),
+      origin: 'calendar',
+      active: true,
+      reason:
+        tage > 1
+          ? `${fotos.length} Fotos an ${tage} Tagen, vom Kalender als Anlass erkannt`
+          : `${fotos.length} Fotos, vom Kalender als Anlass erkannt`,
+    });
+  }
+
+  return groups;
 }
 
 export interface DayGroupOptions {

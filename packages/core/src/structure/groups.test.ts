@@ -14,11 +14,12 @@ import type { PhotoGroup } from './groups.js';
 import {
   type GroupCandidate,
   mergeSuggestions,
-  occasionOfDay,
   propagatePlaces,
   suggestDayGroups,
+  suggestOccasionGroups,
   suggestPlaceGroups,
 } from './suggest-groups.js';
+import { occasionOfDay } from './occasions.js';
 
 function group(id: string, photoIds: string[], patch: Partial<PhotoGroup> = {}): PhotoGroup {
   return { id, title: id, photoIds, origin: 'manual', active: true, ...patch };
@@ -361,6 +362,97 @@ describe('mergeSuggestions', () => {
       [group('auto', ['a'], { origin: 'place' })],
     );
     expect(zusammen.map((g) => g.id)).toEqual(['meine']);
+  });
+
+  it('gibt bei Überschneidung dem früheren Vorschlag den Vorrang', () => {
+    // Die Reihenfolge der Liste ist die Rangfolge der Quellen: Anlass vor Ort.
+    const zusammen = mergeSuggestions(
+      [],
+      [
+        group('weihnachten-2019', ['a', 'b'], { origin: 'calendar' }),
+        group('bremerhaven', ['a', 'b', 'c'], { origin: 'place' }),
+      ],
+    );
+    expect(zusammen.find((g) => g.id === 'weihnachten-2019')!.photoIds).toEqual(['a', 'b']);
+    expect(zusammen.find((g) => g.id === 'bremerhaven')!.photoIds).toEqual(['c']);
+  });
+
+  it('vergibt eine zweite Kennung neu', () => {
+    const zusammen = mergeSuggestions(
+      [],
+      [
+        group('ostern-2015', ['a'], { origin: 'calendar', title: 'Ostern 2015' }),
+        group('ostern-2015', ['b'], { origin: 'place', title: 'Ostern 2015' }),
+      ],
+    );
+    expect(new Set(zusammen.map((g) => g.id)).size).toBe(2);
+  });
+});
+
+describe('suggestOccasionGroups', () => {
+  function anTag(tag: string, n: number, prefix = 'p'): GroupCandidate[] {
+    return Array.from({ length: n }, (_, i) => ({
+      photoId: `${prefix}-${tag}-${i}`,
+      date: `${tag}T${String(9 + i).padStart(2, '0')}:00:00`,
+    }));
+  }
+
+  const ctx = { birthDate: '1999-04-18' };
+
+  it('macht aus einem Kalenderanlass eine Gruppe', () => {
+    const g = suggestOccasionGroups(anTag('2019-12-24', 3));
+    expect(g).toHaveLength(1);
+    expect(g[0]!.title).toBe('Weihnachten 2019');
+    expect(g[0]!.origin).toBe('calendar');
+    expect(g[0]!.active).toBe(true);
+  });
+
+  it('fasst die Tage eines Anlasses zusammen', () => {
+    // Heiligabend bis zweiter Feiertag ist ein Weihnachten, nicht drei.
+    const g = suggestOccasionGroups([
+      ...anTag('2019-12-24', 2),
+      ...anTag('2019-12-25', 2),
+      ...anTag('2019-12-26', 2),
+    ]);
+    expect(g).toHaveLength(1);
+    expect(g[0]!.photoIds).toHaveLength(6);
+    expect(g[0]!.reason).toContain('3 Tagen');
+  });
+
+  it('holt die Feier am Wochenende neben dem Geburtstag dazu', () => {
+    const g = suggestOccasionGroups([...anTag('2020-04-18', 2), ...anTag('2020-04-20', 2)], {
+      detection: ctx,
+    });
+    expect(g).toHaveLength(1);
+    expect(g[0]!.title).toBe('21. Geburtstag');
+    expect(g[0]!.photoIds).toHaveLength(4);
+  });
+
+  it('nennt das erste Lebensjahr Geburt', () => {
+    const g = suggestOccasionGroups(anTag('1999-04-18', 2), { detection: ctx });
+    expect(g[0]!.title).toBe('Geburt');
+  });
+
+  it('übergeht einen Anlass mit einem einzigen Foto', () => {
+    expect(suggestOccasionGroups(anTag('2019-12-24', 1))).toHaveLength(0);
+  });
+
+  it('lässt gewöhnliche Tage in Ruhe', () => {
+    expect(suggestOccasionGroups(anTag('2019-09-08', 5))).toHaveLength(0);
+  });
+
+  it('übergeht bereits vergebene Fotos', () => {
+    const fotos = anTag('2019-12-24', 3);
+    const g = suggestOccasionGroups(fotos, {
+      taken: new Set(fotos.slice(0, 2).map((f) => f.photoId)),
+    });
+    expect(g).toHaveLength(0);
+  });
+
+  it('liefert die Anlässe in zeitlicher Reihenfolge', () => {
+    const g = suggestOccasionGroups([...anTag('2019-12-24', 2), ...anTag('2019-04-21', 2)]);
+    // Ostersonntag 2019 war der 21. April
+    expect(g.map((x) => x.title)).toEqual(['Ostern 2019', 'Weihnachten 2019']);
   });
 });
 

@@ -165,18 +165,6 @@ export function templatesWithSlotCount(n: number): Template[] {
 }
 
 /**
- * Templates, die einen Gruppentitel aufnehmen können.
- *
- * Nur Vorlagen mit Freiraum am oberen Rand – bei einer dichten Collage, deren
- * Bilder am Satzspiegel beginnen, wäre kein Platz dafür.
- */
-export function templatesWithTitle(slotCount: number): Template[] {
-  return templatesWithSlotCount(slotCount).filter((t) =>
-    t.textSlots?.some((ts) => ts.role === 'eventTitle'),
-  );
-}
-
-/**
  * Templates für eine Gruppe dieser Größe, die keinen Titel erwartet.
  *
  * Die `mit-titel`-Fassungen räumen 16 mm am oberen Rand für die Überschrift
@@ -185,6 +173,9 @@ export function templatesWithTitle(slotCount: number): Template[] {
  * traf das 9 von 45 Doppelseiten, deren Bilder dadurch 6 % kleiner standen als
  * nötig. Bleibt nach dem Filtern nichts übrig, gilt wieder die vollständige
  * Liste – ein leerer Streifen ist besser als keine Vorlage.
+ *
+ * Seit die Titel im Zeitstrahl stehen, ist das der einzige Weg zu einer Vorlage
+ * für den Fluss: Eine Doppelseite im Innenteil bekommt keine Überschrift mehr.
  */
 export function templatesWithoutTitle(slotCount: number): Template[] {
   const alle = templatesWithSlotCount(slotCount);

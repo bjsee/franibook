@@ -209,8 +209,13 @@ Aus einer chronologischen Liste eine gegliederte Erzählung machen.
 >   3 als Alltag abgeschaltet.
 >
 > Die Titeldetektoren aus dem Konzept sind da: Geburtstag aus `birthDate`,
-> Weihnachten, Silvester/Neujahr, Ostern. Der Gruppen-Editor kann anlegen,
-> umbenennen, zusammenführen, Fotos zuordnen und herauslösen, ab- und anschalten.
+> Weihnachten, Silvester/Neujahr, Ostern. Sie münden allerdings nicht mehr in
+> einen Titel am Segment, sondern in Fotogruppen (`structure/occasions.ts` →
+> `suggestOccasionGroups`): Ein Name, der im Buch steht, soll in der
+> Gruppenansicht auffindbar, umbenennbar und auflösbar sein. Vorher stand
+> „Geburt" gedruckt auf einer Doppelseite und war nirgends zu finden. Der
+> Gruppen-Editor kann anlegen, umbenennen, zusammenführen, Fotos zuordnen und
+> herauslösen, ab- und anschalten.
 >
 > Nicht umgesetzt: GPS als Trennsignal (die Orte wirken über Gruppen statt über
 > Segmentgrenzen), Dateisystem-Detektor (der Quellordner ist flach), Zeitlücken-
