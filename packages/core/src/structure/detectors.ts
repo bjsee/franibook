@@ -43,13 +43,6 @@ function yearOf(v: NaiveDateTime): number {
   return Number(v.slice(0, 4));
 }
 
-/** Tagesabstand zweier Datumsangaben, unabhängig von der Uhrzeit. */
-function daysBetween(a: NaiveDateTime, b: NaiveDateTime): number {
-  const ta = Date.parse(`${a.slice(0, 10)}T00:00:00Z`);
-  const tb = Date.parse(`${b.slice(0, 10)}T00:00:00Z`);
-  return Math.abs(ta - tb) / 86_400_000;
-}
-
 /**
  * Ostersonntag nach der anonymen gregorianischen Berechnung.
  *
