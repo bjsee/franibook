@@ -70,6 +70,10 @@ app.get('/api/project', async () => ({
   report: project.lastReport,
   chapters: project.chapters(),
   groupMarks: project.groupMarks(),
+  // Was der Zeitstrahl beschriftet, folgt einer Gruppenänderung sofort;
+  // Verteilung und Auftaktseiten erst beim Neuanordnen. Die Oberfläche sagt es,
+  // statt das Buch ungefragt neu zu bauen.
+  groupsPending: project.groupsPending(),
   undatedCount: project.structure.undated.length,
 }));
 
@@ -137,9 +141,25 @@ app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
 
 // ------------------------------------------------------------------ Gruppen
 
-app.get('/api/groups', async () => ({
-  groups: project.sortedGroups(),
-}));
+/**
+ * Die Gruppen mit ihrem Platz im Buch.
+ *
+ * `firstSpreadIndex` fehlt, wenn keines der Fotos im Buch steht – etwa weil sie
+ * noch im Pool liegen. Die Gruppenansicht sortiert danach und schreibt die
+ * Seitenzahl an jede Gruppe; ohne sie war nicht zu sehen, wo eine Gruppe im
+ * Buch überhaupt vorkommt.
+ */
+function gruppenAntwort() {
+  const erste = project.firstSpreadOfGroup();
+  return {
+    groups: project.sortedGroups().map((g) => {
+      const index = erste.get(g.id);
+      return { ...g, ...(index !== undefined ? { firstSpreadIndex: index } : {}) };
+    }),
+  };
+}
+
+app.get('/api/groups', async () => gruppenAntwort());
 
 /**
  * Erzeugt Vorschläge aus den aufgelösten Orten.
@@ -150,7 +170,7 @@ app.get('/api/groups', async () => ({
 app.post<{ Body?: { reset?: boolean } }>('/api/groups/suggest', async (req) => {
   const result = project.suggestGroups({ reset: req.body?.reset === true });
   void project.save();
-  return { groups: project.sortedGroups(), added: result.added };
+  return { ...gruppenAntwort(), added: result.added };
 });
 
 app.post<{ Body: { title: string; photoIds: string[] } }>('/api/groups', async (req, reply) => {
@@ -160,7 +180,7 @@ app.post<{ Body: { title: string; photoIds: string[] } }>('/api/groups', async (
   }
   project.createGroup(title, photoIds);
   void project.save();
-  return { groups: project.sortedGroups() };
+  return gruppenAntwort();
 });
 
 app.patch<{
@@ -179,13 +199,13 @@ app.patch<{
 }>('/api/groups/:id', async (req) => {
   project.updateGroup(req.params.id, req.body ?? {});
   void project.save();
-  return { groups: project.sortedGroups() };
+  return gruppenAntwort();
 });
 
 app.delete<{ Params: { id: string } }>('/api/groups/:id', async (req) => {
   project.removeGroup(req.params.id);
   void project.save();
-  return { groups: project.sortedGroups() };
+  return gruppenAntwort();
 });
 
 /** Führt eine Gruppe in eine andere über. Die Quellgruppe verschwindet. */
@@ -196,7 +216,7 @@ app.post<{ Params: { id: string }; Body: { targetId: string } }>(
     if (!targetId) return reply.code(400).send({ error: 'targetId fehlt' });
     project.mergeGroups(req.params.id, targetId);
     void project.save();
-    return { groups: project.sortedGroups() };
+    return gruppenAntwort();
   },
 );
 
@@ -210,7 +230,7 @@ app.post<{ Params: { id: string }; Body: { photoIds: string[] } }>(
     }
     project.addToGroup(req.params.id, photoIds);
     void project.save();
-    return { groups: project.sortedGroups() };
+    return gruppenAntwort();
   },
 );
 
@@ -218,7 +238,7 @@ app.post<{ Params: { id: string }; Body: { photoIds: string[] } }>(
 app.post<{ Body: { photoIds: string[] } }>('/api/groups/ungroup', async (req) => {
   project.ungroupPhotos(req.body?.photoIds ?? []);
   void project.save();
-  return { groups: project.sortedGroups() };
+  return gruppenAntwort();
 });
 
 /** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
@@ -256,10 +276,15 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
   const index = Number(req.params.index);
   const rendered = project.render(index);
   if (!rendered) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
-  // `timelineOverride` ist kein Teil des Rendered Spread Model, sondern die
-  // Entscheidung des Benutzers zu dieser Doppelseite. Die Oberfläche braucht
-  // sie, um den Schalter richtig zu stellen; die Renderer sehen sie nie.
-  return { ...rendered, timelineOverride: project.spreads[index]?.timeline ?? null };
+  // `timelineOverride` und `groups` sind kein Teil des Rendered Spread Model:
+  // Das eine ist die Entscheidung des Benutzers zu dieser Doppelseite, das
+  // andere die Auskunft, welche Gruppen hier liegen – die Oberfläche verlinkt
+  // damit in die Gruppenansicht. Die Renderer sehen beides nie.
+  return {
+    ...rendered,
+    timelineOverride: project.spreads[index]?.timeline ?? null,
+    groups: project.spreadGroups(index),
+  };
 });
 
 /**

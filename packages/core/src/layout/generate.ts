@@ -15,22 +15,15 @@ import type { Spread } from '../model/spread.js';
 import type { Template } from '../model/template.js';
 import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
-import type { Chapter, Segment, Structure } from '../structure/segment.js';
+import type { Chapter, Structure } from '../structure/segment.js';
 import {
   chapterTemplates,
   supportedSlotCounts,
   templateById,
   groupOpenerTemplates,
-  templatesWithTitle,
   templatesWithoutTitle,
 } from '../templates/index.js';
-import {
-  type ChapterBudget,
-  budgetByYear,
-  distributeBudget,
-  groupChapter,
-  segmentsById,
-} from './grouping.js';
+import { type ChapterBudget, budgetByYear, distributeBudget, groupChapter } from './grouping.js';
 import { type TemplateFit, assign, slotCost, slotGeometry } from './scoring.js';
 import { bookStats } from './stats.js';
 
@@ -216,6 +209,10 @@ function mulberry32(seed: number): () => number {
  * Zuordnung der Fotos. Zusätzlich wird bestraft, wenn dasselbe Template kurz
  * zuvor schon verwendet wurde – sonst wiederholen sich Doppelseiten, was beim
  * Durchblättern sofort auffällt.
+ *
+ * Seit die Titel im Zeitstrahl stehen, kommen nur noch Vorlagen ohne
+ * Überschriftenstreifen in Frage: Die `mit-titel`-Fassungen räumen 16 mm am
+ * oberen Rand frei und setzen die Bilder entsprechend kleiner.
  */
 function chooseTemplate(
   group: readonly Photo[],
@@ -223,14 +220,8 @@ function chooseTemplate(
   profile: PrintProfile,
   weightOf: (id: PhotoId) => PhotoWeight,
   rng: () => number,
-  /** Am Anfang einer Gruppe nur Vorlagen, die den Titel aufnehmen können. */
-  needsTitle = false,
 ): TemplateFit | undefined {
-  // Gibt es für diese Bilderzahl keine titelfähige Vorlage, wird lieber ohne
-  // Titel gesetzt als die Doppelseite umzubauen – der Gruppenname steht dann
-  // erst auf der nächsten Seite der Gruppe.
-  const mitTitel = needsTitle ? templatesWithTitle(group.length) : [];
-  const candidates = mitTitel.length > 0 ? mitTitel : templatesWithoutTitle(group.length);
+  const candidates = templatesWithoutTitle(group.length);
   if (candidates.length === 0) return undefined;
 
   const fits: TemplateFit[] = [];
@@ -280,7 +271,16 @@ function chooseTemplate(
   return fits[0];
 }
 
-/** Baut die Doppelseite aus Template, Gruppe und Zuordnung. */
+/**
+ * Baut die Doppelseite aus Template, Gruppe und Zuordnung.
+ *
+ * Ohne Überschrift, und das ist eine Entscheidung: Was eine Doppelseite zeigt,
+ * benennt der Zeitstrahl an ihrem Fuß – dort steht der Titel der Fotogruppe auf
+ * jeder Seite der Gruppe, nicht nur auf ihrer ersten. Eine Überschrift oben
+ * wäre auf der Eröffnungsseite eine Dopplung und auf allen folgenden eine
+ * Leerstelle. Nur die Auftaktseite einer Gruppe trägt ihren Titel noch groß
+ * (`buildGroupOpener`) – sie besteht aus nichts anderem.
+ */
 function buildSpread(
   id: string,
   index: number,
@@ -288,9 +288,6 @@ function buildSpread(
   group: readonly Photo[],
   fit: TemplateFit,
   profile: PrintProfile,
-  segment?: Segment,
-  /** Gruppentitel, wenn diese Doppelseite eine Gruppe eröffnet. */
-  groupTitle?: string,
 ): Spread {
   const slots = template.slots.map((slot, slotIndex) => {
     // `assignment[i]` ist der Slot für Foto i – gesucht ist die Umkehrung.
@@ -313,24 +310,7 @@ function buildSpread(
     };
   });
 
-  const spread: Spread = { id, index, templateId: template.id, slots };
-
-  // Überschrift nur, wenn die Vorlage einen Platz dafür hat. Der Gruppentitel
-  // geht vor: Er ist vom Benutzer gesetzt, der Segmenttitel nur geraten.
-  const titel = groupTitle ?? segment?.title;
-  const textSlot = template.textSlots?.find((t) => t.role === 'eventTitle');
-  if (titel && textSlot) {
-    spread.texts = [
-      {
-        id: `${id}-title`,
-        role: 'eventTitle',
-        content: titel,
-        slotId: textSlot.id,
-      },
-    ];
-  }
-
-  return spread;
+  return { id, index, templateId: template.id, slots };
 }
 
 /**
@@ -670,7 +650,6 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     maxPhotosPerSpread: Math.max(...slotCounts, 1),
   });
   const spreadsPerYear = budgetByYear(budgets);
-  const segments = segmentsById(structure);
 
   // Farbe je Jahrgang. Auf den Doppelseiten gesetzt und nicht erst beim
   // Rendern aufgelöst: So steht sie im Layout-Dokument, lässt sich dort ändern
@@ -730,8 +709,8 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         .filter((p): p is Photo => p !== undefined);
       if (groupPhotos.length === 0) continue;
 
-      // Eröffnet diese Doppelseite eine benannte Gruppe? Dann trägt sie deren
-      // Titel – und braucht eine Vorlage, die Platz dafür hat.
+      // Eröffnet diese Doppelseite eine benannte Gruppe? Dann kommt hier ihre
+      // Auftaktseite hin.
       //
       // Maßgeblich ist die Gruppe mit den meisten Fotos, nicht die des ersten.
       // Vorher entschied allein das erste Foto: Lag dort ein Bild einer anderen
@@ -741,7 +720,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       // neun Fotos.
       const gruppenId = mehrheitsGruppe(groupPhotos, groupOf);
       const eroeffnet = gruppenId !== undefined && !gruppenGesehen.has(gruppenId);
-      let gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
+      const gruppenTitel = eroeffnet ? titelVonGruppe.get(gruppenId) : undefined;
       if (gruppenId !== undefined) gruppenGesehen.add(gruppenId);
 
       // Eigene Auftaktseite, sofern gewünscht und ein Hauptbild vorliegt.
@@ -763,20 +742,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
           groupOpenerCount++;
           placed.add(cover.id);
           offeneAuftakte.delete(gruppenId!);
-          // Der Titel steht jetzt auf dem Auftakt; die folgende Doppelseite
-          // braucht ihn nicht noch einmal.
-          gruppenTitel = undefined;
         }
       }
 
-      const fit = chooseTemplate(
-        groupPhotos,
-        recentTemplates,
-        profile,
-        weightOf,
-        rng,
-        gruppenTitel !== undefined,
-      );
+      const fit = chooseTemplate(groupPhotos, recentTemplates, profile, weightOf, rng);
       if (!fit) continue;
 
       const template = templateById(fit.templateId);
@@ -789,8 +758,6 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         groupPhotos,
         fit,
         profile,
-        group.startsSegment ? segments.get(group.segmentId) : undefined,
-        gruppenTitel,
       );
       spreads.push(spread);
 

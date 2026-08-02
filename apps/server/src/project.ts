@@ -27,7 +27,6 @@ import {
   type RenderedSpread,
   type Spread,
   type Structure,
-  allSegments,
   bookStats,
   buildStructure,
   DEFAULT_BACKGROUND,
@@ -54,10 +53,11 @@ import {
   resolveEffectiveDate,
   sortKey,
   removeGroup,
+  templateById,
   sortGroupsChronologically,
   suggestDayGroups,
+  suggestOccasionGroups,
   suggestPlaceGroups,
-  suggestTitles,
   ungroupPhotos,
   updateGroup,
 } from '@franibook/core';
@@ -68,12 +68,13 @@ import { type PhotoSource, quellenId, Sources } from './sources.js';
 
 /**
  * 2: Bildquellen sind eine Liste, Fotos tragen eine `sourceId`.
+ * 3: Titel stehen im Zeitstrahl, nicht als Überschrift auf der Doppelseite.
  *
- * Der Sprung von 1 wird migriert statt verworfen – ein Projekt enthält
+ * Jeder Sprung wird migriert statt verworfen – ein Projekt enthält
  * Datumskorrekturen, bestätigte Gruppen und ein von Hand nachgearbeitetes
  * Buch, und nichts davon stellt ein Neuimport wieder her.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /** Fotos zeitlich, Undatiertes ans Ende – dieselbe Ordnung wie im Import. */
 function nachAufnahme(a: Photo, b: Photo): number {
@@ -138,6 +139,8 @@ interface PersistedProject {
   overrides: Record<PhotoId, PhotoOverride>;
   book: { spreads: Spread[] };
   groups: PhotoGroup[];
+  /** Stand der Gruppen beim letzten Erzeugen; fehlt in älteren Projekten. */
+  groupStamp?: string;
   yearEvents?: Record<string, string[]>;
   /** Erst ab Umschlagunterstützung vorhanden; ältere Projekte haben es nicht. */
   cover?: CoverDesign;
@@ -153,27 +156,65 @@ interface PersistedProject {
 export function migriere(data: PersistedProject): PersistedProject | null {
   if (data.schemaVersion === SCHEMA_VERSION) return data;
 
-  // 1 → 2: Aus dem einen Quellordner wird eine Liste mit einem Eintrag, und
-  // jedes Foto bekommt dessen Kennung. Ohne diese Zuordnung wäre nach dem
-  // ersten zusätzlichen Ordner nicht mehr entscheidbar, in welchem Ordner eine
-  // Datei zu suchen ist.
-  if (data.schemaVersion === 1 && data.sourceRoot) {
-    const root = data.sourceRoot;
-    const source: PhotoSource = {
-      id: quellenId(root),
-      label: basename(root) || root,
-      root,
-      addedAt: data.importedAt,
-    };
-    return {
-      ...data,
-      schemaVersion: SCHEMA_VERSION,
-      sources: [source],
-      photos: data.photos.map((p) => ({ ...p, sourceId: p.sourceId ?? source.id })),
-    };
+  let stand = data;
+  if (stand.schemaVersion === 1) {
+    const zwei = zuSchema2(stand);
+    if (!zwei) return null;
+    stand = zwei;
   }
+  if (stand.schemaVersion === 2) stand = zuSchema3(stand);
 
-  return null;
+  return stand.schemaVersion === SCHEMA_VERSION ? stand : null;
+}
+
+/**
+ * 1 → 2: Aus dem einen Quellordner wird eine Liste mit einem Eintrag, und jedes
+ * Foto bekommt dessen Kennung.
+ *
+ * Ohne diese Zuordnung wäre nach dem ersten zusätzlichen Ordner nicht mehr
+ * entscheidbar, in welchem Ordner eine Datei zu suchen ist.
+ */
+function zuSchema2(data: PersistedProject): PersistedProject | null {
+  if (!data.sourceRoot) return null;
+
+  const root = data.sourceRoot;
+  const source: PhotoSource = {
+    id: quellenId(root),
+    label: basename(root) || root,
+    root,
+    addedAt: data.importedAt,
+  };
+  return {
+    ...data,
+    schemaVersion: 2,
+    sources: [source],
+    photos: data.photos.map((p) => ({ ...p, sourceId: p.sourceId ?? source.id })),
+  };
+}
+
+/**
+ * 2 → 3: Überschriften aus dem Innenteil nehmen.
+ *
+ * Sie standen dort als `eventTitle` auf der ersten Doppelseite einer Gruppe
+ * oder – geraten – auf der eines Monats. Beides benennt heute der Zeitstrahl,
+ * und zwar auf jeder Doppelseite der Gruppe und aus den Gruppen selbst, statt
+ * aus einem Text, der beim Erzeugen einmal festgeschrieben wurde. Bliebe der
+ * alte Text stehen, zeigte ein gespeichertes Buch nach dem Auflösen einer
+ * Gruppe weiter deren Namen.
+ *
+ * Die Auftaktseiten behalten ihren Titel: Sie bestehen aus nichts anderem.
+ */
+function zuSchema3(data: PersistedProject): PersistedProject {
+  const spreads = (data.book?.spreads ?? []).map((spread) => {
+    if (!spread.texts?.some((t) => t.role === 'eventTitle')) return spread;
+    if (templateById(spread.templateId)?.tags?.includes('gruppenauftakt')) return spread;
+
+    const uebrige = spread.texts.filter((t) => t.role !== 'eventTitle');
+    const { texts: _alt, ...ohne } = spread;
+    return uebrige.length > 0 ? { ...ohne, texts: uebrige } : ohne;
+  });
+
+  return { ...data, schemaVersion: 3, book: { spreads } };
 }
 
 export interface PhotoView extends Photo {
@@ -191,6 +232,8 @@ export class Project {
   spreads: Spread[] = [];
   structure: Structure = { chapters: [], undated: [], photoCount: 0 };
   lastReport: GenerateResult['report'] | null = null;
+  /** Stand der Gruppen, aus dem das aktuelle Buch gebaut wurde. */
+  private groupStamp: string | undefined;
 
   /**
    * Gestaltung des Umschlags.
@@ -525,22 +568,14 @@ export class Project {
 
     dated.sort((a, b) => a.key.localeCompare(b.key));
 
-    const structure = buildStructure(
+    // Kalenderanlässe werden hier nicht mehr eingearbeitet: Sie sind
+    // Fotogruppen (`suggestGroups`) und keine Segmenttitel. Die Struktur bleibt
+    // damit das, was sie sein soll – die Kalendergliederung des Bestands, ohne
+    // eine Meinung darüber, was darin ein Ereignis war.
+    this.structure = buildStructure(
       dated.map((d) => ({ id: d.id, date: d.date })),
       undated,
     );
-
-    // Titelvorschläge einarbeiten
-    const titled = suggestTitles(allSegments(structure), {
-      ...(this.settings.birthDate ? { birthDate: this.settings.birthDate } : {}),
-      ...(this.settings.subjectName ? { name: this.settings.subjectName } : {}),
-    });
-    const byId = new Map(titled.map((s) => [s.id, s]));
-    for (const chapter of structure.chapters) {
-      chapter.segments = chapter.segments.map((s) => byId.get(s.id) ?? s);
-    }
-
-    this.structure = structure;
   }
 
   // ------------------------------------------------------------ Hintergrund
@@ -677,6 +712,7 @@ export class Project {
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
+    this.groupStamp = this.groupFingerprint();
     return result;
   }
 
@@ -709,22 +745,78 @@ export class Project {
 
     const mitOrt = propagatePlaces(kandidaten);
 
-    // Zuerst die Orte: Ein Ortsname sagt mehr als ein Datum. Was dabei keiner
-    // Gruppe zufällt, wird anschließend nach Tagen geprüft – wer an einem Tag
-    // mehr als zwei Fotos macht, war meist bei etwas.
+    const detection = {
+      ...(this.settings.birthDate ? { birthDate: this.settings.birthDate } : {}),
+      ...(this.settings.subjectName ? { name: this.settings.subjectName } : {}),
+    };
+
+    // Die Rangfolge der drei Quellen ist zugleich ihre Aussagekraft, und sie
+    // entscheidet bei Überschneidung: Ein Kalenderanlass ist belegt, ein Ort
+    // erschlossen, ein dichter Tag nur vermutet. Seit die Anlässe das Buch
+    // beschriften, muss ihre Gruppe auch dann entstehen, wenn zufällig ein
+    // Ortsname danebensteht – sonst stünde im Zeitstrahl „Bremerhaven“, wo
+    // „Weihnachten 2019“ gemeint ist.
+    const anlaesse = suggestOccasionGroups(mitOrt, { detection });
+    const vergeben = new Set(anlaesse.flatMap((g) => g.photoIds));
     const orte = suggestPlaceGroups(mitOrt);
-    const vergeben = new Set(orte.flatMap((g) => g.photoIds));
-    const tage = suggestDayGroups(mitOrt, {
-      taken: vergeben,
-      detection: {
-        ...(this.settings.birthDate ? { birthDate: this.settings.birthDate } : {}),
-        ...(this.settings.subjectName ? { name: this.settings.subjectName } : {}),
-      },
-    });
+    for (const g of orte) for (const id of g.photoIds) vergeben.add(id);
+    const tage = suggestDayGroups(mitOrt, { taken: vergeben, detection });
 
     const vorher = this.groups.length;
-    this.groups = mergeSuggestions(this.groups, [...orte, ...tage]);
+    this.groups = mergeSuggestions(this.groups, [...anlaesse, ...orte, ...tage]);
     return { groups: this.groups, added: this.groups.length - vorher };
+  }
+
+  /**
+   * Fingerabdruck dessen, was an den Gruppen das Buch verändern kann.
+   *
+   * Ein Flag „Gruppen geändert“ in jeder der sieben Mutationen wäre die
+   * naheliegende Lösung und die brüchigere: Die achte Stelle vergisst es. Der
+   * Abdruck vergleicht stattdessen den Stand mit dem, aus dem das Buch gebaut
+   * wurde, und kann gar nicht veralten. Nicht enthalten sind `origin` und
+   * `reason` – sie sagen etwas über die Herkunft des Vorschlags, nicht über das
+   * Buch.
+   */
+  private groupFingerprint(): string {
+    const zeilen = [...this.groups]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((g) =>
+        [
+          g.id,
+          g.active ? '1' : '0',
+          g.opener === undefined ? '-' : g.opener ? '1' : '0',
+          g.coverPhotoId ?? '-',
+          g.title,
+          g.photoIds.join(','),
+        ].join('|'),
+      );
+
+    // FNV-1a: kurz, stabil und ohne Abhängigkeit. Kollisionen sind hier
+    // folgenlos – im schlimmsten Fall bleibt ein Hinweis aus.
+    let hash = 0x811c9dc5;
+    const text = zeilen.join('\n');
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(36);
+  }
+
+  /**
+   * Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde.
+   *
+   * Was der Zeitstrahl beschriftet, folgt sofort – er liest die Gruppen beim
+   * Rendern. Die Verteilung der Fotos auf Doppelseiten und die Auftaktseiten
+   * entstehen dagegen beim Erzeugen. Statt das Buch stillschweigend neu zu
+   * bauen und dabei jede Handarbeit zu verwerfen, sagt die Oberfläche, dass
+   * noch etwas aussteht.
+   *
+   * Ohne gespeicherten Abdruck (Projekt aus einer älteren Fassung) gilt das
+   * Buch als aktuell – ein Fehlalarm bei jedem Start wäre die schlechtere
+   * Auskunft.
+   */
+  groupsPending(): boolean {
+    return this.groupStamp !== undefined && this.groupStamp !== this.groupFingerprint();
   }
 
   /** Gruppen in Buchreihenfolge, also nach dem frühesten enthaltenen Foto. */
@@ -1241,29 +1333,104 @@ export class Project {
    * Für die Übersicht: Sie markiert die erste Doppelseite jeder Gruppe, so wie
    * sie es für die Jahre tut.
    */
-  groupMarks(): { spreadIndex: number; title: string }[] {
+  groupMarks(): { spreadIndex: number; id: string; title: string }[] {
+    const marks: { spreadIndex: number; id: string; title: string }[] = [];
+    for (const [id, spreadIndex] of this.firstSpreadOfGroup()) {
+      // Nur was das Buch gliedert: Der abgeschaltete Wohnort käme sonst als
+      // Marke über die halbe Übersicht.
+      const gruppe = this.groups.find((g) => g.id === id);
+      if (gruppe?.active) marks.push({ spreadIndex, id, title: gruppe.title });
+    }
+    return marks.sort((a, b) => a.spreadIndex - b.spreadIndex);
+  }
+
+  /**
+   * Erste Doppelseite jeder Gruppe, an ihrer Kennung.
+   *
+   * Auch abgeschaltete Gruppen sind dabei: Sie gliedern das Buch zwar nicht,
+   * ihre Fotos stehen aber darin, und die Gruppenansicht soll auch zu ihnen
+   * sagen können, wo man sie findet. Gruppen ohne Foto im Buch fehlen – ihre
+   * Bilder liegen im Pool.
+   */
+  firstSpreadOfGroup(): Map<string, number> {
     const gruppeVon = new Map<PhotoId, string>();
     for (const g of this.groups) {
-      if (!g.active) continue;
-      for (const id of g.photoIds) gruppeVon.set(id, g.title);
+      for (const id of g.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, g.id);
     }
 
-    const marks: { spreadIndex: number; title: string }[] = [];
-    const gesehen = new Set<string>();
-
+    const erste = new Map<string, number>();
     this.spreads.forEach((spread, i) => {
-      for (const slot of spread.slots) {
-        if (!slot.photoId) continue;
-        const titel = gruppeVon.get(slot.photoId);
-        if (titel && !gesehen.has(titel)) {
-          gesehen.add(titel);
-          marks.push({ spreadIndex: i, title: titel });
-          return;
-        }
+      const bilder = [
+        ...spread.slots.map((s) => s.photoId),
+        ...(spread.backgroundPhotoId ? [spread.backgroundPhotoId] : []),
+      ];
+      for (const photoId of bilder) {
+        if (!photoId) continue;
+        const gruppenId = gruppeVon.get(photoId);
+        if (gruppenId !== undefined && !erste.has(gruppenId)) erste.set(gruppenId, i);
       }
     });
 
-    return marks;
+    return erste;
+  }
+
+  /**
+   * Die Gruppen einer Doppelseite, die stärkste zuerst.
+   *
+   * Dieselbe Rangfolge wie beim Zeitstrahl-Label: Die Gruppe mit den meisten
+   * Fotos benennt die Seite. Die Oberfläche zeigt sie deshalb an erster Stelle
+   * und kann von dort in die Gruppenansicht springen – bislang war nicht
+   * erkennbar, woher ein Name auf einer Doppelseite stammt.
+   */
+  spreadGroups(index: number): { id: string; title: string; active: boolean; count: number }[] {
+    const spread = this.spreads[index];
+    if (!spread) return [];
+
+    const gruppeVon = new Map<PhotoId, PhotoGroup>();
+    for (const g of this.groups) {
+      for (const id of g.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, g);
+    }
+
+    const zaehler = new Map<string, { group: PhotoGroup; count: number }>();
+    for (const slot of spread.slots) {
+      if (!slot.photoId) continue;
+      const group = gruppeVon.get(slot.photoId);
+      if (!group) continue;
+      const bestand = zaehler.get(group.id);
+      if (bestand) bestand.count++;
+      else zaehler.set(group.id, { group, count: 1 });
+    }
+
+    return [...zaehler.values()]
+      .sort((a, b) => b.count - a.count)
+      .map(({ group, count }) => ({
+        id: group.id,
+        title: group.title,
+        active: group.active,
+        count,
+      }));
+  }
+
+  /**
+   * Rettet eine nicht deutbare Projektdatei, statt sie überschreiben zu lassen.
+   *
+   * Der Zeitstempel steckt im Namen, damit mehrere Versuche einander nicht
+   * überschreiben. Schlägt selbst das Umbenennen fehl, startet der Server
+   * trotzdem – aber mit einer lauten Meldung, denn dann liegt die einzige
+   * Fassung noch unter dem alten Namen und der nächste `save()` trifft sie.
+   */
+  private async legeBeiseite(pfad: string): Promise<void> {
+    const stempel = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ziel = `${pfad}.unlesbar-${stempel}`;
+    try {
+      await rename(pfad, ziel);
+      console.warn(`Projektdatei nicht deutbar — beiseitegelegt als ${ziel}`);
+    } catch (fehler) {
+      console.error(
+        `Projektdatei nicht deutbar und nicht zu sichern (${String(fehler)}). ` +
+          `Vor dem nächsten Speichern von Hand kopieren: ${pfad}`,
+      );
+    }
   }
 
   private yearOf(spread: Spread): number | undefined {
@@ -1292,6 +1459,7 @@ export class Project {
       photos: [...this.photos.values()],
       overrides: this.overrides,
       groups: this.groups,
+      ...(this.groupStamp !== undefined ? { groupStamp: this.groupStamp } : {}),
       yearEvents: this.yearEvents,
       book: { spreads: this.spreads },
       cover: this.cover,
@@ -1307,13 +1475,20 @@ export class Project {
 
   /** @returns ob ein gespeichertes Projekt gefunden wurde. */
   async load(): Promise<boolean> {
+    const pfad = join(this.projectPath, 'project.json');
     try {
-      const raw = await readFile(join(this.projectPath, 'project.json'), 'utf8');
+      const raw = await readFile(pfad, 'utf8');
       const data = migriere(JSON.parse(raw) as PersistedProject);
 
       if (data === null) {
         // Ein neueres oder unbekanntes Format lieber gar nicht deuten als
-        // falsch – der Server importiert dann neu.
+        // falsch – der Server importiert dann neu. Die Datei wird dabei zur
+        // Seite gelegt, nicht überschrieben: Genau hier sind schon einmal 61
+        // bestätigte Gruppen und die Handarbeit eines Nachmittags verschwunden,
+        // weil ein laufender Entwicklungsserver mit erhöhter `SCHEMA_VERSION`
+        // neu lud, bevor die zugehörige Migration geschrieben war. Ein
+        // Neuimport stellt nichts davon wieder her.
+        await this.legeBeiseite(pfad);
         return false;
       }
 
@@ -1323,6 +1498,7 @@ export class Project {
       for (const p of data.photos) this.photos.set(p.id, p);
       this.overrides = data.overrides ?? {};
       this.groups = data.groups ?? [];
+      this.groupStamp = data.groupStamp;
       this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
       this.cover = data.cover ?? {};

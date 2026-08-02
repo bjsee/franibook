@@ -114,7 +114,17 @@ berechnet Ausschnitte → `renderSpread` (render/render-spread.ts) erzeugt das R
 
 Zeitliche Lücken gliedern das Buch bewusst **nicht** (der Bestand ist vorausgewählt,
 Mediangap 1,2 Tage → 502 Zerfallsgruppen). Stattdessen gliedert der Kalender, ergänzt
-um vom Benutzer bestätigte `PhotoGroup`s aus der Ortsauflösung.
+um vom Benutzer bestätigte `PhotoGroup`s aus Kalenderanlässen, der Ortsauflösung und
+Tagesballungen — in dieser Rangfolge, denn ein Anlass ist belegt, ein Ort erschlossen,
+ein dichter Tag nur vermutet (`structure/suggest-groups.ts`).
+
+**Was das Buch beschriftet, ist immer eine `PhotoGroup`.** Doppelseiten im Fluss tragen
+keine Überschrift; der Name steht im Zeitstrahl an ihrem Fuß und entsteht beim Rendern
+aus den Gruppen (`render/timeline.ts`). Deshalb wirkt Auflösen oder Umbenennen sofort,
+ohne Neuanordnen — nur Fotoverteilung und Auftaktseiten warten darauf, gemeldet über
+`groupsPending`. Kalenderanlässe („Geburt", „Weihnachten 2019") sind aus demselben
+Grund Gruppen und keine Segmenttitel: Was gedruckt wird, muss in der Gruppenansicht
+auffindbar sein.
 
 `rebuild.ts` ist das Gegenstück zu `generate.ts`: Die Fotoverteilung steht schon fest
 (bearbeitetes Layout-Dokument), nur Vorlage, Slots und Ausschnitte werden neu bestimmt.

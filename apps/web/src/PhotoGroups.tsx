@@ -31,15 +31,37 @@ interface Group {
   /** Auftaktseite für diese Gruppe, unabhängig von der Vorgabe. */
   opener?: boolean;
   reason?: string;
+  /** Erste Doppelseite mit einem Foto dieser Gruppe; fehlt, wenn keins im Buch steht. */
+  firstSpreadIndex?: number;
 }
 
 type Filter = { kind: 'all' } | { kind: 'ungrouped' } | { kind: 'group'; id: string };
 
-export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
+/**
+ * Reihenfolge der Gruppenliste.
+ *
+ * Bei über sechzig Gruppen ist Wiederfinden das eigentliche Problem: Wer eine
+ * Beschriftung im Buch gesehen hat, sucht nach dem Namen; wer beim Blättern
+ * etwas ändern will, sucht nach der Stelle. Beides braucht seine Ordnung.
+ */
+type Sortierung = 'buch' | 'name';
+
+interface Props {
+  onChanged: () => void;
+  /** Gruppe, die beim Öffnen der Ansicht gewählt sein soll – Sprung aus der Doppelseite. */
+  focusGroupId?: string | null;
+  /** Springt zu einer Doppelseite des Buches. */
+  onOpenSpread?: (index: number) => void;
+}
+
+export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState<Filter>({ kind: 'all' });
+  const [filter, setFilter] = useState<Filter>(
+    focusGroupId ? { kind: 'group', id: focusGroupId } : { kind: 'all' },
+  );
+  const [sortierung, setSortierung] = useState<Sortierung>('buch');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const lastClicked = useRef<string | null>(null);
@@ -58,6 +80,12 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Ein Sprung aus der Doppelseiten-Ansicht wählt die Gruppe aus, auch wenn
+  // diese Ansicht schon offen war.
+  useEffect(() => {
+    if (focusGroupId) setFilter({ kind: 'group', id: focusGroupId });
+  }, [focusGroupId]);
 
   /**
    * Legt die Datei in den Papierkorb ihrer Quelle.
@@ -175,6 +203,23 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
     });
   }
 
+  /**
+   * Die Gruppen in der gewählten Reihenfolge.
+   *
+   * Der Server liefert sie chronologisch nach dem frühesten Foto. Das ist fast,
+   * aber nicht ganz die Buchreihenfolge: Auftaktseiten und Gruppen, deren Fotos
+   * gar nicht im Buch stehen, verschieben sie. Deshalb wird hier nach dem
+   * tatsächlichen Platz sortiert – und was nicht im Buch vorkommt, ans Ende.
+   */
+  const sortierteGruppen = useMemo(() => {
+    if (sortierung === 'name') {
+      return [...groups].sort((a, b) => a.title.localeCompare(b.title, 'de'));
+    }
+    return [...groups].sort(
+      (a, b) => (a.firstSpreadIndex ?? Infinity) - (b.firstSpreadIndex ?? Infinity),
+    );
+  }, [groups, sortierung]);
+
   const aktiveGruppe = filter.kind === 'group' ? groups.find((g) => g.id === filter.id) : undefined;
   const gruppiert = groupOf.size;
   const manuelleGruppen = groups.filter((g) => g.origin === 'manual').length;
@@ -273,15 +318,41 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
           Ohne Gruppe <span style={S.count}>{photos.length - gruppiert}</span>
         </button>
 
+        <div style={S.sortLeiste}>
+          <span style={S.sortLabel}>Reihenfolge</span>
+          {(
+            [
+              ['buch', 'im Buch'],
+              ['name', 'nach Name'],
+            ] as const
+          ).map(([wert, beschriftung]) => (
+            <button
+              key={wert}
+              onClick={() => setSortierung(wert)}
+              style={sortierung === wert ? S.sortActive : S.sortButton}
+            >
+              {beschriftung}
+            </button>
+          ))}
+        </div>
+
         <ul style={S.groupList}>
-          {groups.map((g) => (
+          {sortierteGruppen.map((g) => (
             <li key={g.id}>
               <button
                 onClick={() => setFilter({ kind: 'group', id: g.id })}
                 style={filter.kind === 'group' && filter.id === g.id ? S.filterActive : S.filter}
                 title={g.reason}
               >
-                <span style={{ opacity: g.active ? 1 : 0.45 }}>
+                {/*
+                  Die Doppelseite vor dem Namen: Sie beantwortet die Frage, mit
+                  der man in diese Liste kommt – „wo im Buch ist das?“ Ein
+                  Strich heißt, dass kein Foto der Gruppe im Buch steht.
+                */}
+                <span style={S.spreadNo} title="Erste Doppelseite im Buch">
+                  {g.firstSpreadIndex === undefined ? '–' : g.firstSpreadIndex + 1}
+                </span>
+                <span style={{ ...S.groupTitle, opacity: g.active ? 1 : 0.45 }}>
                   {g.active ? '' : '○ '}
                   {g.title}
                 </span>
@@ -361,6 +432,16 @@ export function PhotoGroups({ onChanged }: { onChanged: () => void }) {
 
           {aktiveGruppe && (
             <>
+              {/* Der Rückweg zum Sprung aus der Doppelseiten-Ansicht. */}
+              {onOpenSpread && aktiveGruppe.firstSpreadIndex !== undefined && (
+                <button
+                  onClick={() => onOpenSpread(aktiveGruppe.firstSpreadIndex!)}
+                  title={`Doppelseite ${aktiveGruppe.firstSpreadIndex + 1} aufschlagen`}
+                  style={S.button}
+                >
+                  Im Buch zeigen
+                </button>
+              )}
               <button onClick={() => void umbenennen(aktiveGruppe)} style={S.button}>
                 Umbenennen
               </button>
@@ -585,6 +666,47 @@ const S = {
     textAlign: 'left' as const,
   },
   count: { color: '#9ca3af', fontVariantNumeric: 'tabular-nums' as const, fontWeight: 400 },
+  spreadNo: {
+    minWidth: '1.7rem',
+    color: '#9ca3af',
+    fontVariantNumeric: 'tabular-nums' as const,
+    fontWeight: 400,
+    textAlign: 'right' as const,
+    flexShrink: 0,
+  },
+  groupTitle: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  sortLeiste: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.25rem',
+    margin: '0.6rem 0 0.1rem',
+  },
+  sortLabel: { fontSize: '0.7rem', color: '#9ca3af', marginRight: '0.15rem' },
+  sortButton: {
+    padding: '0.1rem 0.4rem',
+    border: '1px solid transparent',
+    borderRadius: '4px',
+    background: 'none',
+    color: '#6b7280',
+    cursor: 'pointer',
+    fontSize: '0.72rem',
+  },
+  sortActive: {
+    padding: '0.1rem 0.4rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    background: '#f9fafb',
+    color: '#111827',
+    cursor: 'pointer',
+    fontSize: '0.72rem',
+    fontWeight: 600,
+  },
   groupList: {
     listStyle: 'none',
     margin: '0.5rem 0 0',

@@ -812,6 +812,14 @@ In die Spanne gehen nur Daten der Konfidenz `high` oder `medium` ein – ein Dat
 
 Geschaltet wird über `settings.timeline` (Vorgabe an) und `Spread.timeline` für die einzelne Doppelseite. Der globale Schalter läuft über `PATCH /api/settings` und löst bewusst kein Neugenerieren aus – der Zeitstrahl ändert das RSM, nicht die Fotoverteilung.
 
+**Beschriftung.** Das Label am Zeitstrahl ist die einzige Beschriftung im Innenteil: Doppelseiten tragen keine Überschrift mehr. Eine Überschrift stand nur auf der ersten Doppelseite einer Gruppe – auf allen folgenden fehlte der Name, und auf der ersten stand er doppelt, sobald der Zeitstrahl lief. Drei Folgen hat der Wechsel:
+
+- **Alle Vorlagen im Fluss sind titellos.** Die `mit-titel`-Fassungen räumten 16 mm am oberen Rand frei; am echten Bestand standen die Bilder dadurch auf 9 von 45 Doppelseiten 6 % kleiner als nötig.
+- **Der Name folgt der Gruppe sofort.** Er entsteht beim Rendern aus `PhotoGroup.title` und nicht beim Erzeugen als `TextElement`. Eine aufgelöste oder umbenannte Gruppe wirkt damit ohne Neuanordnen; nur die Verteilung der Fotos und die Auftaktseiten warten darauf (`groupsPending` in `/api/project`).
+- **Was im Buch steht, ist auffindbar.** Kalenderanlässe sind Fotogruppen statt Segmenttitel – siehe [Kalender-Detektor](#kalender-detektor).
+
+Bleibt die Auftaktseite einer Gruppe: Sie trägt ihren Titel weiter groß, denn sie besteht aus nichts anderem.
+
 ### Auftaktseiten
 
 Zwei Arten, unterschiedlich geregelt:
@@ -991,6 +999,21 @@ Für diesen Anwendungsfall ungewöhnlich ergiebig, weil das Projekt ein Geburtsd
 - August/September mit einer auffälligen Fotohäufung im Einschulungsjahr → Titelvorschlag „Einschulung“
 
 Alle Titel sind Vorschläge und in der Oberfläche als solche markiert; ein Klick übernimmt oder verwirft sie.
+
+> **Stand: umgesetzt als Fotogruppen, nicht als Segmenttitel**
+>
+> Die Erkennung sitzt in `structure/occasions.ts` (`occasionOfDay`) und mündet über
+> `suggestOccasionGroups` in Gruppen – Geburtstag ± 3 Tage, Weihnachten, Silvester,
+> Neujahr, Ostern. Der Umweg über einen Titel am Segment ist entfallen, und das
+> ist keine technische Frage: Ein Titel, der aus einem Detektor kam, stand
+> gedruckt im Buch, ohne in der Gruppenansicht auffindbar zu sein. „Geburt" auf
+> Doppelseite 2 war nirgends anzufassen. Als Gruppe lässt er sich umbenennen,
+> abschalten, auflösen und mit einer anderen zusammenführen.
+>
+> Anlässe gehen den Ortsgruppen vor: Wer am zwölften Geburtstag zufällig in Paris
+> war, hat Fotos vom Geburtstag. Die Mindestzahl liegt bei zwei Fotos statt drei
+> wie bei den Tagesgruppen – dort trägt allein die Fotodichte die Vermutung, hier
+> belegt es der Kalender.
 
 ### Dateisystem-Detektor
 

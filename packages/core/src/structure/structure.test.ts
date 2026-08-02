@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { type DatedPhoto, allSegments, buildStructure, monthLabel } from './segment.js';
-import { DEFAULT_DETECTORS, easterSunday, suggestTitles } from './detectors.js';
 
 function p(id: string, date: string): DatedPhoto {
   return { id, date };
@@ -87,97 +86,6 @@ describe('Serien innerhalb eines Segments', () => {
       { serieGapHours: 6 },
     );
     expect(weit.chapters[0]!.segments[0]!.series).toHaveLength(1);
-  });
-});
-
-describe('easterSunday', () => {
-  it('trifft bekannte Ostersonntage', () => {
-    // Nachprüfbare Werte
-    expect(easterSunday(2008)).toEqual({ month: 3, day: 23 });
-    expect(easterSunday(2015)).toEqual({ month: 4, day: 5 });
-    expect(easterSunday(2024)).toEqual({ month: 3, day: 31 });
-    expect(easterSunday(2026)).toEqual({ month: 4, day: 5 });
-  });
-});
-
-describe('Titelvorschläge', () => {
-  const ctx = { birthDate: '2008-04-18', name: 'Franziska' };
-
-  function titleFor(dates: string[]) {
-    const s = buildStructure(dates.map((d, i) => p(`p${i}`, d)));
-    return suggestTitles(allSegments(s), ctx)[0];
-  }
-
-  it('erkennt einen Geburtstag und berechnet das Alter', () => {
-    const seg = titleFor(['2016-04-18T12:00:00', '2016-04-18T13:00:00', '2016-04-18T14:00:00']);
-    expect(seg?.title).toBe('8. Geburtstag');
-    expect(seg?.titleSource).toBe('calendar:birthday');
-  });
-
-  it('erkennt eine Feier am Wochenende neben dem Stichtag', () => {
-    const seg = titleFor(['2016-04-16T12:00:00', '2016-04-16T13:00:00']);
-    expect(seg?.title).toBe('8. Geburtstag');
-  });
-
-  it('erkennt Weihnachten', () => {
-    const seg = titleFor(['2015-12-24T18:00:00', '2015-12-25T12:00:00']);
-    expect(seg?.title).toBe('Weihnachten 2015');
-  });
-
-  it('erkennt Silvester', () => {
-    const seg = titleFor(['2015-12-31T22:00:00', '2015-12-31T23:00:00']);
-    expect(seg?.title).toBe('Silvester 2015');
-  });
-
-  it('erkennt Ostern', () => {
-    // Ostersonntag 2015 war der 5. April
-    const seg = titleFor(['2015-04-05T11:00:00', '2015-04-06T11:00:00']);
-    expect(seg?.title).toBe('Ostern 2015');
-  });
-
-  it('markiert einen auffällig dichten Tag ohne Kalenderbezug', () => {
-    const seg = titleFor([
-      '2015-07-11T10:00:00',
-      '2015-07-11T10:30:00',
-      '2015-07-11T11:00:00',
-      '2015-07-11T11:30:00',
-      '2015-07-11T12:00:00',
-      '2015-07-11T12:30:00',
-    ]);
-    expect(seg?.titleSource).toBe('density:busy-day');
-    expect(seg?.title).toContain('Juli');
-  });
-
-  it('bevorzugt bei Konkurrenz den sichereren Vorschlag', () => {
-    // Weihnachten (0,85) schlägt den dichten Tag (0,4)
-    const seg = titleFor([
-      '2015-12-24T10:00:00',
-      '2015-12-24T10:30:00',
-      '2015-12-24T11:00:00',
-      '2015-12-24T11:30:00',
-      '2015-12-24T12:00:00',
-      '2015-12-24T12:30:00',
-    ]);
-    expect(seg?.titleSource).toBe('calendar:christmas');
-  });
-
-  it('schlägt für einen unauffälligen Monat nichts vor', () => {
-    const seg = titleFor(['2015-09-08T10:00:00', '2015-09-19T14:00:00']);
-    expect(seg?.title).toBeUndefined();
-  });
-
-  it('kommt ohne Geburtsdatum aus', () => {
-    const s = buildStructure([p('a', '2016-04-18T12:00:00')]);
-    const segs = suggestTitles(allSegments(s), {}, DEFAULT_DETECTORS);
-    expect(segs[0]!.title).toBeUndefined();
-  });
-
-  it('verändert die übergebenen Segmente nicht', () => {
-    const s = buildStructure([p('a', '2015-12-24T18:00:00')]);
-    const original = allSegments(s);
-    const kopie = JSON.parse(JSON.stringify(original));
-    suggestTitles(original, ctx);
-    expect(original).toEqual(kopie);
   });
 });
 

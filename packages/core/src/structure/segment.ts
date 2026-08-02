@@ -39,9 +39,6 @@ export interface Segment {
   to: NaiveDateTime;
   /** Serien innerhalb des Segments – die Layout-Engine hält sie zusammen. */
   series: Serie[];
-  /** Titelvorschlag eines Detektors. Immer nur ein Vorschlag. */
-  title?: string;
-  titleSource?: string;
 }
 
 export interface Chapter {

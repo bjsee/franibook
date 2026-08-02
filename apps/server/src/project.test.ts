@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FULL_CROP, MAX_TILT_DEG } from '@franibook/core';
+import { FULL_CROP, MAX_TILT_DEG, groupOpenerTemplates } from '@franibook/core';
 import { Project, migriere } from './project.js';
 import { quellenId } from './sources.js';
 
@@ -29,7 +29,7 @@ describe('migriere', () => {
   it('macht aus dem einen Quellordner eine Quellenliste', () => {
     const neu = migriere(altesProjekt());
 
-    expect(neu?.schemaVersion).toBe(2);
+    expect(neu?.schemaVersion).toBe(3);
     expect(neu?.sources).toEqual([
       {
         id: quellenId('/bilder/buch'),
@@ -61,8 +61,49 @@ describe('migriere', () => {
   });
 
   it('lässt ein Projekt im aktuellen Schema unverändert', () => {
-    const aktuell = { ...altesProjekt(), schemaVersion: 2 };
+    const aktuell = { ...altesProjekt(), schemaVersion: 3 };
     expect(migriere(aktuell)).toBe(aktuell);
+  });
+
+  it('nimmt die Überschrift von einer Doppelseite des Innenteils', () => {
+    // Sie stünde sonst als festgeschriebener Text im Buch, während der
+    // Zeitstrahl denselben Namen aus den Gruppen holt – und nach dem Auflösen
+    // einer Gruppe bliebe der alte Titel stehen.
+    const alt = altesProjekt();
+    alt.book = {
+      spreads: [
+        {
+          id: 's0',
+          index: 0,
+          templateId: 'raster-2x2',
+          slots: [],
+          texts: [{ id: 't', role: 'eventTitle', content: 'Geburt', slotId: 't-title' }],
+        },
+      ],
+    } as never;
+
+    expect(migriere(alt)?.book.spreads[0]!.texts).toBeUndefined();
+  });
+
+  it('lässt der Auftaktseite ihren Titel', () => {
+    // Sie besteht aus nichts anderem als Hauptbild und Gruppenname.
+    const auftakt = groupOpenerTemplates()[0];
+    expect(auftakt).toBeDefined();
+
+    const alt = altesProjekt();
+    alt.book = {
+      spreads: [
+        {
+          id: 's0',
+          index: 0,
+          templateId: auftakt!.id,
+          slots: [],
+          texts: [{ id: 't', role: 'eventTitle', content: 'Kreta', slotId: 't-title' }],
+        },
+      ],
+    } as never;
+
+    expect(migriere(alt)?.book.spreads[0]!.texts).toHaveLength(1);
   });
 
   it('lehnt ein unbekanntes Schema ab, statt es zu deuten', () => {

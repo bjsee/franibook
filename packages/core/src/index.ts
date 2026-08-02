@@ -17,7 +17,7 @@ export * from './model/template.js';
 export * from './model/spread.js';
 
 export * from './structure/segment.js';
-export * from './structure/detectors.js';
+export * from './structure/occasions.js';
 export * from './structure/groups.js';
 export * from './structure/suggest-groups.js';
 
