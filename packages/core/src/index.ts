@@ -30,6 +30,7 @@ export * from './layout/rebuild.js';
 export * from './render/rendered-spread.js';
 export * from './render/render-spread.js';
 export * from './render/timeline.js';
+export * from './render/typography.js';
 
 export * from './cover/cover.js';
 export * from './cover/geometry.js';

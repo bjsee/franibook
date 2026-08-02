@@ -15,12 +15,15 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import PDFDocument from 'pdfkit';
 import {
+  FONT_WEIGHTS,
   type ImageBox,
   type PhotoId,
   type PrintProfile,
   type RenderedSpread,
   mmToPt,
+  textBaselineOffsetMm,
 } from '@franibook/core';
+import { fontFilePath } from '@franibook/fonts';
 import { prepareImage } from './prepare-image.js';
 
 export interface PhotoSource {
@@ -53,6 +56,25 @@ export interface RenderPdfResult {
   pages: number;
   images: number;
   skipped: { photoId: PhotoId; reason: string }[];
+}
+
+/**
+ * Bettet die Buchschrift ein und macht sie unter dem Namen des Schnitts
+ * ansprechbar.
+ *
+ * pdfkit bettet nur ein, was tatsächlich gesetzt wird – ein registrierter, aber
+ * unbenutzter Schnitt kostet also nichts. Die Standardschrift (Helvetica) wird
+ * damit nie gebraucht: Sie ist eine der 14 PDF-Basisschriften, wird nicht
+ * eingebettet und hängt beim Druckdienstleister an dessen Interpretation. Genau
+ * das war der Anlass für Issue #5.
+ */
+function registerFonts(doc: PDFKit.PDFDocument): void {
+  for (const weight of FONT_WEIGHTS) {
+    doc.registerFont(weight, fontFilePath(weight));
+  }
+  // Voreinstellung, damit nichts auf Helvetica fällt, was pdfkit intern selbst
+  // setzt (Lesezeichen, Struktur-Tags).
+  doc.font('regular');
 }
 
 /**
@@ -111,6 +133,7 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
+  registerFonts(doc);
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
   const skipped: { photoId: PhotoId; reason: string }[] = [];
@@ -140,13 +163,20 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
             onProgress?.(images, totalImages);
           }
         } else if (box.kind === 'text') {
+          const baselineMm = box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt);
           doc
+            .font(box.weight)
             .fontSize(box.fontSizePt)
             .fillColor(box.color)
-            .text(box.content, mmToPt(box.xMm + slice.offsetXMm), mmToPt(box.yMm), {
+            .text(box.content, mmToPt(box.xMm + slice.offsetXMm), mmToPt(baselineMm), {
               width: mmToPt(box.wMm),
               align: box.align,
               lineBreak: false,
+              // Die y-Koordinate ist die Grundlinie, nicht der Kastenoberrand.
+              // Ohne diese Angabe verschiebt pdfkit die Zeile um seinen eigenen
+              // Ascender (1,024 em) nach unten – eine Layoutentscheidung des
+              // Adapters, und genau die darf hier keine getroffen werden.
+              baseline: 'alphabetic',
             });
         } else if (box.kind === 'rect') {
           doc

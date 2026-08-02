@@ -29,6 +29,7 @@
 import type { NaiveDateTime } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
 import type { RenderBox } from './rendered-spread.js';
+import { textFontSizePt, textStyle } from './typography.js';
 
 /** Fensterbreite in Monaten: Kalenderjahr plus Vorlauf und Nachlauf. */
 const WINDOW_MONTHS = 18;
@@ -226,7 +227,8 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   // Jahreszahlen an den beiden Jahresgrenzen, die immer im Fenster liegen.
   // Überdeckt die Markerspitze eine Zahl, entfällt sie: Der Leser hat noch die
   // andere Zahl und die hell abgesetzten Randmonate.
-  const yearSize = fontSizePt(LAYOUT.markerHeight);
+  const yearStyle = textStyle('timelineYear');
+  const yearSize = textFontSizePt(LAYOUT.markerHeight, yearStyle);
   for (const [grenze, wert] of [
     [yearStart, year],
     [yearEnd, year + 1],
@@ -247,15 +249,17 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       slotId: `timeline-year-${wert}`,
       content: String(wert),
       fontSizePt: yearSize,
+      weight: yearStyle.weight,
       align: 'left',
-      color: COLOR_CHAPTER,
+      color: yearStyle.color,
     });
   }
 
   // Label der Fotogruppe, auf jeder Doppelseite der Gruppe: Ein Fotobuch wird
   // aufgeschlagen, nicht von vorn gelesen.
   if (input.label && markerX !== undefined) {
-    const size = fontSizePt(LAYOUT.labelHeight);
+    const labelStyle = textStyle('timelineLabel');
+    const size = textFontSizePt(LAYOUT.labelHeight, labelStyle);
     const width = estimatedTextWidthMm(input.label, size);
     // Zentriert unter dem Marker, außer der Marker steht im Falzband: Dann
     // weicht das Label auf die Seite mit mehr Platz aus. Die Breite ist
@@ -282,17 +286,13 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
       slotId: 'timeline-label',
       content: input.label,
       fontSizePt: size,
+      weight: labelStyle.weight,
       align,
-      color: COLOR_CHAPTER,
+      color: labelStyle.color,
     });
   }
 
   return boxes;
-}
-
-/** Schriftgröße aus der Zeilenhöhe, wie bei den Textslots der Templates. */
-function fontSizePt(heightMm: number): number {
-  return (heightMm / 25.4) * 72 * 0.7;
 }
 
 /**
