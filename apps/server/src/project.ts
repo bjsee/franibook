@@ -27,72 +27,46 @@ import {
   type RenderedSpread,
   type SinglePageResult,
   type Spread,
-  type SpreadAnchor,
   type Structure,
   type TextBlock,
   type TimelineFootVariant,
   type TimelineSideVariant,
-  BLANK_TEMPLATE_ID,
-  HALF_BLANK_ID,
-  allTemplates,
-  choosePairFor,
-  halfPageById,
-  insertSinglePage,
-  insertTemplates,
-  removeSinglePage,
-  isBlank,
-  isOwnHalf,
-  ownHalves,
-  pairId,
   splitKept,
   bookStats,
   buildStructure,
-  chapterTemplates,
   DEFAULT_BACKGROUND,
   FONT_FAMILIES,
   DEFAULT_TILT_DEG,
   MAX_TILT_DEG,
   backgroundFit,
   defaultProfile,
-  exportLayout,
   findBulkSeconds,
   FULL_CROP,
   generateBook,
-  halfPages,
-  halvesOfTemplate,
   isJustified,
-  JUSTIFIED_MAX_PHOTOS,
-  JUSTIFIED_MIN_PHOTOS,
-  justifiedRects,
-  justifiedTemplateId,
-  layoutSpread,
   movePhoto,
   addToGroup,
   createGroup,
   mergeGroups,
-  mergeSuggestions,
   needsAttention,
-  parseLayout,
-  propagatePlaces,
-  rebuildSpreads,
-  renderCover,
   renderSpread,
   requireTemplate,
   resolveEffectiveDate,
   sortKey,
   removeGroup,
   templateById,
-  templateMeta,
-  sortGroupsChronologically,
-  suggestDayGroups,
-  suggestOccasionGroups,
-  suggestPlaceGroups,
   ungroupPhotos,
   updateGroup,
 } from '@franibook/core';
 import type { DecodeCache } from './decode.js';
-import { importSource } from './import.js';
 import type { PreviewCache } from './previews.js';
+import * as anordnung from './project/anordnung.js';
+import * as bestand from './project/bestand.js';
+import type { ImportDiff, QuellenBericht } from './project/bestand.js';
+import * as gruppen from './project/gruppen.js';
+import * as layoutDokument from './project/layout-dokument.js';
+import * as seiten from './project/seiten.js';
+import * as umschlag from './project/umschlag.js';
 import { type PhotoSource, quellenId, Sources } from './sources.js';
 
 /**
@@ -105,25 +79,8 @@ import { type PhotoSource, quellenId, Sources } from './sources.js';
  */
 const SCHEMA_VERSION = 3;
 
-/** Fotos zeitlich, Undatiertes ans Ende – dieselbe Ordnung wie im Import. */
-function nachAufnahme(a: Photo, b: Photo): number {
-  if (a.takenAt && b.takenAt) return a.takenAt.localeCompare(b.takenAt);
-  if (a.takenAt) return -1;
-  if (b.takenAt) return 1;
-  return a.relPath.localeCompare(b.relPath);
-}
-
-/** Quellen, die beim Einlesen nicht erreichbar waren. */
-export interface QuellenBericht {
-  offline: (PhotoSource & { photoCount: number })[];
-}
-
-export interface ImportDiff extends QuellenBericht {
-  neu: PhotoId[];
-  verschwunden: PhotoId[];
-  unveraendert: number;
-  imBuchVerschwunden: PhotoId[];
-}
+/** Beides beschreibt einen Einlesevorgang und steht deshalb bei ihm. */
+export type { ImportDiff, QuellenBericht };
 
 export interface ProjectSettings {
   targetPages: number;
@@ -355,223 +312,43 @@ export class Project {
     private readonly projectPath: string,
   ) {}
 
-  // ---------------------------------------------------------------- Quellen
-
-  /** Zu welcher Quelle ein Foto gehört – ohne Angabe zur ersten. */
-  private quelleVon(photo: Photo): string | undefined {
-    return photo.sourceId ?? this.sources.primary()?.id;
-  }
+  // ------------------------------------------------- Bestand und Bildquellen
 
   photosOfSource(sourceId: string): Photo[] {
-    return [...this.photos.values()].filter((p) => this.quelleVon(p) === sourceId);
+    return bestand.photosOfSource(this, sourceId);
   }
 
-  /**
-   * Nimmt eine Bildquelle auf und liest sie ein.
-   *
-   * Bewusst ohne Neugenerieren, wie beim Reimport: Die neuen Fotos stehen
-   * danach im Fotopool und lassen sich von dort einsetzen. Wer das Buch neu
-   * bauen will, sagt das eigens.
-   */
-  async addSource(root: string, label?: string): Promise<{ source: PhotoSource } & ImportDiff> {
-    const { source } = await this.sources.add(root, label);
-    // Auch eine schon bekannte Quelle wird eingelesen: Der Aufruf heißt für
-    // den Benutzer „lies das hier ein", nicht „lege einen Eintrag an".
-    const diff = await this.reimport(undefined, [source.id]);
-    return { source, ...diff };
+  addSource(root: string, label?: string): Promise<{ source: PhotoSource } & ImportDiff> {
+    return bestand.addSource(this, root, label);
   }
 
-  /**
-   * Entfernt eine Quelle samt ihrer Fotos.
-   *
-   * Die Doppelseiten bleiben stehen; belegte Plätze werden zu fehlenden
-   * Bildern (`photo-missing` im RSM), genau wie bei einer gelöschten Datei.
-   * Wie viele das sind, steht in der Rückgabe – die Oberfläche fragt damit
-   * vorher nach.
-   */
   removeSource(sourceId: string): { source: PhotoSource; entfernt: number; imBuch: number } | null {
-    const betroffen = this.photosOfSource(sourceId);
-    const source = this.sources.remove(sourceId);
-    if (!source) return null;
-
-    const { imBuch } = this.vergessen(betroffen.map((p) => p.id));
-    return { source, entfernt: betroffen.length, imBuch };
+    return bestand.removeSource(this, sourceId);
   }
 
-  // ----------------------------------------------------------------- Fotos
-
-  /**
-   * Nimmt Fotos aus dem Projekt, ohne die Doppelseiten umzubauen.
-   *
-   * Die Slots behalten ihre Kennung und werden zu fehlenden Bildern
-   * (`photo-missing` im RSM) – die Alternative wäre, das Buch beim Aussortieren
-   * eines einzigen Fotos umzuwerfen. Alles andere, was auf ein Foto zeigt, muss
-   * dagegen mit: eine Gruppe mit toter Kennung, ein Hintergrundbild oder ein
-   * Titelbild, das es nicht mehr gibt, wären stille Fehler.
-   *
-   * `PhotoOverride` bleibt bewusst erhalten. Er hängt an der Kennung, nicht am
-   * Foto, und ist sofort wieder gültig, wenn die Datei aus dem Papierkorb
-   * zurückkommt.
-   */
   vergessen(ids: readonly PhotoId[]): { entfernt: number; imBuch: number; spreads: number[] } {
-    const menge = new Set(ids);
-    let entfernt = 0;
-    for (const id of menge) {
-      if (this.photos.delete(id)) entfernt++;
-    }
-
-    const spreads: number[] = [];
-    let imBuch = 0;
-    this.spreads.forEach((spread, i) => {
-      const slots = spread.slots.filter((sl) => sl.photoId && menge.has(sl.photoId)).length;
-      imBuch += slots;
-      let betroffen = slots > 0;
-      if (spread.backgroundPhotoId && menge.has(spread.backgroundPhotoId)) {
-        delete spread.backgroundPhotoId;
-        betroffen = true;
-      }
-      if (betroffen) spreads.push(i);
-    });
-
-    this.groups = ungroupPhotos(this.groups, [...menge]);
-    if (this.cover.frontPhotoId && menge.has(this.cover.frontPhotoId)) {
-      delete this.cover.frontPhotoId;
-      delete this.cover.frontCrop;
-    }
-    if (this.cover.backPhotoId && menge.has(this.cover.backPhotoId)) {
-      delete this.cover.backPhotoId;
-      delete this.cover.backCrop;
-    }
-
-    this.rebuildStructure();
-    return { entfernt, imBuch, spreads };
+    return bestand.vergessen(this, ids);
   }
 
-  /**
-   * Legt die Datei eines Fotos in den Papierkorb seiner Quelle und vergisst es.
-   *
-   * Der Rückweg bleibt offen: Die Datei liegt unter `.franibook-geloescht` in
-   * derselben Quelle und lässt sich im Finder zurücklegen. Ein späterer Reimport
-   * holt sie erst wieder ins Projekt, wenn sie dort auch wirklich liegt –
-   * versteckte Ordner liest der Scan nicht.
-   */
-  async deletePhoto(id: PhotoId): Promise<{
+  deletePhoto(id: PhotoId): Promise<{
     fileName: string;
     papierkorb: string;
     imBuch: number;
     spreads: number[];
   } | null> {
-    const photo = this.photos.get(id);
-    if (!photo) return null;
-
-    const papierkorb = await this.sources.inDenPapierkorb(photo);
-    const { imBuch, spreads } = this.vergessen([id]);
-    return { fileName: photo.fileName, papierkorb, imBuch, spreads };
+    return bestand.deletePhoto(this, id);
   }
 
-  // ---------------------------------------------------------------- Import
-
-  /**
-   * Liest die angegebenen Quellen ein (ohne Angabe: alle).
-   *
-   * Fotos aus Quellen, die gerade nicht lesbar sind, bleiben unangetastet und
-   * werden als `offline` gemeldet. Das ist der wichtigste Unterschied zum
-   * flachen Ordnerscan von früher: Der Grundbestand liegt auf einem
-   * Netzlaufwerk, und ein nicht eingehängtes Laufwerk sieht aus wie ein leerer
-   * Ordner – ohne diese Prüfung gälte jedes Foto darin als gelöscht.
-   */
-  async importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
-    const gesammelt: Photo[] = [];
-    const offline: QuellenBericht['offline'] = [];
-    const skippedVideos: string[] = [];
-    const failed: { file: string; reason: string }[] = [];
-    let rest = limit;
-
-    for (const quelle of this.sources.list()) {
-      // Nicht angefragt oder nicht lesbar: Der bisherige Bestand dieser Quelle
-      // bleibt, wie er ist.
-      if (nurQuellen && !nurQuellen.includes(quelle.id)) {
-        gesammelt.push(...this.photosOfSource(quelle.id));
-        continue;
-      }
-      if (!(await this.sources.erreichbar(quelle.id))) {
-        const bestand = this.photosOfSource(quelle.id);
-        gesammelt.push(...bestand);
-        offline.push({ ...quelle, photoCount: bestand.length });
-        continue;
-      }
-
-      const result = await importSource(quelle, this.decodes, rest);
-      gesammelt.push(...result.photos);
-      skippedVideos.push(...result.skippedVideos.map((f) => `${quelle.label}/${f}`));
-      failed.push(...result.failed.map((f) => ({ ...f, file: `${quelle.label}/${f.file}` })));
-      if (rest !== undefined) rest = Math.max(0, rest - result.photos.length);
-    }
-
-    // Über Quellen hinweg entscheidet wieder der Inhaltshash: Dasselbe Foto in
-    // zwei Ordnern ist ein Foto, und es gehört zu der Quelle, die es zuerst
-    // gemeldet hat. Sonst stünde dasselbe Bild zweimal im Pool.
-    this.photos.clear();
-    for (const photo of gesammelt.sort(nachAufnahme)) {
-      if (!this.photos.has(photo.id)) this.photos.set(photo.id, photo);
-    }
-
-    this.skippedVideos = skippedVideos;
-    this.failed = failed;
-    this.importedAt = new Date().toISOString();
-    return { offline };
+  importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
+    return bestand.importPhotos(this, limit, nurQuellen);
   }
 
-  /**
-   * Liest die Bildquellen erneut ein, ohne das Buch anzutasten.
-   *
-   * Die Foto-Kennung ist der Inhaltshash, deshalb bleiben unveränderte Dateien
-   * dieselben Fotos – auch wenn sie umbenannt, in einen Unterordner verschoben
-   * oder in eine andere Quelle umgezogen wurden. Neue kommen hinzu,
-   * verschwundene fehlen; die Doppelseiten bleiben stehen, wie sie sind.
-   *
-   * Bewusst ohne Neugenerieren: Ein Reimport ist meistens „ich habe zwanzig
-   * Bilder nachgelegt", nicht „baue das Buch neu". Die neuen Fotos stehen danach
-   * im Fotopool der Doppelseitenansicht und lassen sich von dort einsetzen. Wer
-   * doch neu bauen will, ruft anschließend `generate()`.
-   *
-   * Korrekturen (`PhotoOverride`) bleiben in jedem Fall erhalten: Sie hängen an
-   * der Kennung, nicht am Importergebnis.
-   */
-  async reimport(limit?: number, nurQuellen?: readonly string[]): Promise<ImportDiff> {
-    const vorher = new Set(this.photos.keys());
-    const { offline } = await this.importPhotos(limit, nurQuellen);
-    const nachher = new Set(this.photos.keys());
-
-    const neu = [...nachher].filter((id) => !vorher.has(id));
-    const verschwunden = [...vorher].filter((id) => !nachher.has(id));
-
-    // Fehlt ein Foto, das im Buch steht, bleibt die Doppelseite intakt und der
-    // Platz wird als fehlendes Bild gemeldet – siehe `photo-missing` im RSM.
-    const imBuch = new Set(this.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)));
-    const imBuchVerschwunden = verschwunden.filter((id) => imBuch.has(id));
-
-    this.rebuildStructure();
-    return {
-      neu,
-      verschwunden,
-      unveraendert: [...nachher].filter((id) => vorher.has(id)).length,
-      imBuchVerschwunden,
-      offline,
-    };
+  reimport(limit?: number, nurQuellen?: readonly string[]): Promise<ImportDiff> {
+    return bestand.reimport(this, limit, nurQuellen);
   }
 
-  /**
-   * Wärmt die Vorschauen der genannten Fotos auf.
-   *
-   * Nach einem Reimport nötig, nicht bloß nett: Ohne sie erzeugt der Fotopool
-   * jede Vorschau einzeln beim Scrollen, und bei ein paar hundert Nachzüglern
-   * ruckelt genau die Ansicht, in der man sie einsetzen will.
-   */
   warmPreviews(ids: readonly PhotoId[]): void {
-    const photos = ids.map((id) => this.photos.get(id)).filter((p): p is Photo => p !== undefined);
-    if (photos.length === 0) return;
-    void this.previews.warm(photos, 'preview', 6);
+    bestand.warmPreviews(this, ids);
   }
 
   /**
@@ -813,94 +590,14 @@ export class Project {
     });
     this.spreads = result.spreads;
     this.lastReport = result.report;
-    this.groupStamp = this.groupFingerprint();
+    this.groupStamp = gruppen.groupFingerprint(this);
     return result;
   }
 
   // -------------------------------------------------------------- Gruppen
 
-  /**
-   * Erzeugt Gruppenvorschläge aus den aufgelösten Orten.
-   *
-   * Von Hand angelegte Gruppen bleiben unangetastet; frühere Umbenennungen und
-   * Abschaltungen werden übernommen. Ein erneuter Aufruf darf nichts
-   * überschreiben, was jemand eingerichtet hat.
-   */
   suggestGroups(opts: { reset?: boolean } = {}): { groups: PhotoGroup[]; added: number } {
-    // Beim vollständigen Neuaufbau werden auch von Hand angelegte Gruppen
-    // verworfen. Nur auf ausdrückliche Anforderung – sonst gilt der schonende
-    // Weg, der Bearbeitetes stehen lässt.
-    if (opts.reset) this.groups = [];
-
-    const kandidaten = [...this.photos.values()]
-      .map((photo) => {
-        const e = resolveEffectiveDate(photo, this.overrides[photo.id]);
-        if (!e.value) return undefined;
-        return {
-          photoId: photo.id,
-          date: e.value,
-          ...(photo.place ? { place: photo.place } : {}),
-        };
-      })
-      .filter((c): c is NonNullable<typeof c> => c !== undefined);
-
-    const mitOrt = propagatePlaces(kandidaten);
-
-    const detection = {
-      ...(this.settings.birthDate ? { birthDate: this.settings.birthDate } : {}),
-      ...(this.settings.subjectName ? { name: this.settings.subjectName } : {}),
-    };
-
-    // Die Rangfolge der drei Quellen ist zugleich ihre Aussagekraft, und sie
-    // entscheidet bei Überschneidung: Ein Kalenderanlass ist belegt, ein Ort
-    // erschlossen, ein dichter Tag nur vermutet. Seit die Anlässe das Buch
-    // beschriften, muss ihre Gruppe auch dann entstehen, wenn zufällig ein
-    // Ortsname danebensteht – sonst stünde im Zeitstrahl „Bremerhaven“, wo
-    // „Weihnachten 2019“ gemeint ist.
-    const anlaesse = suggestOccasionGroups(mitOrt, { detection });
-    const vergeben = new Set(anlaesse.flatMap((g) => g.photoIds));
-    const orte = suggestPlaceGroups(mitOrt);
-    for (const g of orte) for (const id of g.photoIds) vergeben.add(id);
-    const tage = suggestDayGroups(mitOrt, { taken: vergeben, detection });
-
-    const vorher = this.groups.length;
-    this.groups = mergeSuggestions(this.groups, [...anlaesse, ...orte, ...tage]);
-    return { groups: this.groups, added: this.groups.length - vorher };
-  }
-
-  /**
-   * Fingerabdruck dessen, was an den Gruppen das Buch verändern kann.
-   *
-   * Ein Flag „Gruppen geändert“ in jeder der sieben Mutationen wäre die
-   * naheliegende Lösung und die brüchigere: Die achte Stelle vergisst es. Der
-   * Abdruck vergleicht stattdessen den Stand mit dem, aus dem das Buch gebaut
-   * wurde, und kann gar nicht veralten. Nicht enthalten sind `origin` und
-   * `reason` – sie sagen etwas über die Herkunft des Vorschlags, nicht über das
-   * Buch.
-   */
-  private groupFingerprint(): string {
-    const zeilen = [...this.groups]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((g) =>
-        [
-          g.id,
-          g.active ? '1' : '0',
-          g.opener === undefined ? '-' : g.opener ? '1' : '0',
-          g.coverPhotoId ?? '-',
-          g.title,
-          g.photoIds.join(','),
-        ].join('|'),
-      );
-
-    // FNV-1a: kurz, stabil und ohne Abhängigkeit. Kollisionen sind hier
-    // folgenlos – im schlimmsten Fall bleibt ein Hinweis aus.
-    let hash = 0x811c9dc5;
-    const text = zeilen.join('\n');
-    for (let i = 0; i < text.length; i++) {
-      hash ^= text.charCodeAt(i);
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-    return hash.toString(36);
+    return gruppen.suggestGroups(this, opts);
   }
 
   /**
@@ -917,17 +614,11 @@ export class Project {
    * Auskunft.
    */
   groupsPending(): boolean {
-    return this.groupStamp !== undefined && this.groupStamp !== this.groupFingerprint();
+    return this.groupStamp !== undefined && this.groupStamp !== gruppen.groupFingerprint(this);
   }
 
-  /** Gruppen in Buchreihenfolge, also nach dem frühesten enthaltenen Foto. */
   sortedGroups(): PhotoGroup[] {
-    const dateOf = (id: PhotoId) => {
-      const photo = this.photos.get(id);
-      if (!photo) return undefined;
-      return resolveEffectiveDate(photo, this.overrides[id]).value ?? undefined;
-    };
-    return sortGroupsChronologically(this.groups, dateOf);
+    return gruppen.sortedGroups(this);
   }
 
   createGroup(title: string, photoIds: PhotoId[]): PhotoGroup[] {
@@ -988,106 +679,17 @@ export class Project {
 
   // ------------------------------------------------------- Layout-Dokument
 
-  /** Die Buchaufteilung als lesbares, bearbeitbares JSON. */
   exportLayout(): LayoutDocument {
-    const platziert = new Set<PhotoId>();
-    for (const spread of this.spreads) {
-      for (const slot of spread.slots) if (slot.photoId) platziert.add(slot.photoId);
-    }
-    const unplaced = [...this.photos.keys()].filter((id) => !platziert.has(id));
-
-    return exportLayout({
-      spreads: this.spreads,
-      photos: this.photos,
-      profile: this.profile,
-      settings: {
-        targetPages: this.settings.targetPages,
-        chapterOpeners: this.settings.chapterOpeners,
-        timeline: this.settings.timeline,
-        groupOpeners: this.settings.groupOpeners,
-      },
-      yearEvents: this.yearEvents,
-      unplaced,
-      groups: this.sortedGroups(),
-    });
+    return layoutDokument.exportLayout(this);
   }
 
-  /**
-   * Übernimmt ein von Hand bearbeitetes Layout.
-   *
-   * Vorlagen und Ausschnitte werden neu berechnet, weil sich beim Umhängen
-   * regelmäßig die Zahl der Bilder je Doppelseite ändert. Was sich nicht
-   * auflösen lässt, wird gemeldet statt stillschweigend verworfen.
-   */
   applyLayout(raw: unknown): {
     ok: boolean;
     issues: LayoutIssue[];
     problems: { index: number; photoCount: number; message: string }[];
     spreadCount: number;
   } {
-    const parsed = parseLayout(raw, this.photos);
-    if (!parsed.ok) {
-      return { ok: false, issues: parsed.issues, problems: [], spreadCount: 0 };
-    }
-
-    // Festgehaltene Seiten trägt das Dokument nur als Kennung; ihren Inhalt
-    // kennt allein der Projektstand. Eine Kennung, zu der es keine Seite mehr
-    // gibt, wird gemeldet statt stillschweigend übergangen – sonst verschwände
-    // eine selbst gebaute Seite durch einen Tippfehler.
-    const behalten = new Map(this.spreads.filter((s) => s.locked).map((s) => [s.id, s]));
-    const issues = [...parsed.issues];
-    const eingaben = parsed.spreads.map((eintrag, i) => {
-      if (eintrag.keepId === undefined) return eintrag;
-      const seite = behalten.get(eintrag.keepId);
-      if (!seite) {
-        issues.push({
-          severity: 'error' as const,
-          spread: i + 1,
-          message: `Keine festgehaltene Doppelseite mit der Kennung "${eintrag.keepId}".`,
-        });
-        return eintrag;
-      }
-      const { keepId: _kennung, ...rest } = eintrag;
-      return { ...rest, keep: seite };
-    });
-
-    if (issues.some((i) => i.severity === 'error')) {
-      return { ok: false, issues, problems: [], spreadCount: 0 };
-    }
-
-    const rebuilt = rebuildSpreads({
-      spreads: eingaben,
-      photos: this.photos,
-      profile: this.profile,
-      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
-    });
-
-    if (rebuilt.problems.length > 0) {
-      // Doppelseiten ohne passende Vorlage würden verschwinden – das wäre ein
-      // stiller Datenverlust. Lieber gar nichts übernehmen.
-      return {
-        ok: false,
-        issues,
-        problems: rebuilt.problems,
-        spreadCount: rebuilt.spreads.length,
-      };
-    }
-
-    this.spreads = rebuilt.spreads;
-    if (parsed.settings?.targetPages) this.settings.targetPages = parsed.settings.targetPages;
-    if (parsed.settings?.chapterOpeners !== undefined) {
-      this.settings.chapterOpeners = parsed.settings.chapterOpeners;
-    }
-    if (parsed.settings?.timeline !== undefined) this.settings.timeline = parsed.settings.timeline;
-    if (parsed.settings?.groupOpeners !== undefined) {
-      this.settings.groupOpeners = parsed.settings.groupOpeners;
-    }
-    // Ereignisse dürfen im Dokument bearbeitet werden. Sie wirken erst beim
-    // nächsten Erzeugen, weil sie auf der Auftaktseite stehen, die der
-    // Neuaufbau nicht anfasst.
-    if (parsed.yearEvents) this.yearEvents = parsed.yearEvents;
-
-    return { ok: true, issues, problems: [], spreadCount: rebuilt.spreads.length };
+    return layoutDokument.applyLayout(this, raw);
   }
 
   // --------------------------------------------------------- Eigene Seiten
@@ -1114,45 +716,9 @@ export class Project {
     at: number,
     opts: { templateId?: string; title?: string } = {},
   ): { ok: boolean; error?: string; index: number } {
-    const stelle = Math.min(Math.max(0, Math.trunc(at)), this.spreads.length);
-    const templateId = opts.templateId ?? BLANK_TEMPLATE_ID;
-
-    const template = templateById(templateId);
-    if (!template) return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, index: -1 };
-
-    const titel = opts.title?.trim();
-    const textSlot = template.textSlots?.[0];
-    const id = `eigen-${Date.now().toString(36)}-${stelle}`;
-
-    // Der Nachbar, an dem sich die neue Seite ausrichtet: die Seite, vor der sie
-    // steht, sonst die davor. Am leeren Buch gibt es keinen – dann gelten die
-    // Vorgaben.
-    const nachbar = this.spreads[stelle] ?? this.spreads[stelle - 1];
-
-    const spread: Spread = {
-      id,
-      index: stelle,
-      templateId,
-      slots: template.slots.map((slot) => ({
-        slotId: slot.id,
-        photoId: null,
-        crop: { ...FULL_CROP },
-      })),
-      locked: true,
-      ...(nachbar?.background !== undefined ? { background: nachbar.background } : {}),
-      ...(nachbar?.timeline !== undefined ? { timeline: nachbar.timeline } : {}),
-      ...(titel && textSlot
-        ? {
-            texts: [{ id: `${id}-text`, role: textSlot.role, content: titel, slotId: textSlot.id }],
-          }
-        : {}),
-      ...(this.ankerFuer(stelle) ?? {}),
-    };
-
-    this.spreads.splice(stelle, 0, spread);
-    this.spreads.forEach((s, i) => (s.index = i));
-    this.refreshReport();
-    return { ok: true, index: stelle };
+    const ergebnis = seiten.insertSpread(this, at, opts);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
   /**
@@ -1175,60 +741,9 @@ export class Project {
     atPage: number,
     opts: { halfId?: string; title?: string } = {},
   ): { ok: boolean; error?: string; index: number; bericht?: SinglePageResult['bericht'] } {
-    const halfId = opts.halfId ?? HALF_BLANK_ID;
-    const stelle = Math.min(Math.max(0, Math.trunc(atPage)), this.spreads.length * 2);
-    const id = `eigen-${Date.now().toString(36)}-${stelle}`;
-    const titel = opts.title?.trim();
-
-    // Die Nachbarseite gibt die Hintergrundfarbe: Eine weiße Seite mitten im
-    // Jahrgang 2019 wäre ein Loch in den Jahresfarben.
-    const nachbar = this.spreads[Math.floor(stelle / 2)] ?? this.spreads[this.spreads.length - 1];
-
-    const ergebnis = insertSinglePage(this.spreads, {
-      atPage: stelle,
-      halfId,
-      id,
-      ...(nachbar?.background !== undefined ? { background: nachbar.background } : {}),
-      ...(titel
-        ? {
-            blocks: [
-              {
-                id: `${id}-titel`,
-                content: titel,
-                // Auf der linken Halbseite, im unteren Drittel – dieselbe Lage
-                // wie der Titel eines Gruppenauftakts. Verschieben lässt er
-                // sich danach mit der Maus.
-                rect: { x: 0.08, y: 0.62, w: 0.34, h: 0.09 },
-                weight: 'semibold' as const,
-                fontSizePt: 28,
-                align: 'left' as const,
-              },
-            ],
-          }
-        : {}),
-    });
-
-    if (!ergebnis.ok) {
-      return { ok: false, ...(ergebnis.error ? { error: ergebnis.error } : {}), index: -1 };
-    }
-
-    this.spreads = ergebnis.spreads;
-    const index = this.spreads.findIndex((s) => s.id === id);
-
-    // Anker auf das erste Bild dahinter: Beim Neuanordnen soll das Blatt dort
-    // wieder auftauchen, nicht an einer Zahl.
-    const anker = this.ankerFuer(index + 1);
-    const eigene = new Set(this.spreads[index]?.slots.map((s) => s.photoId));
-    if (anker && !eigene.has(anker.anchor.photoId)) {
-      this.spreads[index]!.anchor = anker.anchor;
-    }
-
-    this.refreshReport();
-    return {
-      ok: true,
-      index,
-      ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
-    };
+    const ergebnis = seiten.insertSinglePage(this, atPage, opts);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
   /**
@@ -1250,137 +765,23 @@ export class Project {
     photoCount: number;
     bericht?: SinglePageResult['bericht'];
   } {
-    const ergebnis = removeSinglePage(this.spreads, atPage);
-    if (!ergebnis.ok) {
-      return {
-        ok: false,
-        ...(ergebnis.error ? { error: ergebnis.error } : {}),
-        photoCount: 0,
-      };
-    }
-
-    this.spreads = ergebnis.spreads;
-    this.refreshReport();
-    return {
-      ok: true,
-      photoCount: ergebnis.photoCount,
-      ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
-    };
+    const ergebnis = seiten.removeSinglePage(this, atPage);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
-  /**
-   * Der Anker für eine Seite an dieser Stelle.
-   *
-   * Gesucht wird das erste Foto der Doppelseite, vor der die neue steht – dann
-   * folgt sie ihm auch dann, wenn das Buch neu gebaut wird und dieses Bild
-   * woanders landet. Erst wenn dahinter kein Bild mehr kommt (das Buchende),
-   * hängt sie sich hinter das letzte davor. Findet sich gar nichts, bleibt es
-   * beim Index – siehe `insertKept`.
-   */
-  private ankerFuer(stelle: number): { anchor: SpreadAnchor } | undefined {
-    const erstesFoto = (spread: Spread | undefined): PhotoId | undefined =>
-      spread?.slots.find((s) => s.photoId)?.photoId ?? undefined;
-
-    for (let i = stelle; i < this.spreads.length; i++) {
-      const photoId = erstesFoto(this.spreads[i]);
-      if (photoId) return { anchor: { photoId, where: 'before' } };
-    }
-    for (let i = stelle - 1; i >= 0; i--) {
-      const photoId = erstesFoto(this.spreads[i]);
-      if (photoId) return { anchor: { photoId, where: 'after' } };
-    }
-    return undefined;
-  }
-
-  /**
-   * Nimmt eine Doppelseite aus dem Buch.
-   *
-   * Ihre Bilder gehen nicht verloren: Der Fotopool ist die Differenz zwischen
-   * Bestand und platzierten Bildern, sie liegen also unmittelbar danach dort.
-   * Wie viele es waren, steht in der Rückgabe – die Oberfläche fragt damit
-   * vorher nach, denn eine Seite mit acht Bildern löscht man nicht versehentlich.
-   */
   removeSpread(index: number): { ok: boolean; error?: string; photoCount: number } {
-    const spread = this.spreads[index];
-    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', photoCount: 0 };
-
-    const photoCount = spread.slots.filter((s) => s.photoId).length;
-    this.spreads.splice(index, 1);
-    this.spreads.forEach((s, i) => (s.index = i));
-    this.refreshReport();
-    return { ok: true, photoCount };
+    const ergebnis = seiten.removeSpread(this, index);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
-  /**
-   * Hält eine Doppelseite fest oder gibt sie wieder frei.
-   *
-   * Beim Festhalten wird der Anker nachgezogen: Er soll auf den Nachbarn zeigen,
-   * den die Seite *jetzt* hat, nicht auf den von damals. Beim Freigeben bleibt er
-   * stehen – er kostet nichts und wäre beim nächsten Festhalten wieder richtig.
-   */
   setSpreadLocked(index: number, locked: boolean): { ok: boolean; error?: string } {
-    const spread = this.spreads[index];
-    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
-
-    if (!locked) {
-      delete spread.locked;
-      return { ok: true };
-    }
-
-    spread.locked = true;
-    // Der eigene Anker darf nicht auf ein Bild dieser Seite zeigen: Beim
-    // Erzeugen liegt es dann auf keiner Flussseite, und der Anker fände nichts.
-    const eigene = new Set(spread.slots.map((s) => s.photoId));
-    const anker = this.ankerFuer(index + 1);
-    if (anker && !eigene.has(anker.anchor.photoId)) spread.anchor = anker.anchor;
-    else delete spread.anchor;
-    return { ok: true };
+    return seiten.setSpreadLocked(this, index, locked);
   }
 
-  /**
-   * Formen, unter denen eine neu eingefügte Seite wählen kann.
-   *
-   * Zwei Sorten in einer Liste, unterschieden durch `scope`: ganze Doppelseiten
-   * aus der Bibliothek und einzelne Buchseiten aus den eigenen Halbseiten. Die
-   * Oberfläche braucht beides nebeneinander, weil die Wahl „eine Seite oder
-   * zwei" vor allen anderen kommt.
-   */
-  insertChoices(): {
-    id: string;
-    name: string;
-    scope: 'spread' | 'page';
-    slotCount: number;
-    slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
-    hasTitle: boolean;
-  }[] {
-    const geometrie = (s: { x: number; y: number; w: number; h: number; bleed?: boolean }) => ({
-      x: s.x,
-      y: s.y,
-      w: s.w,
-      h: s.h,
-      ...(s.bleed ? { bleed: true } : {}),
-    });
-
-    return [
-      ...ownHalves().map((h) => ({
-        id: h.id,
-        name: h.slots.length === 0 ? 'Einzelne Seite, leer' : 'Einzelne Seite mit einem Bild',
-        scope: 'page' as const,
-        slotCount: h.slots.length,
-        slots: h.slots.map(geometrie),
-        // Auf einer einzelnen Seite entsteht der Titel als Textblock – frei
-        // gesetzt, in jeder Größe. Ein Textplatz der Vorlage gibt es dort nicht.
-        hasTitle: true,
-      })),
-      ...insertTemplates().map((t) => ({
-        id: t.id,
-        name: t.name,
-        scope: 'spread' as const,
-        slotCount: t.slots.length,
-        slots: t.slots.map(geometrie),
-        hasTitle: (t.textSlots?.length ?? 0) > 0,
-      })),
-    ];
+  insertChoices() {
+    return seiten.insertChoices();
   }
 
   // ------------------------------------------------- Punktuelle Änderungen
@@ -1589,238 +990,31 @@ export class Project {
     return result;
   }
 
-  /**
-   * Setzt eine andere Vorlage für eine Doppelseite.
-   *
-   * Die Fotos bleiben dieselben und werden den neuen Plätzen zugeordnet – nach
-   * Passung, nicht nach ihrer bisherigen Reihenfolge. Hat die Vorlage weniger
-   * Plätze, wandern die überzähligen Bilder in den Pool; hat sie mehr, bleiben
-   * Plätze leer. Beides ist erlaubt, denn genau darum geht es beim Wechsel von
-   * Hand: Man will die Seite anders aufteilen, nicht dieselbe Aufteilung mit
-   * anderen Kanten.
-   */
   setSpreadTemplate(
     index: number,
     templateId: string,
   ): { ok: boolean; error?: string; leftover: PhotoId[] } {
-    const spread = this.spreads[index];
-    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
-    if (!templateById(templateId)) {
-      return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, leftover: [] };
-    }
-
-    const photos = spread.slots
-      .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
-      .filter((p): p is Photo => p !== undefined);
-
-    const angeordnet = layoutSpread({
-      photos,
-      profile: this.profile,
-      templateId,
-      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
-    });
-    if (!angeordnet) {
-      return { ok: false, error: `Vorlage ${templateId} lässt sich nicht anwenden`, leftover: [] };
-    }
-
-    spread.templateId = angeordnet.templateId;
-    spread.slots = angeordnet.slots;
-    this.refreshReport();
-    return { ok: true, leftover: angeordnet.leftover };
+    const ergebnis = anordnung.setSpreadTemplate(this, index, templateId);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
-  /**
-   * Setzt die Anordnung einer einzelnen Buchseite; die andere bleibt stehen.
-   *
-   * Die Gegenseite muss dafür als Halbseite benannt sein – und genau das ist
-   * nicht immer der Fall. Bei justierten Zeilen liegen die Rechtecke über die
-   * ganze Satzbreite, es gibt dort keine Halbseite, die sie beschreibt. Vorher
-   * scheiterte der Griff daran und die Oberfläche sagte, die Doppelseite reiche
-   * über den Falz; sie war damit nicht mehr seitenweise zu ändern.
-   *
-   * Jetzt wird für die Gegenseite eine Anordnung gerechnet: die Halbseite, die
-   * ihre Bilder am besten trägt (`choosePairFor`). Das ist eine
-   * Layoutentscheidung, aber die verlangte – wer eine Seite neu anordnet, will
-   * die andere nicht verlieren.
-   */
   setSpreadHalf(
     index: number,
     side: 'left' | 'right',
     halfId: string,
   ): { ok: boolean; error?: string; leftover: PhotoId[] } {
-    const spread = this.spreads[index];
-    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
-    if (!halfPageById(halfId) && !isOwnHalf(halfId)) {
-      return { ok: false, error: `Anordnung ${halfId} gibt es nicht`, leftover: [] };
-    }
-
-    const template = templateById(spread.templateId);
-    const bekannt = template ? halvesOfTemplate(template) : {};
-    const gegenId = side === 'left' ? bekannt.right : bekannt.left;
-
-    // Wie viele Bilder auf der Gegenseite liegen. Über die Geometrie und nicht
-    // über die Slotkennung: Bei justierten Zeilen sagt allein das Rechteck, auf
-    // welcher Buchhälfte ein Bild steht.
-    const geo = new Map((template?.slots ?? []).map((s) => [s.id, s]));
-    const gegenBilder = spread.slots.filter((s) => {
-      if (!s.photoId) return false;
-      const platz = s.rect ?? geo.get(s.slotId);
-      if (!platz) return false;
-      const rechts = platz.x + platz.w / 2 >= 0.5;
-      return side === 'left' ? rechts : !rechts;
-    }).length;
-
-    const photos = spread.slots
-      .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
-      .filter((p): p is Photo => p !== undefined);
-
-    const paarId = gegenId
-      ? side === 'left'
-        ? pairId(halfId, gegenId)
-        : pairId(gegenId, halfId)
-      : choosePairFor({
-          side,
-          halfId,
-          photos,
-          restCount: gegenBilder,
-          profile: this.profile,
-          weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
-        });
-
-    if (!paarId) {
-      return {
-        ok: false,
-        error: `Für ${gegenBilder} Bilder auf der Gegenseite gibt es keine Anordnung`,
-        leftover: [],
-      };
-    }
-
-    return this.setSpreadTemplate(index, paarId);
+    const ergebnis = anordnung.setSpreadHalf(this, index, side, halfId);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
-  /**
-   * Die Anordnungen, unter denen eine einzelne Seite wählen kann.
-   *
-   * Der Vorlagenwechsel betrifft sonst beide Seiten, und das hilft nicht: Man
-   * will die eine Seite ändern, auf der das Bild falsch steht. Zurückgegeben
-   * werden alle Halbseiten in Linksform samt Slotgeometrie; für die rechte
-   * Seite spiegelt sie die Oberfläche beim Zeichnen, so wie es die Engine beim
-   * Zusammensetzen tut.
-   */
-  halfChoices(index: number): {
-    halves: {
-      id: string;
-      slotCount: number;
-      slots: { x: number; y: number; w: number; h: number }[];
-    }[];
-    current: { left?: string; right?: string };
-    /** Bilder auf der linken und rechten Seite dieser Doppelseite. */
-    counts: { left: number; right: number };
-  } {
-    const spread = this.spreads[index];
-    if (!spread) return { halves: [], current: {}, counts: { left: 0, right: 0 } };
-
-    const template = templateById(spread.templateId);
-    const belegt = (pruefe: (x: number, w: number) => boolean) =>
-      (template?.slots ?? []).filter((s, i) => pruefe(s.x, s.w) && spread.slots[i]?.photoId).length;
-
-    return {
-      halves: halfPages().map((h) => ({
-        id: h.id,
-        slotCount: h.slots.length,
-        slots: h.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
-      })),
-      current: template ? halvesOfTemplate(template) : {},
-      counts: {
-        left: belegt((x, w) => x + w <= 0.5001),
-        right: belegt((x) => x >= 0.4999),
-      },
-    };
+  halfChoices(index: number) {
+    return anordnung.halfChoices(this, index);
   }
 
-  /**
-   * Die Vorlagen, unter denen eine Doppelseite wählen kann.
-   *
-   * Nach Bilderzahl sortiert und mit der Slotgeometrie, damit die Oberfläche
-   * jede Anordnung als Skizze zeigen kann statt als Kennung. Vorlagen mit
-   * Überschriftenstreifen bleiben draußen, solange die Seite keinen Text trägt –
-   * der Streifen bliebe leer und die Bilder stünden kleiner.
-   */
-  templateChoices(index: number): {
-    id: string;
-    name: string;
-    slotCount: number;
-    slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
-    current: boolean;
-  }[] {
-    const spread = this.spreads[index];
-    if (!spread) return [];
-
-    const hatText = (spread.texts ?? []).length > 0;
-    const belegt = spread.slots.filter((s) => s.photoId).length;
-    const meta = templateMeta(spread.templateId);
-
-    // Kapitelauftakte und Gruppenauftakte bleiben unter sich: Ihre Vorlagen
-    // tragen Text und werden gezielt vergeben, nicht über die Slotzahl gefunden.
-    const auswahl = meta.chapterOnly
-      ? chapterTemplates().filter((t) => t.slots.length > 0)
-      : allTemplates().filter((t) => {
-          const m = templateMeta(t.id);
-          if (m.chapterOnly || t.tags?.includes('veraltet')) return false;
-          if (!hatText && t.tags?.includes('mit-titel')) return false;
-          // Die leere Vorlage nur, wo nichts liegt: Auf eine Seite mit acht
-          // Bildern angewandt schickt sie alle acht in den Pool, und die
-          // Skizze – ein leeres Rechteck – sagt das niemandem vorher. Auf einer
-          // selbst gebauten Seite ist sie dagegen der Rückweg vom Auftakt.
-          if (isBlank(t.id) && belegt > 0) return false;
-          return true;
-        });
-
-    const eintraege = auswahl.map((t) => ({
-      id: t.id,
-      name: t.name,
-      slotCount: t.slots.length,
-      slots: t.slots.map((s) => ({
-        x: s.x,
-        y: s.y,
-        w: s.w,
-        h: s.h,
-        ...(s.bleed ? { bleed: true } : {}),
-      })),
-      current: t.id === spread.templateId,
-    }));
-
-    // Justierte Zeilen zur Wahl stellen, aber mit der Skizze dieser Bilder:
-    // Anders als eine Vorlage hat sie keine Form, bevor man weiß, was drin
-    // liegt. Die Trägervorlage würde ihr Rückfallgitter zeigen und damit etwas
-    // versprechen, was hinterher anders aussieht.
-    if (
-      !meta.chapterOnly &&
-      belegt >= JUSTIFIED_MIN_PHOTOS &&
-      belegt <= JUSTIFIED_MAX_PHOTOS &&
-      !hatText
-    ) {
-      const photos = spread.slots
-        .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
-        .filter((p): p is Photo => p !== undefined);
-      const rects = justifiedRects({ photos, profile: this.profile });
-      if (rects.length === photos.length) {
-        eintraege.push({
-          id: justifiedTemplateId(belegt),
-          name: 'Justierte Zeilen',
-          slotCount: belegt,
-          slots: rects,
-          current: isJustified(spread.templateId),
-        });
-      }
-    }
-
-    return eintraege.sort(
-      (a, b) =>
-        Math.abs(a.slotCount - belegt) - Math.abs(b.slotCount - belegt) ||
-        a.slotCount - b.slotCount ||
-        a.id.localeCompare(b.id),
-    );
+  templateChoices(index: number) {
+    return anordnung.templateChoices(this, index);
   }
 
   /**
@@ -1978,89 +1172,24 @@ export class Project {
 
   // ---------------------------------------------------------------- Umschlag
 
-  /**
-   * Seitenzahl des Innenteils – und damit die Rückenbreite.
-   *
-   * Jede Doppelseite sind zwei Seiten. Solange die endgültige Seitenzahl nicht
-   * feststeht (#4), ändert sich mit jedem Neuaufbau auch das Cover; deshalb
-   * wird es nie gespeichert, sondern immer neu gerechnet.
-   */
   pageCount(): number {
-    return this.spreads.length * 2;
+    return umschlag.pageCount(this);
   }
 
-  /**
-   * Das Cover mit den Vorgaben aus dem Projekt.
-   *
-   * Der Titel ist der Name des Kindes, der Untertitel der Zeitraum des
-   * Bestands, der Rückentitel beides zusammen – die schlichteste Fassung, die
-   * ein Buchrücken im Regal überhaupt braucht. Alles davon ist überschreibbar;
-   * gespeicherte Werte haben Vorrang.
-   */
   coverDesign(): CoverDesign {
-    const jahre = this.structure.chapters.map((c) => c.year).sort((a, b) => a - b);
-    const von = jahre[0];
-    const bis = jahre[jahre.length - 1];
-    const zeitraum = von === undefined ? undefined : von === bis ? `${von}` : `${von} – ${bis}`;
-    const titel = this.settings.subjectName ?? 'Fotobuch';
-    const vorschlag = this.coverCandidates(1)[0];
-
-    return {
-      title: titel,
-      ...(zeitraum ? { subtitle: zeitraum } : {}),
-      spineText: zeitraum ? `${titel} · ${zeitraum}` : titel,
-      // Ein Titelbild wird vorbelegt, damit der Umschlag ohne Eingabe
-      // druckbar ist. Der Benutzer wählt in der Coveransicht ein anderes.
-      ...(vorschlag ? { frontPhotoId: vorschlag.photoId } : {}),
-      ...this.cover,
-    };
+    return umschlag.coverDesign(this);
   }
 
   renderCover(): RenderedCover {
-    return renderCover(this.coverDesign(), {
-      profile: this.profile,
-      pageCount: this.pageCount(),
-      photos: this.photos,
-    });
+    return umschlag.renderCover(this);
   }
 
-  /** Übernimmt Änderungen am Umschlag. Leerer Text löscht das Feld. */
   updateCover(patch: Partial<CoverDesign>): CoverDesign {
-    const naechste: CoverDesign = { ...this.cover, ...patch };
-    for (const key of ['title', 'subtitle', 'spineText', 'backText'] as const) {
-      if (naechste[key] === '') delete naechste[key];
-    }
-    this.cover = naechste;
-    return this.coverDesign();
+    return umschlag.updateCover(this, patch);
   }
 
-  /**
-   * Bilder, die als Titelbild in Frage kommen.
-   *
-   * Die Hauptbilder der aktiven Fotogruppen zuerst: Sie sind vom Benutzer
-   * bestätigt und damit die beste Auswahl, die das Projekt kennt. Erst wenn es
-   * keine gibt, wird auf die ersten Bilder der Doppelseiten zurückgefallen.
-   */
   coverCandidates(limit = 24): { photoId: PhotoId; label: string }[] {
-    const kandidaten: { photoId: PhotoId; label: string }[] = [];
-    const gesehen = new Set<PhotoId>();
-
-    const nimm = (id: PhotoId | null | undefined, label: string): void => {
-      if (!id || gesehen.has(id) || !this.photos.has(id)) return;
-      gesehen.add(id);
-      kandidaten.push({ photoId: id, label });
-    };
-
-    for (const g of this.sortedGroups()) {
-      if (!g.active) continue;
-      nimm(g.coverPhotoId ?? g.photoIds[0], g.title);
-    }
-    for (const [i, spread] of this.spreads.entries()) {
-      if (kandidaten.length >= limit) break;
-      nimm(spread.slots.find((s) => s.photoId)?.photoId, `Doppelseite ${i + 1}`);
-    }
-
-    return kandidaten.slice(0, limit);
+    return umschlag.coverCandidates(this, limit);
   }
 
   photo(id: PhotoId): Photo | undefined {
@@ -2146,88 +1275,16 @@ export class Project {
     return result;
   }
 
-  /**
-   * Wo im Buch beginnt welche Gruppe?
-   *
-   * Für die Übersicht: Sie markiert die erste Doppelseite jeder Gruppe, so wie
-   * sie es für die Jahre tut.
-   */
   groupMarks(): { spreadIndex: number; id: string; title: string }[] {
-    const marks: { spreadIndex: number; id: string; title: string }[] = [];
-    for (const [id, spreadIndex] of this.firstSpreadOfGroup()) {
-      // Nur was das Buch gliedert: Der abgeschaltete Wohnort käme sonst als
-      // Marke über die halbe Übersicht.
-      const gruppe = this.groups.find((g) => g.id === id);
-      if (gruppe?.active) marks.push({ spreadIndex, id, title: gruppe.title });
-    }
-    return marks.sort((a, b) => a.spreadIndex - b.spreadIndex);
+    return gruppen.groupMarks(this);
   }
 
-  /**
-   * Erste Doppelseite jeder Gruppe, an ihrer Kennung.
-   *
-   * Auch abgeschaltete Gruppen sind dabei: Sie gliedern das Buch zwar nicht,
-   * ihre Fotos stehen aber darin, und die Gruppenansicht soll auch zu ihnen
-   * sagen können, wo man sie findet. Gruppen ohne Foto im Buch fehlen – ihre
-   * Bilder liegen im Pool.
-   */
   firstSpreadOfGroup(): Map<string, number> {
-    const gruppeVon = new Map<PhotoId, string>();
-    for (const g of this.groups) {
-      for (const id of g.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, g.id);
-    }
-
-    const erste = new Map<string, number>();
-    this.spreads.forEach((spread, i) => {
-      const bilder = [
-        ...spread.slots.map((s) => s.photoId),
-        ...(spread.backgroundPhotoId ? [spread.backgroundPhotoId] : []),
-      ];
-      for (const photoId of bilder) {
-        if (!photoId) continue;
-        const gruppenId = gruppeVon.get(photoId);
-        if (gruppenId !== undefined && !erste.has(gruppenId)) erste.set(gruppenId, i);
-      }
-    });
-
-    return erste;
+    return gruppen.firstSpreadOfGroup(this);
   }
 
-  /**
-   * Die Gruppen einer Doppelseite, die stärkste zuerst.
-   *
-   * Dieselbe Rangfolge wie beim Zeitstrahl-Label: Die Gruppe mit den meisten
-   * Fotos benennt die Seite. Die Oberfläche zeigt sie deshalb an erster Stelle
-   * und kann von dort in die Gruppenansicht springen – bislang war nicht
-   * erkennbar, woher ein Name auf einer Doppelseite stammt.
-   */
   spreadGroups(index: number): { id: string; title: string; active: boolean; count: number }[] {
-    const spread = this.spreads[index];
-    if (!spread) return [];
-
-    const gruppeVon = new Map<PhotoId, PhotoGroup>();
-    for (const g of this.groups) {
-      for (const id of g.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, g);
-    }
-
-    const zaehler = new Map<string, { group: PhotoGroup; count: number }>();
-    for (const slot of spread.slots) {
-      if (!slot.photoId) continue;
-      const group = gruppeVon.get(slot.photoId);
-      if (!group) continue;
-      const bestand = zaehler.get(group.id);
-      if (bestand) bestand.count++;
-      else zaehler.set(group.id, { group, count: 1 });
-    }
-
-    return [...zaehler.values()]
-      .sort((a, b) => b.count - a.count)
-      .map(({ group, count }) => ({
-        id: group.id,
-        title: group.title,
-        active: group.active,
-        count,
-      }));
+    return gruppen.spreadGroups(this, index);
   }
 
   /**
