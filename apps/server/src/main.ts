@@ -140,7 +140,7 @@ app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
     return {
       ok: true,
       touched: result.touched,
-      spreads: result.touched.map((index) => project.render(index)),
+      spreads: result.touched.map((index) => spreadAntwort(index)),
       report: project.lastReport,
     };
   },
@@ -178,7 +178,7 @@ app.patch<{ Params: { index: string }; Body: { templateId?: string } }>(
       // Was keinen Platz mehr fand, liegt jetzt im Pool. Die Oberfläche sagt
       // es, statt die Bilder stillschweigend verschwinden zu lassen.
       leftover: result.leftover,
-      spread: project.render(index),
+      spread: spreadAntwort(index),
       report: project.lastReport,
     };
   },
@@ -317,22 +317,37 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index/photos', async (req,
   return { photos: project.photoViewsOf(ids) };
 });
 
-app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
-  const index = Number(req.params.index);
+/**
+ * Eine gerenderte Doppelseite, wie die Oberfläche sie braucht.
+ *
+ * Das Rendered Spread Model plus drei Auskünfte, die nicht hineingehören:
+ * `timelineOverride` ist die Entscheidung des Benutzers zu dieser Doppelseite,
+ * `groups` sagt, welche Fotogruppen hier liegen, `blocks` liefert die Rohdaten
+ * der Textblöcke – im RSM stehen sie als Zeilen mit fertiger Geometrie, zum
+ * Bearbeiten braucht es Kasten, Winkel und Größe. Die Renderer sehen nichts
+ * davon.
+ *
+ * **Eine Funktion für alle Antworten.** Jeder Endpunkt, der eine Doppelseite
+ * zurückgibt, muss dieselbe Form liefern: Die Oberfläche ersetzt damit ihren
+ * Zustand. Gab ein Schreibvorgang nur das nackte RSM zurück, verschwanden die
+ * Textblöcke aus der Ansicht, sobald man einen anlegte – und mit ihnen die
+ * Auswahl, an der jede weitere Änderung hängt.
+ */
+function spreadAntwort(index: number) {
   const rendered = project.render(index);
-  if (!rendered) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
-  // `timelineOverride` und `groups` sind kein Teil des Rendered Spread Model:
-  // Das eine ist die Entscheidung des Benutzers zu dieser Doppelseite, das
-  // andere die Auskunft, welche Gruppen hier liegen – die Oberfläche verlinkt
-  // damit in die Gruppenansicht. Die Renderer sehen beides nie.
+  if (!rendered) return undefined;
   return {
     ...rendered,
     timelineOverride: project.spreads[index]?.timeline ?? null,
     groups: project.spreadGroups(index),
-    // Die Rohdaten der Textblöcke: Im RSM stehen sie als Zeilen mit fertiger
-    // Geometrie, die Oberfläche braucht Kasten, Winkel und Größe zum Bearbeiten.
     blocks: project.spreads[index]?.blocks ?? [],
   };
+}
+
+app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
+  const antwort = spreadAntwort(Number(req.params.index));
+  if (!antwort) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
+  return antwort;
 });
 
 /**
@@ -528,7 +543,7 @@ app.patch<{
   if (!result.ok) return reply.code(404).send({ error: result.error });
 
   void project.save();
-  return { ok: true, spread: project.render(Number(req.params.index)) };
+  return { ok: true, spread: spreadAntwort(Number(req.params.index)) };
 });
 
 /**
@@ -547,7 +562,7 @@ app.patch<{
   if (!result.ok) return reply.code(404).send({ error: result.error });
 
   void project.save();
-  return { ok: true, spread: project.render(index) };
+  return { ok: true, spread: spreadAntwort(index) };
 });
 
 /**
@@ -566,7 +581,7 @@ app.patch<{
   if (!result.ok) return reply.code(404).send({ error: result.error });
 
   void project.save();
-  return { ok: true, spread: project.render(index) };
+  return { ok: true, spread: spreadAntwort(index) };
 });
 
 // -------------------------------------------------------------- Textblöcke
@@ -585,7 +600,7 @@ app.post<{ Params: { index: string }; Body?: Partial<TextBlock> }>(
     if (!block) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
 
     void project.save();
-    return { ok: true, block, spread: project.render(index) };
+    return { ok: true, block, spread: spreadAntwort(index) };
   },
 );
 
@@ -597,7 +612,7 @@ app.patch<{ Params: { index: string; id: string }; Body?: Partial<TextBlock> }>(
     if (!result.ok) return reply.code(404).send({ error: result.error });
 
     void project.save();
-    return { ok: true, spread: project.render(index) };
+    return { ok: true, spread: spreadAntwort(index) };
   },
 );
 
@@ -609,7 +624,7 @@ app.delete<{ Params: { index: string; id: string } }>(
     if (!result.ok) return reply.code(404).send({ error: result.error });
 
     void project.save();
-    return { ok: true, spread: project.render(index) };
+    return { ok: true, spread: spreadAntwort(index) };
   },
 );
 
@@ -622,7 +637,7 @@ app.delete<{ Params: { index: string; slotId: string } }>(
     if (!result.ok) return reply.code(404).send({ error: result.error });
 
     void project.save();
-    return { ok: true, spread: project.render(index) };
+    return { ok: true, spread: spreadAntwort(index) };
   },
 );
 
@@ -660,7 +675,7 @@ app.delete<{ Params: { id: string } }>('/api/photos/:id', async (req, reply) => 
       photoCount: project.photos.size,
       // Fertig gerendert wie bei `/api/book/move`: Die Oberfläche zeigt die
       // Lücke sofort, ohne nachzufragen.
-      rendered: ergebnis.spreads.map((i) => ({ index: i, spread: project.render(i) })),
+      rendered: ergebnis.spreads.map((i) => ({ index: i, spread: spreadAntwort(i) })),
     };
   } catch (err) {
     // Etwa: die Quelle ist gerade nicht eingehängt. Dann ist nichts geschehen –
