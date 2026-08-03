@@ -18,6 +18,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
+import { doppelseiteLaden } from '../api.js';
 
 /**
  * Verzögerung, bis die Nachbarn geladen werden.
@@ -55,9 +56,7 @@ export function useNachbarn(
             .map(async (s) => {
               const i = Number(s);
               try {
-                const res = await fetch(`/api/spreads/${i}`);
-                if (!res.ok) return undefined;
-                return [i, (await res.json()) as RenderedSpread] as const;
+                return [i, (await doppelseiteLaden(i)) as RenderedSpread] as const;
               } catch {
                 return undefined;
               }

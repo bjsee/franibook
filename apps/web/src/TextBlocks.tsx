@@ -15,6 +15,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, type FontFamilyId, fontFamily } from '@franibook/core';
+import { fehlertext, textAendern, textErstellen, textLoeschen } from './api.js';
 import { B, T } from './theme.js';
 
 /**
@@ -72,36 +73,28 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
     setRegler(null);
   }, [selectedId]);
 
-  async function ruf(pfad: string, init: RequestInit) {
+  /** Ein Aufruf mit der Doppelseite als Antwort – und einer Meldung im Fehlerfall. */
+  async function ruf<T extends { spread?: unknown }>(
+    tun: () => Promise<T>,
+  ): Promise<T | undefined> {
     try {
-      const res = await fetch(pfad, {
-        ...init,
-        ...(init.body ? { headers: { 'content-type': 'application/json' } } : {}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        onFehler(data.error ?? 'Der Textblock ließ sich nicht ändern');
-        return undefined;
-      }
+      const data = await tun();
       if (data.spread) onSpread(data.spread);
       return data;
     } catch (e) {
-      onFehler(`Der Textblock ließ sich nicht ändern: ${String(e)}`);
+      onFehler(`Der Textblock ließ sich nicht ändern: ${fehlertext(e)}`);
       return undefined;
     }
   }
 
   async function anlegen() {
-    const data = await ruf(`/api/spreads/${index}/texts`, { method: 'POST', body: '{}' });
-    if (data?.block?.id) onSelect(data.block.id as string);
+    const data = await ruf(() => textErstellen(index, {}));
+    if (data?.block?.id) onSelect(data.block.id);
   }
 
   async function aendern(patch: Partial<Omit<TextBlockData, 'id'>>) {
     if (!gewaehlt) return;
-    await ruf(`/api/spreads/${index}/texts/${gewaehlt.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
+    await ruf(() => textAendern(index, gewaehlt.id, patch));
   }
 
   /**
@@ -121,7 +114,7 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
 
   async function entfernen() {
     if (!gewaehlt) return;
-    await ruf(`/api/spreads/${index}/texts/${gewaehlt.id}`, { method: 'DELETE' });
+    await ruf(() => textLoeschen(index, gewaehlt.id));
     onSelect(null);
   }
 

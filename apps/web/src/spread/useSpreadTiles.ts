@@ -12,6 +12,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
+import { doppelseiteLaden } from '../api.js';
 
 /** Was die Kacheln über eine Doppelseite hinaus brauchen. */
 export type Kachel = RenderedSpread & { locked?: boolean };
@@ -54,9 +55,9 @@ export function useSpreadTiles(spreadCount: number, version = 0) {
     let abgebrochen = false;
     void Promise.all(
       fehlend.map((i) =>
-        fetch(`/api/spreads/${i}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => [i, data] as const),
+        doppelseiteLaden(i)
+          .then((data) => [i, data] as const)
+          .catch(() => [i, null] as const),
       ),
     ).then((paare) => {
       if (abgebrochen) return;

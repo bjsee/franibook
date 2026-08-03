@@ -7,19 +7,9 @@
  * dasselbe versprechen, weil er das Einzige ist, worauf man sich beim Klicken
  * verlässt.
  */
-import type { RenderedSpread } from '@franibook/core';
+import { type AussortierErgebnis, fehlertext, fotoAussortieren } from './api.js';
 
-export interface DeleteResult {
-  fileName: string;
-  /** Wohin die Datei verschoben wurde. */
-  papierkorb: string;
-  /** Slots im Buch, die dadurch leer stehen. */
-  imBuch: number;
-  spreads: number[];
-  photoCount: number;
-  /** Die betroffenen Doppelseiten, fertig gerendert. */
-  rendered: { index: number; spread: RenderedSpread }[];
-}
+export type { AussortierErgebnis as DeleteResult };
 
 /** Der Ordner, in dem gelöschte Bilder landen – wortgleich zum Server. */
 export const PAPIERKORB = '.franibook-geloescht';
@@ -42,7 +32,7 @@ interface Optionen {
 export async function fotoLoeschen(
   photoId: string,
   { name, imBuch }: Optionen,
-): Promise<{ ok: true; ergebnis: DeleteResult } | { ok: false; fehler: string } | null> {
+): Promise<{ ok: true; ergebnis: AussortierErgebnis } | { ok: false; fehler: string } | null> {
   const folge =
     imBuch === true
       ? '\n\nEs steht im Buch – dort bleibt der Platz leer, bis du ein anderes Foto hineinziehst.'
@@ -61,17 +51,14 @@ export async function fotoLoeschen(
   }
 
   try {
-    const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
-    const d = (await res.json()) as DeleteResult & { error?: string };
-    if (!res.ok) return { ok: false, fehler: d.error ?? res.statusText };
-    return { ok: true, ergebnis: d };
+    return { ok: true, ergebnis: await fotoAussortieren(photoId) };
   } catch (e: unknown) {
-    return { ok: false, fehler: String(e) };
+    return { ok: false, fehler: fehlertext(e) };
   }
 }
 
 /** Was passiert ist, in einem Satz. */
-export function loeschMeldung(d: DeleteResult): string {
+export function loeschMeldung(d: AussortierErgebnis): string {
   const teile = [`„${d.fileName}" liegt jetzt in ${PAPIERKORB}`];
   if (d.imBuch === 1) teile.push('ein Platz im Buch bleibt leer');
   else if (d.imBuch > 1) teile.push(`${d.imBuch} Plätze im Buch bleiben leer`);

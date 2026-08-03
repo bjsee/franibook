@@ -12,17 +12,16 @@
  * Kopfzeile weggefallen.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CoverDesign, RenderedCover } from '@franibook/core';
+import type { CoverDesign } from '@franibook/core';
 import { CoverView, type CoverGuideVisibility } from '@franibook/render-dom';
+import {
+  fehlertext,
+  type Umschlag as CoverAntwort,
+  umschlagAendern,
+  umschlagExportieren,
+  umschlagLaden,
+} from './api.js';
 import { B, T } from './theme.js';
-
-interface CoverAntwort {
-  design: CoverDesign;
-  cover: RenderedCover;
-  candidates: { photoId: string; label: string }[];
-  hints: string[];
-  profileVerified: boolean;
-}
 
 const FELDER = [
   { key: 'title', label: 'Titel (Vorderseite)' },
@@ -51,10 +50,9 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
   const [stageWidth, setStageWidth] = useState(1000);
 
   const load = useCallback(() => {
-    fetch('/api/cover')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    umschlagLaden()
       .then(setData)
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => setError(fehlertext(e)));
   }, []);
 
   useEffect(load, [load]);
@@ -71,14 +69,9 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
 
   async function patch(feld: keyof CoverDesign, wert: string) {
     try {
-      const res = await fetch('/api/cover', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ [feld]: wert }),
-      });
-      setData(await res.json());
+      setData(await umschlagAendern({ [feld]: wert }));
     } catch (e) {
-      setNote(`Fehler: ${String(e)}`);
+      setNote(`Fehler: ${fehlertext(e)}`);
     }
   }
 
@@ -86,18 +79,13 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
     setBusy('Exportiere Umschlag …');
     setNote(null);
     try {
-      const res = await fetch('/api/export/cover', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const r = await res.json();
+      const r = await umschlagExportieren();
       setNote(
         `${r.outputPath} — ${r.widthMm.toFixed(1)} × ${r.heightMm.toFixed(1)} mm, ` +
           `Rücken ${r.spineMm.toFixed(1)} mm bei ${r.pageCount} Seiten`,
       );
     } catch (e) {
-      setNote(`Fehler: ${String(e)}`);
+      setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
       setBusy(null);
     }

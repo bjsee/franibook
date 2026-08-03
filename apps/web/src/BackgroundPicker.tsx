@@ -15,20 +15,16 @@
  * liegt hinter einem Klapper darunter.
  */
 import { useEffect, useState } from 'react';
+import {
+  einstellungenAendern,
+  fehlertext,
+  hintergrundOptionenLaden,
+  hintergrundSetzen,
+} from './api.js';
 import { B, T } from './theme.js';
 
-interface Farbe {
-  id: string;
-  name: string;
-  hex: string;
-}
-
-interface Kandidat {
-  photoId: string;
-  fileName: string;
-  dpi: number;
-  taugt: boolean;
-}
+type Farbe = { id: string; name: string; hex: string };
+type Kandidat = { photoId: string; fileName: string; dpi: number; taugt: boolean };
 
 interface BackgroundPickerProps {
   /** Doppelseite, die geändert wird. */
@@ -52,34 +48,32 @@ export function BackgroundPicker({
   const [hinweis, setHinweis] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/background')
-      .then((r) => r.json())
-      .then((d: { colors: Farbe[]; candidates: Kandidat[]; minDpi: number }) => {
+    hintergrundOptionenLaden()
+      .then((d) => {
         setFarben(d.colors);
         setKandidaten(d.candidates);
         setMinDpi(d.minDpi);
       })
-      .catch((e: unknown) => setHinweis(String(e)));
+      .catch((e: unknown) => setHinweis(fehlertext(e)));
   }, []);
 
   async function setzeSeite(patch: { color?: string | null; photoId?: string | null }) {
-    const res = await fetch(`/api/spreads/${spreadIndex}/background`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    const d = (await res.json()) as { hinweis?: string };
-    setHinweis(d.hinweis ?? null);
+    try {
+      const d = await hintergrundSetzen(spreadIndex, patch);
+      setHinweis(d.hinweis ?? null);
+    } catch (e) {
+      setHinweis(fehlertext(e));
+    }
     onChanged();
   }
 
   async function setzeGlobal(hex: string) {
-    await fetch('/api/settings', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ background: hex }),
-    });
-    setHinweis(null);
+    try {
+      await einstellungenAendern({ background: hex });
+      setHinweis(null);
+    } catch (e) {
+      setHinweis(fehlertext(e));
+    }
     onChanged();
   }
 

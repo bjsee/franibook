@@ -31,6 +31,19 @@ import {
   withRotation,
   zoomCrop,
 } from '@franibook/core';
+import {
+  ausschnittSetzen,
+  ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
+  fehlertext,
+  type FotoInfo as PhotoInfo,
+  fotopoolLaden,
+  fotosDerSeiteLaden,
+  fotoVerschieben,
+  neigungSetzen,
+  type PoolFoto as PoolPhoto,
+  rechteckSetzen,
+  textAendern,
+} from '../api.js';
 import { fotoLoeschen, loeschMeldung } from '../deletePhoto.js';
 import type { TextBlockData } from '../TextBlocks.js';
 
@@ -43,38 +56,8 @@ export const ZOOM_SCHRITT = 0.9;
 /** Höchstzahl gleichzeitig gezeigter Poolbilder – 830 Kacheln bremsen sichtbar. */
 export const POOL_SICHTBAR = 120;
 
-export interface PoolPhoto {
-  id: string;
-  fileName: string;
-  date: string | null;
-  width: number;
-  height: number;
-}
-
-/**
- * Was der Server über ein Foto weiß – `PhotoView` aus `project.ts`.
- *
- * `effectiveDate` ist das Ergebnis der Datumskaskade, `dateSource` sagt, woher
- * es stammt (`exif`, `filename`, `interpolated` …). Beides zusammen anzuzeigen
- * ist der Punkt: Ein interpoliertes Datum sieht sonst so verbindlich aus wie
- * ein ausgelesenes.
- */
-export interface PhotoInfo {
-  id: string;
-  fileName: string;
-  relPath: string;
-  width: number;
-  height: number;
-  bytes: number;
-  effectiveDate: string | null;
-  dateSource: string;
-  dateConfidence: string;
-  takenAt?: string;
-  gps?: { lat: number; lon: number };
-  place?: { key: string; label: string };
-  camera?: string;
-  issues: { code: string; detail?: string }[];
-}
+/** Beides beschreibt der Server; die Namen bleiben, wo sie schon benutzt werden. */
+export type { PhotoInfo, PoolPhoto };
 
 export interface Zug {
   source: MoveSource;
@@ -168,9 +151,8 @@ export function useSpreadEditor({
   }, [index, selectedSlotId]);
 
   const poolLaden = useCallback(() => {
-    fetch('/api/book/unplaced')
-      .then((r) => r.json())
-      .then((d: { photos: PoolPhoto[] }) => setPool(d.photos))
+    fotopoolLaden()
+      .then((d) => setPool(d.photos))
       .catch(() => setPool(null));
   }, []);
 
@@ -180,11 +162,8 @@ export function useSpreadEditor({
   // Kamera. Ein Aufruf je Doppelseite statt einer je Bild – gebraucht wird
   // mindestens der Dateiname, sobald man ein Foto aussortieren kann.
   const infosLaden = useCallback(() => {
-    fetch(`/api/spreads/${index}/photos`)
-      .then((r) => r.json())
-      .then((d: { photos: PhotoInfo[] }) =>
-        setInfos(new Map(d.photos.map((p) => [p.id, p] as const))),
-      )
+    fotosDerSeiteLaden(index)
+      .then((d) => setInfos(new Map(d.photos.map((p) => [p.id, p] as const))))
       .catch(() => setInfos(new Map()));
   }, [index]);
 
@@ -247,17 +226,7 @@ export function useSpreadEditor({
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/crop`, {
-            method: 'PATCH',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              x: gesendet.x,
-              y: gesendet.y,
-              w: gesendet.w,
-              h: gesendet.h,
-            }),
-          });
-          const data = await res.json();
+          const data = await ausschnittSetzen(index, selectedSlotId, gesendet);
           // Hat der Benutzer inzwischen weitergezogen, gilt sein Stand – die
           // Antwort ist dann bereits veraltet.
           if (data.spread && zuletzt.current === gesendet) {
@@ -266,7 +235,7 @@ export function useSpreadEditor({
             onChanged();
           }
         } catch (e) {
-          setNote(`Ausschnitt nicht gespeichert: ${String(e)}`);
+          setNote(`Ausschnitt nicht gespeichert: ${fehlertext(e)}`);
         }
       })();
     }, SPEICHER_VERZOEGERUNG_MS);
@@ -287,19 +256,14 @@ export function useSpreadEditor({
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/rotate`, {
-            method: 'PATCH',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ deg: gesendet }),
-          });
-          const data = await res.json();
+          const data = await neigungSetzen(index, selectedSlotId, gesendet);
           if (data.spread && zuletztTilt.current === gesendet) {
             onSpread(data.spread);
             setPendingTilt(null);
             onChanged();
           }
         } catch (e) {
-          setNote(`Neigung nicht gespeichert: ${String(e)}`);
+          setNote(`Neigung nicht gespeichert: ${fehlertext(e)}`);
         }
       })();
     }, SPEICHER_VERZOEGERUNG_MS);
@@ -318,18 +282,13 @@ export function useSpreadEditor({
     if (!selectedSlotId) return;
     setPendingTilt(null);
     try {
-      const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/rotate`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ deg: null }),
-      });
-      const data = await res.json();
+      const data = await neigungSetzen(index, selectedSlotId, null);
       if (data.spread) {
         onSpread(data.spread);
         onChanged();
       }
     } catch (e) {
-      setNote(`Neigung nicht zurückgesetzt: ${String(e)}`);
+      setNote(`Neigung nicht zurückgesetzt: ${fehlertext(e)}`);
     }
   }
 
@@ -344,16 +303,13 @@ export function useSpreadEditor({
     if (!selectedSlotId) return;
     setPendingCrop(null);
     try {
-      const res = await fetch(`/api/spreads/${index}/slots/${selectedSlotId}/crop`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
+      const data = await apiAusschnittZuruecksetzen(index, selectedSlotId);
       if (data.spread) {
         onSpread(data.spread);
         onChanged();
       }
     } catch (e) {
-      setNote(`Ausschnitt nicht zurückgesetzt: ${String(e)}`);
+      setNote(`Ausschnitt nicht zurückgesetzt: ${fehlertext(e)}`);
     }
   }, [selectedSlotId, index, onSpread, onChanged]);
 
@@ -520,12 +476,7 @@ export function useSpreadEditor({
 
   async function textRechteckSpeichern(id: string, rect: NormRect) {
     try {
-      const res = await fetch(`/api/spreads/${index}/texts/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rect }),
-      });
-      const data = await res.json();
+      const data = await textAendern(index, id, { rect });
       if (data.spread) {
         onSpread(data.spread);
         setPendingText(null);
@@ -533,7 +484,7 @@ export function useSpreadEditor({
         onChanged();
       }
     } catch (e) {
-      setNote(`Position nicht gespeichert: ${String(e)}`);
+      setNote(`Position nicht gespeichert: ${fehlertext(e)}`);
     }
   }
 
@@ -549,12 +500,7 @@ export function useSpreadEditor({
 
   async function rechteckSpeichern(slotId: string, rect: NormRect | null) {
     try {
-      const res = await fetch(`/api/spreads/${index}/slots/${slotId}/rect`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rect }),
-      });
-      const data = await res.json();
+      const data = await rechteckSetzen(index, slotId, rect);
       if (data.spread) {
         onSpread(data.spread);
         setPendingRect(null);
@@ -562,7 +508,7 @@ export function useSpreadEditor({
         onChanged();
       }
     } catch (e) {
-      setNote(`Position nicht gespeichert: ${String(e)}`);
+      setNote(`Position nicht gespeichert: ${fehlertext(e)}`);
     }
   }
 
@@ -651,17 +597,8 @@ export function useSpreadEditor({
     async (source: MoveSource, target: MoveTarget) => {
       setNote(null);
       try {
-        const res = await fetch('/api/book/move', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ source, target }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          setNote(data.error ?? 'Das Foto ließ sich nicht verschieben');
-          return;
-        }
-        const k: number = data.touched.indexOf(index);
+        const data = await fotoVerschieben(source, target);
+        const k = data.touched.indexOf(index);
         const neu = k >= 0 ? data.spreads[k] : undefined;
         if (neu) onSpread(neu);
         setPendingCrop(null);
@@ -673,7 +610,7 @@ export function useSpreadEditor({
         poolLaden();
         onChanged();
       } catch (e) {
-        setNote(`Das Foto ließ sich nicht verschieben: ${String(e)}`);
+        setNote(`Das Foto ließ sich nicht verschieben: ${fehlertext(e)}`);
       }
     },
     [index, onSpread, onSelect, onChanged, poolLaden],

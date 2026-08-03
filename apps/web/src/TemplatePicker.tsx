@@ -16,29 +16,16 @@
  * etwas, das in der Spalte ohnehin sichtbar sein kann.
  */
 import { useCallback, useEffect, useState } from 'react';
+import {
+  type Anordnungen as Antwort,
+  anordnungenLaden,
+  fehlertext,
+  type Halbseite,
+  halbseiteSetzen,
+  type Vorlage,
+  vorlageSetzen,
+} from './api.js';
 import { B, T } from './theme.js';
-
-interface Vorlage {
-  id: string;
-  name: string;
-  slotCount: number;
-  slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
-  current: boolean;
-}
-
-/** Eine Anordnung für eine einzelne Buchseite, immer in Linksform. */
-interface Halbseite {
-  id: string;
-  slotCount: number;
-  slots: { x: number; y: number; w: number; h: number }[];
-}
-
-interface Antwort {
-  templates: Vorlage[];
-  halves: Halbseite[];
-  current: { left?: string; right?: string };
-  counts: { left: number; right: number };
-}
 
 interface Props {
   index: number;
@@ -67,9 +54,8 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
   const [busy, setBusy] = useState<string | null>(null);
 
   const laden = useCallback(() => {
-    fetch(`/api/spreads/${index}/templates`)
-      .then((r) => r.json())
-      .then((d: Antwort) => setDaten(d))
+    anordnungenLaden(index)
+      .then(setDaten)
       .catch(() => setDaten(null));
   }, [index, version]);
 
@@ -96,19 +82,10 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
 
     setBusy(halb.id);
     try {
-      const res = await fetch(`/api/spreads/${index}/half`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ side: seite, halfId: halb.id }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        onFehler(data.error ?? 'Die Anordnung ließ sich nicht ändern');
-        return;
-      }
+      const data = await halbseiteSetzen(index, seite, halb.id);
       onApplied({ spread: data.spread, leftover: data.leftover ?? [] });
     } catch (e) {
-      onFehler(`Die Anordnung ließ sich nicht ändern: ${String(e)}`);
+      onFehler(`Die Anordnung ließ sich nicht ändern: ${fehlertext(e)}`);
     } finally {
       setBusy(null);
     }
@@ -129,19 +106,10 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
 
     setBusy(v.id);
     try {
-      const res = await fetch(`/api/spreads/${index}/template`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ templateId: v.id }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        onFehler(data.error ?? 'Die Anordnung ließ sich nicht ändern');
-        return;
-      }
+      const data = await vorlageSetzen(index, v.id);
       onApplied({ spread: data.spread, leftover: data.leftover ?? [] });
     } catch (e) {
-      onFehler(`Die Anordnung ließ sich nicht ändern: ${String(e)}`);
+      onFehler(`Die Anordnung ließ sich nicht ändern: ${fehlertext(e)}`);
     } finally {
       setBusy(null);
     }
