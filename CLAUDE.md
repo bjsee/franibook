@@ -129,6 +129,16 @@ auffindbar sein.
 `rebuild.ts` ist das Gegenstück zu `generate.ts`: Die Fotoverteilung steht schon fest
 (bearbeitetes Layout-Dokument), nur Vorlage, Slots und Ausschnitte werden neu bestimmt.
 
+**Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
+`layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
+jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die
+beste Vorlage um 0,1 je Bild unterbietet (`justifySpread`) — die Bibliothek gestaltet,
+die Rechnung rettet. Kennung `justiert.<n>`, aufgelöst über `templateById` wie eine
+Paarkennung; die Rechtecke stehen als `SlotAssignment.rect` und zählen in `handwork()`
+nicht als Handarbeit, weil der Neuaufbau sie wiederherstellt. Am echten Buch senkt das
+die Bilder in falsch ausgerichteten Plätzen von 108 auf 32, bei gleicher Bilddeckung.
+Begründung und Messwerte: `docs/konzept.md`, Abschnitt „Justierte Zeilen".
+
 ### Zeit und Datum
 
 Alle Zeitangaben sind **naive lokale Zeit** (`YYYY-MM-DDTHH:mm:ss`) ohne Offset — ein

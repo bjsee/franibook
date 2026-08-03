@@ -14,6 +14,13 @@ import type { Template } from '../model/template.js';
 import type { TemplateId } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { templateById, templatesWithSlotCount, templatesWithoutTitle } from '../templates/index.js';
+import {
+  JUSTIFIED_MAX_PHOTOS,
+  JUSTIFIED_MIN_PHOTOS,
+  isJustified,
+  justifiedTemplateId,
+} from '../templates/justified.js';
+import { justifiedRects } from './justify.js';
 import { assign, slotCost, slotGeometry } from './scoring.js';
 
 export interface LayoutSpreadOptions {
@@ -69,10 +76,24 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   const { photos, profile } = opts;
   const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
 
+  // Ausdrücklich justiert: Die Kennung nennt eine Bilderzahl, maßgeblich ist
+  // aber die tatsächliche. Wandert ein Foto von der Seite, wird die Seite mit
+  // einem Bild weniger justiert und nicht mit einem leeren Platz.
+  if (isJustified(opts.templateId)) {
+    const justiert = justifySpread({ photos, profile, weightOf });
+    if (justiert) return { templateId: justiert.templateId, slots: justiert.slots, leftover: [] };
+  }
+
+  // Eine justierte Kennung, die sich nicht rechnen ließ (zu viele Bilder für
+  // den Satzspiegel), fällt hier auf die Bibliothek zurück statt auf ihre
+  // Trägervorlage: Das Rückfallgitter ist für leere Plätze gedacht, nicht als
+  // Anordnung.
+  const festeVorlage = isJustified(opts.templateId) ? undefined : opts.templateId;
+
   const candidates = opts.candidates
     ? opts.candidates
-    : opts.templateId
-      ? [templateById(opts.templateId)].filter((t) => t !== undefined)
+    : festeVorlage
+      ? [templateById(festeVorlage)].filter((t) => t !== undefined)
       : opts.withText
         ? templatesWithSlotCount(photos.length)
         : templatesWithoutTitle(photos.length);
@@ -107,6 +128,14 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
     }
   }
 
+  // Passt keine Vorlage gut, rechnet die Seite ihre Plätze selbst. Nur im
+  // Fluss: Bei gezielt angeforderten Vorlagen (Auftakte, Handauswahl) ist die
+  // Gestaltung die Absicht und nicht die Formtreue.
+  if (!opts.candidates && !festeVorlage && !opts.withText) {
+    const justiert = justifySpread({ photos, profile, weightOf, beatScore: bestScore });
+    if (justiert) return { templateId: justiert.templateId, slots: justiert.slots, leftover: [] };
+  }
+
   const template = templateById(bestTemplateId)!;
   const slots = template.slots.map((slot, slotIndex) => {
     const photoIndex = bestAssignment.indexOf(slotIndex);
@@ -136,6 +165,85 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
 }
 
 const FULL_AUTO_CROP = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
+
+/**
+ * Vorsprung, den die Bibliothek behält.
+ *
+ * Justierte Zeilen beschneiden kein Bild, ihr Kostenanteil aus `cropLoss` und
+ * `orientationClash` ist also null – ohne Zuschlag gewännen sie fast immer, und
+ * das Buch bestünde aus Gitterseiten. Der Wert entspricht einem Zehntel
+ * Flächenverlust je Bild: Soviel darf eine Vorlage verschenken, bevor die
+ * Rechnung übernimmt. Eine Fehlpaarung kostet allein 0,6 – die Fälle, um die es
+ * geht, kippen also, gut sitzende Vorlagen nicht.
+ */
+const JUSTIFY_MALUS = 0.1;
+
+export interface JustifySpreadOptions {
+  photos: readonly Photo[];
+  profile: PrintProfile;
+  weightOf?: (photoId: PhotoId) => PhotoWeight;
+  /**
+   * Kosten der besten Vorlage. Angegeben, übernimmt die Rechnung nur, wenn sie
+   * sie um ihren Zuschlag unterbietet.
+   *
+   * Ohne Angabe wird justiert, weil jemand es verlangt hat – dann entscheidet
+   * nur, ob es überhaupt aufgeht.
+   */
+  beatScore?: number;
+}
+
+/**
+ * Legt die Bilder einer Doppelseite in justierten Zeilen.
+ *
+ * Die Zuordnung ist hier keine Wahl: Jedes Bild bekommt sein eigenes Rechteck
+ * in chronologischer Reihenfolge. Gerechnet werden die Kosten trotzdem – wegen
+ * der Auflösung. Sechs Bilder auf einer Doppelseite werden 176 mm breit, und bei
+ * 2048 px Vorlage ist das die Grenze.
+ *
+ * @returns `undefined`, wenn die Bilder nicht in den Satzspiegel passen oder
+ * eine Vorlage sie besser trägt.
+ */
+export function justifySpread(
+  opts: JustifySpreadOptions,
+): { templateId: TemplateId; slots: SlotAssignment[]; score: number } | undefined {
+  const { photos, profile } = opts;
+  const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
+
+  if (photos.length < JUSTIFIED_MIN_PHOTOS || photos.length > JUSTIFIED_MAX_PHOTOS) {
+    return undefined;
+  }
+
+  const rects = justifiedRects({ photos, profile });
+  if (rects.length !== photos.length) return undefined;
+
+  const templateId = justifiedTemplateId(photos.length);
+  const template = templateById(templateId);
+  if (!template) return undefined;
+
+  let score = 0;
+  const slots: SlotAssignment[] = template.slots.map((slot, i) => {
+    const photo = photos[i]!;
+    const rect = rects[i]!;
+    const platz = { ...slot, ...rect };
+    const geometry = slotGeometry(platz, profile);
+    score += slotCost(photo, platz, geometry, { profile, weightOf }).total;
+    return {
+      slotId: slot.id,
+      photoId: photo.id,
+      // Das Rechteck hat die Form des Bildes; der Ausschnitt bleibt trotzdem
+      // gerechnet und nicht pauschal ganzflächig – ein Rundungsrest von einem
+      // Zehntelmillimeter würde sonst als Verzerrung durchschlagen.
+      crop: coverCrop(photo.width / photo.height, geometry.widthMm / geometry.heightMm),
+      rect,
+    };
+  });
+
+  if (opts.beatScore !== undefined && score + JUSTIFY_MALUS * photos.length >= opts.beatScore) {
+    return undefined;
+  }
+
+  return { templateId, slots, score };
+}
 
 export interface RebuildInput {
   photoIds: PhotoId[];

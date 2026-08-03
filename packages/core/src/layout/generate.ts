@@ -16,7 +16,8 @@ import type { Template } from '../model/template.js';
 import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Structure } from '../structure/segment.js';
-import { layoutSpread } from './rebuild.js';
+import { isJustified } from '../templates/justified.js';
+import { justifySpread, layoutSpread } from './rebuild.js';
 import {
   chapterTemplates,
   supportedSlotCounts,
@@ -248,12 +249,7 @@ function chooseTemplate(
 
     let score = breakdowns.reduce((sum, b) => sum + b.total, 0);
 
-    // Wiederholungsstrafe: je näher die letzte Verwendung, desto teurer
-    const lastUse = recentTemplateIds.lastIndexOf(template.id);
-    if (lastUse >= 0) {
-      const abstand = recentTemplateIds.length - lastUse;
-      score += Math.max(0, 1.2 - 0.3 * abstand);
-    }
+    score += wiederholungsstrafe(recentTemplateIds, (id) => id === template.id);
 
     // Winziger Zufallsanteil, damit gleichwertige Templates nicht immer in
     // Bibliotheksreihenfolge gewinnen. Deterministisch über den Seed.
@@ -270,6 +266,26 @@ function chooseTemplate(
 
   fits.sort((a, b) => a.score - b.score);
   return fits[0];
+}
+
+/**
+ * Aufschlag dafür, dieselbe Anordnung kurz nach der letzten Verwendung erneut
+ * zu nehmen: je näher die letzte, desto teurer, nach vier Doppelseiten null.
+ *
+ * Das Prädikat statt ein Vergleich, weil „dieselbe Anordnung" zweierlei heißt:
+ * bei den Vorlagen dieselbe Kennung, bei den justierten Zeilen dieselbe Familie
+ * – die tragen für jede Bilderzahl eine andere Kennung und sähen doch gleich aus.
+ */
+function wiederholungsstrafe(
+  recentTemplateIds: readonly string[],
+  gleich: (templateId: string) => boolean,
+): number {
+  for (let i = recentTemplateIds.length - 1; i >= 0; i--) {
+    if (gleich(recentTemplateIds[i]!)) {
+      return Math.max(0, 1.2 - 0.3 * (recentTemplateIds.length - i));
+    }
+  }
+  return 0;
 }
 
 /**
@@ -755,22 +771,47 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       const fit = chooseTemplate(groupPhotos, recentTemplates, profile, weightOf, rng);
       if (!fit) continue;
 
-      const template = templateById(fit.templateId);
-      if (!template) continue;
-
-      const spread = buildSpread(
-        `spread-${spreads.length}`,
-        spreads.length,
-        template,
-        groupPhotos,
-        fit,
+      // Trägt keine Vorlage diese Mischung gut, rechnet die Seite ihre Plätze
+      // selbst. Das ist der Ausweg aus einem Zielkonflikt der Bibliothek: Ein
+      // Mosaik aus dreizehn Bildern legt dreizehn Formen fest, und die Mischung
+      // aus Hoch- und Querformat, die dazu passt, kommt selten genau so vor.
+      //
+      // Die Wiederholungsstrafe gilt auch hier, und sie muss es: Justierte
+      // Zeilen sind eine Familie, nicht eine Vorlage – ohne sie liefen ganze
+      // Serien von Gitterseiten hintereinander, weil dieselbe Mischung meist
+      // mehrere Doppelseiten füllt.
+      const justiert = justifySpread({
+        photos: groupPhotos,
         profile,
-      );
+        weightOf,
+        beatScore: fit.score - wiederholungsstrafe(recentTemplates, isJustified),
+      });
+
+      let spread: Spread | undefined;
+      if (justiert) {
+        spread = {
+          id: `spread-${spreads.length}`,
+          index: spreads.length,
+          templateId: justiert.templateId,
+          slots: justiert.slots,
+        };
+      } else {
+        const template = templateById(fit.templateId);
+        if (!template) continue;
+        spread = buildSpread(
+          `spread-${spreads.length}`,
+          spreads.length,
+          template,
+          groupPhotos,
+          fit,
+          profile,
+        );
+      }
       spreads.push(spread);
 
       for (const p of groupPhotos) placed.add(p.id);
 
-      recentTemplates.push(fit.templateId);
+      recentTemplates.push(spread.templateId);
       if (recentTemplates.length > 4) recentTemplates.shift();
     }
 

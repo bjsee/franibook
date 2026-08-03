@@ -860,8 +860,61 @@ braucht eine Vorlage mit genau dieser Mischung — bei 13 Bildern gibt es davon
 vierzehn, und der Bedarf verteilt sich über alle. Eine höhere Bestrafung hilft
 dort nicht: Bei 1,0, 1,5 und 2,5 statt 0,6 blieb das Ergebnis auf dieselben 102
 Fälle, die Engine wählt also bereits das Beste, was die Bibliothek hergibt. Der
-nächste Schritt wären Mosaikslots, die ihre Form dem zugewiesenen Bild anpassen —
+nächste Schritt sind deshalb Slots, die ihre Form dem zugewiesenen Bild anpassen —
 ein Konzeptwechsel, kein weiteres Template.
+
+### Justierte Zeilen
+
+Der Konzeptwechsel, den der Abschnitt davor angekündigt hat: Ab zehn Bildern
+rechnet eine Doppelseite ihre Plätze aus den Bildern, statt sie einer Vorlage zu
+entnehmen (`layout/justify.ts`). Die Bilder werden in ihrem **eigenen**
+Seitenverhältnis nebeneinandergelegt, und die Höhe einer Zeile ergibt sich daraus,
+dass die Zeile genau die Satzbreite füllt — das Verfahren jeder Bildergalerie,
+hier zum ersten Mal in einem Layout mit fester Seitenhöhe.
+
+Vier Entscheidungen halten es zusammen:
+
+- **Je Seite getrennt.** Eine Zeile über den Falz wäre ein Bild im Bund. Die
+  Bilder werden auf die beiden Seiten geteilt und dort unabhängig gesetzt.
+- **Jede Zeile ist justiert, auch die letzte.** Möglich, weil die Zeilenzahl
+  vorher feststeht und die Bilder gleichmäßig verteilt werden. Ein gieriger
+  Umbruch lässt einen Rest übrig, und der sieht entweder nach Abbruch aus oder
+  zieht ein einzelnes Hochformat 380 mm hoch.
+- **Ein begrenzter Zoom (`MAX_ZOOM = 1,25`).** Formtreue Zeilen treffen die
+  Seitenhöhe nur in Sprüngen: Acht Hochformate ergeben in zwei Zeilen 168 mm, in
+  drei 405 — der Satzspiegel ist 256 mm hoch. Der Rest wird über eine Streckung
+  der Zeilenhöhe aufgefangen, die seitlich beschneidet. Nach oben begrenzt sie
+  die Mindestauflösung des Druckprofils, nicht der Geschmack.
+- **Der Satzspiegel kommt aus der Bibliothek, nicht aus dem Profil** — 22 mm
+  außen, 16 mm zum Falz. Technisch erlaubt wären 8 und 7; eine justierte Seite
+  steht aber neben Vorlagenseiten, und ihre Bilder dürfen nicht sichtbar näher an
+  der Kante stehen als überall sonst.
+
+Die Kennung ist `justiert.<n>`, aufgelöst über `templateById` wie eine
+zusammengesetzte Paarkennung — die Trägervorlage (`templates/justified.ts`) liefert
+nur Slotkennungen und ein Rückfallgitter für leere Plätze. Damit braucht der
+Wechsel kein neues Feld im Datenmodell und keinen Schemasprung: Die Rechtecke
+stehen als `SlotAssignment.rect`, dieselbe Infrastruktur, die das Verschieben von
+Hand nutzt. Sie zählen dort nur nicht als Handarbeit, weil der Neuaufbau sie
+wiederherstellt.
+
+Wer entscheidet, steht in `justifySpread`: Die Rechnung übernimmt nur, wenn sie
+die beste Vorlage um einen Zuschlag von 0,1 je Bild unterbietet — soviel Fläche
+darf eine Vorlage verschenken, bevor die Gestaltung ihren Vorrang verliert. Unter
+zehn Bildern kommt sie nicht zum Zuge; dort ist die Anordnung die Aussage der
+Seite.
+
+Am echten Buch gemessen (872 Fotos, 80 Doppelseiten, davon 38 justiert):
+
+|                            | Bibliothek allein | mit justierten Zeilen |
+| -------------------------- | ----------------- | --------------------- |
+| Fehlpaarungen              | 108 (12,4 %)      | 32 (3,7 %)            |
+| mittlerer Flächenverlust   | 11,8 %            | 12,9 %                |
+| Bilddeckung je Doppelseite | 49,4 %            | 49,2 %                |
+
+Gleich große Bilder, gleich viel Beschnitt — aber ein Viertel der Fehlpaarungen.
+Der Beschnitt hat nur seine Art geändert: Statt eines Formbruchs ist es ein
+gleichmäßiger Zoom, der die Ausrichtung erhält.
 
 ### Auftaktseiten
 
