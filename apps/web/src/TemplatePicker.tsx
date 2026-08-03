@@ -73,18 +73,15 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
 
   const vorlagen = daten?.templates ?? null;
 
-  /** Setzt eine Anordnung für eine einzelne Seite; die andere bleibt stehen. */
+  /**
+   * Setzt eine Anordnung für eine einzelne Seite; die andere bleibt stehen.
+   *
+   * Die Paarkennung baut der Server. Hier stand sie einmal – zusammengesetzt aus
+   * der gewählten und der bekannten Gegenseite –, und wenn die Gegenseite keine
+   * bekannte Halbseite war, blieb nur eine Fehlermeldung. Das traf jede justierte
+   * Doppelseite, und dort will man die Anordnung besonders oft ändern.
+   */
   async function halbseiteWaehlen(seite: 'left' | 'right', halb: Halbseite) {
-    const jetzt = daten?.current;
-    const gegenueber = seite === 'left' ? jetzt?.right : jetzt?.left;
-    if (!gegenueber) {
-      onFehler(
-        'Die gegenüberliegende Seite lässt sich nicht einzeln fassen — ' +
-          'diese Doppelseite hat eine Vorlage, die über den Falz reicht.',
-      );
-      return;
-    }
-
     const bisher = seite === 'left' ? daten?.counts.left : daten?.counts.right;
     if (bisher !== undefined && halb.slotCount < bisher) {
       const zuviel = bisher - halb.slotCount;
@@ -95,9 +92,24 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
       if (!ok) return;
     }
 
-    const links = seite === 'left' ? halb.id : gegenueber;
-    const rechts = seite === 'right' ? halb.id : gegenueber;
-    await anwenden(`paar:${links}+${rechts}`, halb.id);
+    setBusy(halb.id);
+    try {
+      const res = await fetch(`/api/spreads/${index}/half`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ side: seite, halfId: halb.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        onFehler(data.error ?? 'Die Anordnung ließ sich nicht ändern');
+        return;
+      }
+      onApplied({ spread: data.spread, leftover: data.leftover ?? [] });
+    } catch (e) {
+      onFehler(`Die Anordnung ließ sich nicht ändern: ${String(e)}`);
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function anwenden(templateId: string, busyId: string) {

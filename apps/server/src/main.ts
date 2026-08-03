@@ -162,6 +162,37 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index/templates', async (r
   return { templates: project.templateChoices(index), ...project.halfChoices(index) };
 });
 
+/**
+ * Wechselt die Anordnung einer einzelnen Buchseite; die andere bleibt stehen.
+ *
+ * Die Paarung bildet der Server und nicht die Oberfläche: Ist die Gegenseite
+ * keine bekannte Halbseite – bei justierten Zeilen etwa, deren Rechtecke über die
+ * Satzbreite laufen –, muss für sie eine Anordnung gerechnet werden, und das ist
+ * eine Layoutentscheidung. Vorher setzte die Oberfläche die Paarkennung selbst
+ * zusammen und konnte in genau diesem Fall nur aufgeben.
+ */
+app.patch<{ Params: { index: string }; Body?: { side?: 'left' | 'right'; halfId?: string } }>(
+  '/api/spreads/:index/half',
+  async (req, reply) => {
+    const { side, halfId } = req.body ?? {};
+    if ((side !== 'left' && side !== 'right') || !halfId) {
+      return reply.code(400).send({ error: 'side und halfId fehlen' });
+    }
+
+    const index = Number(req.params.index);
+    const result = project.setSpreadHalf(index, side, halfId);
+    if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+
+    void project.save();
+    return {
+      ok: true,
+      leftover: result.leftover,
+      spread: spreadAntwort(index),
+      report: project.lastReport,
+    };
+  },
+);
+
 /** Wechselt die Anordnung einer Doppelseite. */
 app.patch<{ Params: { index: string }; Body: { templateId?: string } }>(
   '/api/spreads/:index/template',
