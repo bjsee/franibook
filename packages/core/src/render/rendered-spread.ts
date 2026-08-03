@@ -80,6 +80,18 @@ export interface TextBox extends Rect {
    * im Modell steht, und können deshalb gar nicht auseinanderlaufen.
    */
   letterSpacingMm?: number;
+  /** Drehung in Grad im Uhrzeigersinn. Ohne Angabe waagerecht. */
+  rotateDeg?: number;
+  /**
+   * Drehpunkt, falls nicht die Mitte dieser Box.
+   *
+   * Ein mehrzeiliger Text steht als eine Box je Zeile im Modell – der
+   * Zeilenabstand ist Geometrie und darf keinem Renderer überlassen bleiben.
+   * Gedreht werden muss er trotzdem als ein Block: Um die je eigene Mitte
+   * gedreht, fächerten die Zeilen auseinander. Deshalb tragen alle Zeilen
+   * denselben Punkt.
+   */
+  rotateAboutMm?: { xMm: number; yMm: number };
 }
 
 export interface RectBox extends Rect {

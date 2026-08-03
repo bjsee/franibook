@@ -1488,6 +1488,39 @@ In der Doppelseiten-Ansicht schaltet ein Knopf am gewählten Bild zwischen
 **Ausschnitt** und **Position** um: Zwei Werkzeuge auf derselben Maustaste
 brauchen einen sichtbaren Umschalter, eine Zusatztaste fände niemand.
 
+### Eigene Textblöcke
+
+Alles andere, was das Buch beschriftet, gehört einer Vorlage (`TextElement` an
+einem Textplatz) oder einer Fotogruppe (das Label am Zeitstrahl). Ein
+`TextBlock` gehört niemandem als dem Benutzer: Er steht, wo er ihn hinsetzt, in
+der Größe und dem Winkel, die er gewählt hat, und keine Vorlage weiß von ihm.
+Gedacht für das, was kein Automatismus wissen kann.
+
+Die Schrift ist die Buchschrift, wählbar sind ihre beiden Schnitte. Eine zweite
+Familie hieße eine zweite Datei, und die Parität hängt daran, dass beide
+Adapter dieselbe laden. Die Größe steht ausnahmsweise absolut in Punkt statt als
+Versalhöhe im Kasten wie in `TEXT_STYLES`: Die Stile gelten für Vorlagen, die in
+zwei Buchformaten bestehen müssen — wer selbst einen Block setzt, wählt eine
+Größe.
+
+**Mehrzeilig und gedreht.** Ein Block wird wie die Ereigniszeilen des
+Jahresauftakts in eine Box je Zeile zerlegt; der Zeilenabstand (das
+Anderthalbfache der Schriftgröße) ist Geometrie und darf keinem Renderer
+überlassen bleiben, sonst entschiede CSS `line-height` gegen pdfkit `lineGap`.
+Gedreht werden muss der Block trotzdem als Ganzes — um die je eigene Mitte
+gedreht, fächerten die Zeilen auseinander. Deshalb trägt die `TextBox` neben
+`rotateDeg` auch `rotateAboutMm`: den gemeinsamen Drehpunkt.
+
+Das ist die schärfste Probe auf die beiden Adapter, die es im Projekt gibt — die
+Vorschau dreht über `transform: rotate()` mit `transform-origin`, das PDF über
+`doc.rotate()` mit `origin`, zwei völlig verschiedene Wege zu derselben Matrix.
+Der Parity-Test enthält dafür einen eigenen Fall (gemessen 0,189 %).
+
+Die Griffe zum Verschieben liegen in der Doppelseiten-Ansicht als eigene Ebene
+**über** der Vorschau, nicht in ihr: Sonst müsste `render-dom` wissen, was ein
+ausgewählter Block ist — eine Bedienungsentscheidung im Renderer, und genau die
+soll es dort nicht geben.
+
 ### Anordnung von Hand wählen
 
 Die Engine sucht die Vorlage nach Passung — Auflösung, Ausrichtung, Gewicht. Das
@@ -1608,6 +1641,8 @@ Der Server bindet ausschließlich an `127.0.0.1` und legt keine Authentifizierun
 > | `/api/spreads/:i/templates`                 | GET               | wählbare Anordnungen samt Slotgeometrie |
 > | `/api/spreads/:i/template`                  | PATCH             | Anordnung dieser Doppelseite wechseln   |
 > | `/api/spreads/:i/slots/:slotId/crop`        | PATCH/DELETE      | Ausschnitt setzen, zurücksetzen         |
+> | `/api/spreads/:i/slots/:slotId/rect`        | PATCH             | Bild frei setzen oder ins Raster zurück |
+> | `/api/spreads/:i/texts`, `/texts/:id`       | POST/PATCH/DELETE | eigene Textblöcke                       |
 > | `/api/photos/:id/preview`                   | GET               | WebP-Vorschau                           |
 > | `/api/photos/:id/original`                  | GET               | Original, nur für den Parity-Test       |
 > | `/api/export/pdf`                           | POST              | Innenteil exportieren, synchron         |

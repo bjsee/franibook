@@ -27,6 +27,7 @@ import {
   type RenderedSpread,
   type Spread,
   type Structure,
+  type TextBlock,
   allTemplates,
   bookStats,
   buildStructure,
@@ -1085,6 +1086,91 @@ export class Project {
       w: klemme(rect.w, 0.02, 1 + 2 * randX),
       h: klemme(rect.h, 0.02, 1 + 2 * randY),
     };
+    return { ok: true };
+  }
+
+  // ------------------------------------------------------------ Textblöcke
+
+  /**
+   * Legt einen Textblock auf eine Doppelseite.
+   *
+   * Die Vorgaben sind bewusst großzügig: ein Kasten in der Mitte der linken
+   * Seite, groß genug, um ihn zu greifen. Wer einen Text setzt, will ihn danach
+   * ohnehin verschieben – ein Block, den man erst suchen muss, wäre der
+   * schlechtere Anfang.
+   */
+  addTextBlock(index: number, patch: Partial<TextBlock> = {}): TextBlock | undefined {
+    const spread = this.spreads[index];
+    if (!spread) return undefined;
+
+    const block: TextBlock = {
+      id: `text-${Date.now().toString(36)}-${(spread.blocks?.length ?? 0) + 1}`,
+      content: patch.content ?? 'Text',
+      rect: patch.rect ?? { x: 0.08, y: 0.44, w: 0.3, h: 0.08 },
+      weight: patch.weight ?? 'regular',
+      fontSizePt: patch.fontSizePt ?? 14,
+      align: patch.align ?? 'left',
+      ...(patch.color ? { color: patch.color } : {}),
+      ...(patch.rotateDeg !== undefined ? { rotateDeg: patch.rotateDeg } : {}),
+    };
+
+    spread.blocks = [...(spread.blocks ?? []), block];
+    return block;
+  }
+
+  /**
+   * Ändert einen Textblock.
+   *
+   * `content: ''` löscht ihn nicht – ein leerer Block bleibt greifbar, bis
+   * jemand ihn ausdrücklich entfernt. Sonst verschwände er beim Leeren des
+   * Feldes unter den Händen.
+   */
+  updateTextBlock(
+    index: number,
+    id: string,
+    patch: Partial<Omit<TextBlock, 'id'>>,
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const block = spread.blocks?.find((b) => b.id === id);
+    if (!block) return { ok: false, error: 'Textblock nicht gefunden' };
+
+    if (patch.content !== undefined) block.content = patch.content;
+    if (patch.weight === 'regular' || patch.weight === 'semibold') block.weight = patch.weight;
+    if (patch.align) block.align = patch.align;
+    if (patch.fontSizePt !== undefined && Number.isFinite(patch.fontSizePt)) {
+      // Geklemmt statt abgewiesen: Unter 5 pt ist Text im Druck nicht mehr
+      // lesbar, über 200 pt passt keine Zeile mehr auf die Seite.
+      block.fontSizePt = Math.min(200, Math.max(5, patch.fontSizePt));
+    }
+    if (patch.rotateDeg !== undefined) {
+      block.rotateDeg = ((patch.rotateDeg % 360) + 360) % 360;
+      if (block.rotateDeg === 0) delete block.rotateDeg;
+    }
+    if (patch.color !== undefined) {
+      if (patch.color) block.color = patch.color;
+      else delete block.color;
+    }
+    if (patch.rect) {
+      const { x, y, w, h } = patch.rect;
+      if ([x, y, w, h].every((v) => Number.isFinite(v)) && w > 0 && h > 0) {
+        block.rect = { x, y, w, h };
+      }
+    }
+    return { ok: true };
+  }
+
+  removeTextBlock(index: number, id: string): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const uebrig = (spread.blocks ?? []).filter((b) => b.id !== id);
+    if (uebrig.length === (spread.blocks?.length ?? 0)) {
+      return { ok: false, error: 'Textblock nicht gefunden' };
+    }
+    if (uebrig.length === 0) delete spread.blocks;
+    else spread.blocks = uebrig;
     return { ok: true };
   }
 

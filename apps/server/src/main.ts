@@ -19,6 +19,7 @@ import {
   type CoverDesign,
   type MoveSource,
   type MoveTarget,
+  type TextBlock,
   coverWarningText,
 } from '@franibook/core';
 import { renderCoverPdf, renderPdf } from '@franibook/render-pdf';
@@ -328,6 +329,9 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
     ...rendered,
     timelineOverride: project.spreads[index]?.timeline ?? null,
     groups: project.spreadGroups(index),
+    // Die Rohdaten der Textblöcke: Im RSM stehen sie als Zeilen mit fertiger
+    // Geometrie, die Oberfläche braucht Kasten, Winkel und Größe zum Bearbeiten.
+    blocks: project.spreads[index]?.blocks ?? [],
   };
 });
 
@@ -564,6 +568,50 @@ app.patch<{
   void project.save();
   return { ok: true, spread: project.render(index) };
 });
+
+// -------------------------------------------------------------- Textblöcke
+
+/**
+ * Legt einen Textblock auf die Doppelseite.
+ *
+ * Die Antwort enthält den Block samt Kennung und die gerenderte Doppelseite –
+ * die Oberfläche kann ihn damit sofort auswählen, ohne nachzufragen.
+ */
+app.post<{ Params: { index: string }; Body?: Partial<TextBlock> }>(
+  '/api/spreads/:index/texts',
+  async (req, reply) => {
+    const index = Number(req.params.index);
+    const block = project.addTextBlock(index, req.body ?? {});
+    if (!block) return reply.code(404).send({ error: 'Doppelseite nicht gefunden' });
+
+    void project.save();
+    return { ok: true, block, spread: project.render(index) };
+  },
+);
+
+app.patch<{ Params: { index: string; id: string }; Body?: Partial<TextBlock> }>(
+  '/api/spreads/:index/texts/:id',
+  async (req, reply) => {
+    const index = Number(req.params.index);
+    const result = project.updateTextBlock(index, req.params.id, req.body ?? {});
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: project.render(index) };
+  },
+);
+
+app.delete<{ Params: { index: string; id: string } }>(
+  '/api/spreads/:index/texts/:id',
+  async (req, reply) => {
+    const index = Number(req.params.index);
+    const result = project.removeTextBlock(index, req.params.id);
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: project.render(index) };
+  },
+);
 
 /** Stellt den Ausschnitt auf automatisch zurück. */
 app.delete<{ Params: { index: string; slotId: string } }>(
