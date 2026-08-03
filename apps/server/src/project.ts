@@ -4,7 +4,7 @@
  * Hält Fotos, Struktur und Buch im Speicher und schreibt sie atomar auf
  * Platte. Die Originaldateien werden ausschließlich gelesen.
  */
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
   type Chapter,
@@ -1761,10 +1761,35 @@ export class Project {
   // ------------------------------------------------------------ Persistenz
 
   /**
+   * Läuft gerade ein Schreibvorgang? Der nächste hängt sich daran.
+   *
+   * Jeder Endpunkt speichert mit `void project.save()`, also nebenläufig. Zwei
+   * gleichzeitige Aufrufe schrieben beide in dieselbe Nebendatei und benannten
+   * sie beide um – der zweite fand sie nicht mehr und riss mit einem
+   * unbehandelten `ENOENT` den ganzen Server um. Ausgelöst hat das der
+   * Drehregler eines Textblocks: eine Anfrage je Pixel Reglerweg.
+   */
+  private schreibvorgang: Promise<void> = Promise.resolve();
+
+  /**
    * Schreibt atomar: erst in eine Nebendatei, dann umbenennen. Damit kann ein
    * Absturz mitten im Schreiben kein halbes Projekt hinterlassen.
+   *
+   * Die Aufrufe laufen nacheinander, nie gleichzeitig. Und sie werfen nicht:
+   * Ein fehlgeschlagener Schreibvorgang ist ärgerlich, ein Serverabsturz mit
+   * dem ganzen Projektzustand im Speicher ist schlimmer. Gemeldet wird er
+   * deutlich – wer die Ausgabe nicht sieht, merkt es spätestens am Datum der
+   * Datei.
    */
   async save(): Promise<void> {
+    this.schreibvorgang = this.schreibvorgang.then(
+      () => this.schreibeJetzt(),
+      () => this.schreibeJetzt(),
+    );
+    return this.schreibvorgang;
+  }
+
+  private async schreibeJetzt(): Promise<void> {
     const data: PersistedProject = {
       schemaVersion: SCHEMA_VERSION,
       sources: [...this.sources.list()],
@@ -1779,12 +1804,25 @@ export class Project {
       importedAt: this.importedAt,
     };
 
-    await mkdir(this.projectPath, { recursive: true });
     const target = join(this.projectPath, 'project.json');
-    const tmp = `${target}.tmp`;
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, target);
+    // Eindeutiger Name je Vorgang: Die Serialisierung oben verhindert das
+    // Rennen innerhalb eines Prozesses, zwei Server auf demselben Verzeichnis
+    // wären davon unberührt. Ein Name, den nur dieser Vorgang kennt, ist
+    // billiger als eine Sperrdatei.
+    const tmp = `${target}.${process.pid}-${++this.schreibZaehler}.tmp`;
+
+    try {
+      await mkdir(this.projectPath, { recursive: true });
+      await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+      await rename(tmp, target);
+    } catch (fehler) {
+      console.error(`Projekt nicht gespeichert (${target}): ${String(fehler)}`);
+      // Die Nebendatei aufräumen, damit kein halber Stand liegen bleibt.
+      await rm(tmp, { force: true }).catch(() => undefined);
+    }
   }
+
+  private schreibZaehler = 0;
 
   /** @returns ob ein gespeichertes Projekt gefunden wurde. */
   async load(): Promise<boolean> {
