@@ -218,3 +218,34 @@ export function textBaselineOffsetMm(
   const capMm = ptToMm(fontSizePt) * (CAP_PER_EM_BY_FAMILY[family] ?? CAP_PER_EM);
   return boxHeightMm / 2 + capMm / 2;
 }
+
+/**
+ * Versalhöhe einer Schriftgröße, in Millimetern.
+ *
+ * Die Umkehrung von `textFontSizePt`, und gebraucht, wo die Vorlage die Lage
+ * einer Zeile über die Mitte ihres Versalbands angibt statt über einen Kasten:
+ * Ein Kasten von genau dieser Höhe **ist** das Versalband, damit steht in der
+ * Geometrie nichts, was man auf dem Papier nicht sieht. Mit der Em-Höhe als
+ * Kasten ragte die 14-pt-Jahreszahl der Monatsleiter rechnerisch aus dem
+ * 14 mm hohen Fußraum, ohne dass ein Zeichen darüber stand.
+ */
+export function capHeightMm(fontSizePt: number, family: FontFamilyId = 'sans'): number {
+  return ptToMm(fontSizePt) * (CAP_PER_EM_BY_FAMILY[family] ?? CAP_PER_EM);
+}
+
+/**
+ * Grobe Textbreite.
+ *
+ * Eine halbe Geviertbreite je Zeichen ist für Proportionalschriften eine
+ * brauchbare Näherung. Sie darf niemals darüber entscheiden, **wo** ein Text
+ * steht – dafür sind die Kastenbreite und die Ausrichtung im RSM da, die beide
+ * Renderer gleich lesen. Sie entscheidet ausschließlich Fragen des Ausweichens:
+ * ob das Label des Zeitstrahls dem Falz aus dem Weg geht, ob eine Jahreszahl
+ * noch auf die Achse passt.
+ *
+ * Deshalb steht sie hier und nicht in einem der beiden Adapter: Ein Adapter, der
+ * die echte Breite kennt, würde damit anders entscheiden als der andere.
+ */
+export function estimatedTextWidthMm(text: string, fontSizePt: number): number {
+  return (text.length * fontSizePt * 0.5 * 25.4) / 72;
+}

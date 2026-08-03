@@ -921,6 +921,21 @@ im Jahr, zwei aufeinanderfolgende Doppelseiten liegen knapp 3 mm auseinander. Si
 zeigt eine Stelle, sie erklärt keinen Kalender — deshalb ersetzt sie den
 Fußstrahl nicht, sondern steht zur Wahl.
 
+**Vier Fassungen je Achse** (`settings.timelineFootVariant`,
+`settings.timelineSideVariant`, Vorgabe je `'classic'`). Beide Achsen waren zu
+leise: Der Fußstrahl ist 584 mm breit und sein höchstes Element maß 3,4 mm, die
+Randachse trug 19 Striche von 0,3 mm und keine Zahl. Am Fuß nehmen `band`
+(Jahreszeiten als 6-mm-Felder), `ruler` (hängende Monatszähne) und `ribbon` (das
+Kapiteljahr als Fläche) den Fußraum ernster; am Rand teilen `ladder` die Achse in
+Jahrgänge, `bar` macht sie zum Fortschrittsbalken, `column` lässt die Linie ganz
+weg und behält nur zweistellige Jahreszahlen — dass die überhaupt möglich sind,
+ist die eine Annahme, die hier fällt: Gedreht werden müsste nur eine vierstellige
+Zahl. Fenster, Maßstab und Marker sind allen Fassungen gemeinsam; `classic`
+bleibt bitidentisch und ist die Vorgabe, denn es ist eine Wahl und keine
+Verbesserung. Auch die Akzentfarbe ist wählbar (`settings.timelineAccent`, vier
+feste Töne), Vorgabe bleibt die Ableitung aus der Jahresfarbe. Maße, Farben und
+gemessene Paritätswerte: [Zeitleisten-Fassungen](zeitleisten-fassungen.md).
+
 **Beschriftung.** Das Label am Zeitstrahl ist die einzige Beschriftung im Innenteil: Doppelseiten tragen keine Überschrift mehr. Eine Überschrift stand nur auf der ersten Doppelseite einer Gruppe – auf allen folgenden fehlte der Name, und auf der ersten stand er doppelt, sobald der Zeitstrahl lief. Drei Folgen hat der Wechsel:
 
 - **Alle Vorlagen im Fluss sind titellos.** Die `mit-titel`-Fassungen räumten 16 mm am oberen Rand frei; am echten Bestand standen die Bilder dadurch auf 9 von 45 Doppelseiten 6 % kleiner als nötig.

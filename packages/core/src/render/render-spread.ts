@@ -32,7 +32,9 @@ import type {
   RenderWarning,
   RenderedSpread,
 } from './rendered-spread.js';
+import type { TimelineSideVariant } from './side-timeline.js';
 import { sideTimelineBoxes } from './side-timeline.js';
+import type { TimelineFootVariant } from './timeline.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
 import { randabfallend, tiltDeg } from './tilt.js';
 import { resolveWeight, textFontSizePt, textStyle } from './typography.js';
@@ -63,6 +65,15 @@ export interface TimelineContext {
    * sie beantwortet „wo im Leben stehe ich" und schweigt sonst.
    */
   style?: 'foot' | 'side';
+  /**
+   * Fassung der Zeichnung, je Achse eine.
+   *
+   * Zwei Felder und nicht eines: Die Fassungen der beiden Achsen haben nichts
+   * miteinander zu tun, und wer zwischen Fuß und Rand hin und her schaltet,
+   * soll auf jeder Seite seine Wahl wiederfinden. Ohne Angabe der Bestand.
+   */
+  footVariant?: TimelineFootVariant;
+  sideVariant?: TimelineSideVariant;
   /**
    * Erstes und letztes Jahr des Buches – der Maßstab der Randachse. Nur der
    * Aufrufer kennt sie; die Engine sieht immer nur eine Doppelseite.
@@ -438,6 +449,7 @@ function buildTimeline(
         // gewählt, nicht nach Datum – dieselbe Regel wie am Fuß.
         ...(mitte && !templateMeta(template.id).chapterOnly ? { at: mitte } : {}),
         accentColor: tl.accentColor ?? accentOn(background),
+        ...(tl.sideVariant ? { variant: tl.sideVariant } : {}),
       },
       profile,
     );
@@ -491,6 +503,7 @@ function buildTimeline(
       // der Marker soll zu ihr gehören statt auf ihr zu liegen. Ein Aufrufer
       // kann ihn weiterhin übersteuern.
       accentColor: tl.accentColor ?? accentOn(background),
+      ...(tl.footVariant ? { variant: tl.footVariant } : {}),
     },
     profile,
   );

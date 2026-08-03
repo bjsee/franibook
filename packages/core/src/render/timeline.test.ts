@@ -211,3 +211,98 @@ describe('Zeitstrahl: Platz im Fußraum', () => {
     expect(achse[0]!.fill).toBe(achse[2]!.fill);
   });
 });
+
+describe('Zeitstrahl: Fassungen', () => {
+  /** Eine Doppelseite mit Spanne, damit Balken und Perle beide vorkommen. */
+  const SPANNE = ['2017-04-18T14:20:00', '2017-05-21T16:40:00', '2017-06-09T09:15:00'];
+
+  /** Der Grund einer Fassung: was ohne Marker und ohne Text übrig bleibt. */
+  const grund = (variant: string) =>
+    rects(boxesOf(SPANNE, { variant, markerless: true, label: 'Irgendwo' }));
+
+  it('lässt classic ohne Angabe unverändert', () => {
+    // Bitidentisch heißt: dieselben Boxen, nicht bloß dieselbe Anzahl.
+    expect(boxesOf(SPANNE, { label: 'Irgendwo' })).toEqual(
+      boxesOf(SPANNE, { label: 'Irgendwo', variant: 'classic' }),
+    );
+  });
+
+  it('zeichnet das Kalenderband als 18 Felder mit 17 ausgesparten Fugen', () => {
+    const boxen = grund('band');
+    const felder = boxen.filter((r) => r.hMm === 6 && r.wMm > 1);
+    const fugen = boxen.filter((r) => r.hMm === 6 && r.wMm === 0.2);
+    const grundlinie = boxen.filter((r) => r.hMm === 0.4);
+
+    expect(felder).toHaveLength(18);
+    expect(fugen).toHaveLength(17);
+    expect(grundlinie).toHaveLength(1);
+    // Die drei markanten Höhen: Bandkante, Grundlinie, Perlenoberkante.
+    const top = timelineFootTopMm(profile);
+    expect(felder[0]!.yMm - top).toBeCloseTo(4, 6);
+    expect(grundlinie[0]!.yMm - top).toBeCloseTo(10, 6);
+    expect(perle(boxesOf(SPANNE, { variant: 'band' }))!.yMm - top).toBeCloseTo(1.2, 6);
+  });
+
+  it('hängt an der Monatsleiter 19 Zähne, davon 13 über dem Kapiteljahr', () => {
+    const boxen = grund('ruler');
+    const zaehne = boxen.filter((r) => r.wMm === 0.35);
+    const lang = zaehne.filter((r) => r.hMm === 4.4);
+
+    expect(zaehne).toHaveLength(19);
+    // Dreizehn Grenzen umfassen zwölf Monate – dort wechselt die Länge, und
+    // deshalb braucht die Fassung keine dreigeteilte Achse.
+    expect(lang).toHaveLength(13);
+    expect(lang.every((r) => r.fill !== zaehne[0]!.fill)).toBe(true);
+  });
+
+  it('legt das Jahresband über die zwölf Monate des Kapiteljahres', () => {
+    const boxen = grund('ribbon');
+    const flaeche = boxen.find((r) => r.hMm === 7.4 && r.wMm > 100)!;
+    const fugen = boxen.filter((r) => r.hMm === 7.4 && r.wMm === 0.25);
+    const randmonate = boxen.filter((r) => r.hMm === 0.3);
+
+    expect(fugen).toHaveLength(11);
+    expect(randmonate).toHaveLength(2);
+    // Ein Sechstel bis fünf Sechstel der Achse: dieselben Grenzen wie die
+    // Jahreszahlen von classic.
+    expect(flaeche.xMm).toBeCloseTo(AXIS_X0 + AXIS_LEN / 6, 6);
+    expect(flaeche.xMm + flaeche.wMm).toBeCloseTo(AXIS_X0 + (AXIS_LEN * 5) / 6, 6);
+  });
+
+  it('spart die Jahreszahl des Jahresbandes in der Fläche aus', () => {
+    const zahlen = texts(boxesOf(SPANNE, { variant: 'ribbon' })).filter((t) =>
+      t.slotId.startsWith('timeline-year'),
+    );
+    expect(zahlen).toHaveLength(2);
+    // Papierfarbe: Die Zahl ist ein Loch im Band, kein sechster Grauwert.
+    expect(zahlen[0]!.color).toBe('#ffffff');
+    expect(zahlen[1]!.color).not.toBe('#ffffff');
+  });
+
+  it('hält jede Fassung im Fußraum und trägt den Marker in allen', () => {
+    const top = timelineFootTopMm(profile);
+    const unten = profile.page.bleedMm + profile.page.trimHeightMm - profile.page.safetyMm;
+
+    for (const variant of ['classic', 'band', 'ruler', 'ribbon']) {
+      const boxes = boxesOf(SPANNE, { variant, label: 'Pfingsten am Meer' });
+      expect(perle(boxes), variant).toBeDefined();
+      expect(texts(boxes).some((t) => t.slotId === 'timeline-label')).toBe(true);
+      for (const box of boxes) {
+        if (box.kind === 'polygon') continue;
+        expect(box.yMm, variant).toBeGreaterThanOrEqual(top);
+        expect(box.yMm + box.hMm, variant).toBeLessThanOrEqual(unten);
+      }
+    }
+  });
+
+  it('lässt in jeder Fassung den Marker weg, wo keiner hingehört', () => {
+    for (const variant of ['classic', 'band', 'ruler', 'ribbon']) {
+      // Kapitelauftakt und Doppelseite ohne belastbares Datum: Der Grund bleibt
+      // stehen, damit die Reihe nicht reißt, nur der Marker entfällt.
+      expect(perle(boxesOf(SPANNE, { variant, markerless: true })), variant).toBeUndefined();
+      const ohneDatum = boxesOf([], { variant, fallbackYear: 2017 });
+      expect(perle(ohneDatum), variant).toBeUndefined();
+      expect(rects(ohneDatum).length, variant).toBeGreaterThan(2);
+    }
+  });
+});

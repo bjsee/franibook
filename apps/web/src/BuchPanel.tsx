@@ -12,8 +12,15 @@
  * Unterschied zwischen „Zeitstrahl aus" (folgenlos) und „Jahresauftakte aus"
  * (vierzehn Ausschnitte weg) war nirgends zu sehen.
  */
-import { MAX_TILT_DEG } from '@franibook/core';
+import {
+  accentOn,
+  MAX_TILT_DEG,
+  TIMELINE_ACCENTS,
+  type TimelineFootVariant,
+  type TimelineSideVariant,
+} from '@franibook/core';
 import { B, T } from './theme.js';
+import { ZeitleisteMini } from './ZeitleisteMini.js';
 
 export interface BuchEinstellungen {
   targetPages: number;
@@ -21,10 +28,52 @@ export interface BuchEinstellungen {
   groupOpeners: boolean | 'auto';
   timeline: boolean;
   timelineStyle: 'foot' | 'side';
+  timelineFootVariant: TimelineFootVariant;
+  timelineSideVariant: TimelineSideVariant;
+  timelineAccent: string;
+  /** Papierton des Buches – die Miniaturen zeigen die Fassungen darauf. */
+  background: string;
   chapterColors: boolean;
   tilt: number;
   seed: number;
 }
+
+/**
+ * Was die beiden Achsen beantworten.
+ *
+ * Der Satz steht unter dem Schalter und nicht in einem Tooltip: Es ist keine
+ * Erklärung der Bedienung, sondern die Entscheidung selbst. Beide Achsen sind
+ * richtig, sie antworten nur auf verschiedene Fragen.
+ */
+const ORT_ERKLAERUNG: Record<'foot' | 'side', string> = {
+  foot: 'Im Fußraum, 14 mm hoch, über beide Seiten. Beantwortet: wie weit ist es seit der letzten Seite.',
+  side: 'Senkrecht im äußeren Rand der linken Seite. Beantwortet: wo im Buch stehe ich.',
+};
+
+/**
+ * Die Fassungen mit ihren Namen.
+ *
+ * „Heute" statt „classic" und an erster Stelle: Der Vergleich mit dem Bestand
+ * ist der halbe Zweck des Feldes, und wer die Namen der übrigen Fassungen liest,
+ * hat daneben die Zeichnung.
+ */
+const FASSUNGEN: {
+  foot: readonly { id: TimelineFootVariant; name: string }[];
+  side: readonly { id: TimelineSideVariant; name: string }[];
+} = {
+  foot: [
+    { id: 'classic', name: 'Heute' },
+    { id: 'band', name: 'Kalenderband' },
+    { id: 'ruler', name: 'Monatsleiter' },
+    { id: 'ribbon', name: 'Jahresband' },
+  ],
+  side: [
+    { id: 'classic', name: 'Heute' },
+    { id: 'ladder', name: 'Jahresleiter' },
+    { id: 'bar', name: 'Fortschrittsbalken' },
+    { id: 'column', name: 'Jahresspalte' },
+  ],
+};
 
 export interface Handarbeit {
   crops: number;
@@ -46,6 +95,9 @@ interface Props {
   onDarstellung: (patch: {
     timeline?: boolean;
     timelineStyle?: 'foot' | 'side';
+    timelineFootVariant?: TimelineFootVariant;
+    timelineSideVariant?: TimelineSideVariant;
+    timelineAccent?: string;
     tilt?: number;
   }) => void;
   onNeuEinlesen: () => void;
@@ -68,6 +120,10 @@ export function BuchPanel({
     handwork.positionen > 0 ? `${handwork.positionen} frei gesetzte Bilder` : null,
     handwork.texte > 0 ? `${handwork.texte} Textblöcke` : null,
   ].filter((s): s is string => s !== null);
+
+  // `auto` heißt „aus dem Hintergrund ableiten" – dann bekommt der Kern gar
+  // keine Farbe, statt einer geratenen.
+  const akzent = settings.timelineAccent === 'auto' ? undefined : settings.timelineAccent;
 
   function neuAnordnen() {
     // Was bleibt, gehört genauso in die Warnung wie was geht: Sonst klingt sie,
@@ -163,31 +219,123 @@ export function BuchPanel({
           />
           Zeitstrahl
         </label>
-        {/*
-          Zwei Achsen, zwei Fragen: Der Fuß sagt, wie weit es seit der letzten
-          Seite ist, der Rand, wo man im Buch steht.
-        */}
-        {settings.timeline && (
-          <label
-            style={{ ...B.haken, justifyContent: 'space-between' }}
-            title="Achse am Seitenfuß oder am äußeren Rand"
-          >
-            Achse
-            <select
-              value={settings.timelineStyle}
-              onChange={(e) => onDarstellung({ timelineStyle: e.target.value as 'foot' | 'side' })}
-              style={B.auswahl}
-            >
-              <option value="foot">im Fuß, mit Gruppentitel</option>
-              <option value="side">am Rand, über alle Jahre</option>
-            </select>
-          </label>
-        )}
-        {/*
-          Wie der Zeitstrahl eine reine Darstellungssache: Die Neigung entsteht
-          beim Rendern und rührt die Fotoverteilung nicht an. Ein Dreh am Regler
-          kostet deshalb keine handgemachte Korrektur.
-        */}
+      </div>
+
+      {settings.timeline && (
+        <>
+          {/*
+            Zwei Achsen, zwei Fragen: Der Fuß sagt, wie weit es seit der letzten
+            Seite ist, der Rand, wo man im Buch steht. Ein Segmentschalter statt
+            eines Selects, weil beides gleichrangig ist – ein Select mit zwei
+            Einträgen versteckt die zweite Möglichkeit hinter einem Klick.
+          */}
+          <div style={{ ...B.abschnitt, gap: 8 }}>
+            <span style={B.marke}>Ort</span>
+            <div style={B.segRahmen}>
+              {(['foot', 'side'] as const).map((ort) => (
+                <button
+                  key={ort}
+                  onClick={() => onDarstellung({ timelineStyle: ort })}
+                  style={{
+                    ...(settings.timelineStyle === ort ? B.segAn : B.segAus),
+                    flex: 1,
+                  }}
+                >
+                  {ort === 'foot' ? 'am Fuß' : 'am Rand'}
+                </button>
+              ))}
+            </div>
+            <p style={B.leiser}>{ORT_ERKLAERUNG[settings.timelineStyle]}</p>
+          </div>
+
+          {/*
+            Vier Zeilen statt eines Selects: Man wählt eine Zeichnung, kein Wort.
+            Am Fuß steht der Name über der Miniatur und diese über die volle
+            Zeilenbreite – der Strahl ist 584 mm breit, neben einem Wort wäre
+            beides zu schmal. Am Rand ist die Achse hoch und schmal, dort steht
+            die Miniatur links und der Name rechts daneben.
+          */}
+          <div style={{ ...B.abschnitt, gap: 8 }}>
+            <span style={B.marke}>Fassung</span>
+            {settings.timelineStyle === 'foot'
+              ? FASSUNGEN.foot.map(({ id, name }) => (
+                  <button
+                    key={id}
+                    onClick={() => onDarstellung({ timelineFootVariant: id })}
+                    style={{
+                      ...(settings.timelineFootVariant === id ? B.filterAn : B.filter),
+                      ...S.fassungHoch,
+                    }}
+                  >
+                    {name}
+                    <ZeitleisteMini
+                      ort="foot"
+                      fassung={id}
+                      background={settings.background}
+                      {...(akzent ? { akzent } : {})}
+                    />
+                  </button>
+                ))
+              : FASSUNGEN.side.map(({ id, name }) => (
+                  <button
+                    key={id}
+                    onClick={() => onDarstellung({ timelineSideVariant: id })}
+                    style={{
+                      ...(settings.timelineSideVariant === id ? B.filterAn : B.filter),
+                      ...S.fassungBreit,
+                    }}
+                  >
+                    <ZeitleisteMini
+                      ort="side"
+                      fassung={id}
+                      background={settings.background}
+                      {...(akzent ? { akzent } : {})}
+                    />
+                    {name}
+                  </button>
+                ))}
+          </div>
+
+          {/*
+            Fünf Pillen und kein freier Farbwähler: Der Marker ist das einzige
+            farbige Element im Innenteil, eine offene Farbwahl produziert dort
+            Neonrosa. „Jahresfarbe" steht voran, weil es die Vorgabe ist – dann
+            leitet der Kern den Ton aus dem Hintergrund der jeweiligen
+            Doppelseite ab, und der Tupfen zeigt, was daraus auf diesem Papier
+            wird.
+          */}
+          <div style={{ ...B.abschnitt, gap: 8 }}>
+            <span style={B.marke}>Akzentfarbe</span>
+            <div style={S.pillen}>
+              {TIMELINE_ACCENTS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => onDarstellung({ timelineAccent: value })}
+                  style={{
+                    ...(settings.timelineAccent === value ? B.chipAn : B.chip),
+                    ...S.pille,
+                  }}
+                >
+                  <span
+                    style={{
+                      ...S.tupfen,
+                      background: value === 'auto' ? accentOn(settings.background) : value,
+                    }}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/*
+        Wie der Zeitstrahl eine reine Darstellungssache: Die Neigung entsteht
+        beim Rendern und rührt die Fotoverteilung nicht an. Ein Dreh am Regler
+        kostet deshalb keine handgemachte Korrektur.
+      */}
+      <div style={B.abschnitt}>
         <label style={B.haken} title="Wie schief die Bilder auf den Seiten liegen">
           Neigung
           <input
@@ -251,6 +399,32 @@ const S = {
     borderRadius: T.rMd,
     background: T.bg1,
     color: T.fg1,
+  },
+  /** Eine Fassung des Fußstrahls: Name über der Miniatur, beide linksbündig. */
+  fassungHoch: {
+    flexDirection: 'column' as const,
+    alignItems: 'flex-start',
+    gap: 5,
+    padding: '7px 8px',
+  },
+  /** Eine Fassung der Randachse: Miniatur links, Name rechts daneben. */
+  fassungBreit: {
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 10,
+    padding: '7px 8px',
+  },
+  pillen: { display: 'flex', flexWrap: 'wrap' as const, gap: 6 },
+  pille: { display: 'inline-flex', alignItems: 'center', gap: 6 },
+  /** Der Farbtupfen einer Akzentpille – die Farbe des Buches, nicht der Oberfläche. */
+  tupfen: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+    // Ein zarter Rand, damit auch ein heller Tupfen auf weißem Chip eine Kante
+    // hat: Ohne ihn verschwindet die Jahresfarbe auf Papierweiß.
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.12)',
   },
   reglerWert: {
     fontFamily: T.display,

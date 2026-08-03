@@ -327,6 +327,50 @@ describe('Zeitstrahl auf der Doppelseite', () => {
     const labels = rsm.boxes.filter((b) => b.kind === 'text' && b.slotId === 'timeline-label');
     expect(labels).toHaveLength(0);
   });
+
+  it('reicht die Fassung an die Achse durch, die gerade gezeichnet wird', () => {
+    // Zwei Felder, eines je Achse: Ein Wechsel des Ortes darf die Wahl an der
+    // anderen Achse nicht verlieren, deshalb bekommt der Kontext beide.
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const fuss = renderSpread(spread, {
+      ...timelineCtx,
+      timeline: { dateOf: DATEN, footVariant: 'ruler', sideVariant: 'column' },
+    });
+    // Die Monatsleiter hängt Zähne von 0,35 mm Breite an eine Grundlinie – das
+    // Kalenderband von classic hat keine.
+    expect(fuss.boxes.filter((b) => b.kind === 'rect' && b.wMm === 0.35)).toHaveLength(19);
+
+    const rand = renderSpread(spread, {
+      ...timelineCtx,
+      timeline: {
+        dateOf: DATEN,
+        style: 'side',
+        bookYears: { from: 2008, to: 2026 },
+        footVariant: 'ruler',
+        sideVariant: 'column',
+      },
+    });
+    // Die Jahresspalte zeichnet keine Linie, nur Zahlen und einen Punkt.
+    expect(rand.boxes.filter((b) => b.kind === 'text')).toHaveLength(19);
+    expect(rand.boxes.filter((b) => b.kind === 'rect')).toHaveLength(1);
+  });
+
+  it('nimmt eine gewählte Akzentfarbe, sonst die aus dem Hintergrund abgeleitete', () => {
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const perle = (rsm: ReturnType<typeof renderSpread>) =>
+      rsm.boxes.find((b) => b.kind === 'rect' && b.rxMm !== undefined && b.wMm === b.hMm);
+
+    const gewaehlt = perle(
+      renderSpread(spread, { ...timelineCtx, timeline: { dateOf: DATEN, accentColor: '#0f6f7a' } }),
+    );
+    const abgeleitet = perle(renderSpread(spread, timelineCtx));
+    if (gewaehlt?.kind !== 'rect' || abgeleitet?.kind !== 'rect') throw new Error('keine Perle');
+
+    expect(gewaehlt.fill).toBe('#0f6f7a');
+    // Ohne Angabe bleibt es bei `accentOn` – der Marker gehört dann zur Seite,
+    // statt auf ihr zu liegen.
+    expect(abgeleitet.fill).not.toBe('#0f6f7a');
+  });
 });
 
 describe('Mehrzeilige Texte', () => {

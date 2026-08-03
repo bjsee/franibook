@@ -20,7 +20,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, type Page, expect, test } from '@playwright/test';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
@@ -134,6 +134,64 @@ async function eineDoppelseite(request: APIRequestContext): Promise<void> {
     },
   });
   expect(res.ok()).toBe(true);
+}
+
+/**
+ * Die Messkette in einem Stück: Vorschau schießen, PDF exportieren, rastern,
+ * vergleichen. Gibt den Anteil abweichender Pixel zurück und legt Vorschau,
+ * Raster und Differenzbild unter `<name>` in den Artefakten ab.
+ *
+ * Gebaut für die Fälle, von denen es mehrere gleichartige gibt – die Fassungen
+ * der Zeitleisten. Die älteren Fälle behalten ihren eigenen Ablauf, weil ihre
+ * Schwellen gegen ihn gemessen sind.
+ */
+async function messeParitaet(
+  page: Page,
+  request: APIRequestContext,
+  name: string,
+): Promise<number> {
+  await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+  const stage = page.getByTestId('spread');
+  await expect(stage).toBeVisible();
+  await page.waitForFunction(() => {
+    const imgs = Array.from(document.images);
+    return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+  });
+  // Sobald ein Spread Text trägt, entscheidet die Schrift über Geometrie.
+  await page.evaluate(() => document.fonts.ready);
+
+  const shot = await stage.screenshot({ type: 'png' });
+  await writeFile(join(ARTIFACTS, `preview-${name}.png`), shot);
+
+  const exportRes = await request.post('http://127.0.0.1:5174/api/export/pdf', {
+    data: { spreadIndex: 0, fileName: `parity-${name}.pdf` },
+  });
+  expect(exportRes.ok()).toBe(true);
+
+  const rasterPrefix = join(ARTIFACTS, `pdf-${name}`);
+  await execFileAsync('pdftoppm', [
+    '-png',
+    '-r',
+    String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+    '-singlefile',
+    join(OUT, `parity-${name}.pdf`),
+    rasterPrefix,
+  ]);
+
+  const meta = await sharp(shot).metadata();
+  const width = meta.width ?? COMPARE_WIDTH;
+  const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+
+  const a = await toPng(shot, width, height);
+  const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
+  const diff = new PNG({ width, height });
+  const differing = pixelmatch(a.data, b.data, diff.data, width, height, {
+    threshold: PIXEL_THRESHOLD,
+    includeAA: false,
+  });
+  await writeFile(join(ARTIFACTS, `diff-${name}.png`), PNG.sync.write(diff));
+
+  return differing / (width * height);
 }
 
 test.beforeAll(async ({ playwright }) => {
@@ -604,6 +662,62 @@ test.describe('Vorschau und PDF stimmen überein', () => {
         `Vergleichsbilder in ${ARTIFACTS}`,
     ).toBeLessThan(MAX_DIFF_TIMELINE);
   });
+
+  /**
+   * Jede Fassung der beiden Zeitleisten einmal.
+   *
+   * Sie sind die Klasse Änderung, für die dieser Test gebaut ist: neue
+   * Geometrie in beiden Adaptern, und zwar aus feinen Formen – Kerben von
+   * 0,25 mm, Fugen von 0,2 mm, Zahlen in 5 pt. Wenn ein Adapter davon etwas
+   * selbst rechnet, fällt es hier auf und nicht im gedruckten Buch.
+   *
+   * Datengetrieben und mit einer gemeinsamen Messkette, statt den Ablauf sechs
+   * Mal zu wiederholen. Die fünf Fälle darüber behalten ihre eigene: Ihre
+   * Schwellen sind gegen genau diesen Ablauf gemessen, und ein Umbau der
+   * Messkette müsste neu gemessen werden, um noch etwas zu bedeuten.
+   */
+  const FASSUNGEN = [
+    { ort: 'foot', variant: 'band' },
+    { ort: 'foot', variant: 'ruler' },
+    { ort: 'foot', variant: 'ribbon' },
+    { ort: 'side', variant: 'ladder' },
+    { ort: 'side', variant: 'bar' },
+    { ort: 'side', variant: 'column' },
+  ] as const;
+
+  for (const { ort, variant } of FASSUNGEN) {
+    test(`Zeitleiste ${ort}/${variant} deckt sich in Vorschau und PDF`, async ({
+      page,
+      request,
+    }) => {
+      await eineDoppelseite(request);
+      const feld = ort === 'foot' ? 'timelineFootVariant' : 'timelineSideVariant';
+
+      // Erst der Bestand, dann die Fassung: Der Vergleich der beiden Modelle
+      // zeigt, dass die Wahl überhaupt angekommen ist. Ohne diese Probe wäre
+      // ein Tippfehler im Feldnamen ein grüner Test, der nichts prüft.
+      await request.patch('http://127.0.0.1:5174/api/settings', {
+        data: { timeline: true, timelineStyle: ort, [feld]: 'classic' },
+      });
+      const bestand = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+
+      await request.patch('http://127.0.0.1:5174/api/settings', {
+        data: { timeline: true, timelineStyle: ort, [feld]: variant },
+      });
+      const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+      expect(rsm.boxes).not.toEqual(bestand.boxes);
+
+      const ratio = await messeParitaet(page, request, `${ort}-${variant}`);
+      console.log(
+        `Parity (Zeitleiste ${ort}/${variant}): ${(ratio * 100).toFixed(3)} % abweichend`,
+      );
+      expect(
+        ratio,
+        `Vorschau und PDF weichen mit der Fassung ${variant} um ${(ratio * 100).toFixed(3)} % ab. ` +
+          `Vergleichsbilder in ${ARTIFACTS}`,
+      ).toBeLessThan(MAX_DIFF_TIMELINE);
+    });
+  }
 
   test('PDF trägt die richtigen Boxen', async () => {
     const { stdout } = await execFileAsync('pdfinfo', ['-box', join(OUT, 'parity.pdf')]);

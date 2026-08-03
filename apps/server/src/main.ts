@@ -16,10 +16,15 @@ import {
   BACKGROUND_COLORS,
   BACKGROUND_MIN_DPI,
   MAX_TILT_DEG,
+  TIMELINE_ACCENTS,
+  TIMELINE_FOOT_VARIANTS,
+  TIMELINE_SIDE_VARIANTS,
   type CoverDesign,
   type MoveSource,
   type MoveTarget,
   type TextBlock,
+  type TimelineFootVariant,
+  type TimelineSideVariant,
   coverWarningText,
   teilbar,
 } from '@franibook/core';
@@ -537,12 +542,36 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply)
  * auszublenden.
  */
 app.patch<{
-  Body: { timeline?: boolean; timelineStyle?: 'foot' | 'side'; background?: string; tilt?: number };
+  Body: {
+    timeline?: boolean;
+    timelineStyle?: 'foot' | 'side';
+    timelineFootVariant?: string;
+    timelineSideVariant?: string;
+    timelineAccent?: string;
+    background?: string;
+    tilt?: number;
+  };
 }>('/api/settings', async (req) => {
   if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
   // Fuß oder Rand: eine Frage der Darstellung, keine der Fotoverteilung.
   if (req.body.timelineStyle === 'foot' || req.body.timelineStyle === 'side') {
     project.settings.timelineStyle = req.body.timelineStyle;
+  }
+  // Fassung und Akzent gegen die geschlossenen Listen aus dem Kern geprüft, und
+  // ein unbekannter Wert wird stillschweigend übergangen: Die Geometrie käme mit
+  // ihm auf einen Zweig, den es nicht gibt, und ein halb gezeichneter Zeitstrahl
+  // wäre ein schlechterer Fehler als eine wirkungslose Anfrage.
+  const fuss = req.body.timelineFootVariant;
+  if (fuss !== undefined && (TIMELINE_FOOT_VARIANTS as readonly string[]).includes(fuss)) {
+    project.settings.timelineFootVariant = fuss as TimelineFootVariant;
+  }
+  const rand = req.body.timelineSideVariant;
+  if (rand !== undefined && (TIMELINE_SIDE_VARIANTS as readonly string[]).includes(rand)) {
+    project.settings.timelineSideVariant = rand as TimelineSideVariant;
+  }
+  const akzent = req.body.timelineAccent;
+  if (akzent !== undefined && TIMELINE_ACCENTS.some((a) => a.value === akzent)) {
+    project.settings.timelineAccent = akzent;
   }
   if (req.body.background !== undefined) project.settings.background = req.body.background;
   // Die Neigung gehört aus demselben Grund hierher wie der Zeitstrahl: Sie
