@@ -86,6 +86,18 @@ export interface TextBlock {
   rotateDeg?: number;
 }
 
+/**
+ * Wo eine festgehaltene Doppelseite nach dem Neuerzeugen wieder hingehört.
+ *
+ * `before` heißt: unmittelbar vor der Doppelseite, auf der dieses Foto liegt –
+ * das ist der Fall der selbst gebauten Auftaktseite. `after` ist der Nachsatz,
+ * der Schluss eines Ereignisses.
+ */
+export interface SpreadAnchor {
+  photoId: PhotoId;
+  where: 'before' | 'after';
+}
+
 export interface Spread {
   id: SpreadId;
   index: number;
@@ -97,8 +109,32 @@ export interface Spread {
    * Layout-Dokument nicht – wie jede andere Handarbeit an der Doppelseite.
    */
   blocks?: TextBlock[];
-  /** Von "Buch neu generieren" ausgenommen. */
+  /**
+   * Von „Buch neu generieren" ausgenommen.
+   *
+   * Die Doppelseite wird beim Erzeugen nicht gebaut, sondern übernommen: samt
+   * Vorlage, Slots, Ausschnitten, Textblöcken und Hintergrund. Ihre Bilder
+   * gelten als vergeben und laufen nicht zusätzlich im Fluss mit, ihre zwei
+   * Seiten gehen vom Seitenbudget ab.
+   *
+   * Gesetzt wird das Feld von Hand – jede selbst eingefügte Seite bekommt es
+   * gleich mit. Eine Seite, die aus nichts als gesetzten Textblöcken besteht,
+   * überlebte den Neuaufbau sonst nicht eine Sekunde.
+   */
   locked?: boolean;
+  /**
+   * Woran diese Doppelseite hängt, wenn das Buch neu erzeugt wird.
+   *
+   * Ein festgehaltener Index wäre wertlos: Baut die Engine ein Jahr um zwei
+   * Doppelseiten kürzer, stünde die selbst gebaute Auftaktseite mitten im
+   * falschen Monat. Der Anker nennt deshalb ein Foto – die Seite kommt dorthin
+   * zurück, wo dieses Bild gelandet ist. Das ist die Sprache, in der die
+   * Absicht auch formuliert war: „vor der Seite, auf der das Fest beginnt".
+   *
+   * Fehlt der Anker oder liegt sein Foto in keiner Doppelseite mehr, gilt
+   * `index` als Notnagel.
+   */
+  anchor?: SpreadAnchor;
   /**
    * Hintergrundfarbe dieser Doppelseite. Ohne Angabe gilt die globale Vorgabe.
    */

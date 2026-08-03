@@ -8,6 +8,7 @@ import { PhotoGroups } from './PhotoGroups.js';
 import { PhotoSources } from './PhotoSources.js';
 import { YearEvents } from './YearEvents.js';
 import { BackgroundPicker } from './BackgroundPicker.js';
+import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
 import type { TextBlockData } from './TextBlocks.js';
 
@@ -45,6 +46,8 @@ type SpreadResponse = RenderedSpread & {
   groups?: SpreadGroup[];
   /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
   blocks?: TextBlockData[];
+  /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
+  locked?: boolean;
 };
 
 interface ProjectInfo {
@@ -78,6 +81,10 @@ interface ProjectInfo {
     zeitstrahl: number;
     /** Von Hand gesetzte Bildpositionen. */
     positionen: number;
+    /** Textblöcke auf Seiten, die neu gebaut werden. */
+    texte: number;
+    /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
+    festgehalten: number;
   };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
   groupMarks: { spreadIndex: number; id: string; title: string }[];
@@ -127,6 +134,12 @@ export function App() {
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   /** Gruppe, auf die die Gruppenansicht beim Wechsel dorthin springen soll. */
   const [gruppenFokus, setGruppenFokus] = useState<string | null>(null);
+  /**
+   * Stelle, an der eine eigene Doppelseite entstehen soll – `null` heißt: kein
+   * Dialog offen. Die Zahl ist die Einfügestelle, nicht der Index einer
+   * bestehenden Seite; `spreadCount` bedeutet „ganz hinten".
+   */
+  const [einfuegenAn, setEinfuegenAn] = useState<number | null>(null);
 
   const bare = new URLSearchParams(location.search).has('bare');
   const [guides, setGuides] = useState<GuideVisibility>(() =>
@@ -249,6 +262,62 @@ export function App() {
       setError(String(e));
     } finally {
       setBusy(null);
+    }
+  }
+
+  /**
+   * Hält die gezeigte Doppelseite fest oder gibt sie frei.
+   *
+   * Für eine selbst gebaute Seite ist das Schloss die Voraussetzung, dass sie
+   * den nächsten Knopfdruck übersteht; für eine erzeugte der Weg, eine gelungene
+   * Seite zu behalten, während der Rest neu gemischt wird.
+   */
+  async function setSpreadLocked(locked: boolean) {
+    try {
+      const res = await fetch(`/api/spreads/${index}/locked`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ locked }),
+      });
+      const daten = (await res.json()) as { spread?: SpreadResponse };
+      if (daten.spread) setSpread(daten.spread);
+      loadInfo();
+    } catch (e) {
+      setNote(`Nicht geändert: ${String(e)}`);
+    }
+  }
+
+  /**
+   * Nimmt die gezeigte Doppelseite aus dem Buch.
+   *
+   * Ihre Bilder gehen in den Fotopool – verloren ist keines. Gefragt wird
+   * trotzdem: Die folgenden Seitenzahlen verschieben sich alle.
+   */
+  async function removeSpread() {
+    if (!info) return;
+    const bilder = spread?.boxes.filter((b) => b.kind === 'image').length ?? 0;
+    if (
+      !window.confirm(
+        `Doppelseite ${index + 1} aus dem Buch nehmen?` +
+          (bilder > 0 ? `\n\n${bilder} Bilder wandern in den Fotopool.` : ''),
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/spreads/${index}`, { method: 'DELETE' });
+      const daten = (await res.json()) as { ok?: boolean; error?: string; spreadCount?: number };
+      if (!res.ok || !daten.ok) {
+        setNote(daten.error ?? `Nicht gelöscht (HTTP ${res.status})`);
+        return;
+      }
+      setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
+      loadInfo();
+      setSpread(null);
+      setRenderVersion((v) => v + 1);
+    } catch (e) {
+      setNote(`Nicht gelöscht: ${String(e)}`);
     }
   }
 
@@ -471,6 +540,45 @@ export function App() {
                 )}
 
                 {/*
+                  Festhalten, einfügen, löschen – die drei Griffe am Buchgerüst.
+                  Sie stehen hier und nicht im Editor, weil sie nicht die
+                  Doppelseite ändern, sondern ihren Platz im Buch.
+                */}
+                <label
+                  style={S.check}
+                  title="Diese Doppelseite beim Neuanordnen unverändert lassen"
+                >
+                  <input
+                    type="checkbox"
+                    checked={spread?.locked ?? false}
+                    onChange={(e) => void setSpreadLocked(e.target.checked)}
+                  />
+                  Festgehalten {spread?.locked ? '🔒' : ''}
+                </label>
+                <button
+                  onClick={() => setEinfuegenAn(index)}
+                  style={S.button}
+                  title="Eigene Doppelseite vor dieser einfügen"
+                >
+                  ＋ Seite davor
+                </button>
+                <button
+                  onClick={() => setEinfuegenAn(index + 1)}
+                  style={S.button}
+                  title="Eigene Doppelseite hinter dieser einfügen"
+                >
+                  ＋ Seite danach
+                </button>
+                <button
+                  onClick={() => void removeSpread()}
+                  style={S.buttonDanger}
+                  title="Diese Doppelseite aus dem Buch nehmen. Die Bilder gehen in den Fotopool."
+                  disabled={(info?.spreadCount ?? 0) <= 1}
+                >
+                  Seite löschen
+                </button>
+
+                {/*
                   Welche Gruppen hier liegen – und ein Weg zu ihnen. Der Name im
                   Zeitstrahl kam bislang von irgendwoher; wer ihn ändern wollte,
                   musste ihn in einer Liste von sechzig Gruppen suchen.
@@ -613,12 +721,21 @@ export function App() {
                       h.hintergruende > 0 ? `${h.hintergruende} Hintergründe` : null,
                       h.zeitstrahl > 0 ? `${h.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
                       h.positionen > 0 ? `${h.positionen} frei gesetzte Bilder` : null,
+                      h.texte > 0 ? `${h.texte} Textblöcke` : null,
                     ].filter(Boolean);
+                    // Was bleibt, gehört genauso in die Warnung wie was geht:
+                    // Sonst klingt sie, als würde auch die selbst gebaute Seite
+                    // verworfen.
+                    const bleibt =
+                      h.festgehalten > 0
+                        ? `\n\n${h.festgehalten} festgehaltene Doppelseite(n) bleiben unangetastet.`
+                        : '';
                     if (
                       verlust.length > 0 &&
                       !window.confirm(
                         `Das Buch wird komplett neu gebaut. Verworfen werden: ${verlust.join(', ')}.\n\n` +
-                          'Fotos, Datumskorrekturen, Gruppen und Jahresereignisse bleiben erhalten.',
+                          'Fotos, Datumskorrekturen, Gruppen und Jahresereignisse bleiben erhalten.' +
+                          bleibt,
                       )
                     ) {
                       return;
@@ -633,7 +750,8 @@ export function App() {
                     info.handwork.neigungen +
                     info.handwork.hintergruende +
                     info.handwork.zeitstrahl +
-                    info.handwork.positionen >
+                    info.handwork.positionen +
+                    info.handwork.texte >
                     0 && ' ⚠'}
                 </button>
                 <button
@@ -690,6 +808,7 @@ export function App() {
                   setIndex(i);
                   setView('spread');
                 }}
+                onInsert={setEinfuegenAn}
               />
             </div>
           ) : (
@@ -719,6 +838,30 @@ export function App() {
                 Übersicht.
               </p>
             </>
+          )}
+
+          {/*
+            Nach dem Einfügen gleich zur neuen Seite: Sie ist leer, und alles
+            weitere – Textblock setzen, Bild hineinziehen – passiert dort.
+          */}
+          {einfuegenAn !== null && info && (
+            <InsertSpread
+              at={einfuegenAn}
+              spreadCount={info.spreadCount}
+              onAbbrechen={() => setEinfuegenAn(null)}
+              onFehler={(text) => {
+                setEinfuegenAn(null);
+                setNote(text);
+              }}
+              onEingefuegt={(neu) => {
+                setEinfuegenAn(null);
+                loadInfo();
+                setIndex(neu);
+                setSpread(null);
+                setRenderVersion((v) => v + 1);
+                setView('spread');
+              }}
+            />
           )}
         </>
       )}
@@ -918,6 +1061,15 @@ const S = {
     borderRadius: '6px',
     background: '#2563eb',
     color: '#fff',
+    cursor: 'pointer',
+  },
+  /** Rot wie beim Aussortieren eines Fotos: Der Griff nimmt etwas aus dem Buch. */
+  buttonDanger: {
+    padding: '0.35rem 0.75rem',
+    border: '1px solid #fecaca',
+    borderRadius: '6px',
+    background: '#fff',
+    color: '#b91c1c',
     cursor: 'pointer',
   },
   number: {

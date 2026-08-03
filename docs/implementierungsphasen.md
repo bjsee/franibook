@@ -268,8 +268,8 @@ Aus Ereignissen ein vollständiges Buch erzeugen. Das Herzstück.
 > Offen:
 >
 > - **Falzausweichung im Crop** fehlt; `auto-cover` zentriert nur um den Fokuspunkt.
-> - **`locked` ist ein Feld ohne Wirkung.** Der Generator wertet es nicht aus,
->   `manuallyEdited` gibt es nicht.
+> - **`manuallyEdited` gibt es nicht.** Wer eine erzeugte Doppelseite behalten will,
+>   hält sie von Hand fest.
 > - **Die Gewichtung wird nie gesetzt.** `hero`/`normal`/`filler` sind implementiert
 >   und fließen ins Scoring, aber kein Foto ist je etwas anderes als `normal` —
 >   [#7](https://github.com/bjsee/franibook/issues/7).
@@ -279,6 +279,12 @@ Aus Ereignissen ein vollständiges Buch erzeugen. Das Herzstück.
 > über zwei Dimensionen — Präfixlänge und Zahl der Doppelseiten —, die Seitenzahl ist
 > damit Nebenbedingung statt Kostenterm. Die Zielvorgabe rastet über
 > `nextValidPageCount()` auf das Druckprofil ein.
+>
+> Ebenfalls behoben: **`locked` wirkt.** Der Generator nimmt festgehaltene
+> Doppelseiten als `kept` herein und setzt sie an ihrem Anker zurück
+> (`layout/keep.ts`) — die Grundlage für selbst eingefügte Seiten. Dabei fiel ein
+> stiller Datenverlust auf: Der Layout-Rundlauf entfernte bildlose Doppelseiten und
+> löschte damit die Jahresauftakte ohne Bild samt ihrer Jahreszahl.
 
 **Inhalt**
 

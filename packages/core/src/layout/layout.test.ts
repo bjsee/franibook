@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
+import type { Spread } from '../model/spread.js';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import { buildStructure } from '../structure/segment.js';
@@ -909,5 +910,107 @@ describe('Hintergrundfarbe der Jahrgänge', () => {
       chapterColors: false,
     });
     expect(result.spreads.every((s) => s.background === undefined)).toBe(true);
+  });
+});
+
+describe('Festgehaltene Doppelseiten beim Erzeugen', () => {
+  /** Eine selbst gebaute Seite: leere Vorlage, ein Textblock, festgehalten. */
+  function eigeneSeite(anchor?: Spread['anchor']): Spread {
+    return {
+      id: 'eigen-1',
+      index: 3,
+      templateId: 'spread.leer',
+      slots: [],
+      locked: true,
+      background: '#fff7ed',
+      ...(anchor ? { anchor } : {}),
+      blocks: [
+        {
+          id: 'eigen-1-t1',
+          content: 'Einschulung',
+          rect: { x: 0.1, y: 0.4, w: 0.3, h: 0.1 },
+          weight: 'semibold',
+          fontSizePt: 32,
+          align: 'left',
+        },
+      ],
+    };
+  }
+
+  function erzeuge(kept: Spread[], targetPages = 30) {
+    const { photos, dated } = buildBestand({ 2015: 40 });
+    return {
+      ergebnis: generateBook({
+        structure: buildStructure(dated),
+        photos,
+        profile,
+        targetPages,
+        chapterOpeners: false,
+        kept,
+      }),
+    };
+  }
+
+  it('übernimmt eine festgehaltene Seite unverändert', () => {
+    const { ergebnis } = erzeuge([eigeneSeite()]);
+    const eigen = ergebnis.spreads.find((s) => s.id === 'eigen-1');
+
+    // Der ganze Zweck: Der Generator kennt keine Textblöcke und könnte diese
+    // Seite aus nichts wiederherstellen.
+    expect(eigen?.templateId).toBe('spread.leer');
+    expect(eigen?.blocks?.[0]?.content).toBe('Einschulung');
+    expect(eigen?.background).toBe('#fff7ed');
+    expect(ergebnis.report.keptSpreads).toBe(1);
+  });
+
+  it('setzt sie vor die Doppelseite mit ihrem Ankerfoto', () => {
+    const anker = buildBestand({ 2015: 40 }).dated[20]!.id;
+    const { ergebnis } = erzeuge([eigeneSeite({ photoId: anker, where: 'before' })]);
+
+    const stelle = ergebnis.spreads.findIndex((s) => s.id === 'eigen-1');
+    const danach = ergebnis.spreads[stelle + 1];
+    expect(danach?.slots.some((s) => s.photoId === anker)).toBe(true);
+  });
+
+  it('platziert ihre Bilder nicht ein zweites Mal im Fluss', () => {
+    const { photos, dated } = buildBestand({ 2015: 40 });
+    const belegt = dated[10]!.id;
+    const kept: Spread = {
+      ...eigeneSeite(),
+      templateId: 'spread.group.opener',
+      slots: [
+        { slotId: 'a', photoId: belegt, crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' } },
+      ],
+    };
+
+    const ergebnis = generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 30,
+      chapterOpeners: false,
+      kept: [kept],
+    });
+
+    // Einmal auf der eigenen Seite, nirgends sonst – der Fehler, den die
+    // Gruppenauftakte schon einmal gemacht haben.
+    const treffer = ergebnis.spreads.flatMap((s) => s.slots.filter((sl) => sl.photoId === belegt));
+    expect(treffer).toHaveLength(1);
+    expect(ergebnis.report.unplaced).not.toContain(belegt);
+  });
+
+  it('rechnet ihre zwei Seiten in die Zielseitenzahl ein', () => {
+    const ohne = erzeuge([], 30).ergebnis;
+    const mit = erzeuge([eigeneSeite()], 30).ergebnis;
+
+    // Sonst wäre das Buch mit jeder eigenen Seite zwei Seiten länger als
+    // bestellt – bei Saal ist die Obergrenze hart.
+    expect(mit.report.pageCount).toBe(ohne.report.pageCount);
+    expect(mit.spreads.filter((s) => s.locked)).toHaveLength(1);
+  });
+
+  it('zählt die Indizes über das gemischte Buch durch', () => {
+    const { ergebnis } = erzeuge([eigeneSeite()]);
+    expect(ergebnis.spreads.map((s) => s.index)).toEqual(ergebnis.spreads.map((_, i) => i));
   });
 });

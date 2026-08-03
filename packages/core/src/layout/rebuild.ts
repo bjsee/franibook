@@ -254,6 +254,16 @@ export interface RebuildInput {
   timeline?: boolean;
   /** Hintergrundfarbe, die den Neuaufbau übersteht. */
   background?: string;
+  /**
+   * Fertige Doppelseite, die unverändert übernommen wird – eine selbst gebaute.
+   *
+   * An ihr ist nichts zu rechnen: Sie besteht aus Handarbeit, und ein Neuaufbau
+   * hätte nichts, woraus er sie wiederherstellen könnte. Sie steht hier
+   * trotzdem und nicht daneben, damit ihr Platz in der Reihenfolge aus derselben
+   * Liste kommt wie der aller anderen – die Alternative wäre ein zweites
+   * Einsortieren beim Aufrufer, mit eigener Zählung.
+   */
+  keep?: Spread;
 }
 
 export interface RebuildOptions {
@@ -285,11 +295,31 @@ export function rebuildSpreads(opts: RebuildOptions): RebuildResult {
   const problems: RebuildResult['problems'] = [];
 
   opts.spreads.forEach((input, i) => {
+    // Übernommen statt gebaut. Zeitstrahl und Hintergrund folgen dabei dem
+    // Dokument wie bei jeder anderen Doppelseite – wer die Zeile dort löscht,
+    // will zurück zur Vorgabe.
+    if (input.keep) {
+      const { timeline: _alt, background: _alteFarbe, ...ohne } = input.keep;
+      spreads.push({
+        ...ohne,
+        index: spreads.length,
+        ...(input.timeline !== undefined ? { timeline: input.timeline } : {}),
+        ...(input.background !== undefined ? { background: input.background } : {}),
+      });
+      return;
+    }
+
     const groupPhotos = input.photoIds
       .map((id) => photos.get(id))
       .filter((p): p is Photo => p !== undefined);
 
-    if (groupPhotos.length === 0) return;
+    if (groupPhotos.length === 0) {
+      // Eine bildlose Vorlage ist kein Versehen, sondern eine Aussage: Der
+      // Jahresauftakt zeigt nur die Jahreszahl. Jede andere Doppelseite ohne
+      // auflösbares Bild fällt weiterhin weg – dort wäre nichts zu zeigen.
+      const genannt = input.templateId ? templateById(input.templateId) : undefined;
+      if (!genannt || genannt.slots.length > 0) return;
+    }
 
     // Ohne Text keine `mit-titel`-Fassung: Sie würde 16 mm für eine Überschrift
     // freihalten, die es nicht gibt, und die Bilder dafür kleiner setzen.

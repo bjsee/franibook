@@ -69,6 +69,18 @@ export interface LayoutSpreadEntry {
   timeline?: boolean;
   /** Hintergrundfarbe als Hexwert, sofern eine gesetzt ist. */
   background?: string;
+  /**
+   * Kennung einer festgehaltenen Doppelseite – einer selbst gebauten Seite.
+   *
+   * Sie wird beim Einlesen nicht neu gerechnet, sondern unverändert übernommen:
+   * Vorlage, Textblöcke, Ausschnitte, alles. Umsortieren und Löschen bleiben
+   * möglich, denn dafür zählt allein, wo (und ob) die Zeile im Dokument steht.
+   *
+   * Ihr Inhalt steht bewusst nicht im Dokument. Ein Textblock hat Kasten,
+   * Winkel, Schriftgröße und Farbe; das alles hier zu spiegeln, hieße es an zwei
+   * Stellen pflegen – und die Seite wäre dennoch nicht von Hand gestaltbar.
+   */
+  keep?: string;
   photos: LayoutPhotoEntry[];
 }
 
@@ -117,6 +129,11 @@ const HINWEISE = [
   '',
   'Doppelseiten dürfen ergänzt, gelöscht und umsortiert werden. Die Nummern "n"',
   'werden beim Einlesen neu vergeben.',
+  '',
+  'Eine Doppelseite mit "keep" ist selbst gebaut und wird unverändert übernommen –',
+  'ihre Vorlage, Textblöcke und Ausschnitte stehen nicht in dieser Datei. Verschiebe',
+  'die Zeile, um die Seite anderswohin zu setzen, lösche sie, um die Seite aus dem',
+  'Buch zu nehmen. Ihre "photos" sind Orientierungshilfe wie überall.',
   '',
   'Fotos unter "unplaced" sind derzeit nicht im Buch – meist, weil ihnen ein',
   'Aufnahmedatum fehlt. Verschiebe sie in eine Doppelseite, um sie aufzunehmen.',
@@ -227,6 +244,7 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
     return {
       n: i + 1,
       template: spread.templateId,
+      ...(spread.locked ? { keep: spread.id } : {}),
       ...(text ? { text } : {}),
       ...(group ? { group } : {}),
       ...(spread.timeline !== undefined ? { timeline: spread.timeline } : {}),
@@ -283,6 +301,13 @@ export interface ParsedLayout {
     text?: string;
     timeline?: boolean;
     background?: string;
+    /**
+     * Kennung einer festgehaltenen Doppelseite.
+     *
+     * Nur die Kennung: Was sie enthält, weiß allein der Projektstand. Ihn
+     * kennt diese Datei nicht, und deshalb löst der Aufrufer sie auf.
+     */
+    keepId?: string;
   }[];
   settings?: {
     targetPages?: number;
@@ -355,6 +380,11 @@ export function parseLayout(raw: unknown, photos: ReadonlyMap<PhotoId, Photo>): 
       return;
     }
 
+    // Eine festgehaltene Seite wird nicht gerechnet, sondern übernommen. Sie
+    // darf deshalb ohne Bilder auskommen – eine selbst gebaute Titelseite
+    // besteht oft aus nichts als Text.
+    const keep = typeof entry.keep === 'string' && entry.keep.length > 0 ? entry.keep : undefined;
+
     const photoIds: PhotoId[] = [];
 
     for (const p of entry.photos) {
@@ -378,11 +408,30 @@ export function parseLayout(raw: unknown, photos: ReadonlyMap<PhotoId, Photo>): 
       seen.set(id, [...(seen.get(id) ?? []), nummer]);
     }
 
-    if (photoIds.length === 0) {
+    // Eine Vorlage ohne Bildplatz ist absichtlich bildlos: der Jahresauftakt,
+    // der nur die Jahreszahl trägt, und die leere Doppelseite. Sie zu entfernen
+    // war ein stiller Datenverlust – am echten Buch verschwanden so drei
+    // Jahresauftakte samt ihrer Jahreszahl, sobald das Dokument einmal durch
+    // den Rundlauf ging.
+    const genannt =
+      entry.template && entry.template !== 'auto' ? templateById(entry.template) : undefined;
+    const bildlosGewollt = genannt?.slots.length === 0;
+
+    if (photoIds.length === 0 && !keep && !bildlosGewollt) {
       issues.push({
         severity: 'warning',
         spread: nummer,
         message: 'Doppelseite ohne Bilder – wird entfernt.',
+      });
+      return;
+    }
+
+    if (keep) {
+      spreads.push({
+        photoIds,
+        keepId: keep,
+        ...(typeof entry.timeline === 'boolean' ? { timeline: entry.timeline } : {}),
+        ...(entry.background ? { background: entry.background } : {}),
       });
       return;
     }

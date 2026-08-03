@@ -341,3 +341,73 @@ describe('Rundlauf', () => {
     expect(new Set(alle).size).toBe(5);
   });
 });
+
+describe('Festgehaltene Doppelseiten im Dokument', () => {
+  /** Eine selbst gebaute Seite: leere Vorlage, ein Textblock, kein Bild. */
+  const eigen: Spread = {
+    id: 'eigen-abc',
+    index: 1,
+    templateId: 'spread.leer',
+    slots: [],
+    locked: true,
+    background: '#fff7ed',
+    blocks: [
+      {
+        id: 'eigen-abc-t1',
+        content: 'Einschulung',
+        rect: { x: 0.1, y: 0.4, w: 0.3, h: 0.1 },
+        weight: 'semibold',
+        fontSizePt: 32,
+        align: 'left',
+      },
+    ],
+  };
+
+  const doc = exportLayout({
+    spreads: [spreadOf('spread.4up.grid', ['h1', 'h2', 'h3', 'h4']), eigen],
+    photos: PHOTOS,
+    profile,
+    settings,
+  });
+
+  it('nennt sie mit ihrer Kennung statt mit ihrem Inhalt', () => {
+    expect(doc.spreads[1]!.keep).toBe('eigen-abc');
+    expect(doc.spreads[0]).not.toHaveProperty('keep');
+  });
+
+  it('behält eine Seite ohne Bilder, statt sie zu entfernen', () => {
+    // Ohne "keep" wäre eine Doppelseite ohne Bilder ein Versehen. Mit ihm ist
+    // sie eine Titelseite, die aus nichts als Text besteht.
+    const gelesen = parseLayout(doc, PHOTOS);
+    expect(gelesen.spreads).toHaveLength(2);
+    expect(gelesen.spreads[1]!.keepId).toBe('eigen-abc');
+    expect(gelesen.issues.some((i) => i.message.includes('ohne Bilder'))).toBe(false);
+  });
+
+  it('setzt sie beim Neuaufbau unverändert wieder ein', () => {
+    const gelesen = parseLayout(doc, PHOTOS);
+    const eingaben = gelesen.spreads.map((e) =>
+      e.keepId === 'eigen-abc' ? { ...e, keep: eigen } : e,
+    );
+
+    const rebuilt = rebuildSpreads({ spreads: eingaben, photos: PHOTOS, profile });
+    expect(rebuilt.problems).toEqual([]);
+    expect(rebuilt.spreads[1]!.blocks?.[0]?.content).toBe('Einschulung');
+    expect(rebuilt.spreads[1]!.templateId).toBe('spread.leer');
+    expect(rebuilt.spreads[1]!.locked).toBe(true);
+  });
+
+  it('folgt der Reihenfolge im Dokument, auch nach vorn', () => {
+    // Umsortieren ist der Griff, für den die Zeile im Dokument steht.
+    const umgestellt = { ...doc, spreads: [doc.spreads[1]!, doc.spreads[0]!] };
+    const gelesen = parseLayout(umgestellt, PHOTOS);
+    const rebuilt = rebuildSpreads({
+      spreads: gelesen.spreads.map((e) => (e.keepId ? { ...e, keep: eigen } : e)),
+      photos: PHOTOS,
+      profile,
+    });
+
+    expect(rebuilt.spreads[0]!.templateId).toBe('spread.leer');
+    expect(rebuilt.spreads.map((s) => s.index)).toEqual([0, 1]);
+  });
+});

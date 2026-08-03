@@ -182,13 +182,54 @@ export function templateMeta(id: TemplateId): TemplateMeta {
  * Templates, die für eine Gruppe dieser Größe in Frage kommen.
  *
  * Kapitel- und Reserve-Templates sind ausgenommen; sie werden gezielt
- * angefordert, nicht über die Slotzahl gefunden.
+ * angefordert, nicht über die Slotzahl gefunden. Dasselbe gilt für die von Hand
+ * vergebenen (`eigen`): Die leere Doppelseite hat null Bildplätze und würde
+ * sonst als Vorlage für null Bilder gelten – ein Zustand, den die Engine nie
+ * meint, aber rechnerisch treffen kann.
  */
 export function templatesWithSlotCount(n: number): Template[] {
   return ALL.filter((t) => {
     const meta = templateMeta(t.id);
-    return t.slots.length === n && !meta.chapterOnly && !meta.highResOnly;
+    return t.slots.length === n && !meta.chapterOnly && !meta.highResOnly && !isHandPicked(t);
   });
+}
+
+/**
+ * Kennung der leeren Doppelseite: kein Bildplatz, kein Textplatz, nur Fläche.
+ *
+ * Die Grundlage jeder selbst gebauten Seite. Sie steht in der Bibliothek und
+ * nicht als zusammengesetzte Kennung wie `paar:` oder `justiert.`, weil an ihr
+ * nichts zu rechnen ist – sie ist die einzige Vorlage, die keine Aussage über
+ * Bilder macht.
+ */
+export const BLANK_TEMPLATE_ID = 'spread.leer';
+
+export function isBlank(id: TemplateId | undefined): boolean {
+  return id === BLANK_TEMPLATE_ID;
+}
+
+/**
+ * Ob diese Vorlage ausschließlich von Hand vergeben wird.
+ *
+ * Sie taucht in keiner automatischen Auswahl auf – nicht, weil sie schlechter
+ * wäre, sondern weil ihre Wahl eine Absicht ist und keine Passung. Heute
+ * betrifft das allein die leere Doppelseite.
+ */
+export function isHandPicked(t: Template): boolean {
+  return t.tags?.includes('eigen') ?? false;
+}
+
+/**
+ * Vorlagen, unter denen eine selbst eingefügte Doppelseite wählen kann.
+ *
+ * Die leere zuerst, dann die Gruppenauftakte: Wer eine Seite einfügt, will sie
+ * entweder ganz selbst gestalten oder den vorhandenen Auftakt – Titel groß, ein
+ * Bild daneben – für ein Ereignis nutzen, das die Automatik nicht als Gruppe
+ * erkannt hat.
+ */
+export function insertTemplates(): Template[] {
+  const leer = templateById(BLANK_TEMPLATE_ID);
+  return [...(leer ? [leer] : []), ...groupOpenerTemplates()];
 }
 
 /**
