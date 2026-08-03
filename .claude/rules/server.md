@@ -12,12 +12,14 @@ Engine.
 ## Der Zuschnitt
 
 ```
-main.ts       HTTP-Adapter: Route lesen, prüfen, Project fragen, antworten
-project.ts    der Zustand des Projekts und die Handlungen darauf
-sources.ts    Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad wird
-import.ts     Scan und EXIF-Auswertung
-decode.ts     HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
-previews.ts   WebP-Vorschauen (320 px / 1600 px lange Kante)
+main.ts             Aufbau und Start: Umgebung, die vier Objekte, Anmeldung, Import
+routes/kontext.ts   was jedes Routenmodul kennt — und die drei geteilten Antwortformen
+routes/*.ts         die Endpunkte je Ressource
+project.ts          der Zustand des Projekts und die Handlungen darauf
+sources.ts          Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad wird
+import.ts           Scan und EXIF-Auswertung
+decode.ts           HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
+previews.ts         WebP-Vorschauen (320 px / 1600 px lange Kante)
 ```
 
 **Eine Route entscheidet nichts Fachliches.** Sie liest Parameter, prüft sie,
@@ -25,13 +27,21 @@ ruft genau eine Methode auf `project` und übersetzt das Ergebnis in einen
 Statuscode. Steht in einer Route eine Schleife über Spreads oder eine Rechnung
 mit Millimetern, gehört sie nach `project.ts` oder in den Kern.
 
-**Zielbild für den Zuschnitt.** `main.ts` (rund 1100 Zeilen, etwa 60 Routen am
-Stück) und `project.ts` (rund 2400 Zeilen, etwa 70 Methoden) sind über ihre
-brauchbare Größe hinausgewachsen. Neue Endpunkte gehören deshalb nach
-`routes/<ressource>.ts` als Fastify-Plugin (`spreads`, `groups`, `sources`,
-`cover`, `photos`), neue Fachlogik in ein Modul neben `project.ts` statt als
-weitere Methode hinein. Bestehendes wird beim Anfassen mitgezogen, nicht auf
-Vorrat umgebaut.
+**Ein neuer Endpunkt kommt in das Modul seiner Ressource** (`projekt`, `buch`,
+`spreads`, `slots`, `gruppen`, `fotos`, `quellen`, `umschlag`) und bekommt seine
+Abhängigkeiten aus dem `Kontext`. Die Module sind schlichte Funktionen
+`(app, kontext) => void`, keine Fastify-Plugins: Die Kapselung, die ein Plugin
+brächte — eigene Hooks, eigene Fehlerbehandlung je Zweig — braucht dieser Server
+nirgends, und `app.register` hätte jede Anmeldung asynchron gemacht.
+
+**Antwortformen, die mehrere Module brauchen, stehen in `kontext.ts`:**
+`spreadAntwort`, `gruppenAntwort`, `coverAntwort`. Wer eine Doppelseite
+zurückgibt, nimmt `spreadAntwort` — die Oberfläche ersetzt damit ihren Zustand,
+und eine zweite Form wäre ein Zustand, der beim Speichern Teile verliert.
+
+**`project.ts` ist noch nicht zerlegt** (rund 2400 Zeilen, etwa 70 Methoden).
+Neue Fachlogik gehört deshalb in ein Modul daneben, nicht als weitere Methode
+hinein. Bestehendes wird beim Anfassen mitgezogen, nicht auf Vorrat umgebaut.
 
 ## Antworten
 
