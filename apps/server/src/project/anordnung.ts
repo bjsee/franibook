@@ -221,8 +221,12 @@ export function templateChoices(
 
   // Kapitelauftakte und Gruppenauftakte bleiben unter sich: Ihre Vorlagen
   // tragen Text und werden gezielt vergeben, nicht über die Slotzahl gefunden.
+  //
+  // Die dichten Fassungen stehen hier immer zur Wahl, auch wenn die Automatik
+  // sie nicht vergeben darf: Eine Wahl von Hand ist eine Absicht für diese eine
+  // Doppelseite und keine Vorgabe für das Buch.
   const auswahl = meta.chapterOnly
-    ? chapterTemplates().filter((t) => t.slots.length > 0)
+    ? chapterTemplates(true).filter((t) => t.slots.length > 0)
     : allTemplates().filter((t) => {
         const m = templateMeta(t.id);
         if (m.chapterOnly || t.tags?.includes('veraltet')) return false;

@@ -77,6 +77,49 @@ describe('Bibliothek', () => {
     expect(chapterTemplates().length).toBeGreaterThanOrEqual(2);
   });
 
+  it('hält die dichten Jahresauftakte aus der schlanken Auswahl heraus', () => {
+    // Der Schalter ist die einzige Stelle, die sie hereinlässt. Käme eine
+    // dichte Fassung auch ohne ihn, wäre die Wahl keine Wahl mehr.
+    expect(chapterTemplates().some((t) => t.tags?.includes('dicht'))).toBe(false);
+    expect(chapterTemplates(true).some((t) => t.tags?.includes('dicht'))).toBe(true);
+  });
+
+  it('gibt allen dichten Jahresauftakten dieselbe Plätzezahl', () => {
+    // Die Engine wählt den Auftakt zuerst über die Bilderzahl und erst danach
+    // über die Passung (`auftaktGroessen` in layout/generate.ts). Wären die
+    // Fassungen verschieden groß, entschiede nicht die Ausrichtung der Bilder,
+    // welche kommt, sondern welche die meisten Plätze hat.
+    const dicht = chapterTemplates(true).filter((t) => t.tags?.includes('dicht'));
+    expect(dicht.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(dicht.map((t) => t.slots.length)).size).toBe(1);
+    // Und mehr als die schlanken, sonst käme sie nie zum Zug.
+    const schlank = Math.max(...chapterTemplates().map((t) => t.slots.length));
+    expect(dicht[0]!.slots.length).toBeGreaterThan(schlank);
+  });
+
+  it('lässt der Jahreszahl auch auf einer dichten Fassung ihr Band', () => {
+    // Die Auszeichnung der Jahreszahl ist der Freiraum um sie herum: Sie steht
+    // größer als in den bildlosen Fassungen und kein Bild berührt sie. Ragte
+    // eines hinein, hinge die Lesbarkeit an der Helligkeit dieses Bildes.
+    for (const t of chapterTemplates(true).filter((t) => t.tags?.includes('dicht'))) {
+      const jahr = t.textSlots?.find((s) => s.role === 'year');
+      expect(jahr, `${t.id} ohne Jahresplatz`).toBeDefined();
+      // 66 mm Kastenhöhe gegen 54 mm der bildlosen Fassungen.
+      expect(jahr!.h * PAGE_H, `${t.id}: Jahreszahl nicht größer`).toBeGreaterThan(60);
+
+      for (const text of t.textSlots ?? []) {
+        for (const slot of t.slots) {
+          const überlappt =
+            slot.x < text.x + text.w &&
+            slot.x + slot.w > text.x &&
+            slot.y < text.y + text.h &&
+            slot.y + slot.h > text.y;
+          expect(überlappt, `${t.id}: ${slot.id} liegt auf ${text.id}`).toBe(false);
+        }
+      }
+    }
+  });
+
   it('vergibt eindeutige Kennungen', () => {
     const ids = allTemplates().map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);

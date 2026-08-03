@@ -182,6 +182,18 @@ nicht als Handarbeit, weil der Neuaufbau sie wiederherstellt. Am echten Buch sen
 die Bilder in falsch ausgerichteten Plätzen von 108 auf 32, bei gleicher Bilddeckung.
 Begründung und Messwerte: `docs/konzept.md`, Abschnitt „Justierte Zeilen".
 
+**Der Jahresauftakt kann auch auf der Jahresseite Bilder tragen**
+(`settings.chapterOpenersDense`, Vorgabe aus). Aus: sechs Bilder rechts, links nur
+die Jahreszahl und fünf Ereigniszeilen. An: neun Bilder über beide Seiten
+(`spread.chapter.dicht.*`), die Jahreszahl größer und in einem Band, das kein Bild
+berührt — der Freiraum ist die Auszeichnung, nicht eine Farbfläche und nicht ein
+Bild darunter. Alle dichten Fassungen haben **dieselbe Platzzahl**, weil der
+Auftakt zuerst über die Bilderzahl gewählt wird und erst danach über die Passung;
+sonst entschiede die Platzzahl statt der Ausrichtung. Ein Jahrgang mit weniger als
+achtzehn übrigen Bildern behält die schlanke Fassung. Am echten Bestand sind das 57
+Bilder mehr in den Auftakten, rund vier Doppelseiten. Begründung und verworfene
+Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
+
 ### Zeit und Datum
 
 Alle Zeitangaben sind **naive lokale Zeit** (`YYYY-MM-DDTHH:mm:ss`) ohne Offset — ein

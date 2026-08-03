@@ -86,6 +86,15 @@ export interface ProjectSettings {
   targetPages: number;
   chapterOpeners: boolean;
   /**
+   * Ob der Jahresauftakt auch auf der Jahresseite Bilder trägt.
+   *
+   * Aus: sechs Bilder rechts, links nur die Jahreszahl. An: neun über beide
+   * Seiten, die Zahl größer und in einem Band, das kein Bild berührt. Am echten
+   * Bestand spart das rund vier Doppelseiten und kostet die Ruhe an der
+   * Kapitelgrenze – deshalb eine Wahl und keine Umstellung.
+   */
+  chapterOpenersDense: boolean;
+  /**
    * Eigene Auftaktseite je Fotogruppe, mit Hauptbild und Titel.
    *
    * `'auto'` heißt: das Gegenteil von `timeline`. Trägt der Zeitstrahl den
@@ -260,6 +269,10 @@ export class Project {
   settings: ProjectSettings = {
     targetPages: 160,
     chapterOpeners: true,
+    // Aus: Die leere Jahresseite ist der Atemzug vor dem Jahrgang. Wer die
+    // Seiten braucht, schaltet die dichten Auftakte im Buchpanel dazu; ein
+    // geladenes Projekt ohne dieses Feld bleibt damit beim Bestand.
+    chapterOpenersDense: false,
     // An den Zeitstrahl gekoppelt: Läuft er, benennt er die Gruppe auf jeder
     // ihrer Doppelseiten, und eine eigene Trennerseite kostet nur zwei Seiten,
     // ohne etwas hinzuzufügen. Ohne Zeitstrahl bekommen tragfähige Gruppen
@@ -576,6 +589,7 @@ export class Project {
       ...(kept.length > 0 ? { kept } : {}),
       targetPages: this.settings.targetPages,
       chapterOpeners: this.settings.chapterOpeners,
+      chapterOpenersDense: this.settings.chapterOpenersDense,
       seed: this.settings.seed,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
       groups: this.groups,

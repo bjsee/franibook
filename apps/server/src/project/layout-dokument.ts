@@ -29,6 +29,7 @@ export interface Layoutstand {
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
+    chapterOpenersDense: boolean;
     timeline: boolean;
     groupOpeners: boolean | 'auto';
   };
@@ -50,6 +51,7 @@ export function exportLayout(z: Layoutstand): LayoutDocument {
     settings: {
       targetPages: z.settings.targetPages,
       chapterOpeners: z.settings.chapterOpeners,
+      chapterOpenersDense: z.settings.chapterOpenersDense,
       timeline: z.settings.timeline,
       groupOpeners: z.settings.groupOpeners,
     },
@@ -127,6 +129,9 @@ export function applyLayout(
   if (parsed.settings?.targetPages) z.settings.targetPages = parsed.settings.targetPages;
   if (parsed.settings?.chapterOpeners !== undefined) {
     z.settings.chapterOpeners = parsed.settings.chapterOpeners;
+  }
+  if (parsed.settings?.chapterOpenersDense !== undefined) {
+    z.settings.chapterOpenersDense = parsed.settings.chapterOpenersDense;
   }
   if (parsed.settings?.timeline !== undefined) z.settings.timeline = parsed.settings.timeline;
   if (parsed.settings?.groupOpeners !== undefined) {

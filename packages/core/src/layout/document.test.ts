@@ -38,6 +38,7 @@ const PHOTOS = new Map<string, Photo>([
 const settings = {
   targetPages: 200,
   chapterOpeners: true,
+  chapterOpenersDense: false,
   timeline: true,
   groupOpeners: 'auto' as const,
 };

@@ -7895,6 +7895,387 @@
     },
     {
       "$comment": [
+        "DIE DICHTEN JAHRESAUFTAKTE: Bilder auch auf der Jahresseite.",
+        "",
+        "Ein Auftakt der Fassungen darüber trägt sechs Bilder – alle rechts. Die",
+        "linke Seite hält nur die Jahreszahl und fünf Ereigniszeilen, also 110 der",
+        "256 mm Nutzhöhe; die restlichen 146 mm bleiben leer. Bei neunzehn",
+        "Jahrgängen ist das rund eine halbe Seite je Jahr, die nichts trägt.",
+        "",
+        "Diese drei Fassungen füllen sie. Das Jahr bleibt trotzdem das Erste, was",
+        "man sieht: Es steht in einem Band, das kein Bild berührt, und mit 66 mm",
+        "Kastenhöhe (30,5 mm Versalhöhe gegen 24,9 mm) ist es deutlich größer",
+        "gesetzt als in den bildlosen Fassungen. Der Freiraum ist die Auszeichnung",
+        "– keine Farbfläche, kein Bild darunter, nichts, was von der Bildhelligkeit",
+        "abhängt.",
+        "",
+        "Alle drei haben neun Plätze, und das ist Absicht: Die Engine wählt den",
+        "Auftakt über die Bilderzahl (`auftaktGroessen` in layout/generate.ts) und",
+        "unter den Fassungen dieser Zahl die mit der besten Passung. Nur bei",
+        "gleicher Zahl entscheidet also die Ausrichtung der Bilder und nicht die",
+        "Reihenfolge der Bibliothek.",
+        "",
+        "Die Bänder sind die oben hergeleiteten; die Zellen sind 4:3 oder 3:4.",
+        "Dass es keine durchgehend querformatige Fassung mit drei Bildern links",
+        "gibt, ist Arithmetik und keine Auslassung: Querzellen sind flach, drei",
+        "davon füllen die 118 mm unter dem Jahresband nicht. Die quere Fassung",
+        "setzt deshalb links ein großes Bild (158 x 118) und rechts acht."
+      ],
+      "id": "spread.chapter.dicht.hoch",
+      "name": "Jahresauftakt dicht, neun Hochformate",
+      "tags": ["kapitel", "auftakt", "dicht"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "l1",
+          "x": 22,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l2",
+          "x": 112,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l3",
+          "x": 202,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1b",
+          "x": 406,
+          "y": 38,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1c",
+          "x": 496,
+          "y": 38,
+          "w": 82,
+          "h": 109,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2b",
+          "x": 406,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2c",
+          "x": 496,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "$comment": [
+        "Dicht und gemischt: links ein quer und zwei hoch (Band m12), rechts das",
+        "Ankerband Ah mit dem hochformatigen Hauptbild und darunter vier kleine.",
+        "Vier quer, fünf hoch – die Fassung für ein Jahr mit gemischtem Bestand.",
+        "Das Jahresband sitzt hier tiefer (60 statt 36 mm), weil das Bildband",
+        "links erst bei 191 mm beginnt: Sonst stünde die Zahl oben und darunter",
+        "fünfundvierzig Millimeter Nichts."
+      ],
+      "id": "spread.chapter.dicht.gemischt",
+      "name": "Jahresauftakt dicht, gemischt",
+      "tags": ["kapitel", "auftakt", "dicht"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "l1",
+          "x": 22,
+          "y": 191,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2",
+          "x": 146,
+          "y": 191,
+          "w": 65,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l3",
+          "x": 219,
+          "y": 191,
+          "w": 65,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1b",
+          "x": 445,
+          "y": 99,
+          "w": 133,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 221,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2b",
+          "x": 400,
+          "y": 221,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2c",
+          "x": 484,
+          "y": 221,
+          "w": 43,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2d",
+          "x": 535,
+          "y": 221,
+          "w": 43,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 60,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 138,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "$comment": [
+        "Dicht und quer: links ein großes Querformat unter dem Jahr, rechts zwei",
+        "Bänder aus drei und eines aus zwei. Neun Querformate – die Fassung für",
+        "ein Jahr, in dem kaum hochformatige Bilder liegen.",
+        "",
+        "Das linke Bild ist 158 mm breit und damit das breiteste der Bibliothek",
+        "außerhalb der randabfallenden. Bei 16:9 bleiben 1543 der 2048 px übrig,",
+        "das sind 248 dpi – über der Mindestauflösung von 240, aber knapp; der",
+        "Bibliothekstest rechnet es mit."
+      ],
+      "id": "spread.chapter.dicht.quer",
+      "name": "Jahresauftakt dicht, neun Querformate",
+      "tags": ["kapitel", "auftakt", "dicht"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "l1",
+          "x": 22,
+          "y": 160,
+          "w": 158,
+          "h": 118,
+          "prominence": 3,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 127,
+          "h": 95,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1b",
+          "x": 451,
+          "y": 38,
+          "w": 127,
+          "h": 95,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 145,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2b",
+          "x": 406,
+          "y": 145,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2c",
+          "x": 496,
+          "y": 145,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r3a",
+          "x": 316,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r3b",
+          "x": 406,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r3c",
+          "x": 496,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "$comment": [
         "Die leere Doppelseite. Kein Bildplatz, kein Textplatz, nur Fläche.",
         "Sie wird nie automatisch gewählt – das Tag \"eigen\" hält sie aus der",
         "Auswahl heraus – sondern ausschließlich von Hand eingefügt, wenn jemand",

@@ -38,6 +38,20 @@ export interface GenerateOptions {
   targetPages: number;
   /** Ob jedes Jahr eine eigene Auftaktdoppelseite bekommt. */
   chapterOpeners?: boolean;
+  /**
+   * Ob der Jahresauftakt auch auf der Jahresseite Bilder trägt.
+   *
+   * Aus: Die linke Seite hält nur Jahreszahl und Ereigniszeilen, der Auftakt
+   * trägt sechs Bilder rechts. An: neun Bilder über beide Seiten, die
+   * Jahreszahl steht in einem Band, das kein Bild berührt, und größer als sonst
+   * (`spread.chapter.dicht.*` in `templates/library.json`).
+   *
+   * Am echten Bestand sind das je Jahrgang drei Bilder mehr im Auftakt, bei
+   * neunzehn Jahrgängen also 57 – rund vier Doppelseiten, die der Fluss nicht
+   * mehr braucht. Bezahlt wird das mit der Ruhe an der Kapitelgrenze; deshalb
+   * ist es ein Schalter und keine Umstellung.
+   */
+  chapterOpenersDense?: boolean;
   weightOf?: (photoId: PhotoId) => PhotoWeight;
   /**
    * Aktive Fotogruppen. Nur sie gliedern das Buch – abgeschaltete laufen im
@@ -429,6 +443,11 @@ function kannAuftaktTragen(
  * ein Viertel des Buches – zu viel für eine Zahl und drei Zeilen. Der Auftakt
  * trägt jetzt Bilder mit und kostet damit nichts extra.
  *
+ * Mit `dicht` stehen zusätzlich die Fassungen zur Wahl, die auch auf der
+ * Jahresseite Bilder tragen (neun statt sechs). Die Wahl unter ihnen läuft über
+ * dieselbe Rechnung wie sonst: Plätze müssen zur Bilderzahl passen, und unter
+ * den passenden gewinnt die beste Zuordnung.
+ *
  * Sind zu wenige Fotos übrig, wird die bildlose Fassung gesetzt statt eine
  * Vorlage mit leeren Plätzen zu füllen.
  */
@@ -439,10 +458,12 @@ function buildChapterOpener(
   bilder: readonly Photo[],
   profile: PrintProfile,
   weightOf: (photoId: PhotoId) => PhotoWeight,
+  /** Ob die Fassungen mit Bildern auf der Jahresseite mitspielen. */
+  dicht: boolean,
   /** Ereignisse des Jahres, je Zeile eines. */
   events?: readonly string[],
 ): { spread: Spread; usedPhotoIds: PhotoId[] } {
-  const auftakte = chapterTemplates();
+  const auftakte = chapterTemplates(dicht);
   // Unter den Fassungen mit passender Bilderzahl die beste – und die Bilder
   // darin optimal verteilt, nicht der Reihe nach.
   //
@@ -547,6 +568,9 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const { structure, photos, profile, targetPages } = opts;
   const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
   const useOpeners = opts.chapterOpeners ?? true;
+  // Aus, solange nichts anderes gesagt wird: Ein bestehendes Buch soll nach
+  // einem Neuaufbau aussehen wie vorher.
+  const dichteOpeners = opts.chapterOpenersDense ?? false;
   const rng = mulberry32(opts.seed ?? 1);
 
   // Zielseitenzahl auf das Druckprofil einrasten. Vorher rechnete die Engine mit
@@ -632,7 +656,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
    * einmal auftauchen. Wie viele es sind, gibt die Bibliothek vor – die
    * größte Auftaktvorlage, für die das Jahr genug Bilder übrig hat.
    */
-  const auftaktGroessen = chapterTemplates()
+  const auftaktGroessen = chapterTemplates(dichteOpeners)
     .map((t) => t.slots.length)
     .filter((n) => n > 0)
     .sort((a, b) => b - a);
@@ -721,6 +745,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         jahresBilder.get(chapter.year) ?? [],
         profile,
         weightOf,
+        dichteOpeners,
         opts.yearEvents?.[chapter.year],
       );
       spreads.push(spread);

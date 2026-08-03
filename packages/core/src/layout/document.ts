@@ -91,6 +91,8 @@ export interface LayoutDocument {
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
+    /** Ob der Jahresauftakt auch auf der Jahresseite Bilder trägt. */
+    chapterOpenersDense: boolean;
     /** Zeitstrahl am Fuß jeder Doppelseite. */
     timeline: boolean;
     /** Auftaktseite je Fotogruppe. `"auto"` ist das Gegenteil von `timeline`. */
@@ -176,6 +178,7 @@ export interface ExportOptions {
   settings: {
     targetPages: number;
     chapterOpeners: boolean;
+    chapterOpenersDense: boolean;
     timeline: boolean;
     groupOpeners: boolean | 'auto';
   };
@@ -312,6 +315,7 @@ export interface ParsedLayout {
   settings?: {
     targetPages?: number;
     chapterOpeners?: boolean;
+    chapterOpenersDense?: boolean;
     timeline?: boolean;
     groupOpeners?: boolean | 'auto';
   };
