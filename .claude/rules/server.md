@@ -15,7 +15,8 @@ Engine.
 main.ts             Aufbau und Start: Umgebung, die vier Objekte, Anmeldung, Import
 routes/kontext.ts   was jedes Routenmodul kennt — und die drei geteilten Antwortformen
 routes/*.ts         die Endpunkte je Ressource
-project.ts          der Zustand des Projekts und die Handlungen darauf
+project.ts          der Zustand, die Persistenz, Erzeugen und Rendern
+project/*.ts        die Fachlogik darauf, je Thema
 sources.ts          Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad wird
 import.ts           Scan und EXIF-Auswertung
 decode.ts           HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
@@ -39,9 +40,26 @@ nirgends, und `app.register` hätte jede Anmeldung asynchron gemacht.
 zurückgibt, nimmt `spreadAntwort` — die Oberfläche ersetzt damit ihren Zustand,
 und eine zweite Form wäre ein Zustand, der beim Speichern Teile verliert.
 
-**`project.ts` ist noch nicht zerlegt** (rund 2400 Zeilen, etwa 70 Methoden).
-Neue Fachlogik gehört deshalb in ein Modul daneben, nicht als weitere Methode
-hinein. Bestehendes wird beim Anfassen mitgezogen, nicht auf Vorrat umgebaut.
+## Der Projektzustand
+
+`Project` hält den Zustand — Fotos, Overrides, Gruppen, Doppelseiten, Umschlag —
+und ist die einzige Stelle, die ihn besitzt. Die Fachlogik darauf liegt in
+`project/` je Thema: `bestand` (einlesen, vergessen, aussortieren), `seiten`
+(einfügen, herausnehmen, festhalten), `anordnung` (Vorlage und Halbseite
+wechseln), `gruppen`, `umschlag`, `layout-dokument`.
+
+**Die Module bekommen den Zustand als Argument**, deklariert als schmale
+Schnittstelle im Modul selbst (`Buch`, `Bestandstand`, `Gruppenstand` …). So
+steht in jedem Modulkopf, was es anfasst — und die Klasse delegiert in einer
+Zeile.
+
+Neue Fachlogik gehört in das Modul ihres Themas, nicht als weitere Methode in
+die Klasse. In `project.ts` bleiben: der Zustand, `load`/`save`/`migriere`,
+`generate`, `render*`, die Kalendergliederung und die Auskünfte über Fotos.
+
+Was ein Modul ändert, meldet es zurück; den Kennzahlenbericht (`refreshReport`)
+zieht die Klasse nach. Damit steht die Reihenfolge „erst rechnen, dann melden"
+an einer Stelle und nicht in jeder Funktion.
 
 ## Antworten
 
