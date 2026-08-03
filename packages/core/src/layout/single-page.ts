@@ -289,6 +289,38 @@ export interface SinglePageResult {
 }
 
 /**
+ * Ob zwei Bücher dasselbe zeigen.
+ *
+ * Verglichen wird, wo jedes Bild liegt – nicht die Vorlagenkennung. Ein Blatt
+ * mit einem Bild links heißt einmal `spread.1up.hero-left` und nach dem
+ * Umpaaren `paar:halb:spread.1up.hero-left:L+halb:leer`; gedruckt ist es
+ * dasselbe Blatt. Für die Frage „hat der Griff etwas bewirkt" zählt allein die
+ * Wirkung.
+ */
+function unveraendert(vorher: readonly Spread[], nachher: readonly Spread[]): boolean {
+  const form = (spreads: readonly Spread[]) =>
+    spreads
+      .map((spread) => {
+        const template = templateById(spread.templateId);
+        const geo = new Map((template?.slots ?? []).map((s) => [s.id, s]));
+        return spread.slots
+          .filter((s) => s.photoId)
+          .map((s) => {
+            const platz = s.rect ?? geo.get(s.slotId);
+            const ort = platz
+              ? [platz.x, platz.y, platz.w, platz.h].map((v) => v.toFixed(4)).join(',')
+              : '?';
+            return `${s.photoId}@${ort}`;
+          })
+          .sort()
+          .join(';');
+      })
+      .join('|');
+
+  return form(vorher) === form(nachher);
+}
+
+/**
  * Das Buch als Folge von Buchseiten; unzerlegbare Blätter bleiben ein Eintrag.
  *
  * `auchTrennen` nennt Kennungen von Blättern, die trotz ihres Schlosses zerlegt
@@ -466,6 +498,25 @@ export function removeSinglePage(
   folge.splice(index, 1);
 
   const ergebnis = paareNeu(folge, spreads, false);
+  if (!ergebnis.ok) return { ...ergebnis, photoCount: 0 };
+
+  // Bleibt das Buch dabei unverändert, war der Griff wirkungslos – und das
+  // gehört gesagt statt stillschweigend Erfolg zu melden. Der Fall ist echt und
+  // nicht selten: Eine leere Seite unmittelbar vor einem Blatt, das sich nicht
+  // trennen lässt, wird von der Blattaufteilung sofort wieder erzwungen. Weg
+  // ist sie nur mit dem ganzen Blatt.
+  if (unveraendert(spreads, ergebnis.spreads)) {
+    return {
+      ok: false,
+      error:
+        'Diese Seite lässt sich nicht einzeln entfernen: Sie liegt vor einer Doppelseite, ' +
+        'die sich nicht trennen lässt, und die Blattaufteilung erzwingt sie dort wieder. ' +
+        'Nimm die ganze Doppelseite heraus.',
+      spreads: [...spreads],
+      photoCount: 0,
+    };
+  }
+
   return { ...ergebnis, photoCount };
 }
 

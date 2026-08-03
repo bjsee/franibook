@@ -721,6 +721,15 @@ Fotopool. Eine Seite eines Auftakts oder einer justierten Doppelseite lässt sic
 nicht einzeln nehmen: Dort wird abgelehnt und der Grund genannt, statt heimlich das
 ganze Blatt zu nehmen.
 
+Und es gibt einen zweiten Fall, in dem abgelehnt wird: Eine **leere Seite unmittelbar
+vor einem unzerlegbaren Blatt** kann nicht verschwinden. Zwischen zwei solchen
+Blättern liegt ein Block von Halbseiten fester Zahl; nimmt man eine heraus, setzt der
+Paritätsausgleich sie sofort wieder ein, und Inhalt von außerhalb des Blocks kann
+nicht nachrücken. Der Griff bliebe wirkungslos — deshalb prüft `removeSinglePage`
+nach der Rechnung, ob sich überhaupt etwas geändert hat, und meldet sonst den
+einzigen Ausweg: das ganze Blatt. Verglichen wird dabei, wo jedes Bild liegt, nicht
+die Vorlagenkennung: Dasselbe Blatt heißt vor und nach dem Umpaaren verschieden.
+
 Die eigene Halbseite kommt nicht aus der Bibliothek, sondern aus zwei von Hand
 vergebenen Formen: `halb:leer` (nur Textblöcke) und `halb:eins` (ein quadratischer
 Bildplatz von 180 mm — die volle Nutzfläche von 262 mm ergäbe bei 2048 px nur
