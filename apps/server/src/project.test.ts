@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   BLANK_TEMPLATE_ID,
   FULL_CROP,
+  HALF_BLANK_ID,
+  HALF_ONE_ID,
   MAX_TILT_DEG,
   groupOpenerTemplates,
   isJustified,
@@ -539,12 +541,17 @@ describe('Eigene Doppelseiten', () => {
     expect(p.handwork().texte).toBe(1);
   });
 
-  it('bietet die leere Vorlage und die Auftakte zur Wahl', () => {
+  it('bietet einzelne Seiten und ganze Doppelseiten zur Wahl', () => {
     const auswahl = projektMitZwei().insertChoices();
-    expect(auswahl[0]!.id).toBe(BLANK_TEMPLATE_ID);
-    expect(auswahl[0]!.slotCount).toBe(0);
-    expect(auswahl.length).toBeGreaterThan(1);
-    expect(auswahl.slice(1).every((v) => v.hasTitle)).toBe(true);
+
+    // Die einzelnen Seiten zuerst: „eine Seite oder zwei" ist die Frage, die vor
+    // allen anderen kommt.
+    const seiten = auswahl.filter((v) => v.scope === 'page');
+    const doppelseiten = auswahl.filter((v) => v.scope === 'spread');
+    expect(seiten.map((v) => v.id)).toEqual([HALF_BLANK_ID, HALF_ONE_ID]);
+    expect(doppelseiten[0]!.id).toBe(BLANK_TEMPLATE_ID);
+    expect(doppelseiten[0]!.slotCount).toBe(0);
+    expect(doppelseiten.slice(1).every((v) => v.hasTitle)).toBe(true);
   });
 
   it('bietet die leere Vorlage nur an, wo keine Bilder liegen', () => {
@@ -597,5 +604,152 @@ describe('Eigene Doppelseiten', () => {
     expect(ergebnis.ok).toBe(false);
     expect(ergebnis.issues.some((i) => i.message.includes('gibt-es-nicht'))).toBe(true);
     expect(p.spreads).toHaveLength(3);
+  });
+});
+
+describe('Eigene Einzelseiten', () => {
+  /** Vier Blätter mit je zwei Bildern – genug, um die Umpaarung zu sehen. */
+  function projektMitVier(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (let i = 0; i < 8; i++) {
+      p.photos.set(`p${i}`, {
+        id: `p${i}`,
+        sourceId: 'q',
+        relPath: `p${i}.jpg`,
+        fileName: `p${i}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: `2020-01-0${i + 1}T12:00:00`,
+      } as never);
+    }
+    p.spreads = [0, 1, 2, 3].map((n) => ({
+      id: `s${n}`,
+      index: n,
+      templateId: 'spread.2up.pair',
+      slots: requireTemplate('spread.2up.pair').slots.map((slot, i) => ({
+        slotId: slot.id,
+        photoId: `p${n * 2 + i}`,
+        crop: { ...FULL_CROP },
+      })),
+      background: '#f0f9ff',
+    }));
+    return p;
+  }
+
+  /** Alle Bilder in Buchreihenfolge. */
+  const reihenfolge = (p: Project) =>
+    p.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId).filter(Boolean));
+
+  it('schiebt eine einzelne Seite ein, ohne ein Foto zu verlieren', () => {
+    const p = projektMitVier();
+    const vorher = reihenfolge(p);
+
+    const r = p.insertSinglePage(3);
+
+    expect(r.ok).toBe(true);
+    // Der Kern: Die Blattgrenzen verschieben sich, die Fotoverteilung nicht.
+    expect(reihenfolge(p)).toEqual(vorher);
+    expect(p.unplacedPhotos()).toEqual([]);
+  });
+
+  it('macht das Buch um ein Blatt länger und hält die Seitenzahl gerade', () => {
+    const p = projektMitVier();
+    p.insertSinglePage(3);
+
+    expect(p.spreads).toHaveLength(5);
+    expect(p.pageCount()).toBe(10);
+  });
+
+  it('setzt die Seite an die verlangte Buchseite und hält sie fest', () => {
+    const p = projektMitVier();
+    const r = p.insertSinglePage(3);
+
+    const eigen = p.spreads[r.index]!;
+    expect(eigen.locked).toBe(true);
+    expect(eigen.background).toBe('#f0f9ff');
+    // Buchseite 3 ist die rechte Seite des zweiten Blattes.
+    expect(r.index).toBe(1);
+  });
+
+  it('legt den Titel als Textblock an, nicht als Textelement', () => {
+    // Auf einer selbst gebauten Seite gibt es keine Vorlage, an deren Textplatz
+    // ein Titel hängen könnte.
+    const p = projektMitVier();
+    const r = p.insertSinglePage(2, { title: 'Einschulung' });
+
+    expect(p.spreads[r.index]!.blocks?.[0]?.content).toBe('Einschulung');
+    expect(p.spreads[r.index]!.texts ?? []).toEqual([]);
+  });
+
+  it('legt auf Wunsch einen leeren Bildplatz an', () => {
+    const p = projektMitVier();
+    const r = p.insertSinglePage(2, { halfId: HALF_ONE_ID });
+
+    const eigen = p.spreads[r.index]!;
+    // Ein Platz mehr als das Nachbarblatt hergibt, und er ist leer.
+    expect(eigen.slots.filter((s) => s.photoId === null)).toHaveLength(1);
+  });
+
+  it('ankert die Seite am ersten Bild dahinter', () => {
+    const p = projektMitVier();
+    const r = p.insertSinglePage(3);
+
+    const eigen = p.spreads[r.index]!;
+    const eigeneBilder = new Set(eigen.slots.map((s) => s.photoId));
+    expect(eigen.anchor).toBeDefined();
+    expect(eigeneBilder.has(eigen.anchor!.photoId)).toBe(false);
+  });
+
+  it('meldet, wie viel die Umpaarung angefasst hat', () => {
+    const p = projektMitVier();
+    const r = p.insertSinglePage(1);
+
+    // Ein Eingriff, der vier Blätter umbaut, soll nicht wie einer aussehen, der
+    // eine Seite einfügt.
+    expect(r.bericht?.neuGepaart).toBeGreaterThan(1);
+    expect(r.bericht?.leerseiten).toBe(1);
+  });
+
+  it('übersteht ein Neuanordnen des ganzen Buches', () => {
+    const p = projektMitVier();
+    p.insertSinglePage(3, { title: 'Einschulung' });
+
+    p.generate();
+
+    const eigen = p.spreads.find((s) => s.locked);
+    expect(eigen?.blocks?.[0]?.content).toBe('Einschulung');
+    // Die Nachbarhälfte bleibt am Blatt: Ihre Bilder gelten als vergeben und
+    // laufen nicht zusätzlich im Fluss mit.
+    const alle = p.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)).filter(Boolean);
+    expect(new Set(alle).size).toBe(alle.length);
+  });
+
+  it('lässt einen Auftakt ganz und stellt die Parität davor wieder her', () => {
+    const p = projektMitVier();
+    p.spreads[2] = {
+      id: 'a2',
+      index: 2,
+      templateId: 'spread.chapter.quiet',
+      slots: [],
+      texts: [{ id: 'a2-y', role: 'year', content: '2020', slotId: 't-year' }],
+    };
+
+    p.insertSinglePage(1);
+
+    const auftakt = p.spreads.find((s) => s.templateId === 'spread.chapter.quiet');
+    expect(auftakt?.texts?.[0]?.content).toBe('2020');
+  });
+
+  it('weist eine unbekannte Halbseite ab', () => {
+    const p = projektMitVier();
+    expect(p.insertSinglePage(1, { halfId: 'halb:gibt-es-nicht' }).ok).toBe(false);
+    expect(p.spreads).toHaveLength(4);
+  });
+
+  it('nimmt die leere Halbseite als Vorgabe', () => {
+    const p = projektMitVier();
+    const r = p.insertSinglePage(2);
+    expect(p.spreads[r.index]!.templateId).toContain(HALF_BLANK_ID);
   });
 });

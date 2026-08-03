@@ -667,6 +667,51 @@ Inhalt: Kasten, Winkel und Schriftgröße jedes Textblocks dort zu spiegeln hie�
 sie an zwei Stellen zu pflegen. Umsortieren und Löschen bleiben möglich, denn dafür
 zählt allein, wo die Zeile steht.
 
+### Einzelne Buchseiten
+
+Manches braucht keine zwei Seiten. Eine Auftaktseite für ein Fest, ein Nachsatz –
+dafür fügt `POST /api/spreads/page` eine **einzelne Buchseite** ein
+(`layout/single-page.ts`).
+
+Das ist ein anderer Eingriff als eine Doppelseite, denn es kippt die Parität: Was
+rechts stand, steht danach links, und jedes Blatt dahinter besteht aus anderen zwei
+Buchseiten.
+
+```
+vorher:  [1|2] [3|4] [5|6] [Jahresauftakt]
+nachher: [1|2] [3|N] [4|5] [6|—] [Jahresauftakt]
+                                  ▲ ab hier unverändert
+```
+
+Verlustfrei möglich ist das aus einem Grund, der schon in der Bibliothek steht:
+**Kein einziger Slot der Flussvorlagen liegt über dem Falz.** Jedes Blatt zerfällt
+damit in zwei Buchseiten (`templates/halves.ts`), die neue Seite wird in die Folge
+eingeschoben, und die Folge wird neu gepaart. Kein Foto wechselt dabei seinen Platz
+im Buch, nur seine Blattzugehörigkeit — die Fotoverteilung bleibt unberührt, und die
+DP-Gruppierung läuft nicht neu.
+
+Drei Sorten Blatt bleiben ganz: **Auftakte** (ihr Text hängt an Textplätzen der
+Vorlage, die randabfallenden gehen über den Falz), **justierte Zeilen** (ihre
+Rechtecke sind über die ganze Satzbreite gerechnet) und **festgehaltene** Blätter —
+Handarbeit wird nicht zerschnitten. Vor einem solchen Blatt stellt eine leere
+Halbseite die Parität wieder her; dahinter ist das Buch unverändert. Der Eingriff
+bleibt damit lokal, obwohl die Rechnung über alle Blätter läuft: Am echten Buch mit
+80 Doppelseiten sind 57 unzerlegbar, und eine eingefügte Seite setzt 1 bis 2 Blätter
+neu zusammen.
+
+Zwei Kosten sind unvermeidlich und werden deshalb gemeldet statt verschwiegen:
+Die **leere Halbseite** für die Parität, und die seltene **ganz leere Doppelseite** –
+sie entsteht, wenn eine leere Hälfte aus einer Ein-Bild-Vorlage auf den
+Paritätsausgleich trifft. Sie zu vermeiden hieße, Bilder aufrücken zu lassen, und
+damit genau die Fotoverteilung anzufassen, die hier unangetastet bleibt.
+
+Die eigene Halbseite kommt nicht aus der Bibliothek, sondern aus zwei von Hand
+vergebenen Formen: `halb:leer` (nur Textblöcke) und `halb:eins` (ein quadratischer
+Bildplatz von 180 mm — die volle Nutzfläche von 262 mm ergäbe bei 2048 px nur
+198 dpi und läge unter der Mindestauflösung). Der Titel wird dort ein **Textblock**
+und kein `TextElement`: Auf einer selbst gebauten Seite gibt es keine Vorlage, an
+deren Textplatz er hängen könnte.
+
 ## Template-Modell
 
 ### Definition

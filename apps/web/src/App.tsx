@@ -853,13 +853,28 @@ export function App() {
                 setEinfuegenAn(null);
                 setNote(text);
               }}
-              onEingefuegt={(neu) => {
+              onEingefuegt={(neu, bericht) => {
                 setEinfuegenAn(null);
                 loadInfo();
                 setIndex(neu);
                 setSpread(null);
                 setRenderVersion((v) => v + 1);
                 setView('spread');
+                // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als
+                // die eine Stelle. Das gehört gesagt, sonst wundert man sich über
+                // die veränderten Nachbarseiten.
+                if (bericht && bericht.neuGepaart > 0) {
+                  setNote(
+                    `${bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt` +
+                      (bericht.leerseiten > 0
+                        ? `, ${bericht.leerseiten} leere Seite(n) für die Parität`
+                        : '') +
+                      (bericht.leereBlaetter > 0
+                        ? `, ${bericht.leereBlaetter} Doppelseite(n) ganz ohne Bild`
+                        : '') +
+                      ' — die Fotoverteilung ist unverändert.',
+                  );
+                }
               }}
             />
           )}
