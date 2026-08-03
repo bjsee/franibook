@@ -35,6 +35,7 @@ import {
   allTemplates,
   insertSinglePage,
   insertTemplates,
+  removeSinglePage,
   isBlank,
   ownHalves,
   splitKept,
@@ -1194,6 +1195,43 @@ export class Project {
     return {
       ok: true,
       index,
+      ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+    };
+  }
+
+  /**
+   * Nimmt eine einzelne Buchseite aus dem Buch.
+   *
+   * Das Gegenstück zum Einfügen: Die Seite fällt heraus, alles danach rückt eine
+   * Halbseite auf, und geht die Rechnung auf, wird das Buch ein Blatt kürzer. Die
+   * Bilder dieser Seite liegen danach im Fotopool – verloren ist keines.
+   *
+   * Nicht jede Seite lässt sich einzeln nehmen: Ein Auftakt trägt seinen Text über
+   * beide Hälften, justierte Zeilen ihre Rechtecke. Dort wird abgelehnt und
+   * gesagt, warum – statt heimlich das ganze Blatt zu nehmen.
+   *
+   * @param atPage Buchseite, nullbasiert.
+   */
+  removeSinglePage(atPage: number): {
+    ok: boolean;
+    error?: string;
+    photoCount: number;
+    bericht?: SinglePageResult['bericht'];
+  } {
+    const ergebnis = removeSinglePage(this.spreads, atPage);
+    if (!ergebnis.ok) {
+      return {
+        ok: false,
+        ...(ergebnis.error ? { error: ergebnis.error } : {}),
+        photoCount: 0,
+      };
+    }
+
+    this.spreads = ergebnis.spreads;
+    this.refreshReport();
+    return {
+      ok: true,
+      photoCount: ergebnis.photoCount,
       ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
     };
   }

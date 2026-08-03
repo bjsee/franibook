@@ -699,11 +699,27 @@ bleibt damit lokal, obwohl die Rechnung über alle Blätter läuft: Am echten Bu
 80 Doppelseiten sind 57 unzerlegbar, und eine eingefügte Seite setzt 1 bis 2 Blätter
 neu zusammen.
 
-Zwei Kosten sind unvermeidlich und werden deshalb gemeldet statt verschwiegen:
-Die **leere Halbseite** für die Parität, und die seltene **ganz leere Doppelseite** –
-sie entsteht, wenn eine leere Hälfte aus einer Ein-Bild-Vorlage auf den
-Paritätsausgleich trifft. Sie zu vermeiden hieße, Bilder aufrücken zu lassen, und
-damit genau die Fotoverteilung anzufassen, die hier unangetastet bleibt.
+**Ein Buch besteht aus Blättern**, und daraus folgt der Preis: Für eine zusätzliche
+Seite muss irgendwo eine Halbseite frei werden. Meist steht schon eine leere herum –
+jede Vorlage mit einem einzigen Bild hat eine –, und die wird verbraucht, statt eine
+neue zu erzeugen; sonst wüchse das Buch um zwei Seiten, obwohl nur eine eingefügt
+wurde. Gesucht wird dabei nur bis zum nächsten unzerlegbaren Blatt: Dahinter stellt
+der Paritätsausgleich die Ordnung ohnehin wieder her, und eine dort entnommene
+Leerseite wäre keine Ersparnis, sondern eine genommene Ruhefläche. Bei dicht
+belegten Doppelseiten bleibt es unvermeidlich beim zusätzlichen Blatt — die Meldung
+sagt, was geschehen ist.
+
+Blätter, die durch das Umpaaren **ganz ohne Inhalt** dastünden, werden nicht gebaut:
+zwei leere Hälften, die vorher zu verschiedenen Blättern gehörten, sind reines
+Artefakt der verschobenen Grenzen. Ein Blatt, das schon vorher beidseitig leer war,
+bleibt dagegen — dort war es eine Entscheidung.
+
+**Löschen ist das Gegenstück** (`DELETE /api/spreads/page/:atPage`) und läuft über
+dieselbe Rechnung: Die Seite fällt aus der Folge, alles danach rückt eine Halbseite
+auf, und geht es auf, wird das Buch ein Blatt kürzer. Ihre Bilder liegen danach im
+Fotopool. Eine Seite eines Auftakts oder einer justierten Doppelseite lässt sich
+nicht einzeln nehmen: Dort wird abgelehnt und der Grund genannt, statt heimlich das
+ganze Blatt zu nehmen.
 
 Die eigene Halbseite kommt nicht aus der Bibliothek, sondern aus zwei von Hand
 vergebenen Formen: `halb:leer` (nur Textblöcke) und `halb:eins` (ein quadratischer

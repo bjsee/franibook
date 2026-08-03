@@ -48,6 +48,8 @@ type SpreadResponse = RenderedSpread & {
   blocks?: TextBlockData[];
   /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
   locked?: boolean;
+  /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
+  splittable?: boolean;
 };
 
 interface ProjectInfo {
@@ -321,6 +323,63 @@ export function App() {
     }
   }
 
+  /**
+   * Nimmt eine einzelne Buchseite aus dem Buch.
+   *
+   * Das Gegenstück zum Einfügen: Alles dahinter rückt eine Halbseite auf, und
+   * geht die Rechnung auf, wird das Buch ein Blatt kürzer.
+   */
+  async function removePage(seite: 'left' | 'right') {
+    const bilder =
+      spread?.boxes.filter(
+        (b) =>
+          b.kind === 'image' &&
+          (seite === 'left'
+            ? b.xMm + b.wMm / 2 < spread.gutterXMm
+            : b.xMm + b.wMm / 2 >= spread.gutterXMm),
+      ).length ?? 0;
+
+    if (
+      !window.confirm(
+        `${seite === 'left' ? 'Linke' : 'Rechte'} Seite von Doppelseite ${index + 1} aus dem Buch nehmen?` +
+          (bilder > 0 ? `\n\n${bilder} Bild(er) wandern in den Fotopool.` : '') +
+          '\n\nAlles dahinter rückt eine Seite auf.',
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/spreads/page/${index * 2 + (seite === 'right' ? 1 : 0)}`, {
+        method: 'DELETE',
+      });
+      const daten = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        spreadCount?: number;
+        photoCount?: number;
+        bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
+      };
+      if (!res.ok || !daten.ok) {
+        setNote(daten.error ?? `Seite nicht entfernt (HTTP ${res.status})`);
+        return;
+      }
+      setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
+      loadInfo();
+      setSpread(null);
+      setRenderVersion((v) => v + 1);
+      setNote(
+        `Seite entfernt` +
+          (daten.photoCount ? `, ${daten.photoCount} Bild(er) im Fotopool` : '') +
+          (daten.bericht?.neuGepaart
+            ? `, ${daten.bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt`
+            : ''),
+      );
+    } catch (e) {
+      setNote(`Seite nicht entfernt: ${String(e)}`);
+    }
+  }
+
   /** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
   async function setSpreadTimeline(value: boolean | null) {
     await fetch(`/api/spreads/${index}/timeline`, {
@@ -569,14 +628,41 @@ export function App() {
                 >
                   ＋ Seite danach
                 </button>
-                <button
-                  onClick={() => void removeSpread()}
-                  style={S.buttonDanger}
-                  title="Diese Doppelseite aus dem Buch nehmen. Die Bilder gehen in den Fotopool."
-                  disabled={(info?.spreadCount ?? 0) <= 1}
-                >
-                  Seite löschen
-                </button>
+                {/*
+                  Drei Griffe, weil es drei verschiedene Eingriffe sind: eine
+                  einzelne Buchseite (alles dahinter rückt auf), oder das ganze
+                  Blatt. Bei einem Auftakt oder justierten Zeilen gibt es keine
+                  einzelne Seite – dort steht nur der letzte Knopf.
+                */}
+                <span style={S.loeschen}>
+                  <span style={S.muted}>Löschen:</span>
+                  {spread?.splittable && (
+                    <>
+                      <button
+                        onClick={() => void removePage('left')}
+                        style={S.buttonDanger}
+                        title="Nur die linke Buchseite herausnehmen. Alles dahinter rückt eine Seite auf."
+                      >
+                        linke Seite
+                      </button>
+                      <button
+                        onClick={() => void removePage('right')}
+                        style={S.buttonDanger}
+                        title="Nur die rechte Buchseite herausnehmen. Alles dahinter rückt eine Seite auf."
+                      >
+                        rechte Seite
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => void removeSpread()}
+                    style={S.buttonDanger}
+                    title="Die ganze Doppelseite aus dem Buch nehmen. Die Bilder gehen in den Fotopool."
+                    disabled={(info?.spreadCount ?? 0) <= 1}
+                  >
+                    ganze Doppelseite
+                  </button>
+                </span>
 
                 {/*
                   Welche Gruppen hier liegen – und ein Weg zu ihnen. Der Name im
@@ -1078,6 +1164,7 @@ const S = {
     color: '#fff',
     cursor: 'pointer',
   },
+  loeschen: { display: 'flex', alignItems: 'center', gap: '0.3rem' },
   /** Rot wie beim Aussortieren eines Fotos: Der Griff nimmt etwas aus dem Buch. */
   buttonDanger: {
     padding: '0.35rem 0.75rem',

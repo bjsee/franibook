@@ -78,11 +78,23 @@ function spiegel<T extends { x: number; w: number }>(r: T): T {
  * eine leere Halbseite davor.
  */
 export function zerlegbar(spread: Spread): boolean {
+  // Handarbeit wird beim Umpaaren nicht zerschnitten: Ein festgehaltenes Blatt
+  // behält seine Form und seine Kennung. Auf ausdrückliches Verlangen – wenn
+  // jemand eine seiner Seiten löscht – geht es trotzdem, siehe `teilbar`.
+  if (spread.locked) return false;
+  return teilbar(spread);
+}
+
+/**
+ * Ob dieses Blatt sich überhaupt an der Falzachse trennen lässt.
+ *
+ * Ohne die Rücksicht auf das Schloss: Wer die eine Seite seiner selbst gebauten
+ * Doppelseite löscht, verlangt genau diese Trennung, und sie ist geometrisch
+ * ebenso sauber wie bei jedem anderen Blatt.
+ */
+export function teilbar(spread: Spread): boolean {
   if (isJustified(spread.templateId)) return false;
   if ((spread.texts ?? []).length > 0) return false;
-  // Handarbeit wird nicht zerschnitten: Ein festgehaltenes Blatt behält seine
-  // Form und seine Kennung – auch die selbst gebauten Seiten sind welche.
-  if (spread.locked) return false;
   const template = templateById(spread.templateId);
   if (!template) return false;
   if (templateMeta(template.id).chapterOnly) return false;
@@ -263,13 +275,70 @@ export interface SinglePageResult {
    *
    * `neuGepaart` zählt Blätter, deren beide Hälften vorher nicht zusammenstanden –
    * ein Blatt, das nur seine Nummer wechselt, ist keine Änderung. `leerseiten`
-   * sind die Halbseiten, die für die Parität eingeschoben wurden, `leereBlaetter`
-   * die Blätter, die dadurch ganz ohne Bild dastehen: Trifft eine leere Halbseite
-   * aus einer Ein-Bild-Vorlage auf den Paritätsausgleich, bleibt eine leere
-   * Doppelseite. Sie zu vermeiden hieße, Bilder aufrücken zu lassen – und damit
-   * genau die Fotoverteilung anzufassen, die hier unangetastet bleiben soll.
+   * sind die Halbseiten, die für die Parität neu eingeschoben werden mussten:
+   * `0` heißt, dass eine bereits leere verbraucht wurde und das Buch nicht
+   * länger geworden ist. `leereBlaetter` sind Blätter ganz ohne Bild.
    */
-  bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
+  bericht?: {
+    neuGepaart: number;
+    leerseiten: number;
+    leereBlaetter: number;
+    /** Ob eine schon vorhandene leere Halbseite den Platz gestellt hat. */
+    leerseiteVerbraucht: boolean;
+  };
+}
+
+/**
+ * Das Buch als Folge von Buchseiten; unzerlegbare Blätter bleiben ein Eintrag.
+ *
+ * `auchTrennen` nennt Kennungen von Blättern, die trotz ihres Schlosses zerlegt
+ * werden – das ist der Fall, wenn jemand ausdrücklich eine ihrer Seiten löscht.
+ */
+function buchseitenfolge(
+  spreads: readonly Spread[],
+  auchTrennen?: ReadonlySet<string>,
+): BookPage[] {
+  const folge: BookPage[] = [];
+  for (const spread of spreads) {
+    const darf = zerlegbar(spread) || (auchTrennen?.has(spread.id) === true && teilbar(spread));
+    const teile = darf ? zerlege(spread) : undefined;
+    if (teile) folge.push(teile[0], teile[1]);
+    else folge.push({ span: 2, spread });
+  }
+  return folge;
+}
+
+/**
+ * Welcher Folgeeintrag steht an dieser Buchseitenposition?
+ *
+ * Ein unzerlegtes Blatt lässt sich nicht in der Mitte treffen – eine Position
+ * innerhalb eines solchen Blattes trifft seinen Anfang.
+ */
+function folgeIndexVon(folge: readonly BookPage[], stelle: number): number {
+  let gezaehlt = 0;
+  for (const [i, eintrag] of folge.entries()) {
+    if (gezaehlt >= stelle) return i;
+    gezaehlt += eintrag.span;
+  }
+  return folge.length;
+}
+
+/**
+ * Welcher Eintrag **enthält** diese Buchseite?
+ *
+ * Der Unterschied zu `folgeIndexVon` ist die zweite Seite eines unzerlegten
+ * Blattes: Als Einfügestelle gehört sie zur Grenze dahinter, als zu löschende
+ * Seite gehört sie zu diesem Blatt. Beim Löschen die Grenze zu nehmen träfe die
+ * Nachbarseite – gemessen an einer eingefügten Seite hinter einem festgehaltenen
+ * Blatt: Statt ihrer verschwand das Bild danach.
+ */
+function eintragAn(folge: readonly BookPage[], stelle: number): number {
+  let gezaehlt = 0;
+  for (const [i, eintrag] of folge.entries()) {
+    if (stelle < gezaehlt + eintrag.span) return i;
+    gezaehlt += eintrag.span;
+  }
+  return -1;
 }
 
 /**
@@ -288,35 +357,10 @@ export function insertSinglePage(
     return { ok: false, error: `Halbseite ${opts.halfId} gibt es nicht`, spreads: [...spreads] };
   }
 
-  // --- Buchseitenfolge bilden -------------------------------------------
-  const folge: BookPage[] = [];
-  let seitenzahl = 0;
-  for (const spread of spreads) {
-    if (zerlegbar(spread)) {
-      const teile = zerlege(spread);
-      if (teile) {
-        folge.push(teile[0], teile[1]);
-        seitenzahl += 2;
-        continue;
-      }
-    }
-    folge.push({ span: 2, spread });
-    seitenzahl += 2;
-  }
-
+  const folge = buchseitenfolge(spreads);
+  const seitenzahl = folge.reduce((n, e) => n + e.span, 0);
   const stelle = Math.min(Math.max(0, Math.trunc(opts.atPage)), seitenzahl);
-
-  // Wo in der Folge liegt diese Buchseitenposition? Ein unzerlegtes Blatt lässt
-  // sich nicht in der Mitte treffen – dort wird davor eingefügt.
-  let einfuegeIndex = folge.length;
-  let gezaehlt = 0;
-  for (const [i, eintrag] of folge.entries()) {
-    if (gezaehlt >= stelle) {
-      einfuegeIndex = i;
-      break;
-    }
-    gezaehlt += eintrag.span;
-  }
+  const einfuegeIndex = folgeIndexVon(folge, stelle);
 
   const neue: BookPage = {
     span: 1,
@@ -334,39 +378,150 @@ export function insertSinglePage(
 
   folge.splice(einfuegeIndex, 0, neue);
 
-  // --- Neu paaren --------------------------------------------------------
+  // --- Platz für die neue Seite beschaffen -------------------------------
+  //
+  // Ein Buch besteht aus Blättern: Eine Seite mehr heißt, dass irgendwo eine
+  // Halbseite frei werden muss. Meist steht schon eine leere herum – jede
+  // Vorlage mit einem einzigen Bild hat eine –, und die wird verbraucht statt
+  // eine neue zu erzeugen. Sonst hätte das Einfügen einer Seite eine ganze leere
+  // Doppelseite zur Folge, und das Buch wüchse um zwei Seiten statt um eine.
+  //
+  // Gesucht wird nur bis zum nächsten unzerlegbaren Blatt: Dahinter stellt der
+  // Paritätsausgleich die Ordnung ohnehin wieder her, und eine dort entnommene
+  // Leerseite würde nichts sparen, sondern nur eine gewollte Ruhefläche nehmen.
+  let verbraucht = false;
+  for (let i = einfuegeIndex + 1; i < folge.length; i++) {
+    const eintrag = folge[i]!;
+    if (eintrag.span === 2) break;
+    if (eintrag.halfId === HALF_BLANK_ID && (eintrag.blocks ?? []).length === 0) {
+      folge.splice(i, 1);
+      verbraucht = true;
+      break;
+    }
+  }
+
+  return paareNeu(folge, spreads, verbraucht);
+}
+
+/**
+ * Nimmt eine einzelne Buchseite aus dem Buch und zieht die Blattgrenzen neu.
+ *
+ * Das Gegenstück zum Einfügen, mit derselben Rechnung: Die Seite fällt aus der
+ * Folge, alles danach rückt eine Halbseite auf, und vor dem nächsten
+ * unzerlegbaren Blatt füllt eine leere Halbseite auf. Geht die Rechnung auf,
+ * verschwindet ein Blatt.
+ *
+ * Bilder auf dieser Seite gehen nicht verloren: Der Fotopool ist die Differenz
+ * zwischen Bestand und platzierten Bildern, sie liegen unmittelbar danach dort.
+ */
+export function removeSinglePage(
+  spreads: readonly Spread[],
+  atPage: number,
+): SinglePageResult & { photoCount: number } {
+  let folge = buchseitenfolge(spreads);
+  const seitenzahl = folge.reduce((n, e) => n + e.span, 0);
+  const stelle = Math.trunc(atPage);
+
+  if (stelle < 0 || stelle >= seitenzahl) {
+    return {
+      ok: false,
+      error: `Buchseite ${stelle + 1} gibt es nicht`,
+      spreads: [...spreads],
+      photoCount: 0,
+    };
+  }
+
+  let index = eintragAn(folge, stelle);
+
+  // Trifft es ein festgehaltenes Blatt, wird es für diesen einen Griff getrennt:
+  // Wer eine Seite seiner selbst gebauten Doppelseite löscht, verlangt genau
+  // das. Das Schloss schützt die Handarbeit vor der Umpaarung, nicht vor dem
+  // Benutzer.
+  const getroffen = folge[index];
+  if (getroffen?.span === 2 && getroffen.spread?.locked && teilbar(getroffen.spread)) {
+    folge = buchseitenfolge(spreads, new Set([getroffen.spread.id]));
+    index = eintragAn(folge, stelle);
+  }
+
+  const eintrag = folge[index];
+  if (!eintrag) {
+    return { ok: false, error: 'Buchseite nicht gefunden', spreads: [...spreads], photoCount: 0 };
+  }
+
+  // Ein unzerlegbares Blatt hat keine einzelne Seite, die man herausnehmen
+  // könnte – ein Auftakt trägt seinen Text über beide Hälften, justierte Zeilen
+  // ihre Rechtecke. Das gehört gesagt, statt heimlich das ganze Blatt zu nehmen.
+  if (eintrag.span === 2) {
+    return {
+      ok: false,
+      error:
+        'Diese Doppelseite lässt sich nicht in einzelne Seiten trennen – ' +
+        'nimm sie ganz aus dem Buch.',
+      spreads: [...spreads],
+      photoCount: 0,
+    };
+  }
+
+  const photoCount = (eintrag.slots ?? []).filter((s) => s.photoId).length;
+  folge.splice(index, 1);
+
+  const ergebnis = paareNeu(folge, spreads, false);
+  return { ...ergebnis, photoCount };
+}
+
+/**
+ * Setzt eine Buchseitenfolge zu Blättern zusammen.
+ *
+ * Ein unzerlegtes Blatt muss auf einer Blattgrenze beginnen. Steht davor noch
+ * eine Seite offen, füllt eine leere Halbseite auf – das ist der Punkt, an dem
+ * die Parität wieder gerade wird und alles Weitere unverändert bleibt.
+ */
+function paareNeu(
+  folge: readonly BookPage[],
+  original: readonly Spread[],
+  leerseiteVerbraucht: boolean,
+): SinglePageResult {
   const ergebnis: Spread[] = [];
   let leerseiten = 0;
+  let neuGepaart = 0;
   let offen: BookPage | undefined;
 
-  let neuGepaart = 0;
+  /** Ob eine Buchseite nichts trägt – kein Bild, keinen Text. */
+  const nichts = (seite: BookPage): boolean =>
+    !seite.own && (seite.slots ?? []).every((s) => !s.photoId) && (seite.blocks ?? []).length === 0;
 
   const schliessen = (rechts: BookPage): boolean => {
     const links = offen!;
+    offen = undefined;
+
+    // Ein Blatt, das durch das Umpaaren entsteht und nichts trägt, wird gar
+    // nicht gebaut: Es wäre reines Artefakt der verschobenen Blattgrenzen –
+    // zwei leere Hälften, die vorher zu verschiedenen Blättern gehörten. Ein
+    // Blatt, das schon vorher beidseitig leer war, bleibt dagegen: Dort war es
+    // eine Entscheidung.
+    if (links.from !== rechts.from && nichts(links) && nichts(rechts)) return true;
+
     const blatt = paare(links, rechts, ergebnis.length);
     if (!blatt) return false;
     // Neu zusammengesetzt ist ein Blatt, dessen beide Hälften vorher nicht
     // zusammen auf einem Blatt standen. Das ist die Zahl, die den Eingriff
-    // beschreibt – ein Blatt, das nur seine Nummer wechselt, ist keine
-    // Änderung.
+    // beschreibt – ein Blatt, das nur seine Nummer wechselt, ist keine Änderung.
     if (links.from !== rechts.from) neuGepaart++;
     ergebnis.push(blatt);
-    offen = undefined;
     return true;
   };
 
   const leer = (): BookPage => ({ span: 1, halfId: HALF_BLANK_ID, slots: [], blocks: [] });
+  const gescheitert = (): SinglePageResult => ({
+    ok: false,
+    error: 'Blatt nicht zusammensetzbar',
+    spreads: [...original],
+  });
 
   for (const eintrag of folge) {
     if (eintrag.span === 2) {
-      // Ein unzerlegtes Blatt muss auf einer Blattgrenze beginnen. Steht noch
-      // eine Seite offen, füllt eine leere Halbseite auf – das ist der Punkt,
-      // an dem die Parität wieder gerade wird und alles Weitere unverändert
-      // bleibt.
       if (offen) {
-        if (!schliessen(leer())) {
-          return { ok: false, error: 'Blatt nicht zusammensetzbar', spreads: [...spreads] };
-        }
+        if (!schliessen(leer())) return gescheitert();
         leerseiten++;
       }
       ergebnis.push({ ...eintrag.spread!, index: ergebnis.length });
@@ -374,15 +529,11 @@ export function insertSinglePage(
     }
 
     if (!offen) offen = eintrag;
-    else if (!schliessen(eintrag)) {
-      return { ok: false, error: 'Blatt nicht zusammensetzbar', spreads: [...spreads] };
-    }
+    else if (!schliessen(eintrag)) return gescheitert();
   }
 
   if (offen) {
-    if (!schliessen(leer())) {
-      return { ok: false, error: 'Blatt nicht zusammensetzbar', spreads: [...spreads] };
-    }
+    if (!schliessen(leer())) return gescheitert();
     leerseiten++;
   }
 
@@ -390,5 +541,9 @@ export function insertSinglePage(
     (blatt) => blatt.slots.every((s) => !s.photoId) && !blatt.locked && !blatt.texts?.length,
   ).length;
 
-  return { ok: true, spreads: ergebnis, bericht: { neuGepaart, leerseiten, leereBlaetter } };
+  return {
+    ok: true,
+    spreads: ergebnis,
+    bericht: { neuGepaart, leerseiten, leereBlaetter, leerseiteVerbraucht },
+  };
 }
