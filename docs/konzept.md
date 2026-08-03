@@ -1798,6 +1798,79 @@ Eine ausklappbare Leiste zeigt nicht platzierte und ausgeschlossene Fotos. Von d
 
 Alle drei Kontexte unterstützen Tastaturbedienung über die Sensor-API von dnd-kit; die Cropverschiebung ist zusätzlich über Pfeiltasten mit Feinraster bedienbar.
 
+## Gestalt der Oberfläche
+
+Die Oberfläche war bis August 2026 gewachsen und nicht gestaltet: eine
+scrollende Seite, auf der jede neue Fähigkeit einen weiteren Knopf in dieselbe
+Werkzeugleiste legte. Am Ende standen dort zwölf Griffe, die je nach Auswahl
+umsprangen, und die Doppelseite — der eigentliche Gegenstand — musste sich den
+Platz mit ihnen teilen. Die Neufassung ändert drei Dinge grundsätzlich.
+
+**Die App füllt das Fenster und scrollt nicht als Ganzes.** Kopfzeile,
+Kennzahlenzeile und Seitenspalten stehen fest, gescrollt wird nur der Inhalt
+darunter. Der Gewinn ist messbar und nicht bloß ästhetisch: Die Bühne bekommt
+die Höhe, die der Bildschirm hergibt, statt die, die nach zwei Bildschirmhöhen
+Beiwerk übrig bleibt. `usePlatz` rechnet die Breite aus beiden Richtungen —
+ein Blatt von 606 × 306 mm ist fast doppelt so breit wie hoch, also begrenzt in
+einem hohen Fenster die Breite und in einem flachen die Höhe.
+
+**Die Werkzeuge folgen der Auswahl, statt umzuspringen.** Was ein Bild betrifft
+(Ausschnitt, Position, Neigung, Aussortieren) und was die Doppelseite betrifft
+(Anordnung, Hintergrund, Text, Seiten einfügen und löschen) sind zwei Sätze
+Griffe, die nie gleichzeitig gebraucht werden. Sie teilen deshalb dieselbe
+Spalte und tauschen sich mit der Auswahl aus.
+
+**Farbe ist Aussage.** Türkis markiert ausschließlich Auswahl und Aktion; Rot,
+Gelb und Grün tragen ausschließlich Zustände des Buches — zu klein, knapp, in
+Ordnung, nicht erreichbar. Daraus folgt, dass eine farbige Fläche in dieser
+Oberfläche immer etwas über das Buch sagt und niemals über die Bedienung. Die
+Neutraltöne sind warm und die Textfarbe ein dunkles Braun statt Schwarz: Über
+einer Ansicht, die zu drei Vierteln aus Fotos besteht, wirkt kaltes Grau wie ein
+Fehler in der Bildwiedergabe. Werte und Grundstile stehen in
+`apps/web/src/theme.css`, die daraus gebauten Bausteine in `theme.ts`.
+
+Betroffen ist nur das Werkzeug, nicht das Werkstück: Was auf der Doppelseite
+steht, kommt weiterhin aus `core/render/typography.ts` und `fonts.css`. Auch die
+Farben der Auswahl- und Diagnosemarken in `render-dom` sind reine
+Bildschirmsache — der PDF-Renderer kennt keine Hilfslinien, und `?bare` zeigt
+weder Marken noch Ränder. Der Parity-Test bleibt davon unberührt.
+
+### Drei Rahmen um dieselbe Bühne
+
+Ob eine feste Seitenspalte, eine schwebende Leiste oder fast nichts beim
+Durcharbeiten von achtzig Doppelseiten besser trägt, lässt sich aus Standbildern
+nicht entscheiden. Deshalb stehen drei Varianten zur Wahl, bis eine gewonnen hat:
+
+| Variante        | Navigation                  | Werkzeuge                       | Handel                                                     |
+| --------------- | --------------------------- | ------------------------------- | ---------------------------------------------------------- |
+| **a** Inspektor | Nachbarstreifen im Fuß      | feste Spalte, 336 px            | jeder Griff sichtbar, ein Drittel der Breite dauerhaft weg |
+| **b** Werkbank  | ganzes Buch als Kachelbaum  | schwebende Pillenleiste, Panels | mehr Fläche fürs Papier, jeder Griff einen Klick weiter    |
+| **c** Lesetisch | Filmstreifen, dunkler Grund | Tasten `g` `i` `p` `a`          | ehrlichste Beurteilung der Bilder, unbequemste Arbeit      |
+
+Billig ist das nur, weil die drei sich ausschließlich im Beiwerk unterscheiden.
+Das Verhalten — Ausschnitt ziehen, Bild versetzen, neigen, verschieben,
+aussortieren, Fotopool, die verzögerten Schreibvorgänge — liegt einmal in
+`spread/useSpreadEditor.ts`, die Bühne einmal in `spread/SpreadStage.tsx`; die
+Rahmen sind je rund 150 Zeilen darum. Ohne diese Trennung wären es dreimal
+1400 Zeilen und dreimal dieselbe Gelegenheit, sie auseinanderlaufen zu lassen.
+
+Umgeschaltet wird über `?ui=a|b|c` — dieselbe Konvention wie `?bare` und
+`?cover` — und über einen Umschalter in der Kopfzeile, der die Wahl in
+`localStorage` merkt. Beides, weil zum Vergleichen beides gebraucht wird: die
+Adresse für zwei Fenster nebeneinander, der Knopf für den schnellen Wechsel.
+
+Die Kopfzeile mit ihren sieben Reitern steht in **allen** Varianten, auch wenn
+1b und 1c sie im Entwurf nicht hatten. Andernfalls kostete ein Variantenwechsel
+den Zugang zu Gruppen, Jahren und Bildquellen, und der Vergleich hätte nicht
+mehr die Anordnung der Griffe gemessen, sondern den Funktionsumfang. Aus dem
+gleichen Grund fehlt die Kommandopalette (`⌘K`) des Lesetisch-Entwurfs: Sie
+hätte nichts zu tun, was die Reiter nicht schon tun.
+
+Der Umschlag wurde bei der Gelegenheit vom `?cover`-Sonderweg zu einem echten
+Reiter; die alte Adresse wählt ihn nur noch aus. Der Grund für den Sonderweg —
+die Hauptansicht nicht anfassen zu müssen — ist mit dem Umbau der Kopfzeile
+weggefallen.
+
 ## Backend-Schnittstelle
 
 REST mit JSON, bewusst schlank. Die interessante Eigenschaft: Layoutoperationen sind **nicht** am Server, sie laufen im Browser über `packages/core`. Der Server persistiert nur.

@@ -6,8 +6,13 @@
  * die Gruppen gliedern später das Buch.
  *
  * Die Automatik schlägt Gruppen anhand der Orte vor – entschieden wird hier.
+ *
+ * Links die Gruppen, rechts ihre Fotos, und beide scrollen für sich: Bei über
+ * sechzig Gruppen und 830 Fotos ist eine gemeinsam scrollende Seite der Grund,
+ * warum man die Liste verliert, in der man gerade war.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { B, T } from './theme.js';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 
 interface PhotoRow {
@@ -244,17 +249,18 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 
   return (
     <div style={S.wrap}>
-      <aside style={S.side}>
-        <div style={S.sideHead}>
-          <strong>Gruppen</strong>
-          <button onClick={() => setFrageVorschlag(true)} disabled={!!busy} style={S.smallButton}>
+      <aside style={S.seite}>
+        <div style={S.seiteKopf}>
+          <strong style={{ ...B.titel, fontSize: 15 }}>Gruppen</strong>
+          <button onClick={() => setFrageVorschlag(true)} disabled={!!busy} style={B.knopfKlein}>
             Vorschlagen
           </button>
         </div>
+
         {frageVorschlag ? (
-          <div style={S.confirm}>
-            <strong style={S.confirmTitle}>Vorschläge neu berechnen?</strong>
-            <ul style={S.confirmList}>
+          <div style={S.frage}>
+            <strong style={{ display: 'block', marginBottom: 4 }}>Vorschläge neu berechnen?</strong>
+            <ul style={S.frageListe}>
               <li>
                 <strong>{manuelleGruppen}</strong> von Hand angelegte oder bearbeitete{' '}
                 {manuelleGruppen === 1 ? 'Gruppe bleibt' : 'Gruppen bleiben'} unverändert. Als
@@ -268,16 +274,15 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                 können wegfallen oder hinzukommen.
               </li>
             </ul>
-            <div style={S.confirmButtons}>
-              <button onClick={() => void vorschlagen(false)} style={S.confirmOk}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => void vorschlagen(false)} style={B.knopfPrimaer}>
                 Neu berechnen
               </button>
-              <button onClick={() => setFrageVorschlag(false)} style={S.button}>
+              <button onClick={() => setFrageVorschlag(false)} style={B.knopf}>
                 Abbrechen
               </button>
             </div>
-
-            <p style={S.confirmReset}>
+            <p style={{ ...B.leiser, marginTop: 10, color: T.warnText }}>
               Oder{' '}
               <button
                 onClick={() => {
@@ -291,7 +296,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                     void vorschlagen(true);
                   }
                 }}
-                style={S.linkButton}
+                style={B.knopfText}
               >
                 ganz von vorn beginnen
               </button>{' '}
@@ -299,7 +304,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
             </p>
           </div>
         ) : (
-          <p style={S.hint}>
+          <p style={{ ...B.leiser, margin: '8px 0 12px' }}>
             Vorschläge entstehen aus den Orten. Häufig besuchte Orte gelten als Alltag und sind
             abgeschaltet — sie gliedern das Buch nicht.
           </p>
@@ -307,71 +312,72 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 
         <button
           onClick={() => setFilter({ kind: 'all' })}
-          style={filter.kind === 'all' ? S.filterActive : S.filter}
+          style={filter.kind === 'all' ? B.filterAn : B.filter}
         >
-          Alle Fotos <span style={S.count}>{photos.length}</span>
+          <span>Alle Fotos</span>
+          <span style={S.zahl}>{photos.length}</span>
         </button>
         <button
           onClick={() => setFilter({ kind: 'ungrouped' })}
-          style={filter.kind === 'ungrouped' ? S.filterActive : S.filter}
+          style={filter.kind === 'ungrouped' ? B.filterAn : B.filter}
         >
-          Ohne Gruppe <span style={S.count}>{photos.length - gruppiert}</span>
+          <span>Ohne Gruppe</span>
+          <span style={S.zahl}>{photos.length - gruppiert}</span>
         </button>
 
         <div style={S.sortLeiste}>
-          <span style={S.sortLabel}>Reihenfolge</span>
+          <span style={{ ...B.marke, marginRight: 4 }}>Reihenfolge</span>
           {(
             [
               ['buch', 'im Buch'],
-              ['name', 'nach Name'],
+              ['name', 'Name'],
             ] as const
-          ).map(([wert, beschriftung]) => (
+          ).map(([wert, text]) => (
             <button
               key={wert}
               onClick={() => setSortierung(wert)}
-              style={sortierung === wert ? S.sortActive : S.sortButton}
+              style={sortierung === wert ? B.sortAn : B.sortAus}
             >
-              {beschriftung}
+              {text}
             </button>
           ))}
         </div>
 
-        <ul style={S.groupList}>
+        <div style={S.gruppenListe}>
           {sortierteGruppen.map((g) => (
-            <li key={g.id}>
-              <button
-                onClick={() => setFilter({ kind: 'group', id: g.id })}
-                style={filter.kind === 'group' && filter.id === g.id ? S.filterActive : S.filter}
-                title={g.reason}
-              >
-                {/*
-                  Die Doppelseite vor dem Namen: Sie beantwortet die Frage, mit
-                  der man in diese Liste kommt – „wo im Buch ist das?“ Ein
-                  Strich heißt, dass kein Foto der Gruppe im Buch steht.
-                */}
-                <span style={S.spreadNo} title="Erste Doppelseite im Buch">
-                  {g.firstSpreadIndex === undefined ? '–' : g.firstSpreadIndex + 1}
-                </span>
-                <span style={{ ...S.groupTitle, opacity: g.active ? 1 : 0.45 }}>
-                  {g.active ? '' : '○ '}
-                  {g.title}
-                </span>
-                <span style={S.count}>{g.photoIds.length}</span>
-              </button>
-            </li>
+            <button
+              key={g.id}
+              onClick={() => setFilter({ kind: 'group', id: g.id })}
+              style={filter.kind === 'group' && filter.id === g.id ? B.filterAn : B.filter}
+              title={g.reason}
+            >
+              {/*
+                Die Doppelseite vor dem Namen: Sie beantwortet die Frage, mit der
+                man in diese Liste kommt – „wo im Buch ist das?" Ein Strich heißt,
+                dass kein Foto der Gruppe im Buch steht.
+              */}
+              <span style={S.spreadNr} title="Erste Doppelseite im Buch">
+                {g.firstSpreadIndex === undefined ? '–' : g.firstSpreadIndex + 1}
+              </span>
+              <span style={{ ...S.gruppenTitel, opacity: g.active ? 1 : 0.5 }}>
+                {g.active ? '' : '○ '}
+                {g.title}
+              </span>
+              <span style={S.zahl}>{g.photoIds.length}</span>
+            </button>
           ))}
-        </ul>
+        </div>
       </aside>
 
-      <section style={S.main}>
-        <div style={S.toolbar}>
-          <span style={S.muted}>
+      <section style={S.haupt}>
+        <div style={S.leiste}>
+          <span style={{ ...B.leise, minWidth: '8rem' }}>
             {selected.size > 0 ? `${selected.size} ausgewählt` : `${sichtbar.length} Fotos`}
           </span>
 
           {selected.size > 0 && (
             <>
-              <button onClick={() => void gruppieren()} style={S.button}>
+              <button onClick={() => void gruppieren()} style={B.knopfPrimaer}>
                 Gruppieren …
               </button>
               <button
@@ -381,7 +387,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                     body: JSON.stringify({ photoIds: [...selected] }),
                   }).then(() => setSelected(new Set()))
                 }
-                style={S.button}
+                style={B.knopf}
               >
                 Gruppierung lösen
               </button>
@@ -399,7 +405,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                     setNote(`${selected.size} Fotos zugeordnet`);
                   });
                 }}
-                style={S.select}
+                style={B.auswahl}
               >
                 <option value="">Zu Gruppe hinzufügen …</option>
                 {groups.map((g) => (
@@ -417,18 +423,18 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                       body: JSON.stringify({ coverPhotoId: [...selected][0] }),
                     })
                   }
-                  style={S.button}
+                  style={B.knopf}
                 >
                   Als Hauptbild
                 </button>
               )}
-              <button onClick={() => setSelected(new Set())} style={S.button}>
+              <button onClick={() => setSelected(new Set())} style={B.knopf}>
                 Auswahl aufheben
               </button>
             </>
           )}
 
-          <span style={S.spacer} />
+          <span style={B.dehner} />
 
           {aktiveGruppe && (
             <>
@@ -437,15 +443,15 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                 <button
                   onClick={() => onOpenSpread(aktiveGruppe.firstSpreadIndex!)}
                   title={`Doppelseite ${aktiveGruppe.firstSpreadIndex + 1} aufschlagen`}
-                  style={S.button}
+                  style={B.knopf}
                 >
                   Im Buch zeigen
                 </button>
               )}
-              <button onClick={() => void umbenennen(aktiveGruppe)} style={S.button}>
+              <button onClick={() => void umbenennen(aktiveGruppe)} style={B.knopf}>
                 Umbenennen
               </button>
-              <label style={S.check}>
+              <label style={B.haken}>
                 <input
                   type="checkbox"
                   checked={aktiveGruppe.active}
@@ -463,24 +469,23 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                 eigene Angabe folgt die Gruppe `settings.groupOpeners`, das
                 seinerseits an den Zeitstrahl gekoppelt sein kann.
               */}
-              <label style={S.check}>
-                Auftakt
-                <select
-                  value={aktiveGruppe.opener === undefined ? '' : String(aktiveGruppe.opener)}
-                  onChange={(e) =>
-                    void call(`/api/groups/${aktiveGruppe.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({
-                        opener: e.target.value === '' ? null : e.target.value === 'true',
-                      }),
-                    })
-                  }
-                >
-                  <option value="">wie Vorgabe</option>
-                  <option value="true">eigene Seite</option>
-                  <option value="false">keine</option>
-                </select>
-              </label>
+              <select
+                value={aktiveGruppe.opener === undefined ? '' : String(aktiveGruppe.opener)}
+                onChange={(e) =>
+                  void call(`/api/groups/${aktiveGruppe.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                      opener: e.target.value === '' ? null : e.target.value === 'true',
+                    }),
+                  })
+                }
+                style={B.auswahl}
+                title="Auftaktseite für diese Gruppe"
+              >
+                <option value="">Auftakt: wie Vorgabe</option>
+                <option value="true">eigene Seite</option>
+                <option value="false">keine</option>
+              </select>
               {/*
                 Zusammenführen: Die Automatik zerlegt einen Aufenthalt
                 gelegentlich in zwei – „Helgoland Mai 2025" und „Helgoland
@@ -500,7 +505,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                     setNote(`„${aktiveGruppe.title}" ging in „${zielTitel}" auf`);
                   });
                 }}
-                style={S.select}
+                style={B.auswahl}
               >
                 <option value="">Zusammenführen mit …</option>
                 {groups
@@ -522,7 +527,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                   );
                   setFilter({ kind: 'all' });
                 }}
-                style={S.button}
+                style={B.knopfWeg}
               >
                 Gruppe auflösen
               </button>
@@ -530,9 +535,16 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
           )}
         </div>
 
-        {note && <p style={S.note}>{note}</p>}
+        {note && (
+          <p style={S.note}>
+            {note}
+            <button onClick={() => setNote(null)} style={S.noteZu}>
+              ×
+            </button>
+          </p>
+        )}
 
-        <div style={S.list}>
+        <div style={S.liste}>
           {sichtbar.map((p) => {
             const g = groupOf.get(p.id);
             const ausgewaehlt = selected.has(p.id);
@@ -543,31 +555,31 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                 onClick={(e) => toggle(p.id, e)}
                 onDoubleClick={() => setLightbox(p.id)}
                 title="Doppelklick vergrößert"
-                style={{ ...S.row, ...(ausgewaehlt ? S.rowSelected : {}) }}
+                style={{ ...S.zeile, ...(ausgewaehlt ? S.zeileAn : {}) }}
               >
                 <img src={`/api/photos/${p.id}/preview?size=thumb`} alt="" style={S.thumb} />
-                <div style={S.rowMain}>
-                  <div style={S.rowFile}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={S.datei}>
                     {p.fileName}
                     {istCover && <span style={S.coverTag}>Hauptbild</span>}
                   </div>
-                  <div style={S.rowMeta}>
-                    <span style={S.date}>
+                  <div style={S.meta}>
+                    <span style={S.datum}>
                       {p.effectiveDate?.replace('T', ' ').slice(0, 16) ?? '—'}
                     </span>
                     {p.place ? (
-                      <span style={S.place}>{p.place.label}</span>
+                      <span style={S.ort}>{p.place.label}</span>
                     ) : (
-                      <span style={S.placeNone}>kein Ort</span>
+                      <span style={{ color: T.fg4 }}>kein Ort</span>
                     )}
-                    {p.camera && <span style={S.camera}>{p.camera}</span>}
-                    <span style={S.px}>
+                    {p.camera && <span>{p.camera}</span>}
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {p.width}×{p.height}
                     </span>
                   </div>
                 </div>
                 {g && (
-                  <span style={{ ...S.groupTag, opacity: g.active ? 1 : 0.45 }}>{g.title}</span>
+                  <span style={{ ...S.gruppenTag, opacity: g.active ? 1 : 0.5 }}>{g.title}</span>
                 )}
                 {/*
                   Hier stehen die Bilder eines Tages untereinander – die Stelle,
@@ -581,38 +593,39 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                     void aussortieren(p.id, p.fileName);
                   }}
                   title={`„${p.fileName}" aussortieren`}
-                  style={S.rowWeg}
+                  style={S.weg}
                 >
                   ×
                 </button>
               </div>
             );
           })}
+          <p style={{ ...B.leiser, margin: '12px 0 24px' }}>
+            Klick wählt aus, Umschalt-Klick einen Bereich, Cmd-Klick einzelne dazu. Doppelklick
+            vergrößert.
+          </p>
         </div>
-
-        <p style={S.hint}>
-          Klick wählt aus, Umschalt-Klick einen Bereich, Cmd-Klick einzelne dazu. Doppelklick
-          vergrößert.
-        </p>
       </section>
 
       {grossesBild && (
         <div style={S.overlay} onClick={() => setLightbox(null)}>
-          <figure style={S.figure} onClick={(e) => e.stopPropagation()}>
+          <figure style={S.figur} onClick={(e) => e.stopPropagation()}>
             <img
               src={`/api/photos/${grossesBild.id}/preview`}
               alt={grossesBild.fileName}
-              style={S.bigImage}
+              style={S.grossesBild}
             />
-            <figcaption style={S.figCaption}>
-              <strong style={S.captionFile}>{grossesBild.fileName}</strong>
-              <span style={S.captionMeta}>
+            <figcaption style={S.bildunterschrift}>
+              <strong style={{ color: '#fff', fontFamily: T.mono, fontSize: 13 }}>
+                {grossesBild.fileName}
+              </strong>
+              <span style={{ color: 'var(--warm-300)', fontSize: 12 }}>
                 {grossesBild.effectiveDate?.replace('T', ' ').slice(0, 16) ?? 'kein Datum'}
                 {grossesBild.place && ` · ${grossesBild.place.label}`}
                 {grossesBild.camera && ` · ${grossesBild.camera}`}
                 {` · ${grossesBild.width}×${grossesBild.height}`}
               </span>
-              <span style={S.captionHint}>
+              <span style={{ color: 'var(--warm-500)', fontSize: 11 }}>
                 Pfeiltasten blättern · Esc oder Klick daneben schließt
               </span>
             </figcaption>
@@ -624,273 +637,181 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 }
 
 const S = {
-  wrap: {
-    display: 'grid',
-    gridTemplateColumns: '260px minmax(0, 1fr)',
-    gap: '1.5rem',
-    marginTop: '1rem',
+  wrap: { flex: 1, display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', minHeight: 0 },
+  seite: {
+    background: T.bg1,
+    borderRight: `1px solid ${T.line}`,
+    overflowY: 'auto' as const,
+    padding: '18px 16px',
   },
-  side: { position: 'sticky' as const, top: '1rem', alignSelf: 'start' },
-  sideHead: {
+  seiteKopf: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '0.4rem',
+    gap: 8,
   },
-  hint: { fontSize: '0.72rem', color: '#9ca3af', margin: '0.4rem 0 0.8rem', lineHeight: 1.45 },
-  filter: {
-    display: 'flex',
-    width: '100%',
-    justifyContent: 'space-between',
-    gap: '0.5rem',
-    padding: '0.3rem 0.5rem',
-    border: '1px solid transparent',
-    borderRadius: '5px',
-    background: 'none',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
-    textAlign: 'left' as const,
-  },
-  filterActive: {
-    display: 'flex',
-    width: '100%',
-    justifyContent: 'space-between',
-    gap: '0.5rem',
-    padding: '0.3rem 0.5rem',
-    border: '1px solid #bfdbfe',
-    borderRadius: '5px',
-    background: '#eff6ff',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    textAlign: 'left' as const,
-  },
-  count: { color: '#9ca3af', fontVariantNumeric: 'tabular-nums' as const, fontWeight: 400 },
-  spreadNo: {
-    minWidth: '1.7rem',
-    color: '#9ca3af',
+  zahl: { color: T.fg4, fontVariantNumeric: 'tabular-nums' as const, fontWeight: 400 },
+  spreadNr: {
+    minWidth: '1.8rem',
+    color: T.fg4,
     fontVariantNumeric: 'tabular-nums' as const,
     fontWeight: 400,
     textAlign: 'right' as const,
     flexShrink: 0,
   },
-  groupTitle: {
+  gruppenTitel: {
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
   },
-  sortLeiste: {
+  sortLeiste: { display: 'flex', alignItems: 'center', gap: 4, margin: '14px 0 6px' },
+  gruppenListe: { display: 'flex', flexDirection: 'column' as const, gap: 1 },
+
+  haupt: { minWidth: 0, display: 'flex', flexDirection: 'column' as const },
+  leiste: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.25rem',
-    margin: '0.6rem 0 0.1rem',
-  },
-  sortLabel: { fontSize: '0.7rem', color: '#9ca3af', marginRight: '0.15rem' },
-  sortButton: {
-    padding: '0.1rem 0.4rem',
-    border: '1px solid transparent',
-    borderRadius: '4px',
-    background: 'none',
-    color: '#6b7280',
-    cursor: 'pointer',
-    fontSize: '0.72rem',
-  },
-  sortActive: {
-    padding: '0.1rem 0.4rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    background: '#f9fafb',
-    color: '#111827',
-    cursor: 'pointer',
-    fontSize: '0.72rem',
-    fontWeight: 600,
-  },
-  groupList: {
-    listStyle: 'none',
-    margin: '0.5rem 0 0',
-    padding: 0,
-    maxHeight: '55vh',
-    overflowY: 'auto' as const,
-  },
-  main: { minWidth: 0 },
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    paddingBottom: '0.6rem',
-    borderBottom: '1px solid #e5e7eb',
+    gap: 8,
+    padding: '12px 20px',
+    borderBottom: `1px solid ${T.line}`,
+    background: T.bg1,
     flexWrap: 'wrap' as const,
+    flexShrink: 0,
   },
-  spacer: { flex: 1 },
-  muted: { color: '#6b7280', fontSize: '0.8125rem', minWidth: '7rem' },
-  button: {
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
-  },
-  smallButton: {
-    padding: '0.15rem 0.5rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.72rem',
-  },
-  check: {
+  note: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.3rem',
-    fontSize: '0.78rem',
-    color: '#374151',
+    gap: 10,
+    margin: '10px 20px 0',
+    padding: '6px 10px',
+    fontSize: 13,
+    color: T.fg2,
+    background: T.bg3,
+    borderRadius: T.rMd,
   },
-  note: { fontSize: '0.78rem', color: '#065f46', margin: '0.4rem 0 0' },
-  list: { marginTop: '0.5rem', maxHeight: '68vh', overflowY: 'auto' as const },
-  row: {
+  noteZu: {
+    font: 'inherit',
+    border: 'none',
+    background: 'none',
+    color: T.fg3,
+    cursor: 'pointer',
+    padding: 0,
+    marginLeft: 'auto',
+  },
+  liste: { flex: 1, overflowY: 'auto' as const, padding: '0 20px' },
+  zeile: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.3rem 0.5rem',
-    borderBottom: '1px solid #f3f4f6',
+    gap: 14,
+    padding: '8px 10px',
+    borderBottom: `1px solid ${T.bg3}`,
+    borderRadius: T.rMd,
     cursor: 'pointer',
     userSelect: 'none' as const,
   },
-  rowSelected: { background: '#eff6ff' },
+  zeileAn: { background: T.cyanZart },
   thumb: {
-    width: 56,
-    height: 42,
+    width: 60,
+    height: 44,
     objectFit: 'cover' as const,
-    borderRadius: '3px',
-    background: '#f3f4f6',
+    borderRadius: T.rSm,
+    background: T.bg3,
     flexShrink: 0,
   },
-  rowMain: { minWidth: 0, flex: 1 },
-  rowFile: {
-    fontSize: '0.78rem',
-    fontFamily: 'ui-monospace, monospace',
+  datei: {
+    fontFamily: T.mono,
+    fontSize: 13,
+    color: T.fg1,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  rowMeta: {
+  meta: {
     display: 'flex',
-    gap: '0.75rem',
-    fontSize: '0.7rem',
-    color: '#6b7280',
+    gap: 14,
+    fontSize: 12,
+    color: T.fg3,
     flexWrap: 'wrap' as const,
+    marginTop: 2,
   },
-  date: { fontVariantNumeric: 'tabular-nums' as const, minWidth: '8rem' },
-  place: { color: '#0369a1', fontWeight: 500 },
-  placeNone: { color: '#d1d5db' },
-  camera: { color: '#9ca3af' },
-  px: { color: '#9ca3af', fontVariantNumeric: 'tabular-nums' as const },
-  groupTag: {
-    fontSize: '0.7rem',
-    padding: '0.1rem 0.45rem',
-    background: '#f3f4f6',
-    borderRadius: '4px',
+  datum: { fontVariantNumeric: 'tabular-nums' as const, minWidth: '9rem' },
+  ort: { color: T.cyanTief },
+  gruppenTag: {
+    fontSize: 12,
+    padding: '3px 10px',
+    background: T.bg3,
+    borderRadius: T.rPill,
     whiteSpace: 'nowrap' as const,
+    color: T.fg2,
   },
-  rowWeg: {
+  weg: {
     font: 'inherit',
-    fontSize: '0.9rem',
+    fontSize: 14,
     lineHeight: 1,
-    width: '1.4rem',
-    height: '1.4rem',
-    border: '1px solid #fca5a5',
+    width: 24,
+    height: 24,
+    border: `1px solid ${T.fehlerRand}`,
     borderRadius: '50%',
-    background: '#fff',
-    color: '#991b1b',
+    background: T.bg1,
+    color: T.fehler,
     cursor: 'pointer',
     flexShrink: 0,
   },
-  figCaption: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    gap: '0.2rem',
-    textAlign: 'center' as const,
+  coverTag: {
+    marginLeft: 8,
+    fontSize: 10,
+    padding: '1px 6px',
+    background: T.warnBg,
+    color: T.warnText,
+    borderRadius: T.rSm,
+    fontFamily: 'inherit',
   },
-  confirm: {
-    padding: '0.6rem 0.7rem',
-    margin: '0.4rem 0 0.8rem',
-    background: '#fffbeb',
-    border: '1px solid #fde68a',
-    borderRadius: '6px',
-    fontSize: '0.75rem',
+
+  frage: {
+    padding: '10px 12px',
+    margin: '8px 0 12px',
+    background: T.warnBg,
+    border: `1px solid ${T.warnRand}`,
+    borderRadius: T.rLg,
+    fontSize: 12,
     lineHeight: 1.5,
   },
-  confirmTitle: { display: 'block', marginBottom: '0.3rem' },
-  confirmList: { margin: '0 0 0.5rem', paddingLeft: '1rem', color: '#78350f' },
-  confirmButtons: { display: 'flex', gap: '0.4rem' },
-  confirmReset: { margin: '0.55rem 0 0', fontSize: '0.7rem', color: '#92400e', lineHeight: 1.45 },
-  linkButton: {
-    padding: 0,
-    border: 'none',
-    background: 'none',
-    color: '#b45309',
-    textDecoration: 'underline',
-    cursor: 'pointer',
-    font: 'inherit',
-  },
-  confirmOk: {
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #b45309',
-    borderRadius: '5px',
-    background: '#f59e0b',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
-  },
-  select: {
-    padding: '0.25rem 0.4rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
-    maxWidth: '13rem',
-  },
+  frageListe: { margin: '0 0 10px', paddingLeft: 16, color: T.warnText },
+
   overlay: {
     position: 'fixed' as const,
     inset: 0,
-    background: 'rgba(17, 24, 39, 0.88)',
+    background: 'rgba(51, 46, 42, 0.9)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '2rem',
+    padding: 32,
     zIndex: 100,
     cursor: 'zoom-out',
   },
-  figure: {
+  figur: {
     margin: 0,
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: 12,
     maxHeight: '100%',
     cursor: 'default',
   },
-  bigImage: {
+  grossesBild: {
     maxWidth: '100%',
     maxHeight: 'calc(100vh - 10rem)',
     objectFit: 'contain' as const,
     boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
     background: '#000',
   },
-  captionFile: { color: '#fff', fontFamily: 'ui-monospace, monospace', fontSize: '0.85rem' },
-  captionMeta: { color: '#d1d5db', fontSize: '0.78rem' },
-  captionHint: { color: '#6b7280', fontSize: '0.7rem' },
-  coverTag: {
-    marginLeft: '0.5rem',
-    fontSize: '0.65rem',
-    padding: '0.05rem 0.35rem',
-    background: '#fef3c7',
-    color: '#92400e',
-    borderRadius: '3px',
+  bildunterschrift: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: 3,
+    textAlign: 'center' as const,
   },
 } satisfies Record<string, React.CSSProperties>;

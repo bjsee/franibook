@@ -6,14 +6,15 @@
  * folgt. Die Gelenkzonen sind standardmäßig eingeblendet – sie sind der eine
  * Ort, an dem der Bildschirm nicht zeigt, was der Druck macht.
  *
- * Erreichbar über `?cover` (siehe `main.tsx`). Ein eigener Reiter neben
- * „Übersicht" und „Doppelseite" gehört in `App.tsx`, sobald dort nicht
- * parallel gearbeitet wird – Modell, Renderer und Endpunkte sind davon
- * unabhängig.
+ * Jetzt ein Reiter neben „Übersicht" und „Doppelseite"; `?cover` wählt ihn nur
+ * noch aus. Vorher war es ein eigener Einstiegspunkt in `main.tsx`, weil die
+ * Hauptansicht nicht angefasst werden sollte — der Grund ist mit dem Umbau der
+ * Kopfzeile weggefallen.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoverDesign, RenderedCover } from '@franibook/core';
 import { CoverView, type CoverGuideVisibility } from '@franibook/render-dom';
+import { B, T } from './theme.js';
 
 interface CoverAntwort {
   design: CoverDesign;
@@ -47,7 +48,7 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
   const [guides, setGuides] = useState<CoverGuideVisibility>({ hinge: true, diagnostics: true });
 
   const stageRef = useRef<HTMLDivElement>(null);
-  const [stageWidth, setStageWidth] = useState(1200);
+  const [stageWidth, setStageWidth] = useState(1000);
 
   const load = useCallback(() => {
     fetch('/api/cover')
@@ -102,32 +103,58 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
     }
   }
 
-  if (error) return <p style={{ color: '#b91c1c' }}>Fehler: {error}</p>;
-  if (!data) return <p style={S.muted}>Lade Umschlag …</p>;
+  if (error) {
+    return (
+      <div style={S.flaeche}>
+        <p style={B.fehlerfeld}>Fehler: {error}</p>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div style={S.flaeche}>
+        <p style={B.leise}>Lade Umschlag …</p>
+      </div>
+    );
+  }
 
   const geo = data.cover.geometry;
 
   return (
-    <div>
-      <div style={S.stats}>
-        <Stat label="Buchrücken" value={`${geo.spineMm.toFixed(1)} mm`} />
-        <Stat label="Seiten" value={String(geo.pageCount)} />
-        <Stat label="Bogen" value={`${geo.widthMm.toFixed(1)} × ${geo.heightMm.toFixed(1)} mm`} />
-        <Stat label="Gelenkzone" value={`${geo.hingeMm} mm je Seite`} />
-        <Stat label="Umschlag" value={`${geo.wrapMm} mm`} />
+    <div style={S.flaeche}>
+      <div style={S.kopf}>
+        <Kennzahl label="Buchrücken" wert={`${geo.spineMm.toFixed(1)} mm`} />
+        <Kennzahl label="Seiten" wert={String(geo.pageCount)} />
+        <Kennzahl
+          label="Bogen"
+          wert={`${geo.widthMm.toFixed(1)} × ${geo.heightMm.toFixed(1)} mm`}
+        />
+        <Kennzahl label="Gelenkzone" wert={`${geo.hingeMm} mm je Seite`} />
+        <Kennzahl label="Umschlag" wert={`${geo.wrapMm} mm`} />
+        <span style={B.dehner} />
+        <button onClick={() => void exportCover()} disabled={!!busy} style={B.knopfPrimaer}>
+          Umschlag als PDF
+        </button>
       </div>
 
+      {/*
+        Die Hinweise des Servers sind fast immer derselbe: Die Maße dieses
+        Druckprofils sind Annahmen. Das gehört gelesen, bevor jemand einen
+        Druckauftrag auslöst, also steht es hier und nicht in einem Tooltip.
+      */}
       {data.hints.length > 0 && (
-        <ul style={S.hints}>
+        <ul style={S.hinweise}>
           {data.hints.map((h) => (
             <li key={h}>{h}</li>
           ))}
         </ul>
       )}
 
-      <div style={S.toolbar}>
+      {(busy || note) && <p style={S.status}>{busy ?? note}</p>}
+
+      <div style={S.schalter}>
         {SCHALTER.map((s) => (
-          <label key={s.key} style={S.check}>
+          <label key={s.key} style={B.haken}>
             <input
               type="checkbox"
               checked={guides[s.key] ?? false}
@@ -136,48 +163,44 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
             {s.label}
           </label>
         ))}
-        <span style={S.spacer} />
-        <button onClick={() => void exportCover()} disabled={!!busy} style={S.buttonPrimary}>
-          Umschlag als PDF
-        </button>
       </div>
 
-      {(busy || note) && <p style={S.note}>{busy ?? note}</p>}
-
-      <div ref={stageRef} style={S.stage}>
+      <div ref={stageRef} style={S.buehne}>
         <CoverView cover={data.cover} widthPx={stageWidth} imageSrc={imageSrc} guides={guides} />
       </div>
-      <p style={S.muted}>
+      <p style={{ ...B.leiser, marginTop: 10 }}>
         Links die Rückseite, in der Mitte der Buchrücken, rechts die Vorderseite. Die roten Bänder
-        sind die Gelenkzonen.
+        sind die Gelenkzonen — dort verschwindet beim Binden Fläche.
       </p>
 
-      <div style={S.editor}>
+      <div style={S.felder}>
         {FELDER.map((f) => (
-          <label key={f.key} style={S.field}>
-            <span style={S.fieldLabel}>{f.label}</span>
+          <label key={f.key} style={S.feldWrap}>
+            <span style={B.marke}>{f.label}</span>
             <input
               defaultValue={data.design[f.key] ?? ''}
               onBlur={(e) => {
                 if (e.target.value !== (data.design[f.key] ?? ''))
                   void patch(f.key, e.target.value);
               }}
-              style={S.input}
+              style={{ ...B.feld, fontSize: 14 }}
             />
           </label>
         ))}
       </div>
 
-      <h2 style={S.h2}>Titelbild</h2>
-      <div style={S.candidates}>
+      <strong style={{ ...B.titel, display: 'block', fontSize: 15, margin: '26px 0 10px' }}>
+        Titelbild
+      </strong>
+      <div style={S.kandidaten}>
         {data.candidates.map((c) => (
           <button
             key={c.photoId}
             onClick={() => void patch('frontPhotoId', c.photoId)}
             title={c.label}
             style={{
-              ...S.candidate,
-              borderColor: c.photoId === data.design.frontPhotoId ? '#2563eb' : '#e5e7eb',
+              ...S.kandidat,
+              borderColor: c.photoId === data.design.frontPhotoId ? T.cyan : T.line,
             }}
           >
             <img src={imageSrc(c.photoId)} alt={c.label} style={S.thumb} />
@@ -189,107 +212,84 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Kennzahl({ label, wert }: { label: string; wert: string }) {
   return (
-    <div style={S.stat}>
-      <span style={S.statLabel}>{label}</span>
-      <span style={S.statValue}>{value}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={B.marke}>{label}</span>
+      <span style={{ ...B.zahl, fontSize: 19 }}>{wert}</span>
     </div>
   );
 }
 
 const S = {
-  muted: { color: '#6b7280', fontSize: '0.875rem' },
-  spacer: { flex: 1 },
-  stats: {
-    display: 'flex',
-    gap: '2rem',
-    padding: '0.75rem 1rem',
-    background: '#f9fafb',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    flexWrap: 'wrap' as const,
-  },
-  stat: { display: 'flex', flexDirection: 'column' as const, gap: '0.1rem' },
-  statLabel: {
-    fontSize: '0.6875rem',
-    color: '#6b7280',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.04em',
-  },
-  statValue: { fontSize: '1.05rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' as const },
-  hints: {
-    margin: '0.75rem 0 0',
-    paddingLeft: '1.1rem',
-    fontSize: '0.8125rem',
-    color: '#b45309',
-  },
-  toolbar: {
+  flaeche: { flex: 1, overflowY: 'auto' as const, padding: '24px 32px 48px', minHeight: 0 },
+  kopf: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 0',
-    marginTop: '0.75rem',
-    borderTop: '1px solid #e5e7eb',
-    borderBottom: '1px solid #e5e7eb',
+    gap: 28,
     flexWrap: 'wrap' as const,
+    paddingBottom: 18,
+    borderBottom: `1px solid ${T.line}`,
   },
-  check: {
+  hinweise: {
+    margin: '14px 0 0',
+    paddingLeft: 18,
+    fontSize: 13,
+    color: T.warn,
+    lineHeight: 1.55,
+    maxWidth: '70ch',
+  },
+  status: {
+    margin: '14px 0 0',
+    padding: '6px 10px',
+    fontSize: 13,
+    color: T.fg2,
+    background: T.bg3,
+    borderRadius: T.rMd,
+    fontFamily: T.mono,
+  },
+  schalter: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.3rem',
-    fontSize: '0.8125rem',
-    color: '#374151',
+    gap: 18,
+    flexWrap: 'wrap' as const,
+    margin: '18px 0',
   },
-  buttonPrimary: {
-    padding: '0.35rem 0.9rem',
-    border: '1px solid #1d4ed8',
-    borderRadius: '6px',
-    background: '#2563eb',
-    color: '#fff',
-    cursor: 'pointer',
-  },
-  note: { fontSize: '0.8125rem', color: '#065f46', fontFamily: 'ui-monospace, monospace' },
-  stage: {
-    margin: '1.5rem 0 0.5rem',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08)',
-    lineHeight: 0,
-  },
-  editor: {
+  buehne: { border: `1px solid ${T.line}`, lineHeight: 0, background: T.bg1 },
+  felder: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
-    gap: '0.75rem',
-    marginTop: '1.5rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))',
+    gap: 14,
+    marginTop: 24,
+    maxWidth: 900,
   },
-  field: { display: 'flex', flexDirection: 'column' as const, gap: '0.2rem' },
-  fieldLabel: { fontSize: '0.6875rem', color: '#6b7280' },
-  input: {
-    padding: '0.3rem 0.45rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    fontSize: '0.875rem',
-  },
-  h2: { fontSize: '0.9rem', fontWeight: 600, margin: '1.5rem 0 0.5rem' },
-  candidates: { display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const },
-  candidate: {
-    padding: '2px',
-    border: '2px solid #e5e7eb',
-    borderRadius: '4px',
-    background: '#fff',
+  feldWrap: { display: 'flex', flexDirection: 'column' as const, gap: 5 },
+  kandidaten: { display: 'flex', gap: 10, flexWrap: 'wrap' as const },
+  kandidat: {
+    padding: 3,
+    border: `2px solid ${T.line}`,
+    borderRadius: 6,
+    background: T.bg1,
     cursor: 'pointer',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
-    gap: '0.15rem',
-    width: '6.5rem',
+    gap: 4,
+    width: '7rem',
   },
-  thumb: { width: '100%', height: '4.5rem', objectFit: 'cover' as const, display: 'block' },
+  thumb: {
+    width: '100%',
+    height: '4.5rem',
+    objectFit: 'cover' as const,
+    display: 'block',
+    borderRadius: T.rSm,
+  },
   thumbLabel: {
-    fontSize: '0.625rem',
-    color: '#6b7280',
+    fontSize: 11,
+    color: T.fg3,
     maxWidth: '100%',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
   },
-};
+} satisfies Record<string, React.CSSProperties>;

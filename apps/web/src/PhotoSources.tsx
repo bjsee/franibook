@@ -8,8 +8,14 @@
  * Der Pfad wird getippt statt ausgewählt: Ein Dateidialog im Browser gibt
  * keinen echten Pfad heraus, und der Server läuft ohnehin auf demselben
  * Rechner wie die Bilder.
+ *
+ * Eine nicht erreichbare Quelle bekommt eine gelbe Karte statt einer Fußnote:
+ * Der Grundbestand liegt auf einem Netzlaufwerk, und der Unterschied zwischen
+ * „der Ordner ist leer" und „der Ordner ist nicht eingehängt" ist die ganze
+ * Auskunft dieser Ansicht.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { B, T } from './theme.js';
 
 interface Source {
   id: string;
@@ -153,199 +159,158 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
   const gesamt = (sources ?? []).reduce((n, q) => n + q.photoCount, 0);
 
   return (
-    <div style={S.wrap}>
-      <div style={S.kopf}>
+    <div style={S.flaeche}>
+      <div style={S.spalte}>
         <h2 style={S.titel}>Woher kommen die Bilder?</h2>
-        <p style={S.hinweis}>
+        <p style={S.lead}>
           Jeder Ordner wird nur gelesen, nichts wird kopiert oder verschoben. Neue Fotos landen im
           Fotopool der Doppelseitenansicht – das Buch wird dabei nicht neu gebaut.
         </p>
-      </div>
 
-      {busy && <p style={S.status}>{busy}</p>}
-      {note && !busy && <p style={S.status}>{note}</p>}
-      {fehler && <p style={S.fehler}>{fehler}</p>}
+        {busy && <p style={S.status}>{busy}</p>}
+        {note && !busy && <p style={S.status}>{note}</p>}
+        {fehler && <p style={{ ...B.fehlerfeld, margin: '0 0 12px' }}>{fehler}</p>}
 
-      <div style={S.liste}>
         {sources?.map((q) => (
-          <div key={q.id} style={S.zeile}>
-            <div>
-              <input
-                defaultValue={q.label}
-                onBlur={(e) => void umbenennen(q, e.target.value)}
-                style={S.name}
-                title="Anzeigename"
-              />
-              <p style={S.pfad}>{q.root}</p>
-              <p style={S.zahlen}>
-                {q.photoCount} Fotos
-                {q.inBookCount > 0 && `, ${q.inBookCount} im Buch`}
+          <div key={q.id} style={{ ...S.karte, ...(q.erreichbar ? {} : S.karteOffline) }}>
+            <div style={S.karteReihe}>
+              <div style={{ minWidth: 0 }}>
+                <input
+                  defaultValue={q.label}
+                  onBlur={(e) => void umbenennen(q, e.target.value)}
+                  style={S.name}
+                  title="Anzeigename"
+                />
+                <p style={S.pfad}>{q.root}</p>
+                <p style={{ ...B.leise, marginTop: 6 }}>
+                  {q.photoCount} Fotos
+                  {q.inBookCount > 0 && ` · ${q.inBookCount} im Buch`}
+                </p>
                 {!q.erreichbar && (
-                  <span style={S.offline}>
-                    {' '}
-                    · nicht erreichbar – die Fotos bleiben, bis der Ordner wieder da ist
-                  </span>
+                  <p style={{ ...B.leise, marginTop: 8, color: T.warn }}>
+                    Nicht erreichbar — die Fotos bleiben im Buch, bis der Ordner wieder da ist.
+                  </p>
                 )}
-              </p>
-            </div>
-            <div style={S.knoepfe}>
-              <button
-                onClick={() => void einlesen(q)}
-                disabled={!!busy || !q.erreichbar}
-                style={S.button}
-                title="Liest diesen Ordner erneut ein. Das Buch bleibt stehen."
-              >
-                Neu einlesen
-              </button>
-              <button onClick={() => void entfernen(q)} disabled={!!busy} style={S.buttonWeg}>
-                Entfernen
-              </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => void einlesen(q)}
+                  disabled={!!busy || !q.erreichbar}
+                  style={{ ...B.knopf, ...(q.erreichbar ? {} : S.aus) }}
+                  title="Liest diesen Ordner erneut ein. Das Buch bleibt stehen."
+                >
+                  Neu einlesen
+                </button>
+                <button onClick={() => void entfernen(q)} disabled={!!busy} style={B.knopfWeg}>
+                  Entfernen
+                </button>
+              </div>
             </div>
           </div>
         ))}
-        {sources?.length === 0 && <p style={S.hinweis}>Noch keine Bildquelle.</p>}
-      </div>
+        {sources?.length === 0 && <p style={B.leise}>Noch keine Bildquelle.</p>}
 
-      <div style={S.neu}>
-        <h3 style={S.untertitel}>Ordner hinzufügen</h3>
-        <div style={S.eingaben}>
-          <input
-            value={pfad}
-            onChange={(e) => setPfad(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void hinzufuegen();
-            }}
-            placeholder="/Users/see/Bilder/Nachtrag"
-            spellCheck={false}
-            style={S.feld}
-          />
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Name (optional)"
-            style={S.feldKurz}
-          />
-          <button
-            onClick={() => void hinzufuegen()}
-            disabled={!!busy || !pfad.trim()}
-            style={S.button}
-          >
-            Hinzufügen und einlesen
+        <div style={{ ...S.karte, marginTop: 24 }}>
+          <strong style={{ ...B.titel, fontSize: 15 }}>Ordner hinzufügen</strong>
+          <div style={S.eingaben}>
+            <input
+              value={pfad}
+              onChange={(e) => setPfad(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void hinzufuegen();
+              }}
+              placeholder="/Users/see/Bilder/Nachtrag"
+              spellCheck={false}
+              style={{ ...B.feldMono, flex: '1 1 22rem' }}
+            />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name (optional)"
+              style={{ ...B.feld, width: '11rem' }}
+            />
+            <button
+              onClick={() => void hinzufuegen()}
+              disabled={!!busy || !pfad.trim()}
+              style={B.knopfPrimaer}
+            >
+              Hinzufügen und einlesen
+            </button>
+          </div>
+          <p style={{ ...B.leise, marginTop: 10 }}>
+            Im Finder mit <kbd>⌥⌘C</kbd> den Pfad des Ordners kopieren und hier einfügen.
+            Unterordner werden mitgelesen; ein Ordner, der in einer bestehenden Quelle liegt, wird
+            abgelehnt.
+          </p>
+        </div>
+
+        <div style={S.fuss}>
+          <span style={B.leise}>{gesamt} Fotos insgesamt</span>
+          <button onClick={() => void einlesen()} disabled={!!busy} style={B.knopf}>
+            Alle Quellen neu einlesen
           </button>
         </div>
-        <p style={S.hinweis}>
-          Im Finder mit <kbd>⌥⌘C</kbd> den Pfad des Ordners kopieren und hier einfügen. Unterordner
-          werden mitgelesen; ein Ordner, der in einer bestehenden Quelle liegt, wird abgelehnt.
-        </p>
-      </div>
-
-      <div style={S.fuss}>
-        <span style={S.zahlen}>{gesamt} Fotos insgesamt</span>
-        <button onClick={() => void einlesen()} disabled={!!busy} style={S.button}>
-          Alle Quellen neu einlesen
-        </button>
       </div>
     </div>
   );
 }
 
 const S = {
-  wrap: { padding: '1rem 1.25rem', maxWidth: '52rem' },
-  kopf: { marginBottom: '1rem' },
-  titel: { fontSize: '1.1rem', margin: '0 0 0.35rem' },
-  untertitel: { fontSize: '0.95rem', margin: '0 0 0.5rem' },
-  hinweis: { margin: '0.4rem 0 0', fontSize: '0.85rem', color: '#52525b', lineHeight: 1.5 },
+  flaeche: { flex: 1, overflowY: 'auto' as const, padding: '28px 32px 48px', minHeight: 0 },
+  spalte: { maxWidth: '52rem' },
+  titel: { fontSize: 24, marginBottom: 6 },
+  lead: { fontSize: 14, color: T.fg2, lineHeight: 1.55, marginBottom: 22 },
   status: {
-    margin: '0 0 0.75rem',
-    fontSize: '0.85rem',
-    color: '#166534',
-    background: '#f0fdf4',
-    padding: '0.35rem 0.6rem',
-    borderRadius: 4,
+    margin: '0 0 12px',
+    padding: '6px 10px',
+    fontSize: 13,
+    color: T.fg2,
+    background: T.bg3,
+    borderRadius: T.rMd,
   },
-  fehler: {
-    margin: '0 0 0.75rem',
-    fontSize: '0.85rem',
-    color: '#991b1b',
-    background: '#fef2f2',
-    padding: '0.35rem 0.6rem',
-    borderRadius: 4,
+  karte: {
+    padding: '16px 18px',
+    background: T.bg1,
+    border: `1px solid ${T.line}`,
+    borderRadius: T.rLg,
+    marginBottom: 10,
   },
-  liste: { display: 'flex', flexDirection: 'column' as const, gap: '0.5rem' },
-  zeile: {
+  karteOffline: { background: T.warnBg, borderColor: T.warnRand },
+  karteReihe: {
     display: 'grid',
     gridTemplateColumns: '1fr auto',
-    gap: '0.75rem',
+    gap: 16,
     alignItems: 'start',
-    paddingBottom: '0.6rem',
-    borderBottom: '1px solid #e4e4e7',
   },
   name: {
-    font: 'inherit',
-    fontSize: '1rem',
+    fontFamily: T.display,
+    fontSize: 17,
+    fontWeight: 600,
     border: '1px solid transparent',
-    borderRadius: 4,
-    padding: '0.15rem 0.3rem',
-    marginLeft: '-0.3rem',
+    borderRadius: T.rMd,
+    padding: '2px 6px',
+    marginLeft: -6,
     background: 'transparent',
     width: '100%',
     maxWidth: '24rem',
+    color: T.fg1,
   },
   pfad: {
-    margin: '0.1rem 0 0',
-    fontSize: '0.8rem',
-    color: '#71717a',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    margin: '4px 0 0',
+    fontSize: 13,
+    color: T.fg3,
+    fontFamily: T.mono,
     wordBreak: 'break-all' as const,
   },
-  zahlen: { margin: '0.15rem 0 0', fontSize: '0.8rem', color: '#52525b' },
-  offline: { color: '#b45309' },
-  knoepfe: { display: 'flex', gap: '0.4rem' },
-  button: {
-    font: 'inherit',
-    fontSize: '0.85rem',
-    padding: '0.3rem 0.7rem',
-    border: '1px solid #d4d4d8',
-    borderRadius: 4,
-    background: '#fff',
-    cursor: 'pointer',
-  },
-  buttonWeg: {
-    font: 'inherit',
-    fontSize: '0.85rem',
-    padding: '0.3rem 0.7rem',
-    border: '1px solid #fca5a5',
-    borderRadius: 4,
-    background: '#fff',
-    color: '#991b1b',
-    cursor: 'pointer',
-  },
-  neu: { marginTop: '1.5rem' },
-  eingaben: { display: 'flex', gap: '0.4rem', flexWrap: 'wrap' as const },
-  feld: {
-    font: 'inherit',
-    fontSize: '0.9rem',
-    padding: '0.35rem 0.5rem',
-    border: '1px solid #d4d4d8',
-    borderRadius: 4,
-    flex: '1 1 22rem',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-  },
-  feldKurz: {
-    font: 'inherit',
-    fontSize: '0.9rem',
-    padding: '0.35rem 0.5rem',
-    border: '1px solid #d4d4d8',
-    borderRadius: 4,
-    width: '10rem',
-  },
+  aus: { color: T.fg4, cursor: 'not-allowed' },
+  eingaben: { display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 12 },
   fuss: {
-    marginTop: '1.5rem',
-    paddingTop: '0.75rem',
-    borderTop: '1px solid #e4e4e7',
+    marginTop: 20,
+    paddingTop: 14,
+    borderTop: `1px solid ${T.line}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '0.75rem',
+    gap: 12,
   },
 } satisfies Record<string, React.CSSProperties>;

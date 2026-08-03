@@ -4,10 +4,16 @@
  * Zwei Hälften: links das JSON zum Bearbeiten, rechts die Doppelseite, in der
  * gerade der Cursor steht, samt Metadaten der Bilder. Die Vorschau folgt dem
  * Cursor – ohne sie wäre das Umhängen ein Blindflug durch Dateinamen.
+ *
+ * Die Textfläche füllt die Höhe des Fensters, statt eine feste Zahl von
+ * Bildschirmhöhen zu belegen: Wer hier arbeitet, arbeitet an einer Datei von
+ * einigen Tausend Zeilen, und jede Zeile, die stattdessen an Rahmen geht, ist
+ * eine Zeile weniger Übersicht.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
+import { B, T } from './theme.js';
 
 interface LayoutIssue {
   severity: 'error' | 'warning';
@@ -43,6 +49,9 @@ interface Props {
   imageSrc: (photoId: string) => string;
   onApplied: () => void;
 }
+
+/** Breite der Vorschau in der Seitenspalte. */
+const VORSCHAU_PX = 418;
 
 export function LayoutEditor({ imageSrc, onApplied }: Props) {
   const [text, setText] = useState('');
@@ -151,14 +160,14 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
 
   return (
     <div style={S.wrap}>
-      <div style={S.toolbar}>
-        <button onClick={load} disabled={busy} style={S.button}>
+      <div style={S.leiste}>
+        <button onClick={load} disabled={busy} style={B.knopf}>
           Neu laden
         </button>
-        <button onClick={download} style={S.button}>
+        <button onClick={download} style={B.knopf}>
           Als Datei speichern
         </button>
-        <label style={{ ...S.button, cursor: 'pointer' }}>
+        <label style={{ ...B.knopf, cursor: 'pointer' }}>
           Datei öffnen
           <input
             type="file"
@@ -170,36 +179,32 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
             }}
           />
         </label>
-        <span style={S.spacer} />
+        <span style={B.dehner} />
         {parseError ? (
-          <span style={S.parseError}>JSON ungültig: {parseError}</span>
+          <span style={S.parseFehler}>JSON ungültig: {parseError}</span>
         ) : (
           doc?.summary && (
-            <span style={S.muted}>
+            <span style={B.leise}>
               {doc.spreads?.length ?? 0} Doppelseiten ·{' '}
               {doc.spreads?.reduce((n, s) => n + s.photos.length, 0) ?? 0} Bilder
               {doc.unplaced?.length ? ` · ${doc.unplaced.length} außen vor` : ''}
             </span>
           )
         )}
-        <button
-          onClick={() => void apply()}
-          disabled={busy || !!parseError}
-          style={S.buttonPrimary}
-        >
+        <button onClick={() => void apply()} disabled={busy || !!parseError} style={B.knopfPrimaer}>
           {busy ? 'Übernehme …' : 'Übernehmen'}
         </button>
       </div>
 
       {result && (
-        <div style={result.ok ? S.resultOk : S.resultBad}>
+        <div style={result.ok ? S.ergebnisOk : S.ergebnisSchlecht}>
           {result.ok ? (
             <strong>Übernommen: {result.spreadCount} Doppelseiten.</strong>
           ) : (
             <strong>Nicht übernommen.</strong>
           )}
           {result.problems.length > 0 && (
-            <ul style={S.list}>
+            <ul style={S.liste}>
               {result.problems.map((p) => (
                 <li key={p.index}>
                   Doppelseite {p.index}: {p.message}
@@ -208,7 +213,7 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
             </ul>
           )}
           {fehler.length > 0 && (
-            <ul style={S.list}>
+            <ul style={S.liste}>
               {fehler.slice(0, 12).map((i, k) => (
                 <li key={k}>
                   {i.spread ? `Doppelseite ${i.spread}: ` : ''}
@@ -220,8 +225,10 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
           )}
           {warnungen.length > 0 && (
             <details>
-              <summary style={S.muted}>{warnungen.length} Hinweise</summary>
-              <ul style={S.list}>
+              <summary style={{ ...B.leise, cursor: 'pointer' }}>
+                {warnungen.length} Hinweise
+              </summary>
+              <ul style={S.liste}>
                 {warnungen.slice(0, 12).map((i, k) => (
                   <li key={k}>
                     {i.spread ? `Doppelseite ${i.spread}: ` : ''}
@@ -234,7 +241,7 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
         </div>
       )}
 
-      <div style={S.split}>
+      <div style={S.teilung}>
         <textarea
           ref={areaRef}
           value={text}
@@ -245,54 +252,58 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
           style={S.editor}
         />
 
-        <aside style={S.side}>
-          <h3 style={S.sideTitle}>
+        <aside style={S.spalte}>
+          <strong style={{ ...B.titel, fontSize: 15 }}>
             Doppelseite {cursorSpread + 1}
             {aktuelleSeite?.text ? ` · ${aktuelleSeite.text}` : ''}
-          </h3>
-          <div style={S.previewBox}>
+          </strong>
+          <div style={S.vorschau}>
             {preview ? (
-              <SpreadView spread={preview} widthPx={420} imageSrc={imageSrc} guides={{}} />
+              <SpreadView spread={preview} widthPx={VORSCHAU_PX} imageSrc={imageSrc} guides={{}} />
             ) : (
-              <div style={{ ...S.placeholder, height: 212 }} />
+              <div style={{ background: T.bg3, height: VORSCHAU_PX / 2 }} />
             )}
           </div>
-          <p style={S.hint}>
-            Die Vorschau zeigt den <em>gespeicherten</em> Stand. Nach „Übernehmen“ folgt sie den
+          <p style={{ ...B.leiser, margin: '8px 0 16px' }}>
+            Die Vorschau zeigt den <em>gespeicherten</em> Stand. Nach „Übernehmen" folgt sie den
             Änderungen.
           </p>
 
           {aktuelleSeite && (
             <>
-              <div style={S.metaHead}>
-                {aktuelleSeite.photos.length} Bilder
+              <div style={S.metaKopf}>
+                {aktuelleSeite.photos.length}{' '}
+                {aktuelleSeite.photos.length === 1 ? 'Bild' : 'Bilder'}
                 {aktuelleSeite.template && (
-                  <span style={S.templateTag}>{aktuelleSeite.template.replace('spread.', '')}</span>
+                  <span style={S.vorlage}>{aktuelleSeite.template.replace('spread.', '')}</span>
                 )}
               </div>
-              <ul style={S.metaList}>
-                {aktuelleSeite.photos.map((p) => (
-                  <li key={p.file} style={S.metaItem}>
-                    <div style={S.metaFile}>{p.file}</div>
-                    <div style={S.metaRow}>
-                      {p.date && <span>{p.date}</span>}
-                      {p.px && <span>{p.px}</span>}
-                      {p.dpi !== undefined && (
-                        <span style={{ color: p.warn ? '#b91c1c' : '#6b7280' }}>{p.dpi} dpi</span>
-                      )}
-                    </div>
-                    {p.camera && <div style={S.metaRow}>{p.camera}</div>}
-                    {p.gps && (
-                      <div style={S.metaRow}>
-                        <a href={p.map} target="_blank" rel="noreferrer" style={S.link}>
-                          {p.gps}
-                        </a>
-                      </div>
+              {aktuelleSeite.photos.map((p) => (
+                <div key={p.file} style={S.metaZeile}>
+                  <div style={B.dateiname}>{p.file}</div>
+                  <div style={S.metaWerte}>
+                    {p.date && <span>{p.date}</span>}
+                    {p.px && <span>{p.px}</span>}
+                    {p.dpi !== undefined && (
+                      <span style={{ color: p.warn ? T.fehler : T.fg3 }}>{p.dpi} dpi</span>
                     )}
-                    {p.warn && <div style={S.metaWarn}>{p.warn}</div>}
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                  {p.camera && <div style={S.metaWerte}>{p.camera}</div>}
+                  {p.gps && (
+                    <div style={S.metaWerte}>
+                      <a
+                        href={p.map}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: T.cyanTief }}
+                      >
+                        {p.gps}
+                      </a>
+                    </div>
+                  )}
+                  {p.warn && <div style={{ fontSize: 12, color: T.fehler }}>{p.warn}</div>}
+                </div>
+              ))}
             </>
           )}
         </aside>
@@ -302,96 +313,78 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
 }
 
 const S = {
-  wrap: { marginTop: '1rem' },
-  toolbar: {
+  wrap: { flex: 1, display: 'flex', flexDirection: 'column' as const, minHeight: 0 },
+  leiste: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.6rem',
-    paddingBottom: '0.75rem',
+    gap: 10,
+    padding: '12px 20px',
+    borderBottom: `1px solid ${T.line}`,
+    background: T.bg1,
     flexWrap: 'wrap' as const,
+    flexShrink: 0,
   },
-  spacer: { flex: 1 },
-  muted: { color: '#6b7280', fontSize: '0.8125rem' },
-  parseError: { color: '#b91c1c', fontSize: '0.8125rem', fontFamily: 'ui-monospace, monospace' },
-  button: {
-    padding: '0.35rem 0.75rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
+  parseFehler: { color: T.fehler, fontSize: 13, fontFamily: T.mono },
+  ergebnisOk: {
+    padding: '10px 20px',
+    background: T.bg1,
+    borderBottom: `1px solid ${T.line}`,
+    fontSize: 13,
+    flexShrink: 0,
   },
-  buttonPrimary: {
-    padding: '0.35rem 0.9rem',
-    border: '1px solid #1d4ed8',
-    borderRadius: '6px',
-    background: '#2563eb',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
-  },
-  resultOk: {
-    padding: '0.6rem 0.9rem',
-    background: '#ecfdf5',
-    border: '1px solid #a7f3d0',
-    borderRadius: '6px',
-    fontSize: '0.8125rem',
-    marginBottom: '0.75rem',
-  },
-  resultBad: {
-    padding: '0.6rem 0.9rem',
-    background: '#fef2f2',
-    border: '1px solid #fecaca',
-    borderRadius: '6px',
-    fontSize: '0.8125rem',
-    marginBottom: '0.75rem',
-  },
-  list: { margin: '0.4rem 0 0', paddingLeft: '1.1rem' },
-  split: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 460px', gap: '1rem' },
-  editor: {
-    width: '100%',
-    // Ohne border-box addieren sich Polsterung und Rahmen auf die 100 % und
-    // die Textfläche schiebt sich unter die Seitenleiste.
-    boxSizing: 'border-box' as const,
-    height: '70vh',
-    padding: '0.75rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    fontSize: '12px',
-    lineHeight: 1.5,
-    resize: 'vertical' as const,
-    tabSize: 2,
-  },
-  side: { minWidth: 0 },
-  sideTitle: { margin: '0 0 0.5rem', fontSize: '0.9rem', fontWeight: 600 },
-  previewBox: { border: '1px solid #e5e7eb', lineHeight: 0, background: '#fff' },
-  placeholder: { background: '#f3f4f6' },
-  hint: { fontSize: '0.75rem', color: '#9ca3af', margin: '0.4rem 0 0.8rem' },
-  metaHead: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    fontSize: '0.75rem',
-    color: '#6b7280',
-    marginBottom: '0.4rem',
-  },
-  templateTag: {
-    padding: '0.1rem 0.4rem',
-    background: '#f3f4f6',
-    borderRadius: '4px',
-    fontFamily: 'ui-monospace, monospace',
-  },
-  metaList: {
-    listStyle: 'none',
-    margin: 0,
-    padding: 0,
-    maxHeight: '38vh',
+  ergebnisSchlecht: {
+    padding: '10px 20px',
+    background: T.warnBg,
+    borderBottom: `1px solid ${T.warnRand}`,
+    color: T.warnText,
+    fontSize: 13,
+    flexShrink: 0,
+    maxHeight: '30vh',
     overflowY: 'auto' as const,
   },
-  metaItem: { padding: '0.4rem 0', borderTop: '1px solid #f3f4f6' },
-  metaFile: { fontFamily: 'ui-monospace, monospace', fontSize: '0.75rem', color: '#111827' },
-  metaRow: { display: 'flex', gap: '0.75rem', fontSize: '0.7rem', color: '#6b7280' },
-  metaWarn: { fontSize: '0.7rem', color: '#b91c1c' },
-  link: { color: '#2563eb' },
+  liste: { margin: '6px 0 0', paddingLeft: 18 },
+  teilung: {
+    flex: 1,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 460px',
+    minHeight: 0,
+  },
+  editor: {
+    width: '100%',
+    height: '100%',
+    boxSizing: 'border-box' as const,
+    padding: '16px 20px',
+    border: 'none',
+    background: T.bg2,
+    fontFamily: T.mono,
+    fontSize: 12,
+    lineHeight: 1.6,
+    resize: 'none' as const,
+    color: T.fg1,
+    tabSize: 2,
+  },
+  spalte: {
+    borderLeft: `1px solid ${T.line}`,
+    background: T.bg1,
+    overflowY: 'auto' as const,
+    padding: '18px 20px',
+    minWidth: 0,
+  },
+  vorschau: { border: `1px solid ${T.line}`, lineHeight: 0, marginTop: 10 },
+  metaKopf: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 12,
+    color: T.fg3,
+    marginBottom: 6,
+  },
+  vorlage: {
+    padding: '2px 8px',
+    background: T.bg3,
+    borderRadius: T.rPill,
+    fontFamily: T.mono,
+  },
+  metaZeile: { padding: '10px 0', borderTop: `1px solid ${T.bg3}` },
+  metaWerte: { display: 'flex', gap: 12, fontSize: 12, color: T.fg3, marginTop: 2 },
 } satisfies Record<string, React.CSSProperties>;
