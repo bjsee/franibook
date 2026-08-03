@@ -16,6 +16,7 @@ import type { Template } from '../model/template.js';
 import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Structure } from '../structure/segment.js';
+import { layoutSpread } from './rebuild.js';
 import {
   chapterTemplates,
   supportedSlotCounts,
@@ -409,33 +410,38 @@ function buildChapterOpener(
   chapter: Chapter,
   bilder: readonly Photo[],
   profile: PrintProfile,
+  weightOf: (photoId: PhotoId) => PhotoWeight,
   /** Ereignisse des Jahres, je Zeile eines. */
   events?: readonly string[],
 ): { spread: Spread; usedPhotoIds: PhotoId[] } {
   const auftakte = chapterTemplates();
-  const template =
-    auftakte.find((t) => t.slots.length === bilder.length) ??
-    auftakte.find((t) => t.slots.length === 0) ??
-    auftakte[0]!;
+  // Unter den Fassungen mit passender Bilderzahl die beste – und die Bilder
+  // darin optimal verteilt, nicht der Reihe nach.
+  //
+  // Vorher nahm die Wahl schlicht die erste Vorlage dieser Größe. Weil die
+  // Sechserfassung nur Hochformate hatte und am echten Bestand immer greift,
+  // standen dort 47 von 108 Bildern in einem Slot der falschen Ausrichtung und
+  // verloren dabei bis zu 58 % ihrer Fläche. Es gibt sie deshalb inzwischen
+  // dreimal – hoch, quer und gemischt –, und hier wird gewählt.
+  const passend = auftakte.filter((t) => t.slots.length === bilder.length);
+  const gewaehlt =
+    passend.length > 0
+      ? layoutSpread({ photos: bilder, profile, weightOf, candidates: passend })
+      : undefined;
 
-  const verwendet = template.slots.length === bilder.length ? bilder : [];
+  const template = gewaehlt
+    ? templateById(gewaehlt.templateId)!
+    : (auftakte.find((t) => t.slots.length === 0) ?? auftakte[0]!);
 
-  const slots = template.slots.map((slot, i) => {
-    const photo = verwendet[i];
-    if (!photo) {
-      return {
-        slotId: slot.id,
-        photoId: null,
-        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
-      };
-    }
-    const geometry = slotGeometry(slot, profile);
-    return {
+  const slots =
+    gewaehlt?.slots ??
+    template.slots.map((slot) => ({
       slotId: slot.id,
-      photoId: photo.id,
-      crop: coverCrop(photo.width / photo.height, geometry.widthMm / geometry.heightMm),
-    };
-  });
+      photoId: null,
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+    }));
+
+  const verwendet = gewaehlt ? bilder : [];
 
   const yearSlot = template.textSlots?.find((t) => t.role === 'year');
   const eventSlot = template.textSlots?.find((t) => t.id === 't-events');
@@ -679,6 +685,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         chapter,
         jahresBilder.get(chapter.year) ?? [],
         profile,
+        weightOf,
         opts.yearEvents?.[chapter.year],
       );
       spreads.push(spread);
