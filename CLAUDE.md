@@ -148,6 +148,12 @@ festgehaltene Blätter bleiben ganz; vor einem solchen stellt eine leere Halbsei
 die Parität wieder her, und dahinter ist das Buch unverändert. Am echten Buch sind
 davon 1–2 Blätter betroffen, weil 57 von 80 unzerlegbar sind.
 
+Für die zusätzliche Seite wird eine schon leere Halbseite verbraucht, wenn eine vor
+dem nächsten unzerlegbaren Blatt liegt – sonst wächst das Buch um ein Blatt (bei
+dichten Seiten unvermeidlich). Blätter, die durch das Umpaaren ganz leer wären,
+entstehen nicht. `DELETE /api/spreads/page/:atPage` ist das Gegenstück: dieselbe
+Rechnung, die Seite fällt heraus, ihre Bilder gehen in den Fotopool.
+
 **Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
 `layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
 jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die

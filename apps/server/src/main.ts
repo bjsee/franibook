@@ -21,6 +21,7 @@ import {
   type MoveTarget,
   type TextBlock,
   coverWarningText,
+  teilbar,
 } from '@franibook/core';
 import { renderCoverPdf, renderPdf } from '@franibook/render-pdf';
 import { DecodeCache } from './decode.js';
@@ -262,6 +263,30 @@ app.post<{ Body?: { atPage?: number; halfId?: string; title?: string } }>(
 );
 
 /**
+ * Nimmt eine einzelne Buchseite aus dem Buch.
+ *
+ * `atPage` ist nullbasiert wie beim Einfügen. Alles dahinter rückt eine Halbseite
+ * auf; geht die Rechnung auf, wird das Buch ein Blatt kürzer. Eine Seite eines
+ * Auftakts oder einer justierten Doppelseite lässt sich nicht einzeln nehmen –
+ * dort antwortet der Endpunkt mit 409 und dem Grund.
+ */
+app.delete<{ Params: { atPage: string } }>('/api/spreads/page/:atPage', async (req, reply) => {
+  const atPage = Number(req.params.atPage);
+  if (!Number.isFinite(atPage)) return reply.code(400).send({ error: 'atPage ist keine Zahl' });
+
+  const ergebnis = project.removeSinglePage(atPage);
+  if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+
+  void project.save();
+  return {
+    ok: true,
+    photoCount: ergebnis.photoCount,
+    spreadCount: project.spreads.length,
+    ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+  };
+});
+
+/**
  * Nimmt eine Doppelseite aus dem Buch.
  *
  * Ihre Bilder liegen danach im Fotopool – verloren geht keines, denn der Pool
@@ -448,6 +473,7 @@ app.get<{ Params: { index: string } }>('/api/spreads/:index/photos', async (req,
 function spreadAntwort(index: number) {
   const rendered = project.render(index);
   if (!rendered) return undefined;
+  const spread = project.spreads[index];
   return {
     ...rendered,
     timelineOverride: project.spreads[index]?.timeline ?? null,
@@ -456,6 +482,12 @@ function spreadAntwort(index: number) {
     // Ob diese Seite das Neuanordnen übersteht. Die Oberfläche zeigt das
     // Schloss – sonst wäre nicht zu sehen, welche Seiten selbst gebaut sind.
     locked: project.spreads[index]?.locked ?? false,
+    // Ob sich einzelne Buchseiten daraus nehmen lassen. Ein Auftakt trägt seinen
+    // Text über beide Hälften, justierte Zeilen ihre Rechtecke – dort gibt es
+    // nur das ganze Blatt, und die Oberfläche soll das gar nicht erst anbieten.
+    // Gefragt wird mit `teilbar` und nicht mit `zerlegbar`: Ein festgehaltenes
+    // Blatt wird beim Umpaaren geschont, auf Verlangen aber sehr wohl getrennt.
+    splittable: spread ? teilbar(spread) : false,
   };
 }
 
