@@ -184,6 +184,84 @@ app.patch<{ Params: { index: string }; Body: { templateId?: string } }>(
   },
 );
 
+// ------------------------------------------------------------ Eigene Seiten
+
+/**
+ * Vorlagen, unter denen eine neu eingefügte Doppelseite wählen kann.
+ *
+ * Bewusst nicht unter `/api/spreads/...`: Die Auskunft gilt für eine Seite, die
+ * es noch nicht gibt, und hätte dort keinen Index.
+ */
+app.get('/api/templates/insert', async () => ({ templates: project.insertChoices() }));
+
+/**
+ * Fügt eine selbst gestaltete Doppelseite ein.
+ *
+ * `at` ist die Stelle im Buch: `0` ganz vorn, die Zahl der Doppelseiten ganz
+ * hinten. Ohne `templateId` entsteht eine leere Seite, mit einer der
+ * Auftaktvorlagen eine Seite mit Titelplatz und einem Bildplatz – Bilder weist
+ * niemand automatisch zu, die zieht man selbst hinein.
+ *
+ * Die Seite ist von vorn an festgehalten: Ein Neuanordnen baut sie nicht neu,
+ * sondern setzt sie an ihren Anker zurück.
+ */
+app.post<{ Body?: { at?: number; templateId?: string; title?: string } }>(
+  '/api/spreads',
+  async (req, reply) => {
+    const at = req.body?.at ?? project.spreads.length;
+    if (!Number.isFinite(at)) return reply.code(400).send({ error: 'at ist keine Zahl' });
+
+    const ergebnis = project.insertSpread(at, {
+      ...(req.body?.templateId ? { templateId: req.body.templateId } : {}),
+      ...(req.body?.title ? { title: req.body.title } : {}),
+    });
+    if (!ergebnis.ok) return reply.code(400).send({ error: ergebnis.error });
+
+    void project.save();
+    return {
+      ok: true,
+      index: ergebnis.index,
+      spreadCount: project.spreads.length,
+      spread: spreadAntwort(ergebnis.index),
+    };
+  },
+);
+
+/**
+ * Nimmt eine Doppelseite aus dem Buch.
+ *
+ * Ihre Bilder liegen danach im Fotopool – verloren geht keines, denn der Pool
+ * ist die Differenz zwischen Bestand und platzierten Bildern. Wie viele es
+ * waren, steht in der Antwort.
+ */
+app.delete<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
+  const ergebnis = project.removeSpread(Number(req.params.index));
+  if (!ergebnis.ok) return reply.code(404).send({ error: ergebnis.error });
+
+  void project.save();
+  return { ok: true, photoCount: ergebnis.photoCount, spreadCount: project.spreads.length };
+});
+
+/**
+ * Hält eine Doppelseite fest oder gibt sie frei.
+ *
+ * Festgehalten heißt: Das Neuanordnen baut sie nicht neu. Für eine selbst
+ * gebaute Seite ist das die Voraussetzung, dass sie den nächsten Knopfdruck
+ * überlebt; für eine erzeugte ist es der Weg, eine gelungene Seite zu behalten,
+ * während der Rest neu gemischt wird.
+ */
+app.patch<{ Params: { index: string }; Body?: { locked?: boolean } }>(
+  '/api/spreads/:index/locked',
+  async (req, reply) => {
+    const index = Number(req.params.index);
+    const ergebnis = project.setSpreadLocked(index, req.body?.locked !== false);
+    if (!ergebnis.ok) return reply.code(404).send({ error: ergebnis.error });
+
+    await project.save();
+    return { ok: true, spread: spreadAntwort(index), handwork: project.handwork() };
+  },
+);
+
 // ------------------------------------------------------------------ Gruppen
 
 /**
@@ -341,6 +419,9 @@ function spreadAntwort(index: number) {
     timelineOverride: project.spreads[index]?.timeline ?? null,
     groups: project.spreadGroups(index),
     blocks: project.spreads[index]?.blocks ?? [],
+    // Ob diese Seite das Neuanordnen übersteht. Die Oberfläche zeigt das
+    // Schloss – sonst wäre nicht zu sehen, welche Seiten selbst gebaut sind.
+    locked: project.spreads[index]?.locked ?? false,
   };
 }
 

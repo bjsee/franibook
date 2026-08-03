@@ -17,6 +17,7 @@ import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Structure } from '../structure/segment.js';
 import { isJustified } from '../templates/justified.js';
+import { insertKept, keptPhotos } from './keep.js';
 import { justifySpread, layoutSpread } from './rebuild.js';
 import {
   chapterTemplates,
@@ -90,6 +91,15 @@ export interface GenerateOptions {
    * aufgeschlagenen Seiten fallen auf.
    */
   chapterColors?: boolean;
+  /**
+   * Doppelseiten, die nicht gebaut, sondern übernommen werden (`locked`).
+   *
+   * Sie kosten Seitenbudget, ihre Bilder sind vergeben, und ihren Platz im Buch
+   * finden sie über ihren Anker – Näheres in `layout/keep.ts`. Der Generator
+   * bleibt dabei deterministisch: Die Seiten kommen von außen, gerechnet wird
+   * an ihnen nichts.
+   */
+  kept?: readonly Spread[];
 }
 
 export interface GenerateResult {
@@ -114,6 +124,8 @@ export interface GenerateResult {
     chapterOpeners: number;
     /** Auftaktseiten für Fotogruppen. */
     groupOpeners: number;
+    /** Übernommene Doppelseiten, die das Erzeugen nicht angefasst hat. */
+    keptSpreads: number;
     /** Fotos, die nicht platziert werden konnten. */
     unplaced: PhotoId[];
     worstDpi: number;
@@ -562,6 +574,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   }
   const openerMinPhotos = opts.groupOpenerMinPhotos ?? 6;
   const gruppenGesehen = new Set<string>();
+  // Festgehaltene Doppelseiten: ihre Bilder sind vergeben, bevor irgendetwas
+  // verteilt wird. Sonst stünde dasselbe Foto zweimal im Buch – groß auf der
+  // selbst gebauten Seite und klein im Fluss.
+  const kept = opts.kept ?? [];
+  const keptFotos = keptPhotos(kept);
   /**
    * Vorgabe für Gruppenauftakte, aufgelöst.
    *
@@ -585,7 +602,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Gruppenauftakte reservieren ihr Hauptbild: Es soll nicht zwei Seiten später
   // noch einmal klein im Fluss auftauchen. Jahresauftakte tragen kein Bild mehr
   // und nehmen deshalb auch keines heraus.
-  const schonVergeben = new Set<PhotoId>();
+  const schonVergeben = new Set<PhotoId>(keptFotos);
   {
     for (const g of opts.groups ?? []) {
       if (!g.active) continue;
@@ -639,6 +656,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   }
 
   const ausDemFluss = new Set([
+    ...keptFotos,
     ...auftaktBild.values(),
     ...[...jahresBilder.values()].flat().map((p) => p.id),
   ]);
@@ -665,9 +683,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
 
   // Gruppenauftakte gehen vom selben Kontingent ab wie alles andere. Ohne sie
   // einzurechnen, plante das Budget 61 Doppelseiten und das Buch wurde 68 lang.
+  // Festgehaltene Seiten sind schon gedruckt gedacht und kosten genauso.
   const auftaktSpreads = auftaktBild.size;
   const budgets = distributeBudget(budgetKapitel, {
-    targetPages: Math.max(2, zielSeiten - auftaktSpreads * 2),
+    targetPages: Math.max(2, zielSeiten - (auftaktSpreads + kept.length) * 2),
     chapterSpreads: useOpeners ? 1 : 0,
     maxPhotosPerSpread: Math.max(...slotCounts, 1),
   });
@@ -686,7 +705,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       : new Map<number, string>();
 
   const spreads: Spread[] = [];
-  const placed = new Set<PhotoId>();
+  const placed = new Set<PhotoId>(keptFotos);
   const recentTemplates: string[] = [];
   let chapterOpenerCount = 0;
 
@@ -844,6 +863,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     }
   }
 
+  // Die festgehaltenen Seiten kommen zurück an ihren Platz, bevor irgendetwas
+  // gezählt wird: Die Kennzahlen sollen das Buch beschreiben, das entsteht,
+  // nicht nur den Teil, den die Engine gebaut hat.
+  const alle = insertKept(spreads, kept);
+
   // Auswertung
   const allPhotoIds = structure.chapters.flatMap((c) => c.segments.flatMap((s) => s.photoIds));
   const unplaced = allPhotoIds.filter((id) => !placed.has(id));
@@ -851,22 +875,27 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Dieselbe Rechnung wie nach einer punktuellen Änderung – die Kennzahlen
   // eines generierten und eines von Hand nachbearbeiteten Buchs entstehen
   // damit auf genau einem Weg.
-  const stats = bookStats({ spreads, photos, profile });
+  const stats = bookStats({ spreads: alle, photos, profile });
 
-  const platzierbar = structure.chapters.reduce((n, c) => n + c.photoCount, 0);
+  // Was die Engine noch zu verteilen hatte: ohne die Bilder, die auf
+  // festgehaltenen Seiten schon liegen.
+  const platzierbar =
+    structure.chapters.reduce((n, c) => n + c.photoCount, 0) -
+    allPhotoIds.filter((id) => keptFotos.has(id)).length;
 
   return {
-    spreads,
+    spreads: alle,
     budgets,
     report: {
       photoCount: structure.photoCount,
       placedCount: stats.placedCount,
-      spreadCount: spreads.length,
-      pageCount: spreads.length * 2,
+      spreadCount: alle.length,
+      pageCount: alle.length * 2,
       targetPages,
       effectiveTargetPages: zielSeiten,
       chapterOpeners: chapterOpenerCount,
       groupOpeners: groupOpenerCount,
+      keptSpreads: kept.length,
       unplaced,
       worstDpi: stats.worstDpi,
       belowTargetDpi: stats.belowTargetDpi,
@@ -874,7 +903,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       photosPerSpread: stats.photosPerSpread,
       feasibility: checkFeasibility(
         platzierbar,
-        zielSeiten,
+        Math.max(2, zielSeiten - kept.length * 2),
         slotCounts,
         structure.chapters.length,
         useOpeners,

@@ -26,9 +26,14 @@ import {
   type RenderedCover,
   type RenderedSpread,
   type Spread,
+  type SpreadAnchor,
   type Structure,
   type TextBlock,
+  BLANK_TEMPLATE_ID,
   allTemplates,
+  insertTemplates,
+  isBlank,
+  splitKept,
   bookStats,
   buildStructure,
   chapterTemplates,
@@ -537,6 +542,11 @@ export class Project {
    *
    * Gezählt, nicht geraten: Der Knopf „Neu anordnen" baut das Buch komplett neu,
    * und was dabei verloren geht, soll vorher dranstehen.
+   *
+   * Festgehaltene Seiten sind ausgenommen – sie gehen unverändert durch den
+   * Generator (`layout/keep.ts`), und was an ihnen Arbeit war, überlebt. Wie
+   * viele es sind, steht als `festgehalten` daneben: Die Warnung soll nicht nur
+   * sagen, was verloren geht, sondern auch, was bleibt.
    */
   handwork(): {
     crops: number;
@@ -544,13 +554,24 @@ export class Project {
     hintergruende: number;
     zeitstrahl: number;
     positionen: number;
+    /** Von Hand gesetzte Textblöcke auf Seiten, die neu gebaut werden. */
+    texte: number;
+    /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
+    festgehalten: number;
   } {
     let crops = 0;
     let neigungen = 0;
     let hintergruende = 0;
     let zeitstrahl = 0;
     let positionen = 0;
+    let texte = 0;
+    let festgehalten = 0;
     for (const spread of this.spreads) {
+      if (spread.locked) {
+        festgehalten++;
+        continue;
+      }
+      texte += spread.blocks?.length ?? 0;
       crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
       // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
       // eine Entscheidung, die der Neuaufbau verwirft.
@@ -563,7 +584,7 @@ export class Project {
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
     }
-    return { crops, neigungen, hintergruende, zeitstrahl, positionen };
+    return { crops, neigungen, hintergruende, zeitstrahl, positionen, texte, festgehalten };
   }
 
   // ------------------------------------------------------------- Struktur
@@ -723,12 +744,22 @@ export class Project {
 
   // ------------------------------------------------------------ Generieren
 
+  /**
+   * Baut das Buch neu.
+   *
+   * Festgehaltene Doppelseiten sind davon ausgenommen: Sie gehen unverändert
+   * hinein und kommen an ihrem Anker wieder heraus (`layout/keep.ts`). Ohne das
+   * wäre eine selbst gebaute Seite nach dem ersten Neuanordnen verloren – sie
+   * besteht aus Handarbeit, und der Generator kennt nur Fotos und Vorlagen.
+   */
   generate(): GenerateResult {
     this.rebuildStructure();
+    const { kept } = splitKept(this.spreads);
     const result = generateBook({
       structure: this.structure,
       photos: this.photos,
       profile: this.profile,
+      ...(kept.length > 0 ? { kept } : {}),
       targetPages: this.settings.targetPages,
       chapterOpeners: this.settings.chapterOpeners,
       seed: this.settings.seed,
@@ -962,8 +993,33 @@ export class Project {
       return { ok: false, issues: parsed.issues, problems: [], spreadCount: 0 };
     }
 
+    // Festgehaltene Seiten trägt das Dokument nur als Kennung; ihren Inhalt
+    // kennt allein der Projektstand. Eine Kennung, zu der es keine Seite mehr
+    // gibt, wird gemeldet statt stillschweigend übergangen – sonst verschwände
+    // eine selbst gebaute Seite durch einen Tippfehler.
+    const behalten = new Map(this.spreads.filter((s) => s.locked).map((s) => [s.id, s]));
+    const issues = [...parsed.issues];
+    const eingaben = parsed.spreads.map((eintrag, i) => {
+      if (eintrag.keepId === undefined) return eintrag;
+      const seite = behalten.get(eintrag.keepId);
+      if (!seite) {
+        issues.push({
+          severity: 'error' as const,
+          spread: i + 1,
+          message: `Keine festgehaltene Doppelseite mit der Kennung "${eintrag.keepId}".`,
+        });
+        return eintrag;
+      }
+      const { keepId: _kennung, ...rest } = eintrag;
+      return { ...rest, keep: seite };
+    });
+
+    if (issues.some((i) => i.severity === 'error')) {
+      return { ok: false, issues, problems: [], spreadCount: 0 };
+    }
+
     const rebuilt = rebuildSpreads({
-      spreads: parsed.spreads,
+      spreads: eingaben,
       photos: this.photos,
       profile: this.profile,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
@@ -974,7 +1030,7 @@ export class Project {
       // stiller Datenverlust. Lieber gar nichts übernehmen.
       return {
         ok: false,
-        issues: parsed.issues,
+        issues,
         problems: rebuilt.problems,
         spreadCount: rebuilt.spreads.length,
       };
@@ -994,7 +1050,164 @@ export class Project {
     // Neuaufbau nicht anfasst.
     if (parsed.yearEvents) this.yearEvents = parsed.yearEvents;
 
-    return { ok: true, issues: parsed.issues, problems: [], spreadCount: rebuilt.spreads.length };
+    return { ok: true, issues, problems: [], spreadCount: rebuilt.spreads.length };
+  }
+
+  // --------------------------------------------------------- Eigene Seiten
+
+  /**
+   * Fügt eine selbst gestaltete Doppelseite ins Buch ein.
+   *
+   * Zwei Ausgangspunkte, dieselbe Mechanik: die leere Vorlage für eine Seite,
+   * die man ganz selbst baut, oder ein Gruppenauftakt für einen Titel mit einem
+   * großen Bild daneben. Beide bekommen keine Fotos zugeteilt – wer eine Seite
+   * einfügt, wählt sie selbst, und ein automatisch hineingerechnetes Bild wäre
+   * das Gegenteil der Absicht.
+   *
+   * Die Seite wird gleich festgehalten (`locked`). Ohne das verschwände sie beim
+   * nächsten Neuanordnen mitsamt allem, was daran Arbeit war.
+   *
+   * Hintergrundfarbe und Zeitstrahl kommen von der Nachbarseite: Eine eigene
+   * Seite mitten im Jahrgang 2019 soll dessen Farbe tragen, sonst reißt sie ein
+   * weißes Loch in die Jahresfarben.
+   *
+   * @param at Stelle im Buch. `0` heißt ganz vorn, `spreads.length` ganz hinten.
+   */
+  insertSpread(
+    at: number,
+    opts: { templateId?: string; title?: string } = {},
+  ): { ok: boolean; error?: string; index: number } {
+    const stelle = Math.min(Math.max(0, Math.trunc(at)), this.spreads.length);
+    const templateId = opts.templateId ?? BLANK_TEMPLATE_ID;
+
+    const template = templateById(templateId);
+    if (!template) return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, index: -1 };
+
+    const titel = opts.title?.trim();
+    const textSlot = template.textSlots?.[0];
+    const id = `eigen-${Date.now().toString(36)}-${stelle}`;
+
+    // Der Nachbar, an dem sich die neue Seite ausrichtet: die Seite, vor der sie
+    // steht, sonst die davor. Am leeren Buch gibt es keinen – dann gelten die
+    // Vorgaben.
+    const nachbar = this.spreads[stelle] ?? this.spreads[stelle - 1];
+
+    const spread: Spread = {
+      id,
+      index: stelle,
+      templateId,
+      slots: template.slots.map((slot) => ({
+        slotId: slot.id,
+        photoId: null,
+        crop: { ...FULL_CROP },
+      })),
+      locked: true,
+      ...(nachbar?.background !== undefined ? { background: nachbar.background } : {}),
+      ...(nachbar?.timeline !== undefined ? { timeline: nachbar.timeline } : {}),
+      ...(titel && textSlot
+        ? {
+            texts: [{ id: `${id}-text`, role: textSlot.role, content: titel, slotId: textSlot.id }],
+          }
+        : {}),
+      ...(this.ankerFuer(stelle) ?? {}),
+    };
+
+    this.spreads.splice(stelle, 0, spread);
+    this.spreads.forEach((s, i) => (s.index = i));
+    this.refreshReport();
+    return { ok: true, index: stelle };
+  }
+
+  /**
+   * Der Anker für eine Seite an dieser Stelle.
+   *
+   * Gesucht wird das erste Foto der Doppelseite, vor der die neue steht – dann
+   * folgt sie ihm auch dann, wenn das Buch neu gebaut wird und dieses Bild
+   * woanders landet. Erst wenn dahinter kein Bild mehr kommt (das Buchende),
+   * hängt sie sich hinter das letzte davor. Findet sich gar nichts, bleibt es
+   * beim Index – siehe `insertKept`.
+   */
+  private ankerFuer(stelle: number): { anchor: SpreadAnchor } | undefined {
+    const erstesFoto = (spread: Spread | undefined): PhotoId | undefined =>
+      spread?.slots.find((s) => s.photoId)?.photoId ?? undefined;
+
+    for (let i = stelle; i < this.spreads.length; i++) {
+      const photoId = erstesFoto(this.spreads[i]);
+      if (photoId) return { anchor: { photoId, where: 'before' } };
+    }
+    for (let i = stelle - 1; i >= 0; i--) {
+      const photoId = erstesFoto(this.spreads[i]);
+      if (photoId) return { anchor: { photoId, where: 'after' } };
+    }
+    return undefined;
+  }
+
+  /**
+   * Nimmt eine Doppelseite aus dem Buch.
+   *
+   * Ihre Bilder gehen nicht verloren: Der Fotopool ist die Differenz zwischen
+   * Bestand und platzierten Bildern, sie liegen also unmittelbar danach dort.
+   * Wie viele es waren, steht in der Rückgabe – die Oberfläche fragt damit
+   * vorher nach, denn eine Seite mit acht Bildern löscht man nicht versehentlich.
+   */
+  removeSpread(index: number): { ok: boolean; error?: string; photoCount: number } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', photoCount: 0 };
+
+    const photoCount = spread.slots.filter((s) => s.photoId).length;
+    this.spreads.splice(index, 1);
+    this.spreads.forEach((s, i) => (s.index = i));
+    this.refreshReport();
+    return { ok: true, photoCount };
+  }
+
+  /**
+   * Hält eine Doppelseite fest oder gibt sie wieder frei.
+   *
+   * Beim Festhalten wird der Anker nachgezogen: Er soll auf den Nachbarn zeigen,
+   * den die Seite *jetzt* hat, nicht auf den von damals. Beim Freigeben bleibt er
+   * stehen – er kostet nichts und wäre beim nächsten Festhalten wieder richtig.
+   */
+  setSpreadLocked(index: number, locked: boolean): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    if (!locked) {
+      delete spread.locked;
+      return { ok: true };
+    }
+
+    spread.locked = true;
+    // Der eigene Anker darf nicht auf ein Bild dieser Seite zeigen: Beim
+    // Erzeugen liegt es dann auf keiner Flussseite, und der Anker fände nichts.
+    const eigene = new Set(spread.slots.map((s) => s.photoId));
+    const anker = this.ankerFuer(index + 1);
+    if (anker && !eigene.has(anker.anchor.photoId)) spread.anchor = anker.anchor;
+    else delete spread.anchor;
+    return { ok: true };
+  }
+
+  /** Vorlagen, unter denen eine neu eingefügte Doppelseite wählen kann. */
+  insertChoices(): {
+    id: string;
+    name: string;
+    slotCount: number;
+    slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
+    hasTitle: boolean;
+  }[] {
+    return insertTemplates().map((t) => ({
+      id: t.id,
+      name: t.name,
+      slotCount: t.slots.length,
+      slots: t.slots.map((s) => ({
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        ...(s.bleed ? { bleed: true } : {}),
+      })),
+      hasTitle: (t.textSlots?.length ?? 0) > 0,
+    }));
   }
 
   // ------------------------------------------------- Punktuelle Änderungen
@@ -1313,6 +1526,11 @@ export class Project {
           const m = templateMeta(t.id);
           if (m.chapterOnly || t.tags?.includes('veraltet')) return false;
           if (!hatText && t.tags?.includes('mit-titel')) return false;
+          // Die leere Vorlage nur, wo nichts liegt: Auf eine Seite mit acht
+          // Bildern angewandt schickt sie alle acht in den Pool, und die
+          // Skizze – ein leeres Rechteck – sagt das niemandem vorher. Auf einer
+          // selbst gebauten Seite ist sie dagegen der Rückweg vom Auftakt.
+          if (isBlank(t.id) && belegt > 0) return false;
           return true;
         });
 

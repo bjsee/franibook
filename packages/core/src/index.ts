@@ -28,6 +28,7 @@ export * from './layout/generate.js';
 export * from './layout/document.js';
 export * from './layout/rebuild.js';
 export * from './layout/move.js';
+export * from './layout/keep.js';
 export * from './layout/stats.js';
 
 export * from './render/rendered-spread.js';

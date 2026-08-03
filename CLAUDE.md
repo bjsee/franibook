@@ -129,6 +129,15 @@ auffindbar sein.
 `rebuild.ts` ist das Gegenstück zu `generate.ts`: Die Fotoverteilung steht schon fest
 (bearbeitetes Layout-Dokument), nur Vorlage, Slots und Ausschnitte werden neu bestimmt.
 
+**Nicht jede Doppelseite kommt aus der Automatik.** `POST /api/spreads` fügt eine
+selbst gestaltete Seite ein – leer (`spread.leer`) oder mit einem Gruppenauftakt als
+Ausgangsform. Sie ist `locked` und geht damit als `kept` durch `generateBook`
+(`layout/keep.ts`): unverändert übernommen, Bilder als vergeben, zwei Seiten vom
+Budget. Ihren Platz findet sie über `Spread.anchor` – ein Foto und eine Richtung,
+nicht einen Index, denn der stimmt nach einem Neuaufbau nicht mehr. Im
+Layout-Dokument steht sie als `keep: "<Kennung>"` ohne Inhalt. Begründung:
+`docs/konzept.md`, Abschnitt „Eigene Doppelseiten".
+
 **Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
 `layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
 jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die

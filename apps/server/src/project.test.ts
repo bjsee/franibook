@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  BLANK_TEMPLATE_ID,
   FULL_CROP,
   MAX_TILT_DEG,
   groupOpenerTemplates,
@@ -386,5 +387,215 @@ describe('save', () => {
     const p = new Project(sources, null as never, null as never, '/nicht/beschreibbar/franibook');
 
     await expect(p.save()).resolves.toBeUndefined();
+  });
+});
+
+describe('Eigene Doppelseiten', () => {
+  /**
+   * Ein Projekt mit zwei Doppelseiten aus je einem Bild.
+   *
+   * Ohne Quellen und Caches: Einfügen, Löschen und Festhalten fassen nur
+   * `spreads` an, und `generate` rechnet I/O-frei.
+   */
+  function projektMitZwei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const [i, id] of ['p1', 'p2'].entries()) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: `2020-0${i + 1}-01T12:00:00`,
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.1up.hero-left',
+        slots: [{ slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } }],
+        background: '#f0f9ff',
+      },
+      {
+        id: 's1',
+        index: 1,
+        templateId: 'spread.1up.hero-left',
+        slots: [{ slotId: 'a', photoId: 'p2', crop: { ...FULL_CROP } }],
+        background: '#f0f9ff',
+      },
+    ];
+    return p;
+  }
+
+  it('fügt eine leere, festgehaltene Seite an der gewählten Stelle ein', () => {
+    const p = projektMitZwei();
+    const r = p.insertSpread(1);
+
+    expect(r.ok).toBe(true);
+    expect(r.index).toBe(1);
+    expect(p.spreads).toHaveLength(3);
+    expect(p.spreads[1]!.templateId).toBe(BLANK_TEMPLATE_ID);
+    expect(p.spreads[1]!.slots).toEqual([]);
+    // Ohne das Schloss wäre die Seite beim nächsten Neuanordnen weg.
+    expect(p.spreads[1]!.locked).toBe(true);
+    expect(p.spreads.map((s) => s.index)).toEqual([0, 1, 2]);
+  });
+
+  it('übernimmt Hintergrund und Zeitstrahl vom Nachbarn', () => {
+    // Eine weiße Seite mitten im Jahrgang 2020 wäre ein Loch in den
+    // Jahresfarben.
+    const p = projektMitZwei();
+    p.spreads[1]!.timeline = false;
+    p.insertSpread(1);
+
+    expect(p.spreads[1]!.background).toBe('#f0f9ff');
+    expect(p.spreads[1]!.timeline).toBe(false);
+  });
+
+  it('ankert sie am ersten Bild der Folgeseite', () => {
+    const p = projektMitZwei();
+    p.insertSpread(1);
+    expect(p.spreads[1]!.anchor).toEqual({ photoId: 'p2', where: 'before' });
+  });
+
+  it('ankert eine Seite am Buchende hinter dem letzten Bild', () => {
+    const p = projektMitZwei();
+    p.insertSpread(2);
+    expect(p.spreads[2]!.anchor).toEqual({ photoId: 'p2', where: 'after' });
+  });
+
+  it('setzt einen Titel in den Textplatz der Auftaktvorlage', () => {
+    const p = projektMitZwei();
+    const vorlage = groupOpenerTemplates()[0]!;
+    p.insertSpread(1, { templateId: vorlage.id, title: 'Einschulung' });
+
+    const text = p.spreads[1]!.texts?.[0];
+    expect(text?.content).toBe('Einschulung');
+    expect(text?.slotId).toBe(vorlage.textSlots![0]!.id);
+    // Bilder weist niemand automatisch zu – die zieht man selbst hinein.
+    expect(p.spreads[1]!.slots.every((s) => s.photoId === null)).toBe(true);
+  });
+
+  it('lehnt eine unbekannte Vorlage ab, statt eine kaputte Seite anzulegen', () => {
+    const p = projektMitZwei();
+    expect(p.insertSpread(1, { templateId: 'gibt.es.nicht' }).ok).toBe(false);
+    expect(p.spreads).toHaveLength(2);
+  });
+
+  it('klemmt eine Stelle jenseits des Buchendes', () => {
+    const p = projektMitZwei();
+    expect(p.insertSpread(99).index).toBe(2);
+  });
+
+  it('gibt beim Löschen die Bilder in den Pool', () => {
+    const p = projektMitZwei();
+    const r = p.removeSpread(0);
+
+    expect(r.ok).toBe(true);
+    expect(r.photoCount).toBe(1);
+    expect(p.spreads).toHaveLength(1);
+    // Der Pool ist die Differenz zum Bestand – p1 liegt jetzt dort.
+    expect(p.unplacedPhotos().map((f) => f.id)).toEqual(['p1']);
+  });
+
+  it('meldet eine Doppelseite, die es nicht gibt', () => {
+    expect(projektMitZwei().removeSpread(7).ok).toBe(false);
+  });
+
+  it('zieht den Anker nach, wenn eine erzeugte Seite festgehalten wird', () => {
+    const p = projektMitZwei();
+    expect(p.setSpreadLocked(0, true).ok).toBe(true);
+
+    // Nicht das eigene Bild: Beim Erzeugen liegt p1 auf keiner Flussseite, der
+    // Anker fände nichts.
+    expect(p.spreads[0]!.anchor).toEqual({ photoId: 'p2', where: 'before' });
+  });
+
+  it('gibt eine Seite wieder frei', () => {
+    const p = projektMitZwei();
+    p.setSpreadLocked(0, true);
+    p.setSpreadLocked(0, false);
+    expect(p.spreads[0]).not.toHaveProperty('locked');
+  });
+
+  it('zählt festgehaltene Seiten nicht als verlorene Handarbeit', () => {
+    const p = projektMitZwei();
+    p.insertSpread(1);
+    p.addTextBlock(1, { content: 'Einschulung' });
+
+    const h = p.handwork();
+    expect(h.festgehalten).toBe(1);
+    // Der Textblock steht auf der festgehaltenen Seite und überlebt.
+    expect(h.texte).toBe(0);
+    expect(h.hintergruende).toBe(2);
+  });
+
+  it('zählt Textblöcke auf Seiten, die neu gebaut werden', () => {
+    const p = projektMitZwei();
+    p.addTextBlock(0, { content: 'geht verloren' });
+    expect(p.handwork().texte).toBe(1);
+  });
+
+  it('bietet die leere Vorlage und die Auftakte zur Wahl', () => {
+    const auswahl = projektMitZwei().insertChoices();
+    expect(auswahl[0]!.id).toBe(BLANK_TEMPLATE_ID);
+    expect(auswahl[0]!.slotCount).toBe(0);
+    expect(auswahl.length).toBeGreaterThan(1);
+    expect(auswahl.slice(1).every((v) => v.hasTitle)).toBe(true);
+  });
+
+  it('bietet die leere Vorlage nur an, wo keine Bilder liegen', () => {
+    const p = projektMitZwei();
+    p.insertSpread(1);
+
+    // Auf einer Seite mit Bildern schickte sie alle in den Pool, und die
+    // Skizze sagt das niemandem vorher.
+    expect(p.templateChoices(0).some((v) => v.id === BLANK_TEMPLATE_ID)).toBe(false);
+    expect(p.templateChoices(1).some((v) => v.id === BLANK_TEMPLATE_ID)).toBe(true);
+  });
+
+  it('übersteht ein Neuanordnen des ganzen Buches', () => {
+    const p = projektMitZwei();
+    p.insertSpread(1);
+    p.addTextBlock(1, { content: 'Einschulung' });
+
+    p.generate();
+
+    const eigen = p.spreads.find((s) => s.locked);
+    expect(eigen).toBeDefined();
+    expect(eigen!.templateId).toBe(BLANK_TEMPLATE_ID);
+    expect(eigen!.blocks?.[0]?.content).toBe('Einschulung');
+    // Am Anker: unmittelbar vor der Doppelseite mit p2.
+    const stelle = p.spreads.indexOf(eigen!);
+    expect(p.spreads[stelle + 1]!.slots.some((s) => s.photoId === 'p2')).toBe(true);
+  });
+
+  it('übersteht den Rundlauf durch das Layout-Dokument', () => {
+    const p = projektMitZwei();
+    p.insertSpread(1);
+    p.addTextBlock(1, { content: 'Einschulung' });
+    const kennung = p.spreads[1]!.id;
+
+    const ergebnis = p.applyLayout(p.exportLayout());
+
+    expect(ergebnis.ok).toBe(true);
+    expect(p.spreads[1]!.id).toBe(kennung);
+    expect(p.spreads[1]!.blocks?.[0]?.content).toBe('Einschulung');
+  });
+
+  it('meldet eine Kennung, zu der es keine festgehaltene Seite gibt', () => {
+    // Ein Tippfehler im Dokument darf die Seite nicht verschwinden lassen.
+    const p = projektMitZwei();
+    p.insertSpread(1);
+    const doc = p.exportLayout();
+    doc.spreads[1]!.keep = 'gibt-es-nicht';
+
+    const ergebnis = p.applyLayout(doc);
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.issues.some((i) => i.message.includes('gibt-es-nicht'))).toBe(true);
+    expect(p.spreads).toHaveLength(3);
   });
 });

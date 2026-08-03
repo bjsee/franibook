@@ -256,6 +256,7 @@ interface Spread {
   texts: TextElement[];
   eventId?: EventId;              // dominierendes Ereignis, für Navigation
   locked: boolean;                // von 'Buch neu generieren' ausgenommen
+  anchor?: SpreadAnchor;          // wo eine festgehaltene Seite wieder hingehört
   generation: {                   // Nachvollziehbarkeit der Automatik
     seed: number;
     score: number;
@@ -629,14 +630,42 @@ Jeder Generierungslauf bekommt einen Seed. Bei exakt gleichen Eingaben entsteht 
 
 `locked`-Doppelseiten und `manuallyEdited`-Doppelseiten bleiben bei einer Neugenerierung des Gesamtbuchs unangetastet; die Engine plant um sie herum.
 
-> **Korrektur (2. August 2026): der Seed wirkt, `locked` nicht**
+> **Stand (3. August 2026): Seed und `locked` wirken, `manuallyEdited` nicht**
 >
-> Der Determinismus steht und ist durch Snapshot-Tests abgesichert. `locked` ist
-> dagegen bloß ein Feld auf `Spread` — der Generator wertet es nicht aus,
-> `manuallyEdited` und „diese Doppelseite anders generieren" gibt es nicht. Wer den
-> Entwurf behalten will, arbeitet über das Layout-Dokument
+> Der Determinismus steht und ist durch Snapshot-Tests abgesichert. `locked` wirkt
+> seit den eigenen Doppelseiten (siehe unten); `manuallyEdited` und „diese
+> Doppelseite anders generieren" gibt es nicht. Wer eine erzeugte Doppelseite
+> behalten will, hält sie fest oder arbeitet über das Layout-Dokument
 > (`GET`/`POST /api/book/layout`), das eine Neugenerierung aus vorgegebener
 > Fotoverteilung erlaubt (`layout/rebuild.ts`).
+
+### Eigene Doppelseiten
+
+Nicht jede Seite kommt aus der Automatik. Eine Auftaktseite für ein Ereignis, das
+die Gruppenerkennung nicht gefunden hat, ein Vorwort, ein Nachsatz — solche Seiten
+setzt der Benutzer selbst: `POST /api/spreads` fügt an einer Stelle im Buch eine
+Doppelseite ein, entweder leer (`spread.leer`, kein Bild- und kein Textplatz) oder
+mit einem Gruppenauftakt als Ausgangsform. Bilder weist niemand automatisch zu; sie
+kommen aus dem Fotopool.
+
+Solche Seiten sind `locked`. Das ist keine Bequemlichkeit, sondern Voraussetzung:
+Sie bestehen aus Textblöcken und Handarbeit, und der Generator hätte nichts, woraus
+er sie wiederherstellen könnte. `generateBook` bekommt sie als `kept` herein
+(`layout/keep.ts`) und behandelt sie wie schon gedruckt — ihre Bilder gelten als
+vergeben und laufen nicht zusätzlich im Fluss mit, ihre zwei Seiten gehen vom
+Budget ab, gerechnet wird an ihnen nichts.
+
+Ihren Platz im Buch finden sie über einen **Anker** statt über ihren Index:
+`Spread.anchor` nennt ein Foto und eine Richtung („vor der Doppelseite, auf der
+dieses Bild liegt"). Ein Index wäre wertlos — baut die Engine ein Jahr um zwei
+Doppelseiten kürzer, stünde die selbst gebaute Auftaktseite mitten im falschen
+Monat. Der Anker ist zugleich die Sprache, in der die Absicht formuliert war.
+Fehlt das Ankerfoto im Buch, gilt der gespeicherte Index als Notnagel.
+
+Im Layout-Dokument erscheinen sie als Zeile mit `keep: "<Kennung>"` und ohne
+Inhalt: Kasten, Winkel und Schriftgröße jedes Textblocks dort zu spiegeln hieße,
+sie an zwei Stellen zu pflegen. Umsortieren und Löschen bleiben möglich, denn dafür
+zählt allein, wo die Zeile steht.
 
 ## Template-Modell
 

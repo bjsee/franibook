@@ -7892,6 +7892,20 @@
           "lines": 5
         }
       ]
+    },
+    {
+      "$comment": [
+        "Die leere Doppelseite. Kein Bildplatz, kein Textplatz, nur Fläche.",
+        "Sie wird nie automatisch gewählt – das Tag \"eigen\" hält sie aus der",
+        "Auswahl heraus – sondern ausschließlich von Hand eingefügt, wenn jemand",
+        "eine Seite selbst gestalten will: Textblöcke setzen, Bilder frei",
+        "hinziehen. Ohne sie bräuchte eine selbst gebaute Seite eine",
+        "Trägervorlage, deren leere Plätze sie gar nicht meint."
+      ],
+      "id": "spread.leer",
+      "name": "Leere Doppelseite",
+      "tags": ["eigen"],
+      "slots": []
     }
   ]
 }
