@@ -263,9 +263,21 @@ export function groupOpenerTemplates(): Template[] {
  * Projekte weiter auflösbar sind – gewählt werden sie nicht mehr. Betroffen
  * sind die beiden Auftakte mit einem großen Bild, seit die Jahresseite links
  * das Jahr und rechts mehrere Bilder zeigt.
+ *
+ * `dicht` nimmt die Fassungen dazu, die auch auf der Jahresseite Bilder tragen.
+ * Sie sind eine Wahl und keine Verbesserung: Ohne sie steht die Jahreszahl
+ * allein auf ihrer Seite und das Buch atmet an jeder Kapitelgrenze; mit ihnen
+ * trägt der Auftakt neun statt sechs Bilder und kostet damit fast nichts. Weil
+ * sie neun Plätze haben und die bildlosen höchstens sechs, bleiben die kleinen
+ * Fassungen auch dann die Wahl, wenn ein Jahrgang zu wenige Bilder hat.
  */
-export function chapterTemplates(): Template[] {
-  return ALL.filter((t) => templateMeta(t.id).chapterOnly && !t.tags?.includes('veraltet'));
+export function chapterTemplates(dicht = false): Template[] {
+  return ALL.filter(
+    (t) =>
+      templateMeta(t.id).chapterOnly &&
+      !t.tags?.includes('veraltet') &&
+      (dicht || !t.tags?.includes('dicht')),
+  );
 }
 
 /** Welche Gruppengrößen die Bibliothek überhaupt abdeckt. */

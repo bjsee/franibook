@@ -25,6 +25,7 @@ import { ZeitleisteMini } from './ZeitleisteMini.js';
 export interface BuchEinstellungen {
   targetPages: number;
   chapterOpeners: boolean;
+  chapterOpenersDense: boolean;
   groupOpeners: boolean | 'auto';
   timeline: boolean;
   timelineStyle: 'foot' | 'side';
@@ -178,6 +179,24 @@ export function BuchPanel({
           />
           Jahresauftakte
         </label>
+        {/*
+          Eingerückt und nur sichtbar, solange es Auftakte gibt: Es ist keine
+          eigene Entscheidung, sondern die Ausführung der darüber – ein Kästchen
+          ohne Wirkung wäre eine Zusage, die niemand einlöst.
+        */}
+        {settings.chapterOpeners && (
+          <label
+            style={{ ...B.haken, marginLeft: 22 }}
+            title="Neun Bilder über beide Seiten statt sechs rechts. Die Jahreszahl steht größer und in einem Band, das kein Bild berührt — am echten Bestand rund vier Doppelseiten weniger."
+          >
+            <input
+              type="checkbox"
+              checked={settings.chapterOpenersDense}
+              onChange={(e) => onNeuAnordnen({ chapterOpenersDense: e.target.checked })}
+            />
+            Bilder auf der Jahresseite
+          </label>
+        )}
         <label style={B.haken} title="Jeder Jahrgang bekommt eine eigene Hintergrundfarbe">
           <input
             type="checkbox"

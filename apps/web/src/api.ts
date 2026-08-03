@@ -95,6 +95,8 @@ function sende<T>(methode: string, pfad: string, body?: unknown): Promise<T> {
 export interface Einstellungen {
   targetPages: number;
   chapterOpeners: boolean;
+  /** Ob der Jahresauftakt auch auf der Jahresseite Bilder trägt. */
+  chapterOpenersDense: boolean;
   groupOpeners: boolean | 'auto';
   timeline: boolean;
   timelineStyle: 'foot' | 'side';

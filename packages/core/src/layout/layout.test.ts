@@ -421,6 +421,80 @@ describe('generateBook', () => {
     expect(result.report.chapterOpeners).toBe(0);
   });
 
+  /**
+   * Bilder auf der Jahresseite: die Fassungen `spread.chapter.dicht.*`.
+   *
+   * Geprüft wird beides – dass der Schalter wirkt und dass er nichts kostet,
+   * was er nicht kosten soll: Die Jahreszahl muss weiter dastehen, und kein
+   * Bild darf in ihr Band ragen.
+   */
+  function auftakte(result: ReturnType<typeof generate>) {
+    return result.spreads.filter((s) => s.templateId.startsWith('spread.chapter.'));
+  }
+
+  /** Bilder, die auf derselben Seite liegen wie die Jahreszahl. */
+  function bilderAufDerJahresseite(spread: Spread): number {
+    const template = requireTemplate(spread.templateId);
+    const jahr = template.textSlots?.find((t) => t.role === 'year');
+    if (!jahr) return 0;
+    const seite = (x: number, w: number) => (x + w / 2 < 0.5 ? 'links' : 'rechts');
+    const jahresSeite = seite(jahr.x, jahr.w);
+    return template.slots.filter((slot, i) => {
+      const belegt = spread.slots.find((s) => s.slotId === slot.id) ?? spread.slots[i];
+      return belegt?.photoId != null && seite(slot.x, slot.w) === jahresSeite;
+    }).length;
+  }
+
+  it('lässt die Jahresseite von sich aus leer', () => {
+    for (const auftakt of auftakte(generate({ targetPages: 200 }))) {
+      expect(bilderAufDerJahresseite(auftakt), auftakt.templateId).toBe(0);
+    }
+  });
+
+  it('setzt auf Wunsch auch Bilder auf die Jahresseite', () => {
+    const result = generate({ targetPages: 200, chapterOpenersDense: true });
+    const gefunden = auftakte(result);
+    expect(gefunden.length).toBe(19);
+
+    // Die dichte Fassung hat neun Plätze und kommt nur, wenn der Jahrgang
+    // achtzehn Bilder übrig hat – sonst stünde die Hälfte des Auftakts leer.
+    // Drei der neunzehn Jahrgänge dieses Bestands sind zu klein dafür (10, 12
+    // und 14 Bilder); sie behalten die schlanke Fassung, und das ist richtig.
+    const dicht = gefunden.filter((s) => s.templateId.includes('dicht'));
+    expect(dicht.length).toBe(16);
+
+    for (const auftakt of dicht) {
+      expect(bilderAufDerJahresseite(auftakt), auftakt.templateId).toBeGreaterThan(0);
+      // Die Jahreszahl bleibt, und sie bleibt der Grund für die Seite.
+      expect(auftakt.texts?.some((t) => t.role === 'year')).toBe(true);
+    }
+    for (const auftakt of gefunden) {
+      expect(
+        auftakt.texts?.some((t) => t.role === 'year'),
+        auftakt.templateId,
+      ).toBe(true);
+    }
+  });
+
+  it('bringt mit Bildern auf der Jahresseite mehr Fotos in dieselbe Seitenzahl', () => {
+    // Der ganze Zweck des Schalters: Neun Bilder je Auftakt statt sechs sind
+    // am echten Bestand 57 Bilder, die der Fluss nicht mehr tragen muss.
+    const schlank = generate({ targetPages: 160 });
+    const dicht = generate({ targetPages: 160, chapterOpenersDense: true });
+
+    expect(dicht.report.pageCount).toBe(schlank.report.pageCount);
+
+    const inAuftakten = (r: ReturnType<typeof generate>) =>
+      auftakte(r).reduce((n, s) => n + s.slots.filter((sl) => sl.photoId).length, 0);
+    expect(inAuftakten(dicht)).toBeGreaterThan(inAuftakten(schlank) + 40);
+  });
+
+  it('hält die Mindestauflösung auch mit Bildern auf der Jahresseite', () => {
+    const result = generate({ targetPages: 160, chapterOpenersDense: true });
+    expect(result.report.belowMinDpi).toEqual([]);
+    expect(result.report.worstDpi).toBeGreaterThanOrEqual(profile.resolution.minDpi);
+  });
+
   it('ist deterministisch', () => {
     const a = generate({ seed: 42 });
     const b = generate({ seed: 42 });
