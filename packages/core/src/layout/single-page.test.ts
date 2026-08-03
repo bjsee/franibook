@@ -370,3 +370,51 @@ describe('Eine eingefügte Seite wieder löschen', () => {
     expect(fotos(zurueck.spreads)).toEqual(fotos(vorher));
   });
 });
+
+describe('Wirkungslose Löschversuche', () => {
+  it('meldet eine leere Seite, die die Blattaufteilung erzwingt', () => {
+    // Der Fall am echten Buch: Doppelseite 6 trägt links vier Bilder, rechts
+    // nichts, und dahinter stehen justierte Zeilen, die sich nicht trennen
+    // lassen. Die leere Seite fällt weg – und die Parität setzt sie sofort
+    // wieder ein. Vorher meldete der Griff Erfolg und ließ das Buch, wie es war.
+    const einBild = (id: string, photoId: string): Spread => ({
+      id,
+      index: 0,
+      templateId: 'spread.1up.hero-left',
+      slots: requireTemplate('spread.1up.hero-left').slots.map((slot) => ({
+        slotId: slot.id,
+        photoId,
+        crop: { ...AUTO },
+      })),
+    });
+
+    const buch = [einBild('s0', 'p0'), auftakt('a1')];
+    // Buchseite 1 ist die leere rechte Hälfte von s0.
+    const r = removeSinglePage(buch, 1);
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('nicht einzeln entfernen');
+    expect(r.spreads).toHaveLength(2);
+  });
+
+  it('lässt eine leere Seite weg, wo Inhalt nachrücken kann', () => {
+    // Dieselbe Seite, aber mit zerlegbarem Nachbarn statt Auftakt: Jetzt rückt
+    // ein Bild nach und die Leerseite verschwindet wirklich.
+    const einBild = (id: string, photoId: string): Spread => ({
+      id,
+      index: 0,
+      templateId: 'spread.1up.hero-left',
+      slots: requireTemplate('spread.1up.hero-left').slots.map((slot) => ({
+        slotId: slot.id,
+        photoId,
+        crop: { ...AUTO },
+      })),
+    });
+
+    const r = removeSinglePage([einBild('s0', 'p0'), einBild('s1', 'p1')], 1);
+
+    expect(r.ok).toBe(true);
+    expect(r.spreads).toHaveLength(1);
+    expect(fotos(r.spreads)).toEqual(['p0', 'p1']);
+  });
+});
