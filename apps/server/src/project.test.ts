@@ -8,6 +8,7 @@ import {
   HALF_BLANK_ID,
   HALF_ONE_ID,
   MAX_TILT_DEG,
+  MAX_MANUAL_ROTATION_DEG,
   groupOpenerTemplates,
   isJustified,
   justifiedTemplateId,
@@ -164,10 +165,21 @@ describe('setSlotRotation', () => {
     expect(p.spreads[0]?.slots[0]).not.toHaveProperty('rotateDeg');
   });
 
-  it('klemmt einen übertriebenen Winkel auf den Höchstwert', () => {
+  it('lässt eine von Hand gesetzte Drehung über die Neigungsgrenze hinaus', () => {
+    // Die 4° der Automatik begrenzen die Beiläufigkeit, nicht die Absicht: Wer
+    // ein Bild am Griff dreht, meint den Winkel.
     const p = projektMitSlot();
     p.setSlotRotation(0, 'a', 90);
-    expect(p.spreads[0]?.slots[0]?.rotateDeg).toBe(MAX_TILT_DEG);
+    expect(p.spreads[0]?.slots[0]?.rotateDeg).toBe(90);
+    expect(MAX_MANUAL_ROTATION_DEG).toBeGreaterThan(MAX_TILT_DEG);
+  });
+
+  it('schreibt einen über die Naht gezogenen Winkel als Wert zwischen -180 und 180', () => {
+    // Am Drehgriff läuft der Winkel weiter, als der Regler ihn darstellen kann.
+    // 190° und -170° sind dieselbe Lage.
+    const p = projektMitSlot();
+    p.setSlotRotation(0, 'a', 190);
+    expect(p.spreads[0]?.slots[0]?.rotateDeg).toBe(-170);
   });
 
   it('rundet auf ein Zehntelgrad wie die Automatik', () => {

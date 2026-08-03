@@ -8,7 +8,7 @@
  * *soll es weg?* — und die Auflösung bekommt dabei den Platz, den sie braucht,
  * weil sie in diesem Bestand die häufigste Ursache für eine Änderung ist.
  */
-import { MAX_TILT_DEG, photoPixelsOf } from '@franibook/core';
+import { photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
@@ -186,8 +186,8 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
         */}
         <input
           type="range"
-          min={-MAX_TILT_DEG}
-          max={MAX_TILT_DEG}
+          min={-model.neigungGrenze}
+          max={model.neigungGrenze}
           step={0.1}
           value={neigungGesperrt ? 0 : aktuelleNeigung}
           disabled={neigungGesperrt}

@@ -624,6 +624,10 @@ Unterschreitet ein Slot die Ziel-DPI, zeigt die Vorschau ein Warnsymbol; untersc
 
 Die Struktur ist so angelegt, dass eine spätere Saliency- oder Gesichtserkennung nur den Fokuspunkt liefern muss – am Rest der Engine ändert sich nichts. Genau das ist die vorgesehene Erweiterungsstelle: `focal` wird dann nicht mehr defaultet, sondern berechnet.
 
+**Ein manueller Ausschnitt wird in die Form des Kastens gedreht** (`fitCropToAspect`, angewandt in `renderSpread`). Der Grund ist keine Feinheit, sondern die Abbildung selbst: Beide Renderer ziehen den ausgeschnittenen Bereich auf den Kasten: `width: 100/crop.w %` in der Vorschau, `sharp.extract` plus Zielrechteck im PDF. Haben Ausschnitt und Kasten verschiedene Seitenverhältnisse, ist das Bild gestaucht – und zwar in beiden gleich, der Parity-Test hätte es also nie gemeldet. Bei `auto-cover` fiel es nicht auf, weil der Ausschnitt für die aktuellen Kastenmaße ohnehin neu gerechnet wird; ein von Hand gesetzter blieb dagegen stehen und war nach jedem Vorlagenwechsel verzerrt. Seit sich Bildkästen am Griff frei aufziehen lassen, wäre das der Normalfall.
+
+Angepasst wird nur die **Darstellung**: Der gespeicherte Ausschnitt ist die Entscheidung des Benutzers und bleibt unangetastet. Die Anpassung hält die **Fläche** und damit die Auflösung – der Ausschnitt behält seine Vergrößerung und dreht sich nur in die neue Form. Die naheliegende Alternative, jeweils die kürzere Kante zu behalten, hätte über die Dutzende Seitenverhältnisse eines einzigen Ziehvorgangs immer weiter hineingezoomt: In der Messreihe des Tests bleiben so 0,62 von 0,64 Flächenanteilen übrig, mit der Kantenregel wären es 0,03. Am Parity-Test des Falls „manuell verschobene Ausschnitte" sinkt die Abweichung von 0,153 % auf **0,103 %** – die Fixtures waren um jene Kleinigkeit gestaucht, die niemandem auffiel.
+
 ### Determinismus
 
 Jeder Generierungslauf bekommt einen Seed. Bei exakt gleichen Eingaben entsteht exakt dasselbe Buch – notwendig für Snapshot-Tests und dafür, dass „Buch neu generieren“ nach einer kleinen Datumskorrektur nicht das ganze Layout umwirft. „Diese Doppelseite anders generieren“ inkrementiert dagegen bewusst den Seed dieser einen Doppelseite und wählt aus den drei besten Templates ein anderes.
@@ -1081,6 +1085,8 @@ Der Winkel ist **eine reine Funktion aus Slot, Foto und Seed** (`render/tilt.ts`
 Der Betrag liegt zwischen 40 % und 100 % des Höchstwerts. Ohne diese Untergrenze landete ein Teil der Bilder bei 0,1° und stünde zwischen sichtbar geneigten Nachbarn nicht ruhig, sondern schief ausgerichtet.
 
 **`SlotAssignment.rotateDeg` schlägt die Automatik.** Der Unterschied zwischen `undefined` und `0` ist dabei bedeutsam: `undefined` heißt „automatisch", `0` heißt „ausdrücklich geradestellt" und überlebt auch einen Seedwechsel. Genau dafür ist das Feld da — auf einzelnen Seiten fallen die Zufallswinkel unglücklich zusammen, und dann will man ein Bild geraderücken, ohne den Seed des ganzen Buchs anzufassen.
+
+**Von Hand darf weiter gedreht werden als 4°** (`MAX_MANUAL_ROTATION_DEG = 180`). Das ist kein Widerspruch zur Grenze der Automatik, sondern ihre Begründung ernst genommen: Die 4° halten eine Neigung, die _jedes_ Bild des Buches trifft, unterhalb der Schwelle, ab der man sie als Absicht liest. Wer ein einzelnes Bild am Drehgriff anfasst, äußert genau diese Absicht; ihn bei 4° anzuhalten wäre eine Regel gegen den, der sie kennt. 180° ist deshalb keine gestalterische Aussage, sondern der Punkt, an dem ein Winkel wieder von der anderen Seite kommt — jede Drehung lässt sich als Wert zwischen -180 und 180 schreiben (`normalizeRotation`). Der Schutz gegen den Mausrutsch sitzt dort, wo gezogen wird: Umschalt rastet auf 15°-Schritte. Randabfallende Bilder bleiben auch hier gerade.
 
 **Randabfallende Bilder werden nie gedreht**, auch nicht von Hand. Sobald ein Bild kippt, das bis an die Beschnittkante reicht, wandert an zwei Ecken der Hintergrund in die Beschnittzone; was im Druck übrig bleibt, sind weiße Zwickel an der Papierkante — kein Effekt, sondern ein Fehler. Verworfen wurde, den Kasten so weit zu vergrößern, dass die Fläche gedeckt bliebe: Das kostete Motiv und Auflösung an genau den Bildern, die großformatig stehen. Geprüft wird die Geometrie und nicht das `bleed`-Flag des Templates — das Flag ist die Absicht, die Lage der Kanten die Wirkung. Dieselbe Funktion (`randabfallend`) beantwortet die Frage in der Engine und in der Oberfläche, damit es die Regel nur einmal gibt.
 
@@ -1696,6 +1702,33 @@ In der Doppelseiten-Ansicht schaltet ein Knopf am gewählten Bild zwischen
 **Ausschnitt** und **Position** um: Zwei Werkzeuge auf derselben Maustaste
 brauchen einen sichtbaren Umschalter, eine Zusatztaste fände niemand.
 
+**Größe und Winkel liegen dagegen als Griffe am Bild selbst** (`spread/Griffe.tsx`,
+und dieselben tragen auch die Textblöcke).
+Die Geste ist die aus Inkscape und Illustrator, und sie ist es bewusst — wer ein
+Bild anfasst, hat sie schon in der Hand: Der erste Klick wählt und zeigt acht
+Größengriffe, ein weiterer Klick auf dasselbe Bild stellt sie auf vier Drehgriffe,
+der nächste zurück. Umschalt hält beim Aufziehen das Seitenverhältnis und rastet
+beim Drehen auf 15°. Das Maß steht während des Ziehens am Bild, nicht nur in der
+Seitenspalte. Abgewählt wird mit Escape oder dem Kreuz im Panel; dass der zweite
+Klick das früher tat, ist der Preis dieser Geste und in Grafikprogrammen genauso.
+
+Drei Festlegungen darin sind Entscheidungen und nicht Umsetzung:
+
+- **Gerechnet wird im gedrehten Bezugssystem des Kastens.** Der angefasste Griff
+  folgt dem Zeiger, auch wenn das Bild um 24° liegt; fest bleibt die
+  gegenüberliegende Ecke (beim Kantengriff die gegenüberliegende Kante), und der
+  Mittelpunkt wird daraus zurückgerechnet, weil die Drehung um ihn läuft. Ohne
+  diese Umrechnung zöge ein schief liegendes Bild in die falsche Richtung.
+- **Die Griffe liegen als eigene Ebene über der Vorschau**, wie die Griffe der
+  Textblöcke. Sonst müsste `render-dom` wissen, was ein ausgewählter Slot ist —
+  eine Bedienungsentscheidung im Renderer, und genau die soll es dort nicht geben.
+- **Gezogen wird nicht die Darstellung, sondern das Modell.** Am Griff entsteht
+  ein `rect` bzw. ein `rotateDeg`; die Vorschau zeigt es, weil sie das Modell
+  zeichnet. Auch die Zwischenstände während des Ziehens laufen durch dieselben
+  Kernfunktionen, die `renderSpread` benutzt (`fitCropToAspect`, `coverCrop`) —
+  sonst zeigte die Vorschau beim Aufziehen ein gestauchtes Bild und erst nach dem
+  Speichern das richtige.
+
 ### Eigene Textblöcke
 
 Alles andere, was das Buch beschriftet, gehört einer Vorlage (`TextElement` an
@@ -1738,10 +1771,34 @@ Vorschau dreht über `transform: rotate()` mit `transform-origin`, das PDF über
 `doc.rotate()` mit `origin`, zwei völlig verschiedene Wege zu derselben Matrix.
 Der Parity-Test enthält dafür einen eigenen Fall (gemessen 0,189 %).
 
-Die Griffe zum Verschieben liegen in der Doppelseiten-Ansicht als eigene Ebene
-**über** der Vorschau, nicht in ihr: Sonst müsste `render-dom` wissen, was ein
-ausgewählter Block ist — eine Bedienungsentscheidung im Renderer, und genau die
-soll es dort nicht geben.
+Die Griffe liegen in der Doppelseiten-Ansicht als eigene Ebene **über** der
+Vorschau, nicht in ihr: Sonst müsste `render-dom` wissen, was ein ausgewählter
+Block ist — eine Bedienungsentscheidung im Renderer, und genau die soll es dort
+nicht geben.
+
+**Dieselben Griffe wie am Bild**, und zwar buchstäblich dieselben
+(`spread/Griffe.tsx`): Klick wählt und zeigt acht Größengriffe, ein weiterer
+Klick stellt sie auf vier Drehgriffe. Zwei Sätze Griffe, die gleich aussehen und
+sich um ein Pixel unterscheiden, wären derselbe Fehler, den `theme.ts` für Knöpfe
+verhindert. Was Bild und Text unterscheidet, steckt in den Ziehfunktionen und ist
+eine Aussage über die Sache selbst:
+
+- **An den Ecken wächst die Schrift mit** (`fontSizePt` mal demselben Faktor wie
+  der Kasten). Ein Text ist nicht ein Kasten mit Inhalt, sondern eine Zeile in
+  einer Größe — wer ihn am Eck aufzieht, meint größere Buchstaben. Am Bild dagegen
+  bleibt das Foto, was es ist, und nur sein Ausschnitt folgt der neuen Form.
+- **An den Kanten ändert sich nur der Kasten.** Er entscheidet, wo eine zentrierte
+  oder rechts gesetzte Zeile steht; das ist eine eigene Frage und keine der
+  Schriftgröße.
+- Der Winkel geht als Wert zwischen 0 und 359 zum Server — die Schreibweise, die
+  der Regler im Textpanel zeigt. Bilder rechnen in -180 … 180; jede Seite behält
+  die Form, in der ihr Bedienelement sie anzeigt.
+
+Beim Ziehen zeigt die Vorschau **den Text** und nicht nur einen Rahmen, der ihm
+vorausläuft: `withTextBlock` (`render/inspect.ts`) baut die Boxen des offenen
+Stands mit `textBlockBoxes` — derselben Funktion, die `renderSpread` benutzt. Eine
+zweite Fassung wäre eine zweite Wahrheit über Zeilenabstand, Schnitt und
+Drehpunkt, und sie wäre genau während des Ziehens sichtbar.
 
 ### Anordnung von Hand wählen
 

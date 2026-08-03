@@ -26,7 +26,6 @@ import { useSpreadTiles } from './useSpreadTiles.js';
 import { usePlatz } from './usePlatz.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import type { SpreadAussen } from './types.js';
-import { MAX_TILT_DEG } from '@franibook/core';
 
 /**
  * Breite einer Kachel im Buchnavigator.
@@ -366,8 +365,8 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         Neigung
         <input
           type="range"
-          min={-MAX_TILT_DEG}
-          max={MAX_TILT_DEG}
+          min={-model.neigungGrenze}
+          max={model.neigungGrenze}
           step={0.1}
           value={model.neigungGesperrt ? 0 : model.aktuelleNeigung}
           disabled={model.neigungGesperrt}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_CROP_EDGE, coverCrop, cropLoss, cropToPixels, panCrop, zoomCrop } from './crop.js';
+import {
+  MIN_CROP_EDGE,
+  coverCrop,
+  cropLoss,
+  cropToPixels,
+  fitCropToAspect,
+  panCrop,
+  zoomCrop,
+} from './crop.js';
 
 describe('coverCrop', () => {
   it('lässt ein passendes Bild unbeschnitten', () => {
@@ -160,5 +168,75 @@ describe('zoomCrop', () => {
     const vorher = { x: 0.1, y: 0.1, w: 0.5, h: 0.5, mode: 'manual' as const };
     expect(zoomCrop(vorher, 0)).toBe(vorher);
     expect(zoomCrop(vorher, NaN)).toBe(vorher);
+  });
+});
+
+describe('fitCropToAspect', () => {
+  /** Das Verhältnis, in dem der ausgeschnittene Bereich tatsächlich gedruckt wird. */
+  const gedruckt = (c: { w: number; h: number }, photoAspect: number) => (c.w / c.h) * photoAspect;
+
+  it('lässt einen passenden Ausschnitt unangetastet', () => {
+    // Zeichen für Zeichen derselbe Wert: Sonst liefe jede Rundung in die
+    // Parity-Messung, obwohl sich nichts geändert hat.
+    const c = panCrop(coverCrop(4 / 3, 1), 0.1, 0);
+    expect(fitCropToAspect(c, 4 / 3, 1)).toBe(c);
+  });
+
+  it('dreht einen manuellen Ausschnitt in die Form des Kastens', () => {
+    // Ein quadratischer Ausschnitt in einem 3:2 breiten Kasten wäre gestaucht.
+    const c = { x: 0.2, y: 0.2, w: 0.6, h: 0.6, mode: 'manual' as const };
+    const neu = fitCropToAspect(c, 1, 1.5);
+    expect(gedruckt(neu, 1)).toBeCloseTo(1.5, 10);
+  });
+
+  it('hält die Fläche und damit die Auflösung', () => {
+    const c = { x: 0.2, y: 0.2, w: 0.6, h: 0.6, mode: 'manual' as const };
+    const neu = fitCropToAspect(c, 1, 1.5);
+    expect(neu.w * neu.h).toBeCloseTo(c.w * c.h, 10);
+  });
+
+  it('zoomt über mehrere Änderungen hinweg nicht immer weiter hinein', () => {
+    // Der Grund für die Flächenregel: Wer am Griff zieht, ändert das
+    // Seitenverhältnis dutzendfach. Würde jedes Mal die kürzere Kante gelten,
+    // wäre am Ende ein Ausschnitt von wenigen Prozent übrig.
+    let c = { x: 0.1, y: 0.1, w: 0.8, h: 0.8, mode: 'manual' as const };
+    for (let i = 0; i < 20; i++) {
+      c = { ...fitCropToAspect(c, 1, i % 2 === 0 ? 1.6 : 0.7), mode: 'manual' as const };
+    }
+    // 0,64 war die Fläche am Anfang. Sie schrumpft einmal auf 0,625, weil ein
+    // 1,6:1-Ausschnitt dieser Fläche breiter als das Bild wäre und am Rand
+    // geklemmt wird – danach bleibt sie stehen. Genau das ist der Unterschied
+    // zur Regel „kürzere Kante behalten", die hier bei 0,03 gelandet wäre.
+    expect(c.w * c.h).toBeGreaterThan(0.6);
+  });
+
+  it('bleibt im Bild, auch wenn der Kasten extrem breit wird', () => {
+    const c = { x: 0, y: 0, w: 1, h: 1, mode: 'manual' as const };
+    const neu = fitCropToAspect(c, 1, 4);
+    expect(neu.w).toBeLessThanOrEqual(1);
+    expect(neu.h).toBeLessThanOrEqual(1);
+    expect(neu.x).toBeGreaterThanOrEqual(0);
+    expect(neu.y).toBeGreaterThanOrEqual(0);
+    expect(neu.x + neu.w).toBeLessThanOrEqual(1.0000001);
+    expect(neu.y + neu.h).toBeLessThanOrEqual(1.0000001);
+    expect(gedruckt(neu, 1)).toBeCloseTo(4, 10);
+  });
+
+  it('behält den Mittelpunkt, solange das Bild es zulässt', () => {
+    const c = { x: 0.3, y: 0.3, w: 0.4, h: 0.4, mode: 'manual' as const };
+    const neu = fitCropToAspect(c, 1, 1.2);
+    expect(neu.x + neu.w / 2).toBeCloseTo(0.5, 10);
+    expect(neu.y + neu.h / 2).toBeCloseTo(0.5, 10);
+  });
+
+  it('behält den Modus – aus einem Handausschnitt wird keine Automatik', () => {
+    const c = { x: 0.2, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' as const };
+    expect(fitCropToAspect(c, 1, 2).mode).toBe('manual');
+  });
+
+  it('weist unsinnige Seitenverhältnisse ab, statt eine leere Fläche zu liefern', () => {
+    const c = { x: 0.2, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' as const };
+    expect(fitCropToAspect(c, 0, 2)).toBe(c);
+    expect(fitCropToAspect(c, 1, Number.NaN)).toBe(c);
   });
 });

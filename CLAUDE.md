@@ -253,6 +253,22 @@ Neuaufbau bekommt. `SlotAssignment.rotateDeg` schlägt sie; `undefined` heißt
 „automatisch", `0` heißt „ausdrücklich geradestellt". Randabfallende Bilder
 bleiben immer gerade — geneigt entstünden weiße Zwickel an der Papierkante.
 
+Die 4° (`MAX_TILT_DEG`) begrenzen **die Automatik**, nicht die Absicht: Von Hand
+darf bis `MAX_MANUAL_ROTATION_DEG` (180°) gedreht werden, weil ein Winkel am
+Drehgriff eine Aussage ist und keine Beiläufigkeit. Gespeichert wird er über
+`normalizeRotation` als Wert zwischen -180 und 180.
+
+**Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
+`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Textblöcke): Klick wählt,
+ein weiterer Klick schaltet von Größen- auf Drehgriffe, Umschalt hält das
+Seitenverhältnis bzw. rastet auf 15°. Ein frei aufgezogener Bildkasten verzerrt
+nicht, weil ein manueller Ausschnitt beim Rendern in die Form des Kastens gedreht
+wird (`fitCropToAspect` in `renderSpread`, Fläche bleibt gleich) — der
+gespeicherte Ausschnitt selbst bleibt unangetastet. Am Textblock wächst dagegen an
+den Ecken die Schriftgröße mit, an den Kanten nur der Kasten; die Vorschau des
+offenen Stands baut `withTextBlock` mit `textBlockBoxes`, also mit der Funktion
+des Renderers.
+
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.
 

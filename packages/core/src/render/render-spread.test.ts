@@ -172,7 +172,23 @@ describe('Ausschnitt', () => {
     expect(box.crop.w).toBeCloseTo(3 / 4, 6);
   });
 
-  it('lässt einen manuell gesetzten Ausschnitt unangetastet', () => {
+  it('gibt einen manuellen Ausschnitt, der zum Slot passt, unverändert weiter', () => {
+    // Der Slot ist quadratisch, das Bild 4:3 – ein Ausschnitt im Verhältnis 3:4
+    // der Bildkanten wird darin also unverzerrt gedruckt und bleibt, wie er ist.
+    const crop = { x: 0.1, y: 0.2, w: 0.3, h: 0.4, mode: 'manual' as const };
+    const manuell: Spread = {
+      ...spreadWith(['p1', null, null, null]),
+      slots: [{ slotId: 'a', photoId: 'p1', crop }],
+    };
+    const box = imageBoxes(renderSpread(manuell, ctx))[0]!;
+    expect(box.crop).toEqual(crop);
+  });
+
+  it('dreht einen manuellen Ausschnitt in die Form des Slots, statt das Bild zu stauchen', () => {
+    // Beide Renderer bilden den Ausschnitt auf den Kasten ab. Ein quadratischer
+    // Ausschnitt aus einem 4:3-Bild in einem quadratischen Slot wäre um ein
+    // Drittel in die Breite gezogen – vorher passierte genau das, sobald eine
+    // Doppelseite mit manuellem Ausschnitt eine andere Vorlage bekam.
     const manuell: Spread = {
       ...spreadWith(['p1', null, null, null]),
       slots: [
@@ -184,7 +200,11 @@ describe('Ausschnitt', () => {
       ],
     };
     const box = imageBoxes(renderSpread(manuell, ctx))[0]!;
-    expect(box.crop).toEqual({ x: 0.1, y: 0.1, w: 0.4, h: 0.4, mode: 'manual' });
+    // 4:3-Bild, quadratischer Slot → der Ausschnitt muss 3:4 der Bildkanten
+    // messen. Die Fläche bleibt, und der Modus bleibt Handarbeit.
+    expect((box.crop.w / box.crop.h) * (4 / 3)).toBeCloseTo(box.wMm / box.hMm, 6);
+    expect(box.crop.w * box.crop.h).toBeCloseTo(0.16, 6);
+    expect(box.crop.mode).toBe('manual');
   });
 });
 

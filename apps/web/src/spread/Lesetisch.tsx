@@ -19,7 +19,6 @@
  */
 import { useEffect, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
-import { MAX_TILT_DEG } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
 import { TemplatePicker } from '../TemplatePicker.js';
@@ -263,8 +262,8 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
       <span style={B.trenner} />
       <input
         type="range"
-        min={-MAX_TILT_DEG}
-        max={MAX_TILT_DEG}
+        min={-model.neigungGrenze}
+        max={model.neigungGrenze}
         step={0.1}
         value={model.neigungGesperrt ? 0 : model.aktuelleNeigung}
         disabled={model.neigungGesperrt}

@@ -29,6 +29,39 @@ export const DEFAULT_TILT_DEG = 1.2;
 export const MAX_TILT_DEG = 4;
 
 /**
+ * Grenze einer von Hand gesetzten Drehung, in Grad.
+ *
+ * Weiter als `MAX_TILT_DEG`, und das ist kein Widerspruch: Die 4° begrenzen die
+ * **Automatik**, die jedes Bild des Buches leicht kippt – dort ist die Neigung
+ * Beiläufigkeit und darf nie als Absicht gelesen werden. Wer ein einzelnes Bild
+ * am Griff dreht, äußert genau diese Absicht; ihn bei 4° anzuhalten wäre eine
+ * Regel gegen den, der sie kennt.
+ *
+ * 180° ist deshalb keine gestalterische Aussage, sondern der Punkt, an dem ein
+ * Winkel wieder von der anderen Seite kommt: Jede Drehung lässt sich als Wert
+ * zwischen -180 und 180 schreiben. Die Oberfläche rastet mit gehaltener
+ * Umschalttaste auf 15°-Schritte – der Schutz gegen den Mausrutsch sitzt dort,
+ * wo gezogen wird, und nicht in einer engeren Grenze.
+ *
+ * Randabfallende Bilder bleiben davon unberührt gerade (`randabfallend`).
+ */
+export const MAX_MANUAL_ROTATION_DEG = 180;
+
+/**
+ * Bringt einen Winkel in den Bereich -180 … 180.
+ *
+ * Beim Ziehen am Drehgriff läuft der Winkel über die Naht: 190° und -170° sind
+ * dieselbe Lage, und gespeichert werden soll die Schreibweise, die auch der
+ * Regler anzeigen kann.
+ */
+export function normalizeRotation(deg: number): number {
+  if (!Number.isFinite(deg)) return 0;
+  const r = ((((deg + 180) % 360) + 360) % 360) - 180;
+  // -180 und 180 sind dieselbe Lage; die positive liest sich besser.
+  return r === -180 ? 180 : r;
+}
+
+/**
  * Kleinster Betrag, als Anteil des Höchstwerts.
  *
  * Ohne Untergrenze landet ein Teil der Bilder bei 0,1° und steht damit
