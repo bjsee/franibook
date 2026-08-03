@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FULL_CROP, MAX_TILT_DEG, groupOpenerTemplates } from '@franibook/core';
 import { Project, migriere } from './project.js';
@@ -245,5 +248,62 @@ describe('setSpreadTemplate', () => {
 
     expect(r.ok).toBe(false);
     expect(p.spreads[0]!.templateId).toBe('spread.3up.two-and-one');
+  });
+});
+
+describe('save', () => {
+  /**
+   * Ein Projekt mit echtem Verzeichnis.
+   *
+   * `save()` fasst als Einziges das Dateisystem an, deshalb hier keine
+   * Attrappe – nur die Quellenliste, die es beim Schreiben abfragt.
+   */
+  async function projektMitOrdner(): Promise<{ p: Project; dir: string }> {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-test-'));
+    const sources = { list: () => [] } as never;
+    const p = new Project(sources, null as never, null as never, dir);
+    p.spreads = [
+      {
+        id: 's1',
+        index: 0,
+        templateId: 'spread.4up.grid',
+        slots: [{ slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } }],
+      },
+    ];
+    return { p, dir };
+  }
+
+  it('schreibt atomar und lesbar', async () => {
+    const { p, dir } = await projektMitOrdner();
+    await p.save();
+
+    const roh = await readFile(join(dir, 'project.json'), 'utf8');
+    expect(JSON.parse(roh).book.spreads).toHaveLength(1);
+    // Keine Nebendatei bleibt liegen.
+    expect((await readdir(dir)).sort()).toEqual(['project.json']);
+  });
+
+  it('überlebt gleichzeitige Aufrufe', async () => {
+    // Der Fehler, der den Server umgeworfen hat: Jeder Endpunkt speichert
+    // nebenläufig, zwei Aufrufe schrieben in dieselbe Nebendatei und benannten
+    // sie beide um – der zweite fand sie nicht mehr. Ausgelöst hat es ein
+    // Drehregler mit einer Anfrage je Pixel.
+    const { p, dir } = await projektMitOrdner();
+
+    await Promise.all(Array.from({ length: 25 }, () => p.save()));
+
+    const roh = await readFile(join(dir, 'project.json'), 'utf8');
+    expect(() => JSON.parse(roh)).not.toThrow();
+    expect((await readdir(dir)).sort()).toEqual(['project.json']);
+  });
+
+  it('reißt bei einem Schreibfehler nicht den Server um', async () => {
+    // Ein unbehandelter Fehler in `void project.save()` beendet den Prozess.
+    // Ein nicht gespeichertes Projekt ist ärgerlich, ein Absturz mit dem
+    // ganzen Zustand im Speicher ist schlimmer.
+    const sources = { list: () => [] } as never;
+    const p = new Project(sources, null as never, null as never, '/nicht/beschreibbar/franibook');
+
+    await expect(p.save()).resolves.toBeUndefined();
   });
 });

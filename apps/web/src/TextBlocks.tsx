@@ -13,7 +13,15 @@
  * Verschoben und gedreht wird auf der Bühne, nicht hier: Diese Leiste hält den
  * Text und seine Maße, die Lage bestimmt die Hand.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+/**
+ * Verzögerung, bis ein Reglerwert zum Server geht.
+ *
+ * Derselbe Wert wie beim Ausschnitt im Editor – der Griff soll sich anfühlen
+ * wie dort.
+ */
+const SENDE_VERZOEGERUNG_MS = 250;
 
 export interface TextBlockData {
   id: string;
@@ -46,8 +54,20 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
    * Jahresereignissen.
    */
   const [entwurf, setEntwurf] = useState<string | null>(null);
+  /**
+   * Winkel und Größe, solange sie noch nicht beim Server sind.
+   *
+   * Ein Regler feuert je Pixel Reglerweg ein Ereignis. Jedes davon war eine
+   * Anfrage und ein Schreibvorgang auf ein Projekt von 760 kB – der Server ist
+   * daran erstickt. Gesendet wird deshalb verzögert, gezeigt sofort.
+   */
+  const [regler, setRegler] = useState<{ rotateDeg?: number; fontSizePt?: number } | null>(null);
+  const sendeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => setEntwurf(null), [selectedId]);
+  useEffect(() => {
+    setEntwurf(null);
+    setRegler(null);
+  }, [selectedId]);
 
   async function ruf(pfad: string, init: RequestInit) {
     try {
@@ -79,6 +99,22 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
+  }
+
+  /**
+   * Reglerwert übernehmen: sofort anzeigen, verzögert senden.
+   *
+   * Dieselbe Verzögerung wie beim Ausschnitt im Editor. Der Timer wird bei
+   * jeder Bewegung neu gesetzt, es geht also genau eine Anfrage heraus – die
+   * mit dem Wert, bei dem die Hand stehen geblieben ist.
+   */
+  function reglerSetzen(patch: { rotateDeg?: number; fontSizePt?: number }) {
+    setRegler((r) => ({ ...r, ...patch }));
+    if (sendeTimer.current) clearTimeout(sendeTimer.current);
+    sendeTimer.current = setTimeout(() => {
+      void aendern(patch);
+      setRegler(null);
+    }, SENDE_VERZOEGERUNG_MS);
   }
 
   async function entfernen() {
@@ -138,8 +174,8 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
               min={5}
               max={200}
               step={0.5}
-              value={gewaehlt.fontSizePt}
-              onChange={(e) => void aendern({ fontSizePt: Number(e.target.value) })}
+              value={regler?.fontSizePt ?? gewaehlt.fontSizePt}
+              onChange={(e) => reglerSetzen({ fontSizePt: Number(e.target.value) })}
               style={S.zahl}
             />
             pt
@@ -181,8 +217,8 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
               min={0}
               max={359}
               step={1}
-              value={gewaehlt.rotateDeg ?? 0}
-              onChange={(e) => void aendern({ rotateDeg: Number(e.target.value) })}
+              value={regler?.rotateDeg ?? gewaehlt.rotateDeg ?? 0}
+              onChange={(e) => reglerSetzen({ rotateDeg: Number(e.target.value) })}
               style={S.regler}
             />
             <input
@@ -190,8 +226,8 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
               min={0}
               max={359}
               step={1}
-              value={gewaehlt.rotateDeg ?? 0}
-              onChange={(e) => void aendern({ rotateDeg: Number(e.target.value) })}
+              value={regler?.rotateDeg ?? gewaehlt.rotateDeg ?? 0}
+              onChange={(e) => reglerSetzen({ rotateDeg: Number(e.target.value) })}
               style={S.zahl}
             />
             °
