@@ -12,7 +12,7 @@
  * damit ein Wechsel der Variante keine Funktion kostet.
  */
 import { useCallback, useEffect, useState } from 'react';
-import type { RenderedSpread } from '@franibook/core';
+import type { RenderedSpread, TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { B, T } from './theme.js';
 import { Kennzahlen, type Report } from './Kennzahlen.js';
@@ -58,6 +58,11 @@ interface ProjectInfo {
     groupOpeners: boolean | 'auto';
     timeline: boolean;
     timelineStyle: 'foot' | 'side';
+    /** Fassung der Zeichnung, je Achse eine. */
+    timelineFootVariant: TimelineFootVariant;
+    timelineSideVariant: TimelineSideVariant;
+    /** `auto` oder ein Hexwert aus `TIMELINE_ACCENTS`. */
+    timelineAccent: string;
     background: string;
     chapterColors: boolean;
     /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
@@ -225,6 +230,9 @@ export function App() {
   async function setSetting(patch: {
     timeline?: boolean;
     timelineStyle?: 'foot' | 'side';
+    timelineFootVariant?: TimelineFootVariant;
+    timelineSideVariant?: TimelineSideVariant;
+    timelineAccent?: string;
     tilt?: number;
   }) {
     await fetch('/api/settings', {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime } from '../model/photo.js';
-import type { RectBox, RenderBox } from './rendered-spread.js';
+import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
 import { sideTimelineBoxes } from './side-timeline.js';
 
 const profile = saal as PrintProfile;
@@ -71,5 +71,109 @@ describe('Randachse', () => {
     const achseSelbst = alle.find((r) => r.hMm > 100)!;
     expect(frueh.yMm).toBeGreaterThanOrEqual(achseSelbst.yMm - frueh.hMm);
     expect(spaet.yMm).toBeLessThanOrEqual(achseSelbst.yMm + achseSelbst.hMm);
+  });
+});
+
+describe('Randachse: Fassungen', () => {
+  const AT = '2017-07-01T12:00:00';
+
+  /** `null` heißt „Doppelseite ohne belastbares Datum" – nicht `undefined`, das wäre die Vorgabe. */
+  function fassung(variant: string, at: string | null = AT): RenderBox[] {
+    return sideTimelineBoxes(
+      {
+        fromYear: 2008,
+        toYear: 2026,
+        variant: variant as 'classic',
+        ...(at ? { at: at as NaiveDateTime } : {}),
+      },
+      profile,
+    );
+  }
+
+  const texte = (b: RenderBox[]) => b.filter((x): x is TextBox => x.kind === 'text');
+
+  it('lässt classic ohne Angabe unverändert', () => {
+    expect(achse(AT)).toEqual(fassung('classic'));
+  });
+
+  it('teilt die Jahresleiter in 19 Segmente mit 0,7 mm Lücke', () => {
+    const boxen = rects(fassung('ladder'));
+    const segmente = boxen.filter((r) => r.wMm === 1.3 && r.hMm > 10);
+    expect(segmente).toHaveLength(19);
+
+    const [erst, zweit] = segmente;
+    expect(erst!.hMm).toBeCloseTo(12.389, 3); // (248 − 18 · 0,7) / 19
+    expect(zweit!.yMm - (erst!.yMm + erst!.hMm)).toBeCloseTo(0.7, 6);
+    // Vergangen und kommend unterscheiden sich, sonst wäre die Teilung stumm.
+    expect(segmente[0]!.fill).not.toBe(segmente[18]!.fill);
+  });
+
+  it('beschriftet die Jahresleiter nur alle fünf Jahre', () => {
+    // 2010, 2015, 2020, 2025 – neunzehn Zahlen auf 248 mm wären eine Tabelle
+    // am Papierrand.
+    expect(texte(fassung('ladder')).map((t) => t.content)).toEqual(['10', '15', '20', '25']);
+  });
+
+  it('füllt den Fortschrittsbalken bis zum Marker und kerbt die Jahresgrenzen', () => {
+    const boxen = rects(fassung('bar'));
+    const balken = boxen.filter((r) => r.wMm === 1.8 && r.hMm > 50);
+    const kerben = boxen.filter((r) => r.hMm === 0.25);
+
+    expect(balken).toHaveLength(2); // Grund und Füllung
+    expect(balken[1]!.hMm).toBeLessThan(balken[0]!.hMm);
+    // Achtzehn innere Grenzen: An den Enden schnitte eine Kerbe die Kappe ab.
+    expect(kerben).toHaveLength(18);
+    // Mitte 2017 ist die Mitte des Buches – die halbe Länge, auf den Tag genau.
+    expect(balken[1]!.hMm).toBeCloseTo(balken[0]!.hMm / 2, 0);
+  });
+
+  it('stellt an den Fortschrittsbalken die vollen Jahreszahlen und den laufenden Jahrgang', () => {
+    // Vierstellig nur oben und unten, wo die Achse 26 mm Luft hat.
+    expect(texte(fassung('bar')).map((t) => t.content)).toEqual(['2008', '2026', '17']);
+  });
+
+  it('vergibt auch in einem Buch über ein einziges Jahr eindeutige Kennungen', () => {
+    // Erste und letzte Jahreszahl tragen dann denselben Text. Zwei Boxen mit
+    // derselben Kennung verwirft die Vorschau als doppelten React-Key.
+    const einJahr = sideTimelineBoxes(
+      { fromYear: 2017, toYear: 2017, at: AT as NaiveDateTime, variant: 'bar' },
+      profile,
+    );
+    const kennungen = texte(einJahr).map((t) => t.slotId);
+    expect(new Set(kennungen).size).toBe(kennungen.length);
+  });
+
+  it('lässt die Jahresspalte ohne jede Linie stehen', () => {
+    const boxen = fassung('column');
+    expect(texte(boxen)).toHaveLength(19);
+    // Ein einziges Rechteck: der Punkt am Median.
+    expect(rects(boxen)).toHaveLength(1);
+    expect(rects(boxen)[0]!.wMm).toBe(1.1);
+    // Der laufende Jahrgang halbfett, die übrigen nicht.
+    const halbfett = texte(boxen).filter((t) => t.weight === 'semibold');
+    expect(halbfett.map((t) => t.content)).toEqual(['17']);
+  });
+
+  it('hält jede Fassung im Band zwischen Beschnittkante und Sicherheitsrand', () => {
+    const { bleedMm, safetyMm } = profile.page;
+    for (const variant of ['classic', 'ladder', 'bar', 'column']) {
+      for (const box of fassung(variant)) {
+        if (box.kind === 'polygon') continue;
+        expect(box.xMm, variant).toBeGreaterThanOrEqual(bleedMm);
+        expect(box.xMm + box.wMm, variant).toBeLessThanOrEqual(bleedMm + safetyMm);
+      }
+    }
+  });
+
+  it('lässt in jeder Fassung den Marker weg, wenn die Seite kein Datum hat', () => {
+    for (const variant of ['classic', 'ladder', 'bar', 'column']) {
+      const ohne = fassung(variant, null);
+      // Kein Akzent auf der Achse – aber sie steht, damit die Reihe nicht reißt.
+      expect(ohne.length, variant).toBeGreaterThan(0);
+      expect(
+        rects(ohne).some((r) => r.rxMm !== undefined && r.wMm === r.hMm),
+        variant,
+      ).toBe(false);
+    }
   });
 });

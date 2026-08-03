@@ -166,6 +166,40 @@ export function accentOn(background: string): string {
   return fromHsl(ton, saettigung, helligkeit);
 }
 
+export interface TimelineAccent {
+  /** Wert für `settings.timelineAccent`. */
+  value: string;
+  label: string;
+}
+
+/**
+ * Die Akzentfarben, die der Marker des Zeitstrahls tragen darf.
+ *
+ * Eine geschlossene Liste und kein freier Farbwähler: Der Marker ist das
+ * einzige farbige Element im Innenteil, eine offene Wahl produziert dort
+ * Neonrosa. Die vier festen Töne sind gegen Creme und gegen Anthrazit geprüft.
+ *
+ * `auto` steht voran und ist die Vorgabe – dann rechnet `accentOn` den Ton aus
+ * der Jahresfarbe der Doppelseite. Das ist nicht bloß der Bestand, sondern
+ * weiter das Bessere: Ein fester Ton steht auf jedem der sechs Jahrestöne
+ * anders im Raum. Wählbar ist er trotzdem, weil ein Buch mit einer Farbe durch
+ * alle Jahre eine legitime Entscheidung ist – nur keine, die man ungefragt
+ * trifft.
+ */
+export const TIMELINE_ACCENTS: readonly TimelineAccent[] = [
+  { value: 'auto', label: 'Jahresfarbe' },
+  // Der Ton, den der Zeitstrahl vor `accentOn` trug: kalt gegen warmes Papier,
+  // und auf Anthrazit fällt er zu.
+  { value: '#1d4ed8', label: 'Kobalt' },
+  // Nimmt Sommer- und Herbstband des Kalenderbandes auf – steht aber nah an der
+  // Warnfarbe der Oberfläche.
+  { value: '#b4462a', label: 'Rostrot' },
+  // Kühl, aber gebrochen: hält auf hellem und auf dunklem Grund.
+  { value: '#0f6f7a', label: 'Petrol' },
+  // Kommt in keinem Jahreszeitband vor und ist deshalb unverwechselbar.
+  { value: '#6b4696', label: 'Lila' },
+];
+
 function toHsl(hex: string): { h: number; s: number; l: number } {
   const n = hex.replace('#', '');
   const r = parseInt(n.slice(0, 2), 16) / 255;

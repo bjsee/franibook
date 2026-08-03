@@ -30,6 +30,8 @@ import {
   type SpreadAnchor,
   type Structure,
   type TextBlock,
+  type TimelineFootVariant,
+  type TimelineSideVariant,
   BLANK_TEMPLATE_ID,
   HALF_BLANK_ID,
   allTemplates,
@@ -146,6 +148,25 @@ export interface ProjectSettings {
    * verschiedene Fragen, deshalb ist es eine Wahl und keine Verbesserung.
    */
   timelineStyle: 'foot' | 'side';
+  /**
+   * Fassung der Zeichnung, je Achse eine.
+   *
+   * Zwei Felder, weil die Fassungen nichts miteinander zu tun haben: Wer
+   * zwischen Fuß und Rand hin und her schaltet, findet auf jeder Seite seine
+   * Wahl wieder. `'classic'` ist der Bestand und die Vorgabe – ein geladenes
+   * Projekt ohne diese Felder verhält sich damit wie vorher.
+   */
+  timelineFootVariant: TimelineFootVariant;
+  timelineSideVariant: TimelineSideVariant;
+  /**
+   * Akzentfarbe des Markers: `'auto'` oder einer der Hexwerte aus
+   * `TIMELINE_ACCENTS`.
+   *
+   * `'auto'` ist die Vorgabe und heißt „aus der Jahresfarbe der Doppelseite"
+   * (`accentOn`) – der Marker gehört dann zur Seite, statt auf ihr zu liegen.
+   * Ein fester Ton gilt dagegen durch alle Jahrgänge.
+   */
+  timelineAccent: string;
   /** Hintergrundfarbe aller Doppelseiten, sofern keine eigene gesetzt ist. */
   background: string;
   /** Ob jeder Jahrgang beim Erzeugen eine eigene Hintergrundfarbe bekommt. */
@@ -292,6 +313,13 @@ export class Project {
     // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
     timeline: true,
     timelineStyle: 'foot',
+    // Der Bestand als Vorgabe: Die drei neuen Fassungen je Achse sind eine
+    // Wahl und keine Verbesserung, und ein geladenes Projekt soll aussehen wie
+    // vorher. Beim Laden ergänzt `{ ...this.settings, ...data.settings }`
+    // fehlende Felder von hier – eine eigene Migration braucht das nicht.
+    timelineFootVariant: 'classic',
+    timelineSideVariant: 'classic',
+    timelineAccent: 'auto',
     // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
     // deshalb die Palette in render/background.ts.
     background: DEFAULT_BACKGROUND,
@@ -1885,6 +1913,14 @@ export class Project {
     const spanne = this.bookYears();
     return {
       style: this.settings.timelineStyle,
+      footVariant: this.settings.timelineFootVariant,
+      sideVariant: this.settings.timelineSideVariant,
+      // Nur ein gewählter Ton wird durchgereicht: Ohne `accentColor` leitet die
+      // Engine ihn aus dem Hintergrund der Doppelseite ab, und das ist die
+      // Vorgabe – siehe `accentOn`.
+      ...(this.settings.timelineAccent !== 'auto'
+        ? { accentColor: this.settings.timelineAccent }
+        : {}),
       ...(spanne ? { bookYears: spanne } : {}),
       dateOf: (id: PhotoId) => {
         const photo = this.photos.get(id);
