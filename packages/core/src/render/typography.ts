@@ -35,6 +35,65 @@ export const FONT_WEIGHTS = ['regular', 'semibold'] as const;
 
 export type FontWeight = (typeof FONT_WEIGHTS)[number];
 
+export type FontFamilyId = 'sans' | 'serif' | 'hand' | 'display';
+
+export interface FontFamily {
+  id: FontFamilyId;
+  /** Name in der Oberfläche – sagt, wofür sie taugt, nicht wie sie heißt. */
+  label: string;
+  /** Familienname für CSS und für die Registrierung im PDF. */
+  cssName: string;
+  /** Welche Schnitte es gibt. Nicht jede Familie hat einen zweiten. */
+  weights: readonly FontWeight[];
+}
+
+/**
+ * Die Schriften des Buches.
+ *
+ * Alle vier liegen als Datei im Repo und werden ins PDF eingebettet – der
+ * Druckdienstleister verlangt das, und ohne Einbettung hinge das Ergebnis an
+ * seiner Schriftenliste. Dieselben Dateien lädt die Vorschau: Zwei Fassungen
+ * derselben Schrift wären eine Parity-Abweichung mit Ansage.
+ *
+ * `sans` ist die Buchschrift und die Vorgabe; alles, was die Engine selbst
+ * setzt – Jahreszahlen, Zeitstrahl, Auftakttitel –, steht in ihr. Die übrigen
+ * drei stehen nur für von Hand gesetzte Textblöcke zur Wahl, und zwar für
+ * verschiedene Zwecke, nicht als Geschmackssache: eine Serife für längere
+ * Zeilen, eine Handschrift für Persönliches, eine Display für ein großes Wort.
+ *
+ * Herkunft, Lizenzen und verworfene Alternativen: `packages/fonts/HERKUNFT.md`.
+ */
+export const FONT_FAMILIES: readonly FontFamily[] = [
+  {
+    id: 'sans',
+    label: 'Buchschrift',
+    cssName: BOOK_FONT_FAMILY,
+    weights: ['regular', 'semibold'],
+  },
+  { id: 'serif', label: 'Serife', cssName: 'Crimson Text', weights: ['regular', 'semibold'] },
+  { id: 'hand', label: 'Handschrift', cssName: 'Kalam', weights: ['regular', 'semibold'] },
+  // Nur ein Schnitt: Abril Fatface ist selbst schon fett, ein zweiter wäre
+  // keine Steigerung, sondern ein Klumpen.
+  { id: 'display', label: 'Plakativ', cssName: 'Abril Fatface', weights: ['regular'] },
+];
+
+export function fontFamily(id: FontFamilyId): FontFamily {
+  const f = FONT_FAMILIES.find((x) => x.id === id);
+  if (!f) throw new Error(`Schriftfamilie nicht gefunden: ${id}`);
+  return f;
+}
+
+/**
+ * Der Schnitt, den diese Familie tatsächlich hat.
+ *
+ * Wer „halbfett" wählt und dann auf eine Familie mit nur einem Schnitt
+ * wechselt, soll seinen Text behalten und nicht eine Fehlermeldung bekommen.
+ */
+export function resolveWeight(id: FontFamilyId, weight: FontWeight): FontWeight {
+  const f = fontFamily(id);
+  return f.weights.includes(weight) ? weight : f.weights[0]!;
+}
+
 /** Schnittname → CSS-`font-weight`. */
 export const CSS_FONT_WEIGHT: Record<FontWeight, number> = {
   regular: 400,
@@ -62,6 +121,23 @@ export const FONT_METRICS = {
 
 /** Versalhöhe als Anteil der Em-Größe: 0,66. */
 const CAP_PER_EM = FONT_METRICS.capHeight / FONT_METRICS.unitsPerEm;
+
+/**
+ * Versalhöhe je Familie, als Anteil der Em-Größe.
+ *
+ * Aus den Schriftdateien gelesen, geprüft in `packages/fonts/src/index.test.ts`.
+ * Die Werte gehen auseinander – Kalam steht mit 0,739 em zwölf Prozent über der
+ * Buchschrift –, und weil die Grundlinie am Versalband hängt, muss sie je
+ * Familie gerechnet werden. Mit einem festen Wert säße dieselbe Zeile in
+ * derselben Box je nach Schrift sichtbar anders; die Parität litte nicht (beide
+ * Adapter rechnen gleich), die Optik schon.
+ */
+const CAP_PER_EM_BY_FAMILY: Record<FontFamilyId, number> = {
+  sans: 660 / 1000,
+  serif: 656 / 1024,
+  hand: 739 / 1000,
+  display: 700 / 1000,
+};
 
 export type TextStyleName = 'yearLarge' | 'groupTitle' | 'body' | 'timelineYear' | 'timelineLabel';
 
@@ -134,7 +210,11 @@ export function textFontSizePt(boxHeightMm: number, style: TextStyle): number {
  * die halbe Unterlänge nach oben und wundert sich, warum die Jahreszahl im
  * Kasten hängt.
  */
-export function textBaselineOffsetMm(boxHeightMm: number, fontSizePt: number): number {
-  const capMm = ptToMm(fontSizePt) * CAP_PER_EM;
+export function textBaselineOffsetMm(
+  boxHeightMm: number,
+  fontSizePt: number,
+  family: FontFamilyId = 'sans',
+): number {
+  const capMm = ptToMm(fontSizePt) * (CAP_PER_EM_BY_FAMILY[family] ?? CAP_PER_EM);
   return boxHeightMm / 2 + capMm / 2;
 }

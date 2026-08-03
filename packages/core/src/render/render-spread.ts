@@ -34,7 +34,7 @@ import type {
 import { sideTimelineBoxes } from './side-timeline.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
 import { randabfallend, tiltDeg } from './tilt.js';
-import { textFontSizePt, textStyle } from './typography.js';
+import { resolveWeight, textFontSizePt, textStyle } from './typography.js';
 
 /**
  * Was der Zeitstrahl über die Doppelseite hinaus wissen muss.
@@ -380,7 +380,8 @@ function buildTextBlock(block: TextBlock, profile: PrintProfile, background: str
     slotId: zeilen.length > 1 ? `${block.id}-${i}` : block.id,
     content: zeile,
     fontSizePt: block.fontSizePt,
-    weight: block.weight,
+    weight: resolveWeight(block.family ?? 'sans', block.weight),
+    ...(block.family && block.family !== 'sans' ? { family: block.family } : {}),
     align: block.align,
     color: block.color ?? textColorOn(background, TEXT_DEFAULT_COLOR),
     ...(drehung !== 0 ? { rotateDeg: drehung, rotateAboutMm: mitte } : {}),

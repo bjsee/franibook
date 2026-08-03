@@ -15,7 +15,9 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import PDFDocument from 'pdfkit';
 import {
-  FONT_WEIGHTS,
+  type FontFamilyId,
+  type FontWeight,
+  resolveWeight,
   type ImageBox,
   type PhotoId,
   type PrintProfile,
@@ -59,22 +61,41 @@ export interface RenderPdfResult {
 }
 
 /**
- * Bettet die Buchschrift ein und macht sie unter dem Namen des Schnitts
- * ansprechbar.
+ * Registriert die Schriften, die auf diesen Seiten wirklich vorkommen.
  *
- * pdfkit bettet nur ein, was tatsächlich gesetzt wird – ein registrierter, aber
- * unbenutzter Schnitt kostet also nichts. Die Standardschrift (Helvetica) wird
- * damit nie gebraucht: Sie ist eine der 14 PDF-Basisschriften, wird nicht
- * eingebettet und hängt beim Druckdienstleister an dessen Interpretation. Genau
- * das war der Anlass für Issue #5.
+ * pdfkit bettet nur ein, was benutzt wurde – registrieren allein kostet nichts.
+ * Trotzdem wird hier vorher gesammelt: Eine registrierte Schrift ist eine
+ * geöffnete Datei, und bei vier Familien mit je zwei Schnitten wären das acht
+ * Dateien für ein Buch, das oft nur eine braucht. Die Buchschrift kommt in
+ * jedem Fall dazu; pdfkit setzt intern sonst Helvetica, und die ist eine der 14
+ * Basisschriften, wird nicht eingebettet und hängt beim Druckdienstleister an
+ * dessen Interpretation. Genau das war der Anlass für Issue #5.
+ *
+ * @returns Schlüssel je Familie und Schnitt, wie `doc.font()` sie erwartet.
  */
-function registerFonts(doc: PDFKit.PDFDocument): void {
-  for (const weight of FONT_WEIGHTS) {
-    doc.registerFont(weight, fontFilePath(weight));
+function registerFonts(doc: PDFKit.PDFDocument, spreads: readonly RenderedSpread[]): void {
+  const gebraucht = new Set<string>([fontKey('sans', 'regular')]);
+  for (const spread of spreads) {
+    for (const box of spread.boxes) {
+      if (box.kind !== 'text') continue;
+      const family = box.family ?? 'sans';
+      gebraucht.add(fontKey(family, resolveWeight(family, box.weight)));
+    }
   }
+
+  for (const key of gebraucht) {
+    const [family, weight] = key.split('/') as [FontFamilyId, FontWeight];
+    doc.registerFont(key, fontFilePath(family, weight));
+  }
+
   // Voreinstellung, damit nichts auf Helvetica fällt, was pdfkit intern selbst
   // setzt (Lesezeichen, Struktur-Tags).
-  doc.font('regular');
+  doc.font(fontKey('sans', 'regular'));
+}
+
+/** Der Name, unter dem eine Schrift im Dokument registriert ist. */
+function fontKey(family: FontFamilyId, weight: FontWeight): string {
+  return `${family}/${weight}`;
 }
 
 /**
@@ -133,7 +154,7 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
-  registerFonts(doc);
+  registerFonts(doc, spreads);
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
   const skipped: { photoId: PhotoId; reason: string }[] = [];
@@ -163,7 +184,8 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
             onProgress?.(images, totalImages);
           }
         } else if (box.kind === 'text') {
-          const baselineMm = box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt);
+          const baselineMm =
+            box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
           // Gedreht wird das Koordinatensystem, nicht der Text – dieselbe
           // Festlegung wie beim Bild. Der Drehpunkt steht im Modell, damit die
           // Zeilen eines Blocks um denselben Punkt fahren und nicht jede um
@@ -181,7 +203,7 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
           }
 
           doc
-            .font(box.weight)
+            .font(fontKey(box.family ?? 'sans', resolveWeight(box.family ?? 'sans', box.weight)))
             .fontSize(box.fontSizePt)
             .fillColor(box.color)
             .text(box.content, mmToPt(box.xMm + slice.offsetXMm), mmToPt(baselineMm), {

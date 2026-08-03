@@ -1,4 +1,6 @@
-# Herkunft der Buchschrift
+# Herkunft der Schriften
+
+## Buchschrift
 
 `files/FranibookSans-Regular.ttf` und `files/FranibookSans-SemiBold.ttf` sind abgeleitet
 von **Source Sans 3** (Adobe, Robert Slimbach), SIL Open Font License 1.1. Die
@@ -68,3 +70,42 @@ Versalhöhe 660 – stehen als Konstanten in
 `packages/core/src/render/typography.ts`, weil beide Renderer daraus die
 Grundlinie rechnen. `src/index.test.ts` liest sie aus den Dateien zurück und
 schlägt an, wenn eine ausgetauschte Schrift andere Werte mitbringt.
+
+## Zusatzschriften für Textblöcke
+
+Von Hand gesetzte Textblöcke (`TextBlock`) können außer der Buchschrift drei
+weitere verwenden. Sie sind **unverändert** aus dem Google-Fonts-Repository
+übernommen (`github.com/google/fonts/ofl/<familie>`, Stand 3. August 2026), alle
+unter SIL Open Font License 1.1; die Lizenztexte liegen je Schrift daneben.
+
+| Kennung   | Schrift       | Schnitte          | Datei                                              | Wofür                                        |
+| --------- | ------------- | ----------------- | -------------------------------------------------- | -------------------------------------------- |
+| `serif`   | Crimson Text  | Regular, SemiBold | `CrimsonText-*.ttf`, `CrimsonText-OFL.txt`         | längere Zeilen, Zitate, Erzähltext           |
+| `hand`    | Kalam         | Regular, Bold     | `Kalam-*.ttf`, `Kalam-OFL.txt`                     | Persönliches, eine Bildunterschrift von Hand |
+| `display` | Abril Fatface | nur Regular       | `AbrilFatface-Regular.ttf`, `AbrilFatface-OFL.txt` | ein einzelnes großes Wort                    |
+
+**Warum unverändert.** Die Buchschrift musste umbenannt werden, weil sie eine
+geänderte Fassung ist und „Source" ein Reserved Font Name der OFL. Diese drei
+werden bitgenau übernommen, deshalb behalten sie ihre Namen — und deshalb steht
+im Test das Gegenteil der RFN-Prüfung: Der Familienname in der Datei muss genau
+der sein, mit dem Vorschau und PDF sie ansprechen.
+
+**Warum keine Variable Fonts.** EB Garamond, Playfair Display und Caveat lagen
+nur als Variable Font mit Gewichtsachse vor. pdfkit bettet daraus die
+Standardinstanz ein; ein zweiter Schnitt wäre nur über statisch instanziierte
+Dateien zu haben, und die wären wieder geändert und damit umzubenennen. Die drei
+gewählten Familien liegen von Haus aus statisch vor.
+
+**Warum nur ein Schnitt bei Abril Fatface.** Die Schrift ist selbst schon fett;
+ein zweiter Schnitt wäre keine Steigerung, sondern ein Klumpen. `resolveWeight`
+in `core` fängt die Wahl „halbfett" ab und gibt den einzigen vorhandenen zurück.
+
+**Versalhöhen.** Sie gehen auseinander — 0,660 em (Buchschrift), 0,641 (Crimson),
+0,739 (Kalam), 0,700 (Abril). Weil die Grundlinie am Versalband hängt, rechnet
+`textBaselineOffsetMm` sie je Familie; mit einem festen Wert säße dieselbe Zeile
+je nach Schrift sichtbar anders im Kasten.
+
+**Größe.** Zusammen rund 1,2 MB im Repo, davon 0,9 MB Kalam — eine Handschrift
+braucht viele Glyphen. Ins PDF kommt nur, was auf den ausgegebenen Seiten
+tatsächlich vorkommt, und davon nur die benutzten Zeichen (pdfkit subsettet).
+Geprüft: Eine Doppelseite ohne Textblöcke bettet allein die Buchschrift ein.

@@ -27,3 +27,50 @@
   font-style: normal;
   font-display: block;
 }
+
+/*
+ * Die Zusatzschriften für von Hand gesetzte Textblöcke.
+ *
+ * Dieselben Dateien, die der PDF-Renderer einbettet – aus demselben Grund wie
+ * bei der Buchschrift. Unverändert von Google Fonts übernommen (SIL Open Font
+ * License 1.1, Lizenzen liegen je Schrift in `packages/fonts/files/`).
+ */
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../../../packages/fonts/files/CrimsonText-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../../../packages/fonts/files/CrimsonText-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Kalam';
+  src: url('../../../packages/fonts/files/Kalam-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Kalam';
+  src: url('../../../packages/fonts/files/Kalam-Bold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Abril Fatface';
+  src: url('../../../packages/fonts/files/AbrilFatface-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}

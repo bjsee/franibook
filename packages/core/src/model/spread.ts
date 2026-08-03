@@ -3,6 +3,7 @@
  */
 import type { Crop } from './crop.js';
 import type { PhotoId } from './photo.js';
+import type { FontFamilyId } from '../render/typography.js';
 import type { TemplateId } from './template.js';
 
 export type SpreadId = string;
@@ -56,16 +57,19 @@ export interface TextElement {
  * hat, in der Größe und dem Winkel, die er gewählt hat, und keine Vorlage weiß
  * von ihm.
  *
- * Die Schrift ist immer die Buchschrift – nur ihre beiden Schnitte stehen zur
- * Wahl. Eine zweite Schriftfamilie hieße eine zweite Datei, und die Parität von
- * Vorschau und PDF hängt daran, dass beide Adapter dieselbe laden.
+ * Zur Wahl stehen die Schriften aus `FONT_FAMILIES` – die Buchschrift und drei
+ * weitere für Zwecke, die sie nicht abdeckt. Alle liegen als Datei im Repo und
+ * werden eingebettet; Vorschau und PDF laden dieselbe, sonst liefe die Parität
+ * auseinander.
  */
 export interface TextBlock {
   id: string;
   content: string;
   /** Position und Größe, normiert wie ein Templateslot. */
   rect: { x: number; y: number; w: number; h: number };
-  /** Schnitt der Buchschrift. */
+  /** Schriftfamilie. Ohne Angabe die Buchschrift. */
+  family?: FontFamilyId;
+  /** Schnitt. Hat die Familie ihn nicht, gilt ihr einziger. */
   weight: 'regular' | 'semibold';
   /**
    * Schriftgröße in Punkt.

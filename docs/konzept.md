@@ -1496,9 +1496,23 @@ einem Textplatz) oder einer Fotogruppe (das Label am Zeitstrahl). Ein
 der Größe und dem Winkel, die er gewählt hat, und keine Vorlage weiß von ihm.
 Gedacht für das, was kein Automatismus wissen kann.
 
-Die Schrift ist die Buchschrift, wählbar sind ihre beiden Schnitte. Eine zweite
-Familie hieße eine zweite Datei, und die Parität hängt daran, dass beide
-Adapter dieselbe laden. Die Größe steht ausnahmsweise absolut in Punkt statt als
+**Vier Schriften.** Zur Wahl stehen die Buchschrift und drei weitere: eine
+Serife für längere Zeilen (Crimson Text), eine Handschrift für Persönliches
+(Kalam) und eine plakative für ein einzelnes großes Wort (Abril Fatface). Alle
+unverändert unter OFL übernommen, alle als Datei im Repo — Vorschau und PDF
+laden dieselbe, sonst liefe die Parität auseinander. Herkunft und Lizenzen:
+`packages/fonts/HERKUNFT.md`.
+
+Ins PDF kommt nur, was auf den ausgegebenen Seiten wirklich vorkommt:
+`registerFonts` sammelt die Familien aus den Textboxen, bevor die erste Seite
+entsteht. Eine Doppelseite ohne eigene Textblöcke bettet allein die Buchschrift
+ein.
+
+Die Versalhöhen der vier gehen auseinander (0,641 bis 0,739 em). Weil die
+Grundlinie am Versalband hängt, rechnet `textBaselineOffsetMm` sie je Familie —
+mit einem festen Wert säße dieselbe Zeile je nach Schrift sichtbar anders im
+Kasten. Die Parität litte davon nicht (beide Adapter rechnen gleich), die Optik
+schon. Die Größe steht ausnahmsweise absolut in Punkt statt als
 Versalhöhe im Kasten wie in `TEXT_STYLES`: Die Stile gelten für Vorlagen, die in
 zwei Buchformaten bestehen müssen — wer selbst einen Block setzt, wählt eine
 Größe.
