@@ -22,13 +22,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Crop, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
 import {
+  coverCrop,
+  fitCropToAspect,
   imageBoxes,
+  MAX_TILT_DEG,
+  normalizeRotation,
   panCrop,
   photoPixelsOf,
   randabfallend,
   withCrop,
   withRect,
   withRotation,
+  withTextBlock,
   zoomCrop,
 } from '@franibook/core';
 import {
@@ -126,10 +131,37 @@ export function useSpreadEditor({
   const [werkzeug, setWerkzeug] = useState<'ausschnitt' | 'position'>('ausschnitt');
   /** Der Textblock, an dem gerade gearbeitet wird. */
   const [textId, setTextId] = useState<string | null>(null);
-  /** Kasten eines Textblocks, solange er noch nicht beim Server ist. */
-  const [pendingText, setPendingText] = useState<{ id: string; rect: NormRect } | null>(null);
+  /**
+   * Stand eines Textblocks, solange er noch nicht beim Server ist.
+   *
+   * Kasten, Schriftgröße und Winkel in einem: Am Eckgriff ändern sich Kasten und
+   * Schriftgröße gemeinsam, und beide gehören in denselben Zwischenstand –
+   * sonst zeigte die Vorschau eine Mischung aus alt und neu.
+   */
+  const [pendingText, setPendingText] = useState<{
+    id: string;
+    rect: NormRect;
+    fontSizePt?: number;
+    rotateDeg?: number;
+  } | null>(null);
   /** Position und Größe, solange sie noch nicht beim Server sind. */
   const [pendingRect, setPendingRect] = useState<NormRect | null>(null);
+  /**
+   * Was die Griffe am gewählten Bild tun: Größe oder Drehung.
+   *
+   * Zwei Sätze Griffe an derselben Stelle, umgeschaltet durch einen Klick auf
+   * das schon gewählte Bild – die Geste aus Inkscape und Illustrator. Ein
+   * Schalter in der Seitenspalte wäre der zweite Weg zu derselben Handlung, und
+   * die Hand ist beim Bild und nicht am Rand.
+   */
+  const [griffModus, setGriffModus] = useState<'groesse' | 'drehen'>('groesse');
+  /**
+   * Maßangabe während des Ziehens, direkt am Bild.
+   *
+   * Millimeter beim Aufziehen, Grad beim Drehen. Die Panels zeigen dieselben
+   * Werte, aber am anderen Ende des Fensters – wer zieht, schaut auf seine Hand.
+   */
+  const [griffAnzeige, setGriffAnzeige] = useState<string | null>(null);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -148,7 +180,11 @@ export function useSpreadEditor({
     setPendingCrop(null);
     setPendingTilt(null);
     setPendingRect(null);
-  }, [index, selectedSlotId]);
+    // Größe ist der Anfang: Sie wird an fast jedem Bild einmal angefasst, die
+    // Drehung an wenigen. Ein Bild, das gedreht ausgewählt wird, käme sonst
+    // gleich mit dem seltener gebrauchten Werkzeug in der Hand.
+    setGriffModus('groesse');
+  }, [index, selectedSlotId, textId]);
 
   const poolLaden = useCallback(() => {
     fotopoolLaden()
@@ -176,10 +212,34 @@ export function useSpreadEditor({
   const trimBreiteMm = spread.widthMm - 2 * beschnittMm;
   const trimHoeheMm = spread.heightMm - 2 * beschnittMm;
 
+  /**
+   * Bildbox eines Slots in einer beliebigen Fassung der Doppelseite.
+   *
+   * `bildBox` unten fragt immer die *angezeigte* – hier wird auch die Fassung
+   * gebraucht, die vom Server kam.
+   */
+  const bildBoxVon = (s: RenderedSpread, slotId: string) =>
+    imageBoxes(s).find((b) => b.slotId === slotId);
+
   /** Die Doppelseite mit noch nicht gespeichertem Ausschnitt und Neigung. */
   const angezeigt = useMemo(() => {
-    if (!selectedSlotId) return spread;
     let s: RenderedSpread = spread;
+
+    // Der Textblock, an dem gerade gezogen wird – mit Kasten, Größe und Winkel,
+    // wie sie beim Loslassen gespeichert würden.
+    if (pendingText) {
+      const block = spread.blocks?.find((b) => b.id === pendingText.id);
+      if (block) {
+        s = withTextBlock(s, {
+          ...block,
+          rect: pendingText.rect,
+          ...(pendingText.fontSizePt !== undefined ? { fontSizePt: pendingText.fontSizePt } : {}),
+          ...(pendingText.rotateDeg !== undefined ? { rotateDeg: pendingText.rotateDeg } : {}),
+        });
+      }
+    }
+
+    if (!selectedSlotId) return s;
     if (pendingCrop) s = withCrop(s, selectedSlotId, pendingCrop);
     if (pendingTilt !== null) s = withRotation(s, selectedSlotId, pendingTilt);
     if (pendingRect) {
@@ -189,6 +249,26 @@ export function useSpreadEditor({
         wMm: pendingRect.w * trimBreiteMm,
         hMm: pendingRect.h * trimHoeheMm,
       });
+
+      // Der Ausschnitt folgt der neuen Form des Kastens, und zwar mit denselben
+      // beiden Funktionen, die `renderSpread` dafür benutzt: Sonst zeigte die
+      // Vorschau während des Ziehens ein gestauchtes Bild und erst nach dem
+      // Speichern das richtige. Die Bildmaße kommen aus der Box, wie sie vom
+      // Server kam – dort stimmen Ausschnitt und Kasten überein, also lässt sich
+      // aus beiden auf das ganze Foto zurückrechnen.
+      const vomServer = bildBoxVon(spread, selectedSlotId);
+      const px = vomServer ? photoPixelsOf(vomServer) : undefined;
+      const neu = bildBoxVon(s, selectedSlotId);
+      if (px && neu) {
+        const ar = neu.wMm / neu.hMm;
+        s = withCrop(
+          s,
+          selectedSlotId,
+          neu.crop.mode === 'manual'
+            ? fitCropToAspect(neu.crop, px.width / px.height, ar)
+            : coverCrop(px.width / px.height, ar, neu.crop.focal),
+        );
+      }
     }
     return s;
   }, [
@@ -196,6 +276,7 @@ export function useSpreadEditor({
     pendingCrop,
     pendingTilt,
     pendingRect,
+    pendingText,
     selectedSlotId,
     beschnittMm,
     trimBreiteMm,
@@ -406,6 +487,149 @@ export function useSpreadEditor({
     window.addEventListener('pointerup', onUp);
   }
 
+  // ------------------------------------------------------------- Griffe
+
+  /**
+   * Zeigerposition in Millimetern der Beschnittfläche.
+   *
+   * Dieselbe Einheit, in der die Boxen des RSM stehen – damit rechnet die
+   * Zieherei in Millimetern und nicht in Bildschirmpixeln, und der Faktor
+   * `pxPerMm` kommt genau einmal vor.
+   */
+  function zeigerMm(ev: { clientX: number; clientY: number }): { xMm: number; yMm: number } {
+    const rahmen = stageRef.current?.getBoundingClientRect();
+    return {
+      xMm: (ev.clientX - (rahmen?.left ?? 0)) / pxPerMm,
+      yMm: (ev.clientY - (rahmen?.top ?? 0)) / pxPerMm,
+    };
+  }
+
+  /** Kleinste Kante, die ein Bildkasten haben darf. Darunter ist es kein Bild mehr. */
+  const MIN_KANTE_MM = 10;
+
+  /**
+   * Größe am Griff ziehen.
+   *
+   * Gerechnet wird im **gedrehten** Bezugssystem des Kastens: Der Griff, den man
+   * anfasst, soll dem Zeiger folgen, auch wenn das Bild schief liegt. Fest bleibt
+   * dabei die gegenüberliegende Ecke (bei einem Kantengriff die gegenüberliegende
+   * Kante) – wer oben rechts zieht, erwartet, dass unten links nichts wandert.
+   * Der Mittelpunkt wird daraus zurückgerechnet, weil die Drehung um ihn läuft.
+   *
+   * Das Bild wird dabei nicht verzerrt: Der Ausschnitt folgt der neuen Form des
+   * Kastens (`fitCropToAspect` in `renderSpread`), und zwar in beiden Renderern
+   * gleich. Mit gehaltener Umschalttaste bleibt zusätzlich das Seitenverhältnis
+   * des Kastens erhalten.
+   *
+   * @param sx -1 linker Rand, +1 rechter Rand, 0 waagerecht unverändert
+   * @param sy -1 obere Kante, +1 untere Kante, 0 senkrecht unverändert
+   */
+  function griffZiehen(sx: -1 | 0 | 1, sy: -1 | 0 | 1, e: React.PointerEvent<HTMLDivElement>) {
+    const box = bildBox(selectedSlotId);
+    if (!box || e.button !== 0) return;
+    e.preventDefault();
+    // Weiter oben liegt der Slot mit dem Ausschnitt-Ziehen; der Griff behält
+    // sein Ereignis für sich, sonst wanderte gleichzeitig der Ausschnitt.
+    e.stopPropagation();
+
+    const w0 = box.wMm;
+    const h0 = box.hMm;
+    const winkel = ((box.rotateDeg ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(winkel);
+    const sin = Math.sin(winkel);
+    /** Vom lokalen (ungedrehten) Vektor in die Millimeter der Seite. */
+    const dreh = (x: number, y: number) => ({ x: x * cos - y * sin, y: x * sin + y * cos });
+    /** Und zurück. */
+    const zurueck = (x: number, y: number) => ({ x: x * cos + y * sin, y: -x * sin + y * cos });
+
+    const mitte = { xMm: box.xMm + w0 / 2, yMm: box.yMm + h0 / 2 };
+    // Der Punkt, der liegen bleibt: die gegenüberliegende Ecke bzw. Kantenmitte.
+    const festLokal = dreh((-sx * w0) / 2, (-sy * h0) / 2);
+    const fest = { xMm: mitte.xMm + festLokal.x, yMm: mitte.yMm + festLokal.y };
+
+    const onMove = (ev: PointerEvent) => {
+      const p = zeigerMm(ev);
+      const q = zurueck(p.xMm - fest.xMm, p.yMm - fest.yMm);
+
+      let w = sx === 0 ? w0 : Math.max(MIN_KANTE_MM, sx * q.x);
+      let h = sy === 0 ? h0 : Math.max(MIN_KANTE_MM, sy * q.y);
+
+      // Umschalt hält das Seitenverhältnis – nur sinnvoll, wenn beide Kanten
+      // wandern. An einem Kantengriff wäre es das Gegenteil seiner Aufgabe.
+      if (ev.shiftKey && sx !== 0 && sy !== 0) {
+        const f = (w / w0 + h / h0) / 2;
+        w = Math.max(MIN_KANTE_MM, w0 * f);
+        h = Math.max(MIN_KANTE_MM, h0 * f);
+      }
+
+      // Die feste Ecke bleibt, also folgt der Mittelpunkt der neuen Größe.
+      const zurMitte = dreh((sx * w) / 2, (sy * h) / 2);
+      const neueMitte = { xMm: fest.xMm + zurMitte.x, yMm: fest.yMm + zurMitte.y };
+
+      setPendingRect(
+        normiert({
+          xMm: neueMitte.xMm - w / 2,
+          yMm: neueMitte.yMm - h / 2,
+          wMm: w,
+          hMm: h,
+        }),
+      );
+      setGriffAnzeige(`${Math.round(w)} × ${Math.round(h)} mm`);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setGriffAnzeige(null);
+      setPendingRect((r) => {
+        if (r) void rechteckSpeichern(box.slotId, r);
+        return r;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Drehen am Eckgriff.
+   *
+   * Der Winkel ist der, den der Zeiger um die Bildmitte zurücklegt – nicht der
+   * absolute Zeigerwinkel: Sonst spränge das Bild beim Anfassen auf die Lage des
+   * Griffs. Umschalt rastet auf 15°-Schritte; sie sind der Schutz gegen den
+   * Mausrutsch, nicht eine engere Grenze (siehe `MAX_MANUAL_ROTATION_DEG`).
+   */
+  function drehZiehen(e: React.PointerEvent<HTMLDivElement>) {
+    const box = bildBox(selectedSlotId);
+    if (!box || e.button !== 0 || neigungGesperrt) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const mitte = { xMm: box.xMm + box.wMm / 2, yMm: box.yMm + box.hMm / 2 };
+    const zeigerWinkel = (ev: { clientX: number; clientY: number }) => {
+      const p = zeigerMm(ev);
+      return (Math.atan2(p.yMm - mitte.yMm, p.xMm - mitte.xMm) * 180) / Math.PI;
+    };
+
+    const startWinkel = zeigerWinkel(e);
+    const startNeigung = pendingTilt ?? box.rotateDeg ?? 0;
+
+    const onMove = (ev: PointerEvent) => {
+      const roh = startNeigung + (zeigerWinkel(ev) - startWinkel);
+      const gerastet = ev.shiftKey ? Math.round(roh / 15) * 15 : Math.round(roh * 10) / 10;
+      const grad = normalizeRotation(gerastet);
+      setPendingTilt(grad);
+      setGriffAnzeige(`${grad.toFixed(1).replace('.', ',')}°`);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setGriffAnzeige(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
   /**
    * Ändert die Größe um den Mittelpunkt.
    *
@@ -437,22 +661,31 @@ export function useSpreadEditor({
    * Einen Textblock über die Seite ziehen.
    *
    * Derselbe Weg wie beim Bild: Während des Ziehens rechnet die Oberfläche in
-   * normierten Koordinaten und zeigt den Kasten, beim Loslassen geht der Wert
-   * einmal zum Server. Der Text selbst folgt erst danach – die Vorschau
-   * zeichnet nur, was im Modell steht.
+   * normierten Koordinaten, beim Loslassen geht der Wert einmal zum Server. Der
+   * Text folgt dabei mit – `withTextBlock` baut seine Boxen mit derselben
+   * Funktion wie der Renderer. Vorher lief nur ein Rahmen voraus und der Satz
+   * sprang beim Loslassen nach.
    */
   function textZiehen(block: TextBlockData, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    // Der Griff auf einen fremden Block wählt ihn erst einmal aus. Der Klick, der
+    // gleich darauf folgt, darf die Griffe deshalb noch nicht umschalten – sonst
+    // stünde man nach dem ersten Antippen im Drehmodus.
+    if (textId !== block.id) frischGewaehlt.current = true;
     setTextId(block.id);
     onSelect(null);
 
     const startX = e.clientX;
     const startY = e.clientY;
     const start = block.rect;
+    gezogen.current = false;
 
     const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 3) {
+        gezogen.current = true;
+      }
       setPendingText({
         id: block.id,
         rect: {
@@ -465,18 +698,191 @@ export function useSpreadEditor({
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      setPendingText((p) => {
-        if (p && p.id === block.id) void textRechteckSpeichern(block.id, p.rect);
-        return p;
-      });
+      textStandSpeichern(block.id);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
 
-  async function textRechteckSpeichern(id: string, rect: NormRect) {
+  /**
+   * Klick auf einen Textblock: auswählen, dann Griffe umschalten.
+   *
+   * Dieselbe Geste wie am Bild (`slotClick`) und aus demselben Grund – wer beides
+   * auf einer Doppelseite anfasst, soll nicht umlernen müssen. Ein Textblock
+   * kennt keine Papierkante, also gibt es hier auch keine Ausnahme.
+   */
+  function textClick(block: TextBlockData) {
+    if (gezogen.current) {
+      gezogen.current = false;
+      return;
+    }
+    if (frischGewaehlt.current) {
+      frischGewaehlt.current = false;
+      return;
+    }
+    if (textId !== block.id) {
+      setTextId(block.id);
+      setGriffModus('groesse');
+      return;
+    }
+    setGriffModus((m) => (m === 'groesse' ? 'drehen' : 'groesse'));
+  }
+
+  /** Ob der Zeigerdruck den Block gerade erst ausgewählt hat. */
+  const frischGewaehlt = useRef(false);
+
+  /**
+   * Größe eines Textblocks am Griff ziehen.
+   *
+   * An den **Ecken** wächst der Block mitsamt seiner Schrift: Ein Text ist nicht
+   * ein Kasten mit Inhalt, sondern eine Zeile in einer Größe – wer ihn am Eck
+   * aufzieht, meint größere Buchstaben. An den **Kanten** ändert sich nur der
+   * Kasten; er entscheidet, wo eine zentrierte oder rechts gesetzte Zeile steht,
+   * und das ist eine eigene Frage.
+   *
+   * Gerechnet wird wie beim Bild im gedrehten Bezugssystem, mit der
+   * gegenüberliegenden Ecke als Festpunkt (`griffZiehen`).
+   */
+  function textGriffZiehen(
+    block: TextBlockData,
+    sx: -1 | 0 | 1,
+    sy: -1 | 0 | 1,
+    e: React.PointerEvent<HTMLDivElement>,
+  ) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const start = block.rect;
+    const w0 = start.w * trimBreiteMm;
+    const h0 = start.h * trimHoeheMm;
+    const winkel = ((block.rotateDeg ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(winkel);
+    const sin = Math.sin(winkel);
+    const dreh = (x: number, y: number) => ({ x: x * cos - y * sin, y: x * sin + y * cos });
+    const zurueck = (x: number, y: number) => ({ x: x * cos + y * sin, y: -x * sin + y * cos });
+
+    const mitte = {
+      xMm: beschnittMm + start.x * trimBreiteMm + w0 / 2,
+      yMm: beschnittMm + start.y * trimHoeheMm + h0 / 2,
+    };
+    const festLokal = dreh((-sx * w0) / 2, (-sy * h0) / 2);
+    const fest = { xMm: mitte.xMm + festLokal.x, yMm: mitte.yMm + festLokal.y };
+
+    const onMove = (ev: PointerEvent) => {
+      const p = zeigerMm(ev);
+      const q = zurueck(p.xMm - fest.xMm, p.yMm - fest.yMm);
+
+      let w = sx === 0 ? w0 : Math.max(MIN_TEXTKANTE_MM, sx * q.x);
+      let h = sy === 0 ? h0 : Math.max(MIN_TEXTKANTE_MM, sy * q.y);
+
+      // An der Ecke gilt ein gemeinsamer Faktor, sonst wären Kasten und Schrift
+      // nach zwei Zügen nicht mehr im gleichen Verhältnis.
+      const eck = sx !== 0 && sy !== 0;
+      const f = eck ? (w / w0 + h / h0) / 2 : 1;
+      if (eck) {
+        w = Math.max(MIN_TEXTKANTE_MM, w0 * f);
+        h = Math.max(MIN_TEXTKANTE_MM, h0 * f);
+      }
+
+      const zurMitte = dreh((sx * w) / 2, (sy * h) / 2);
+      const neueMitte = { xMm: fest.xMm + zurMitte.x, yMm: fest.yMm + zurMitte.y };
+
+      // Der Server klemmt auf 5 bis 200 pt; hier stünde sonst eine Zahl, die
+      // gleich danach eine andere ist.
+      const pt = eck
+        ? Math.min(200, Math.max(5, Math.round(block.fontSizePt * f * 2) / 2))
+        : block.fontSizePt;
+
+      setPendingText({
+        id: block.id,
+        rect: normiert({
+          xMm: neueMitte.xMm - w / 2,
+          yMm: neueMitte.yMm - h / 2,
+          wMm: w,
+          hMm: h,
+        }),
+        ...(eck ? { fontSizePt: pt } : {}),
+      });
+      setGriffAnzeige(eck ? `${pt.toString().replace('.', ',')} pt` : `${Math.round(w)} mm breit`);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setGriffAnzeige(null);
+      textStandSpeichern(block.id);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Einen Textblock am Eckgriff drehen.
+   *
+   * Wie am Bild, nur ohne Ausnahme für die Papierkante. Der Winkel geht als Wert
+   * zwischen 0 und 359 zum Server – das ist die Schreibweise, die der Regler im
+   * Textpanel zeigt.
+   */
+  function textDrehZiehen(block: TextBlockData, e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = pendingText?.id === block.id ? pendingText.rect : block.rect;
+    const mitte = {
+      xMm: beschnittMm + (rect.x + rect.w / 2) * trimBreiteMm,
+      yMm: beschnittMm + (rect.y + rect.h / 2) * trimHoeheMm,
+    };
+    const zeigerWinkel = (ev: { clientX: number; clientY: number }) => {
+      const p = zeigerMm(ev);
+      return (Math.atan2(p.yMm - mitte.yMm, p.xMm - mitte.xMm) * 180) / Math.PI;
+    };
+
+    const startWinkel = zeigerWinkel(e);
+    const startDrehung = pendingText?.rotateDeg ?? block.rotateDeg ?? 0;
+
+    const onMove = (ev: PointerEvent) => {
+      const roh = startDrehung + (zeigerWinkel(ev) - startWinkel);
+      const gerastet = ev.shiftKey ? Math.round(roh / 15) * 15 : Math.round(roh);
+      const grad = ((gerastet % 360) + 360) % 360;
+      setPendingText({ id: block.id, rect, rotateDeg: grad });
+      setGriffAnzeige(`${grad}°`);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setGriffAnzeige(null);
+      textStandSpeichern(block.id);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /** Kleinste Kante eines Textkastens. Kleiner ist kein Kasten, sondern ein Griff. */
+  const MIN_TEXTKANTE_MM = 5;
+
+  /**
+   * Schickt den offenen Stand eines Textblocks zum Server.
+   *
+   * Einmal am Ende des Ziehens und mit allem, was daran hängt – Kasten,
+   * Schriftgröße, Winkel. Ein Aufruf je Mausbewegung wäre ein Schreibvorgang auf
+   * das ganze Projekt-JSON, hundertmal in der Sekunde.
+   */
+  function textStandSpeichern(id: string) {
+    setPendingText((p) => {
+      if (p && p.id === id) {
+        const { id: _kennung, ...patch } = p;
+        void textPatchSpeichern(id, patch);
+      }
+      return p;
+    });
+  }
+
+  async function textPatchSpeichern(id: string, patch: Partial<TextBlockData>) {
     try {
-      const data = await textAendern(index, id, { rect });
+      const data = await textAendern(index, id, patch);
       if (data.spread) {
         onSpread(data.spread);
         setPendingText(null);
@@ -484,7 +890,7 @@ export function useSpreadEditor({
         onChanged();
       }
     } catch (e) {
-      setNote(`Position nicht gespeichert: ${fehlertext(e)}`);
+      setNote(`Textblock nicht gespeichert: ${fehlertext(e)}`);
     }
   }
 
@@ -515,19 +921,44 @@ export function useSpreadEditor({
   /**
    * War der letzte Zeigerweg ein Ziehen?
    *
-   * Nach jedem Ziehen folgt ein Klick auf denselben Slot – der hätte die
-   * Auswahl aufgehoben und damit genau das Werkzeug geschlossen, mit dem
-   * gerade gearbeitet wird. Drei Pixel Schwelle unterscheiden das vom
-   * Wackeln beim Klicken.
+   * Nach jedem Ziehen folgt ein Klick auf denselben Slot – der hätte die Griffe
+   * umgeschaltet, während man noch am Ausschnitt gearbeitet hat. Drei Pixel
+   * Schwelle unterscheiden das vom Wackeln beim Klicken.
    */
   const gezogen = useRef(false);
 
+  /**
+   * Klick auf ein Bild: auswählen, dann Griffe umschalten.
+   *
+   * Die Geste aus den Grafikprogrammen: Der erste Klick wählt und zeigt die
+   * Größengriffe, der zweite stellt sie auf Drehen, der dritte zurück. Vorher
+   * hob der zweite Klick die Auswahl auf – das übernehmen jetzt Escape und das
+   * Kreuz im Panel, wie in Inkscape auch.
+   *
+   * Randabfallende Bilder bleiben bei den Größengriffen: Ihre Drehung wäre kein
+   * Gestaltungsmittel, sondern ein weißer Zwickel an der Papierkante. Gesagt wird
+   * das dann auch, statt den Klick stumm zu verschlucken.
+   */
   function slotClick(slotId: string) {
     if (gezogen.current) {
       gezogen.current = false;
       return;
     }
-    onSelect(slotId === selectedSlotId ? null : slotId);
+    if (slotId !== selectedSlotId) {
+      onSelect(slotId);
+      return;
+    }
+    if (!bildBox(slotId)) {
+      // Ein leerer Platz hat nichts zu drehen; dort bleibt der Klick das
+      // Abwählen, das er immer war.
+      onSelect(null);
+      return;
+    }
+    if (griffModus === 'groesse' && neigungGesperrt) {
+      setNote('Randabfallend und deshalb gerade — geneigt entstünden weiße Zwickel am Papierrand.');
+      return;
+    }
+    setGriffModus((m) => (m === 'groesse' ? 'drehen' : 'groesse'));
   }
 
   // Eigener Handler, weil er auch ohne ausgewählten Slot gelten soll: Die
@@ -699,6 +1130,16 @@ export function useSpreadEditor({
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
+   * Höchstwert des Neigungsreglers.
+   *
+   * Der Regler ist für die Neigung gebaut: 0,1°-Schritte über acht Grad. Am
+   * Drehgriff kann ein Bild weiter kommen (`MAX_MANUAL_ROTATION_DEG`) – dann
+   * folgt ihm der Regler, statt den Wert zu klemmen, den er anzeigen soll. Ein
+   * Regler von -180 bis 180 wäre der umgekehrte Fehler: Die Neigung, um die es
+   * bei fast jedem Bild geht, ließe sich darauf nicht mehr treffen.
+   */
+  const neigungGrenze = Math.max(MAX_TILT_DEG, Math.ceil(Math.abs(aktuelleNeigung)));
+  /**
    * Randabfallende Bilder bleiben gerade.
    *
    * Geneigt entstünden weiße Zwickel an der Papierkante. Der Regler entfällt
@@ -770,8 +1211,15 @@ export function useSpreadEditor({
     groesseAendern,
     insRaster,
 
+    // Griffe am Bild
+    griffModus,
+    griffZiehen,
+    drehZiehen,
+    griffAnzeige,
+
     // Neigung
     aktuelleNeigung,
+    neigungGrenze,
     neigungGesperrt,
     setPendingTilt,
     neigungZuruecksetzen,
@@ -787,6 +1235,9 @@ export function useSpreadEditor({
     textId,
     setTextId,
     textZiehen,
+    textClick,
+    textGriffZiehen,
+    textDrehZiehen,
     pendingText,
 
     // Buch

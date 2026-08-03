@@ -83,6 +83,67 @@ export function coverCrop(
   };
 }
 
+/**
+ * Passt einen Ausschnitt an ein neues Seitenverhältnis des Kastens an.
+ *
+ * Gebraucht, weil beide Renderer den Ausschnitt auf den Kasten **abbilden**:
+ * Stimmen die Seitenverhältnisse nicht überein, wird das Bild gestaucht. Bei
+ * `auto-cover` fällt das nicht auf, weil der Ausschnitt für die aktuellen
+ * Kastenmaße ohnehin neu gerechnet wird; ein von Hand gesetzter blieb dagegen
+ * unangetastet – und sah nach einem Vorlagenwechsel verzerrt aus. Seit man den
+ * Kasten am Griff frei aufziehen kann, wäre das der Normalfall statt der
+ * Ausnahme.
+ *
+ * **Die Fläche bleibt gleich.** Das ist die Wahl, die diese Funktion trifft:
+ * Fläche halten heißt Auflösung halten – der Ausschnitt behält seine
+ * Vergrößerung und dreht sich nur in die neue Form. Die Alternative, jeweils die
+ * kürzere Kante zu behalten, hätte über mehrere Änderungen hinweg immer weiter
+ * hineingezoomt.
+ *
+ * Der Mittelpunkt bleibt, soweit das Bild es zulässt – am Rand wird geklemmt.
+ * Der gespeicherte Ausschnitt selbst wird davon nicht angefasst: Er ist die
+ * Entscheidung des Benutzers, diese Anpassung nur ihre Darstellung im aktuellen
+ * Kasten.
+ *
+ * @param photoAspect Seitenverhältnis des Bildes (Breite / Höhe)
+ * @param slotAspect  Seitenverhältnis des Kastens
+ */
+export function fitCropToAspect(crop: Crop, photoAspect: number, slotAspect: number): Crop {
+  if (!Number.isFinite(photoAspect) || photoAspect <= 0) return crop;
+  if (!Number.isFinite(slotAspect) || slotAspect <= 0) return crop;
+  if (crop.w <= 0 || crop.h <= 0) return crop;
+
+  // Gesucht ist das Verhältnis der Ausschnittskanten, bei dem der ausgeschnittene
+  // Bildbereich dieselbe Form hat wie der Kasten.
+  const ziel = slotAspect / photoAspect;
+  // Passt es schon, bleibt der Ausschnitt unverändert – Zeichen für Zeichen.
+  // Sonst liefe jede Rundung durch die Wurzel unten in die Parity-Messung.
+  if (Math.abs(crop.w / crop.h - ziel) < 1e-6) return crop;
+
+  let w = Math.sqrt(crop.w * crop.h * ziel);
+  let h = w / ziel;
+  // Über den Bildrand hinaus geht nicht. Nur einer der beiden Fälle kann
+  // eintreten: `w > 1` verlangt `ziel > 1`, `h > 1` verlangt `ziel < 1`.
+  if (w > 1) {
+    w = 1;
+    h = 1 / ziel;
+  } else if (h > 1) {
+    h = 1;
+    w = ziel;
+  }
+
+  const cx = crop.x + crop.w / 2;
+  const cy = crop.y + crop.h / 2;
+
+  return {
+    ...crop,
+    x: clamp(cx - w / 2, 0, 1 - w),
+    y: clamp(cy - h / 2, 0, 1 - h),
+    w,
+    h,
+  };
+}
+
 /** Anteil der Bildfläche, der durch den Ausschnitt verlorengeht. 0 = nichts. */
 export function cropLoss(crop: Crop): number {
   return 1 - crop.w * crop.h;

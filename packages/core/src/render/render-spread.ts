@@ -6,7 +6,7 @@
  * Ergebnis – keiner rechnet selbst.
  */
 import { effectiveDpi, ptToMm } from '../geometry/units.js';
-import { coverCrop, cropToPixels } from '../model/crop.js';
+import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
 import type { EffectiveDate } from '../model/date.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
@@ -193,11 +193,15 @@ function buildImageBox(
   const rect = toMm(assignment.rect ?? slot, profile);
   const slotAr = rect.wMm / rect.hMm;
 
-  // Ein `auto-cover`-Ausschnitt wird für die aktuellen Slotmaße neu gerechnet;
-  // ein manuell gesetzter bleibt unangetastet.
+  // Ein `auto-cover`-Ausschnitt wird für die aktuellen Slotmaße neu gerechnet.
+  // Ein von Hand gesetzter bleibt in seiner Lage und Vergrößerung, wird aber in
+  // die Form des Kastens gedreht: Beide Renderer bilden den Ausschnitt auf den
+  // Kasten ab, ein anderes Seitenverhältnis wäre also ein gestauchtes Bild.
+  // Vorher traf das jeden Vorlagenwechsel mit manuellem Ausschnitt; seit sich
+  // der Kasten am Griff frei aufziehen lässt, wäre es der Normalfall.
   const crop =
     assignment.crop.mode === 'manual'
-      ? assignment.crop
+      ? fitCropToAspect(assignment.crop, aspectRatio(photo), slotAr)
       : coverCrop(aspectRatio(photo), slotAr, assignment.crop.focal);
 
   // Die effektive Auflösung hängt an den *sichtbaren* Pixeln, nicht an der
@@ -346,7 +350,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   // Von Hand gesetzte Blöcke, nach den Bildern: Wer einen Text auf ein Foto
   // legt, meint darüber und nicht darunter.
   for (const block of spread.blocks ?? []) {
-    boxes.push(...buildTextBlock(block, profile, background));
+    boxes.push(...textBlockBoxes(block, profile.page, background));
   }
 
   // Der Zeitstrahl kommt zuletzt: Er liegt im Fußraum, den kein Slot belegt,
@@ -368,6 +372,19 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
 }
 
 /**
+ * Die Fläche, auf die ein normiertes Rechteck abgebildet wird.
+ *
+ * Als Maßpaar und nicht als `PrintProfile`, damit die Oberfläche dieselbe
+ * Funktion auf einem fertigen `RenderedSpread` aufrufen kann – dieselbe
+ * Begründung wie bei `randabfallend`.
+ */
+export interface TextBlockArea {
+  bleedMm: number;
+  trimWidthMm: number;
+  trimHeightMm: number;
+}
+
+/**
  * Boxen eines von Hand gesetzten Textblocks.
  *
  * Der Zeilenabstand ist das Anderthalbfache der Schriftgröße – ein üblicher
@@ -377,12 +394,26 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
  *
  * Gedreht wird der ganze Block um seine Mitte, nicht jede Zeile um ihre eigene:
  * Deshalb tragen alle Zeilen denselben Drehpunkt.
+ *
+ * Exportiert, weil der Editor beim Ziehen an den Griffen dieselben Boxen braucht
+ * (`withTextBlock`): Die Regel, wie aus einem Textblock Boxen werden, soll es
+ * genau einmal geben – sonst zeigte die Vorschau während des Ziehens etwas
+ * anderes als danach.
  */
-function buildTextBlock(block: TextBlock, profile: PrintProfile, background: string): RenderBox[] {
+export function textBlockBoxes(
+  block: TextBlock,
+  area: TextBlockArea,
+  background: string,
+): RenderBox[] {
   const zeilen = block.content.split('\n');
   if (zeilen.every((z) => z.trim().length === 0)) return [];
 
-  const rect = toMm(block.rect, profile);
+  const rect = {
+    xMm: area.bleedMm + block.rect.x * 2 * area.trimWidthMm,
+    yMm: area.bleedMm + block.rect.y * area.trimHeightMm,
+    wMm: block.rect.w * 2 * area.trimWidthMm,
+    hMm: block.rect.h * area.trimHeightMm,
+  };
   const zeilenHoeheMm = ptToMm(block.fontSizePt) * 1.5;
   const mitte = { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
   const drehung = block.rotateDeg ?? 0;

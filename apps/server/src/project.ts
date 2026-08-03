@@ -37,7 +37,7 @@ import {
   DEFAULT_BACKGROUND,
   FONT_FAMILIES,
   DEFAULT_TILT_DEG,
-  MAX_TILT_DEG,
+  normalizeRotation,
   backgroundFit,
   defaultProfile,
   findBulkSeconds,
@@ -844,11 +844,15 @@ export class Project {
     }
     if (!Number.isFinite(deg)) return { ok: false, error: 'Neigung ist keine Zahl' };
 
-    // Geklemmt statt abgewiesen, und auf ein Zehntelgrad gerundet wie die
-    // Automatik: Ein von Hand übernommener Wert soll dem berechneten exakt
-    // entsprechen und nicht um 0,03° daneben liegen.
-    const begrenzt = Math.min(MAX_TILT_DEG, Math.max(-MAX_TILT_DEG, deg));
-    slot.rotateDeg = Math.round(begrenzt * 10) / 10;
+    // In den Bereich -180 … 180 gebracht statt abgewiesen, und auf ein
+    // Zehntelgrad gerundet wie die Automatik: Ein von Hand übernommener Wert
+    // soll dem berechneten exakt entsprechen und nicht um 0,03° daneben liegen.
+    //
+    // Nicht auf `MAX_TILT_DEG` geklemmt: Die 4° begrenzen die Automatik, die
+    // jedes Bild leicht kippt. Am Drehgriff ist der Winkel eine Absicht
+    // (`MAX_MANUAL_ROTATION_DEG`) – 190° sind dann dieselbe Lage wie -170° und
+    // werden so gespeichert, damit der Regler sie anzeigen kann.
+    slot.rotateDeg = Math.round(normalizeRotation(deg) * 10) / 10;
     return { ok: true };
   }
 

@@ -14,6 +14,7 @@ import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { dpiInSlot } from '@franibook/core';
 import { T, dpiFarbe } from '../theme.js';
 import type { TextBlockData } from '../TextBlocks.js';
+import { Griffe } from './Griffe.js';
 import type { PhotoInfo, SpreadEditorModel } from './useSpreadEditor.js';
 
 /** Wortlaut der Datumsquellen aus `model/date.ts`, für die Anzeige. */
@@ -149,12 +150,18 @@ export function SpreadStage({ model, imageSrc, guides, blocks, breite }: Props) 
       />
 
       {blocks.map((block) => {
-        const r = pendingText?.id === block.id ? pendingText.rect : block.rect;
+        const stand = pendingText?.id === block.id ? pendingText : undefined;
+        const r = stand?.rect ?? block.rect;
+        const drehung = stand?.rotateDeg ?? block.rotateDeg;
         const gewaehlt = block.id === textId;
         return (
           <div
             key={block.id}
             onPointerDown={(e) => model.textZiehen(block, e)}
+            // Wie am Bild: Der Klick auf den schon gewählten Block schaltet
+            // zwischen Größen- und Drehgriffen um. Das Verschieben liegt auf dem
+            // Ziehen und stört sich daran nicht.
+            onClick={() => model.textClick(block)}
             title={`„${block.content.split('\n')[0] ?? ''}" verschieben`}
             style={{
               position: 'absolute',
@@ -166,11 +173,18 @@ export function SpreadStage({ model, imageSrc, guides, blocks, breite }: Props) 
               background: gewaehlt ? 'rgba(0,175,203,0.08)' : 'transparent',
               cursor: 'move',
               touchAction: 'none',
-              ...(block.rotateDeg ? { transform: `rotate(${block.rotateDeg}deg)` } : {}),
+              ...(drehung ? { transform: `rotate(${drehung}deg)` } : {}),
             }}
           />
         );
       })}
+
+      {/*
+        Zuletzt und damit obenauf: Die Griffe müssen auch über einem Textblock
+        liegen, der zufällig auf dem gewählten Bild sitzt – sonst greift man ins
+        Leere, wo man eine Ecke sieht.
+      */}
+      <Griffe model={model} blocks={blocks} />
     </div>
   );
 }

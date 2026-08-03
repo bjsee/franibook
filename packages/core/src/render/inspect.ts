@@ -15,7 +15,9 @@
 import { effectiveDpi } from '../geometry/units.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
 import type { Crop } from '../model/crop.js';
-import type { ImageBox, Rect, RenderedSpread } from './rendered-spread.js';
+import type { TextBlock } from '../model/spread.js';
+import type { ImageBox, Rect, RenderBox, RenderedSpread } from './rendered-spread.js';
+import { textBlockBoxes } from './render-spread.js';
 
 /**
  * Dieselbe Doppelseite mit einem anderen Ausschnitt in einem Slot.
@@ -83,6 +85,51 @@ export function withRotation(
       box.kind === 'image' && box.slotId === slotId ? { ...box, rotateDeg } : box,
     ),
   };
+}
+
+/**
+ * Dieselbe Doppelseite mit einem geänderten Textblock.
+ *
+ * Das Gegenstück zu `withRect` für Text: Wer einen Block zieht, an seinen
+ * Griffen aufzieht oder dreht, soll den **Text** dabei sehen und nicht nur einen
+ * Rahmen, der ihm vorausläuft. Gebaut wird mit `textBlockBoxes`, also mit
+ * derselben Funktion wie beim Rendern – eine zweite Fassung wäre eine zweite
+ * Wahrheit über Zeilenabstand, Schnitt und Drehpunkt.
+ *
+ * Die Fläche kommt aus dem RSM selbst: Beschnitt und Gesamtmaße stehen dort, und
+ * der Editor kennt kein Druckprofil.
+ *
+ * Die neuen Boxen stehen an der Stelle der alten, damit die Zeichenreihenfolge
+ * bleibt – ein Textblock liegt über den Bildern und unter dem Zeitstrahl. Hat der
+ * Block noch keine Box (leerer Inhalt), kommen sie ans Ende.
+ */
+export function withTextBlock(spread: RenderedSpread, block: TextBlock): RenderedSpread {
+  const trimWidthMm = (spread.widthMm - 2 * spread.bleedMm) / 2;
+  const trimHeightMm = spread.heightMm - 2 * spread.bleedMm;
+  const neu = textBlockBoxes(
+    block,
+    { bleedMm: spread.bleedMm, trimWidthMm, trimHeightMm },
+    spread.background,
+  );
+
+  const gehoertZuBlock = (box: RenderBox) =>
+    box.kind === 'text' && (box.slotId === block.id || box.slotId.startsWith(`${block.id}-`));
+
+  let gesetzt = false;
+  const boxes: RenderBox[] = [];
+  for (const box of spread.boxes) {
+    if (!gehoertZuBlock(box)) {
+      boxes.push(box);
+      continue;
+    }
+    if (!gesetzt) {
+      boxes.push(...neu);
+      gesetzt = true;
+    }
+  }
+  if (!gesetzt) boxes.push(...neu);
+
+  return { ...spread, boxes };
 }
 
 /**
