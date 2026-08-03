@@ -17,7 +17,7 @@
  */
 import type { Crop } from '../model/crop.js';
 import type { PhotoId } from '../model/photo.js';
-import type { FontWeight } from './typography.js';
+import type { FontFamilyId, FontWeight } from './typography.js';
 
 export interface Rect {
   xMm: number;
@@ -62,8 +62,16 @@ export interface TextBox extends Rect {
   slotId: string;
   content: string;
   fontSizePt: number;
-  /** Schnitt der Buchschrift. Kein Renderer wählt ihn selbst. */
+  /** Schnitt. Kein Renderer wählt ihn selbst. */
   weight: FontWeight;
+  /**
+   * Schriftfamilie. Ohne Angabe die Buchschrift.
+   *
+   * Alles, was die Engine selbst setzt, steht in `sans`; die übrigen Familien
+   * kommen nur aus von Hand gesetzten Textblöcken. Der PDF-Renderer bettet
+   * ausschließlich ein, was auf den ausgegebenen Seiten wirklich vorkommt.
+   */
+  family?: FontFamilyId;
   align: 'left' | 'center' | 'right';
   color: string;
   /**

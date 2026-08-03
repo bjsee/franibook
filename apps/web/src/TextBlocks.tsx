@@ -14,6 +14,7 @@
  * Text und seine Maße, die Lage bestimmt die Hand.
  */
 import { useEffect, useRef, useState } from 'react';
+import { FONT_FAMILIES, type FontFamilyId, fontFamily } from '@franibook/core';
 
 /**
  * Verzögerung, bis ein Reglerwert zum Server geht.
@@ -27,6 +28,7 @@ export interface TextBlockData {
   id: string;
   content: string;
   rect: { x: number; y: number; w: number; h: number };
+  family?: FontFamilyId;
   weight: 'regular' | 'semibold';
   fontSizePt: number;
   align: 'left' | 'center' | 'right';
@@ -182,15 +184,35 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
           </label>
 
           <label style={S.check}>
-            Schnitt
+            Schrift
             <select
-              value={gewaehlt.weight}
-              onChange={(e) => void aendern({ weight: e.target.value as 'regular' | 'semibold' })}
+              value={gewaehlt.family ?? 'sans'}
+              onChange={(e) => void aendern({ family: e.target.value as FontFamilyId })}
+              style={{ fontFamily: fontFamily(gewaehlt.family ?? 'sans').cssName }}
             >
-              <option value="regular">normal</option>
-              <option value="semibold">halbfett</option>
+              {FONT_FAMILIES.map((f) => (
+                // Jeder Eintrag in seiner eigenen Schrift: Namen wie „Serife"
+                // sagen weniger als ein Blick.
+                <option key={f.id} value={f.id} style={{ fontFamily: f.cssName }}>
+                  {f.label}
+                </option>
+              ))}
             </select>
           </label>
+
+          {/* Nur zeigen, wo es etwas zu wählen gibt – Abril hat einen Schnitt. */}
+          {fontFamily(gewaehlt.family ?? 'sans').weights.length > 1 && (
+            <label style={S.check}>
+              Schnitt
+              <select
+                value={gewaehlt.weight}
+                onChange={(e) => void aendern({ weight: e.target.value as 'regular' | 'semibold' })}
+              >
+                <option value="regular">normal</option>
+                <option value="semibold">halbfett</option>
+              </select>
+            </label>
+          )}
 
           <label style={S.check}>
             Satz

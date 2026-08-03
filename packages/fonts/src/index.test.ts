@@ -15,8 +15,10 @@ import { readFileSync } from 'node:fs';
 import {
   BOOK_FONT_FAMILY,
   CSS_FONT_WEIGHT,
+  FONT_FAMILIES,
   FONT_METRICS,
   FONT_WEIGHTS,
+  type FontFamilyId,
   type FontWeight,
 } from '@franibook/core';
 import { describe, expect, it } from 'vitest';
@@ -27,8 +29,8 @@ interface SfntFont {
   tables: Map<string, number>;
 }
 
-function readFont(weight: FontWeight): SfntFont {
-  const buf = readFileSync(fontFilePath(weight));
+function readFont(weight: FontWeight, family: FontFamilyId = 'sans'): SfntFont {
+  const buf = readFileSync(fontFilePath(family, weight));
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const tables = new Map<string, number>();
   const numTables = view.getUint16(4);
@@ -160,5 +162,47 @@ describe('Schriftdateien', () => {
       expect(found.get(nameId) ?? '').not.toContain('Source');
     }
     expect(found.get(10) ?? '').toContain('Source Sans 3');
+  });
+
+  /**
+   * Die Zusatzschriften für Textblöcke.
+   *
+   * Sie sind unverändert übernommen – deshalb hier keine Prüfung auf einen
+   * Reserved Font Name, sondern das Gegenteil: Der Familienname in der Datei
+   * muss der sein, mit dem Vorschau und PDF sie ansprechen. Ein Tippfehler
+   * darin bliebe sonst unbemerkt, bis der Browser auf eine Systemschrift
+   * zurückfällt und das PDF nicht.
+   */
+  const zusatz = FONT_FAMILIES.filter((f) => f.id !== 'sans');
+
+  it.each(zusatz.flatMap((f) => f.weights.map((w) => [f.id, f.cssName, w] as const)))(
+    '%s/%s ist lesbar und trägt ihren Namen',
+    (id, cssName, weight) => {
+      const font = readFont(weight, id);
+      expect(font.tables.has('glyf')).toBe(true);
+      // Name-ID 1 ist bei Schnitten außerhalb von Regular/Bold der Schnittname
+      // („Crimson Text SemiBold"); der typografische Familienname steht in 16.
+      const found = names(font);
+      expect(found.get(16) ?? found.get(1)).toBe(cssName);
+    },
+  );
+
+  it.each(zusatz.map((f) => [f.id, f.cssName] as const))(
+    '%s deckt den deutschen Zeichensatz ab',
+    (id) => {
+      const font = readFont('regular', id);
+      for (const ch of 'äöüÄÖÜßéèêàçñíóú„“–…0123456789') {
+        expect(hasGlyph(font, ch.codePointAt(0) ?? 0), `${ch} fehlt`).toBe(true);
+      }
+    },
+  );
+
+  it('kennt für jede Familie eine Datei je angebotenem Schnitt', () => {
+    // Sonst böte die Oberfläche einen Schnitt an, den es nicht gibt.
+    for (const f of FONT_FAMILIES) {
+      for (const w of f.weights) {
+        expect(() => readFont(w, f.id), `${f.id}/${w}`).not.toThrow();
+      }
+    }
   });
 });

@@ -516,6 +516,95 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     ).toBeLessThan(MAX_DIFF_TIMELINE);
   });
 
+  /**
+   * Die Zusatzschriften kommen in beiden Adaptern aus derselben Datei.
+   *
+   * Der Browser lädt sie über `@font-face` aus `packages/fonts/files`, pdfkit
+   * über `doc.registerFont` aus demselben Pfad. Griffe der Browser auf eine
+   * Systemschrift zurück – ein Tippfehler im Familiennamen genügt –, sähe man
+   * es sonst erst im gedruckten Buch.
+   */
+  test('Textblöcke in den Zusatzschriften decken sich', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    const familien = ['serif', 'hand', 'display'] as const;
+    for (const [i, family] of familien.entries()) {
+      const res = await request.post('http://127.0.0.1:5174/api/spreads/0/texts', {
+        data: {
+          content: `${family} ÄÖÜß 2015`,
+          family,
+          fontSizePt: 26,
+          rect: { x: 0.06, y: 0.12 + i * 0.14, w: 0.36, h: 0.1 },
+        },
+      });
+      expect(res.ok()).toBe(true);
+    }
+
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const gesetzt = rsm.boxes
+      .filter((b: { kind: string; family?: string }) => b.kind === 'text' && b.family)
+      .map((b: { family: string }) => b.family);
+    expect(gesetzt.sort()).toEqual([...familien].sort());
+
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    const stage = page.getByTestId('spread');
+    await expect(stage).toBeVisible();
+    await page.waitForFunction(() => {
+      const imgs = Array.from(document.images);
+      return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    // Alle vier Familien müssen geladen sein, sonst screenshottet der Test eine
+    // Ersatzschrift gegen die eingebettete.
+    await page.evaluate(async () => {
+      await Promise.all(
+        ['Franibook Sans', 'Crimson Text', 'Kalam', 'Abril Fatface'].map((f) =>
+          document.fonts.load(`26pt "${f}"`),
+        ),
+      );
+      await document.fonts.ready;
+    });
+    const shot = await stage.screenshot({ type: 'png' });
+    await writeFile(join(ARTIFACTS, 'preview-fonts.png'), shot);
+
+    const exportRes = await request.post('http://127.0.0.1:5174/api/export/pdf', {
+      data: { spreadIndex: 0, fileName: 'parity-fonts.pdf' },
+    });
+    expect(exportRes.ok()).toBe(true);
+
+    const rasterPrefix = join(ARTIFACTS, 'pdf-fonts');
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r',
+      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      '-singlefile',
+      join(OUT, 'parity-fonts.pdf'),
+      rasterPrefix,
+    ]);
+
+    const meta = await sharp(shot).metadata();
+    const width = meta.width ?? COMPARE_WIDTH;
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+
+    const a = await toPng(shot, width, height);
+    const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
+    const diff = new PNG({ width, height });
+    const differing = pixelmatch(a.data, b.data, diff.data, width, height, {
+      threshold: PIXEL_THRESHOLD,
+      includeAA: false,
+    });
+    await writeFile(join(ARTIFACTS, 'diff-fonts.png'), PNG.sync.write(diff));
+
+    const ratio = differing / (width * height);
+    console.log(`Parity (Zusatzschriften): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit den Zusatzschriften um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_TIMELINE);
+  });
+
   test('PDF trägt die richtigen Boxen', async () => {
     const { stdout } = await execFileAsync('pdfinfo', ['-box', join(OUT, 'parity.pdf')]);
 

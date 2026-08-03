@@ -33,6 +33,7 @@ import {
   buildStructure,
   chapterTemplates,
   DEFAULT_BACKGROUND,
+  FONT_FAMILIES,
   DEFAULT_TILT_DEG,
   MAX_TILT_DEG,
   backgroundFit,
@@ -1108,6 +1109,7 @@ export class Project {
       content: patch.content ?? 'Text',
       rect: patch.rect ?? { x: 0.08, y: 0.44, w: 0.3, h: 0.08 },
       weight: patch.weight ?? 'regular',
+      ...(patch.family ? { family: patch.family } : {}),
       fontSizePt: patch.fontSizePt ?? 14,
       align: patch.align ?? 'left',
       ...(patch.color ? { color: patch.color } : {}),
@@ -1138,6 +1140,9 @@ export class Project {
 
     if (patch.content !== undefined) block.content = patch.content;
     if (patch.weight === 'regular' || patch.weight === 'semibold') block.weight = patch.weight;
+    if (patch.family && FONT_FAMILIES.some((f) => f.id === patch.family)) {
+      block.family = patch.family;
+    }
     if (patch.align) block.align = patch.align;
     if (patch.fontSizePt !== undefined && Number.isFinite(patch.fontSizePt)) {
       // Geklemmt statt abgewiesen: Unter 5 pt ist Text im Druck nicht mehr

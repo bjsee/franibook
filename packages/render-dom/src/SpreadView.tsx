@@ -12,14 +12,15 @@
  */
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import {
-  BOOK_FONT_FAMILY,
   CSS_FONT_WEIGHT,
   type Crop,
   type Guide,
   type ImageBox,
   type RenderBox,
   type RenderedSpread,
+  fontFamily,
   ptToMm,
+  resolveWeight,
   textBaselineOffsetMm,
 } from '@franibook/core';
 
@@ -348,7 +349,7 @@ export function SpreadView({
        */
       case 'text': {
         // Die Grundlinie kommt aus dem Modell; hier wird sie nur getroffen.
-        const baselineMm = textBaselineOffsetMm(box.hMm, box.fontSizePt);
+        const baselineMm = textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
         const anchor = box.align === 'center' ? 'middle' : box.align === 'right' ? 'end' : 'start';
         const xMm = box.align === 'center' ? box.wMm / 2 : box.align === 'right' ? box.wMm : 0;
         return (
@@ -380,8 +381,8 @@ export function SpreadView({
               textAnchor={anchor}
               // Alle vier Werte stammen aus dem RSM. Die Größe steht in Punkt,
               // im viewBox sind die Einheiten Millimeter.
-              fontFamily={BOOK_FONT_FAMILY}
-              fontWeight={CSS_FONT_WEIGHT[box.weight]}
+              fontFamily={fontFamily(box.family ?? 'sans').cssName}
+              fontWeight={CSS_FONT_WEIGHT[resolveWeight(box.family ?? 'sans', box.weight)]}
               fontSize={ptToMm(box.fontSizePt)}
               fill={box.color}
               // Im viewBox sind die Einheiten Millimeter, die Zahl wandert also
