@@ -5,8 +5,9 @@
  * Authentifizierung und darf unter keinen Umständen im Netz stehen.
  *
  * Der Server importiert, rechnet das Layout, liefert Bilder und exportiert PDFs.
- * Die Engine selbst bleibt I/O-frei und könnte ebenso im Browser laufen – das
- * Frontend nutzt aus @franibook/core aber nur die Typen und ruft hier an.
+ * Die Engine selbst bleibt I/O-frei und läuft ebenso im Browser – das Buch rechnet
+ * trotzdem hier, damit es genau einen Stand gibt. Das Frontend ruft an und zeigt,
+ * was zurückkommt.
  */
 import { createReadStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';

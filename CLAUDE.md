@@ -91,9 +91,10 @@ apps/web (React 19 + Vite, 5173)  ──/api-Proxy──▶  apps/server (Fastif
 ### Die vier tragenden Regeln
 
 1. **`packages/core` importiert kein `fs`, kein `sharp`, kein `fetch`.** Dadurch ist die
-   Engine ohne Bilddateien testbar und wäre im Browser lauffähig — aktuell rechnet
-   allerdings der Server, das Frontend nutzt aus `core` nur die Typen. Alles, was die
-   Engine über ein Foto wissen muss, steht im Domänenmodell (`model/photo.ts`).
+   Engine ohne Bilddateien testbar und im Browser lauffähig — das Buch rechnet der
+   Server, aber `ZeitleisteMini` in der Oberfläche rendert echte Zeitleisten mit
+   derselben Funktion wie der PDF-Export. Alles, was die Engine über ein Foto wissen
+   muss, steht im Domänenmodell (`model/photo.ts`).
 2. **Kein Renderer trifft eine Layoutentscheidung.** Jede Position kommt aus dem RSM
    (`render/rendered-spread.ts`). Weicht die Vorschau vom PDF ab, ist das per
    Konstruktion ein Adapterfehler — abgesichert durch den Parity-Test.
@@ -103,6 +104,23 @@ apps/web (React 19 + Vite, 5173)  ──/api-Proxy──▶  apps/server (Fastif
 4. **Die Generierung ist deterministisch.** Gleiche Eingaben ergeben exakt dasselbe
    Buch; Variation läuft über `settings.seed`. Voraussetzung für Snapshot-Tests und
    dafür, dass eine lokale Korrektur nicht das ganze Buch umwirft.
+
+Regel 2 sichert der Parity-Test, die Regeln 1, 3 und 4 sichert
+`tests/architektur/architektur.test.ts` beim normalen `pnpm test` — sie sind damit
+keine Prosa mehr. Wer eine davon bewusst bricht, ändert den Test mit und begründet
+es dort.
+
+### Regeln je Bereich
+
+Die ausführlichen Konventionen stehen in `.claude/rules/` und werden beim Arbeiten an
+den jeweiligen Dateien automatisch geladen:
+
+| Datei                             | gilt für                       | Inhalt                                                               |
+| --------------------------------- | ------------------------------ | -------------------------------------------------------------------- |
+| `.claude/rules/kern-rein.md`      | `packages/core/**`             | I/O-Freiheit, Determinismus, Druckprofil, Datum, Modellgrenzen       |
+| `.claude/rules/adapter-parity.md` | `packages/render-{dom,pdf}/**` | was ein Renderer aus dem Kern beziehen darf, Schrift, Parity-Pflicht |
+| `.claude/rules/server.md`         | `apps/server/**`               | Routenzuschnitt, Antwortform, Persistenz, Umgang mit fremden Dateien |
+| `.claude/rules/web.md`            | `apps/web/**`                  | Bausteine aus `theme.ts`, Ansichten, Serverzugriff über `api.ts`     |
 
 ### Datenfluss beim Generieren
 
