@@ -17,9 +17,11 @@ import { useEffect, useState } from 'react';
 interface Vorlage {
   id: string;
   name: string;
+  /** Ob diese Form eine ganze Doppelseite belegt oder eine einzelne Buchseite. */
+  scope: 'spread' | 'page';
   slotCount: number;
   slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
-  /** Ob die Vorlage einen Titelplatz hat – nur dann lohnt das Textfeld. */
+  /** Ob ein Titel gesetzt werden kann – nur dann lohnt das Textfeld. */
   hasTitle: boolean;
 }
 
@@ -27,7 +29,10 @@ interface Props {
   /** Stelle im Buch: 0 heißt ganz vorn, `spreadCount` ganz hinten. */
   at: number;
   spreadCount: number;
-  onEingefuegt: (index: number) => void;
+  onEingefuegt: (
+    index: number,
+    bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number },
+  ) => void;
   onAbbrechen: () => void;
   onFehler: (text: string) => void;
 }
@@ -41,6 +46,14 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
   const [gewaehlt, setGewaehlt] = useState<string | null>(null);
   const [titel, setTitel] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * Welche Buchseite eine einzelne Seite belegen soll.
+   *
+   * Nur für `scope: 'page'` von Belang, und dort entscheidend: Links oder rechts
+   * ist keine Kosmetik, sondern bestimmt, wo die Parität kippt und welches Blatt
+   * dahinter aus welchen zwei Seiten besteht.
+   */
+  const [seite, setSeite] = useState<'left' | 'right'>('left');
 
   useEffect(() => {
     fetch('/api/templates/insert')
@@ -64,24 +77,36 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
   const vorlage = vorlagen?.find((v) => v.id === gewaehlt);
 
   async function einfuegen() {
-    if (!gewaehlt) return;
+    if (!gewaehlt || !vorlage) return;
     setBusy(true);
+
+    // Zwei Endpunkte, weil es zwei verschiedene Eingriffe sind: Eine
+    // Doppelseite kommt zwischen zwei Blätter, eine einzelne Seite zwischen zwei
+    // Buchseiten – und verschiebt dabei jede Blattgrenze dahinter.
+    const einzeln = vorlage.scope === 'page';
+    const titelText = vorlage.hasTitle && titel.trim() ? { title: titel.trim() } : {};
+
     try {
-      const res = await fetch('/api/spreads', {
+      const res = await fetch(einzeln ? '/api/spreads/page' : '/api/spreads', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          at,
-          templateId: gewaehlt,
-          ...(vorlage?.hasTitle && titel.trim() ? { title: titel.trim() } : {}),
-        }),
+        body: JSON.stringify(
+          einzeln
+            ? { atPage: at * 2 + (seite === 'right' ? 1 : 0), halfId: gewaehlt, ...titelText }
+            : { at, templateId: gewaehlt, ...titelText },
+        ),
       });
-      const daten = (await res.json()) as { ok?: boolean; index?: number; error?: string };
+      const daten = (await res.json()) as {
+        ok?: boolean;
+        index?: number;
+        error?: string;
+        bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
+      };
       if (!res.ok || !daten.ok) {
         onFehler(daten.error ?? `Seite nicht eingefügt (HTTP ${res.status})`);
         return;
       }
-      onEingefuegt(daten.index ?? at);
+      onEingefuegt(daten.index ?? at, daten.bericht);
     } catch (e) {
       onFehler(`Seite nicht eingefügt: ${String(e)}`);
     } finally {
@@ -93,29 +118,73 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
     <div style={S.hintergrund} onClick={onAbbrechen}>
       <div style={S.karte} onClick={(e) => e.stopPropagation()}>
         <h2 style={S.titel}>
-          Eigene Doppelseite {at >= spreadCount ? 'am Ende' : `vor Seite ${at + 1}`}
+          Eigene Seite {at >= spreadCount ? 'am Ende' : `bei Doppelseite ${at + 1}`}
         </h2>
         <p style={S.hinweis}>
-          Die Seite wird festgehalten: Ein Neuanordnen des Buches baut sie nicht neu. Bilder ziehst
-          du selbst aus dem Fotopool hinein.
+          Was du einfügst, wird festgehalten: Ein Neuanordnen des Buches baut es nicht neu. Bilder
+          ziehst du selbst aus dem Fotopool hinein.
         </p>
 
         {vorlagen === null ? (
           <p style={S.muted}>Lade Vorlagen …</p>
         ) : (
-          <div style={S.gitter}>
-            {vorlagen.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setGewaehlt(v.id)}
-                style={{ ...S.kachel, ...(v.id === gewaehlt ? S.kachelAn : {}) }}
-                title={v.name}
-              >
-                <Skizze slots={v.slots} />
-                <span style={S.kachelName}>{kurzname(v)}</span>
-              </button>
-            ))}
-          </div>
+          (['page', 'spread'] as const).map((scope) => {
+            const gruppe = vorlagen.filter((v) => v.scope === scope);
+            if (gruppe.length === 0) return null;
+            return (
+              <div key={scope}>
+                <h3 style={S.gruppe}>
+                  {scope === 'page' ? 'Einzelne Buchseite' : 'Ganze Doppelseite'}
+                </h3>
+                <div style={S.gitter}>
+                  {gruppe.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setGewaehlt(v.id)}
+                      style={{ ...S.kachel, ...(v.id === gewaehlt ? S.kachelAn : {}) }}
+                      title={v.name}
+                    >
+                      <Skizze slots={v.slots} nurLinks={v.scope === 'page'} />
+                      <span style={S.kachelName}>{kurzname(v)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {/*
+          Links oder rechts ist bei einer einzelnen Seite keine Kosmetik: Dort
+          kippt die Parität, und jedes Blatt dahinter besteht danach aus anderen
+          zwei Buchseiten. Deshalb steht die Folge auch dabei.
+        */}
+        {vorlage?.scope === 'page' && (
+          <>
+            <div style={S.seitenwahl}>
+              <span style={S.muted}>Als</span>
+              {(
+                [
+                  ['left', 'linke Seite'],
+                  ['right', 'rechte Seite'],
+                ] as const
+              ).map(([wert, text]) => (
+                <button
+                  key={wert}
+                  onClick={() => setSeite(wert)}
+                  style={{ ...S.button, ...(seite === wert ? S.buttonAn : {}) }}
+                >
+                  {text}
+                </button>
+              ))}
+              <span style={S.muted}>von Doppelseite {at + 1}</span>
+            </div>
+            <p style={S.warnung}>
+              Eine einzelne Seite verschiebt jede Blattgrenze dahinter: Was rechts stand, steht
+              danach links. Die Fotoverteilung bleibt, kein Bild geht verloren – bis zum nächsten
+              Auftakt sehen die Doppelseiten aber anders aus.
+            </p>
+          </>
         )}
 
         {/*
@@ -162,25 +231,35 @@ function kurzname(v: Vorlage): string {
   return komma > 0 ? v.name.slice(komma + 1).trim() : v.name;
 }
 
-/** Die Slotgeometrie als Skizze – dieselbe Rechnung wie im Layout. */
-function Skizze({ slots }: { slots: Vorlage['slots'] }) {
+/**
+ * Die Slotgeometrie als Skizze – dieselbe Rechnung wie im Layout.
+ *
+ * `nurLinks` zeigt eine einzelne Buchseite: Halbseiten sind in Linksform
+ * normiert, also auf die ganze Doppelseite bezogen, und werden auf die halbe
+ * Breite beschnitten. Sonst stünde die Skizze einer Einzelseite in einem Kasten,
+ * dessen rechte Hälfte leer bleibt und wie Fläche aussieht, die es nicht gibt.
+ */
+function Skizze({ slots, nurLinks = false }: { slots: Vorlage['slots']; nurLinks?: boolean }) {
+  const breite = nurLinks ? SKIZZE_BREITE / 2 : SKIZZE_BREITE;
   return (
-    <span style={{ ...S.skizze, width: SKIZZE_BREITE, height: SKIZZE_HOEHE }}>
+    <span style={{ ...S.skizze, width: breite, height: SKIZZE_HOEHE }}>
       {slots.map((s, i) => (
         <span
           key={i}
           style={{
             position: 'absolute',
-            left: `${s.x * 100}%`,
+            // Bei einer Halbseite ist der Bezug die Doppelseite, der Kasten aber
+            // eine Seite – die Anteile verdoppeln sich.
+            left: `${s.x * (nurLinks ? 200 : 100)}%`,
             top: `${s.y * 100}%`,
-            width: `${s.w * 100}%`,
+            width: `${s.w * (nurLinks ? 200 : 100)}%`,
             height: `${s.h * 100}%`,
             background: '#cbd5e1',
           }}
         />
       ))}
       {/* Der Falz: Ohne ihn ist eine Doppelseite nicht als solche zu erkennen. */}
-      <span style={S.falz} />
+      {!nurLinks && <span style={S.falz} />}
     </span>
   );
 }
@@ -227,6 +306,32 @@ const S = {
   },
   kachelAn: { borderColor: '#1d4ed8', background: '#eff6ff' },
   kachelName: { fontSize: '0.7rem', color: '#6b7280' },
+  gruppe: {
+    margin: '0.9rem 0 0.4rem',
+    fontSize: '0.7rem',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.04em',
+    color: '#6b7280',
+  },
+  seitenwahl: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+    marginTop: '0.9rem',
+    fontSize: '0.8125rem',
+  },
+  buttonAn: { borderColor: '#1d4ed8', background: '#eff6ff', color: '#1d4ed8', fontWeight: 600 },
+  warnung: {
+    margin: '0.6rem 0 0',
+    fontSize: '0.75rem',
+    color: '#78350f',
+    background: '#fffbeb',
+    border: '1px solid #fde68a',
+    borderRadius: '6px',
+    padding: '0.4rem 0.6rem',
+    lineHeight: 1.5,
+  },
   skizze: {
     position: 'relative' as const,
     display: 'block',

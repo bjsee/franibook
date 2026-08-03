@@ -228,6 +228,40 @@ app.post<{ Body?: { at?: number; templateId?: string; title?: string } }>(
 );
 
 /**
+ * Fügt eine einzelne Buchseite ein, statt einer ganzen Doppelseite.
+ *
+ * `atPage` ist die Buchseite, vor der eingefügt wird – nullbasiert, also `1` für
+ * „nach der ersten Seite". Eine ungerade Zahl trifft eine rechte Seite und kippt
+ * damit die Parität: Jedes Blatt dahinter besteht danach aus anderen zwei
+ * Buchseiten. Die Antwort sagt, wie viele Blätter dabei neu zusammengesetzt und
+ * wie viele leere Halbseiten für die Parität eingeschoben wurden – ein Eingriff,
+ * der zwanzig Blätter umbaut, soll nicht wie einer aussehen, der eine Seite
+ * einfügt.
+ */
+app.post<{ Body?: { atPage?: number; halfId?: string; title?: string } }>(
+  '/api/spreads/page',
+  async (req, reply) => {
+    const atPage = req.body?.atPage ?? project.spreads.length * 2;
+    if (!Number.isFinite(atPage)) return reply.code(400).send({ error: 'atPage ist keine Zahl' });
+
+    const ergebnis = project.insertSinglePage(atPage, {
+      ...(req.body?.halfId ? { halfId: req.body.halfId } : {}),
+      ...(req.body?.title ? { title: req.body.title } : {}),
+    });
+    if (!ergebnis.ok) return reply.code(400).send({ error: ergebnis.error });
+
+    void project.save();
+    return {
+      ok: true,
+      index: ergebnis.index,
+      spreadCount: project.spreads.length,
+      ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+      spread: spreadAntwort(ergebnis.index),
+    };
+  },
+);
+
+/**
  * Nimmt eine Doppelseite aus dem Buch.
  *
  * Ihre Bilder liegen danach im Fotopool – verloren geht keines, denn der Pool

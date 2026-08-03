@@ -43,8 +43,59 @@ function mirror(slots: readonly TemplateSlot[]): TemplateSlot[] {
   return slots.map((s) => ({ ...s, x: 1 - s.x - s.w }));
 }
 
+/**
+ * Halbseite ohne Bildplatz – die leere Buchseite.
+ *
+ * Nicht aus einer Vorlage abgeleitet, denn keine hat null Plätze. Gebraucht wird
+ * sie an zwei Stellen: als eigene Seite, auf der nur Textblöcke stehen, und als
+ * Paritätsausgleich vor einem Blatt, das sich nicht zerlegen lässt.
+ */
+export const HALF_BLANK_ID = 'halb:leer';
+
+/**
+ * Halbseite mit einem Bildplatz, quadratisch und mittig.
+ *
+ * 180 mm im Quadrat, nicht die volle Nutzfläche von 262 mm: Bei 2048 px langer
+ * Kante – dem Maß dieses Bestands – ergeben 262 mm nur 198 dpi und lägen unter
+ * der Mindestauflösung, 180 mm ergeben 289 dpi. Wer ein größeres Bild hat, zieht
+ * den Platz von Hand auf.
+ */
+export const HALF_ONE_ID = 'halb:eins';
+
+/** Die Halbseiten, die es in keiner Vorlage gibt und die von Hand vergeben werden. */
+function ownHalfPages(): HalfPage[] {
+  return [
+    { id: HALF_BLANK_ID, slots: [], from: HALF_BLANK_ID },
+    {
+      id: HALF_ONE_ID,
+      // Linksform und normiert auf die ganze Doppelseite, wie jede Halbseite:
+      // 180 mm im Quadrat, mittig in der linken Seite des 600×300-Rasters.
+      slots: [
+        {
+          id: 'a',
+          x: 63 / 600,
+          y: 60 / 300,
+          w: 180 / 600,
+          h: 180 / 300,
+          prominence: 3,
+          prefers: 'any',
+        },
+      ],
+      from: HALF_ONE_ID,
+    },
+  ];
+}
+
+/** Ob diese Halbseite von Hand vergeben wird und in keiner Vorlage steckt. */
+export function isOwnHalf(id: string): boolean {
+  return id === HALF_BLANK_ID || id === HALF_ONE_ID;
+}
+
 function buildHalves(): HalfPage[] {
   const gesehen = new Map<string, HalfPage>();
+  // Zuerst die eigenen: Ihre Kennung soll stabil sein und nicht davon abhängen,
+  // ob eine Vorlage zufällig dieselbe Geometrie trägt.
+  for (const eigen of ownHalfPages()) gesehen.set(signature(eigen.slots), eigen);
 
   for (const t of allTemplates()) {
     const meta = templateMeta(t.id);
@@ -97,9 +148,20 @@ function ensureHalves(): HalfPage[] {
   return HALVES;
 }
 
-/** Alle Halbseiten, nach Bilderzahl sortiert. */
+/**
+ * Die Halbseiten des Flusses, nach Bilderzahl sortiert.
+ *
+ * Ohne die von Hand vergebenen: Die leere Halbseite in der Anordnungswahl einer
+ * gewöhnlichen Seite wäre eine Falle – sie schickt jedes Bild dieser Seite in
+ * den Pool, und ihre Skizze, ein leeres Rechteck, sagt das niemandem vorher.
+ */
 export function halfPages(): readonly HalfPage[] {
-  return ensureHalves();
+  return ensureHalves().filter((h) => !isOwnHalf(h.id));
+}
+
+/** Die Halbseiten, unter denen eine selbst eingefügte Buchseite wählen kann. */
+export function ownHalves(): readonly HalfPage[] {
+  return ensureHalves().filter((h) => isOwnHalf(h.id));
 }
 
 export function halfPageById(id: string): HalfPage | undefined {

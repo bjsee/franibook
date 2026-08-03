@@ -25,14 +25,18 @@ import {
   type PrintProfile,
   type RenderedCover,
   type RenderedSpread,
+  type SinglePageResult,
   type Spread,
   type SpreadAnchor,
   type Structure,
   type TextBlock,
   BLANK_TEMPLATE_ID,
+  HALF_BLANK_ID,
   allTemplates,
+  insertSinglePage,
   insertTemplates,
   isBlank,
+  ownHalves,
   splitKept,
   bookStats,
   buildStructure,
@@ -1119,6 +1123,82 @@ export class Project {
   }
 
   /**
+   * Fügt eine einzelne Buchseite ein, statt einer ganzen Doppelseite.
+   *
+   * Der Unterschied ist nicht die Größe, sondern die Folge: Eine einzelne Seite
+   * kippt die Parität, und jedes Blatt dahinter besteht danach aus anderen zwei
+   * Buchseiten. Verlustfrei möglich ist das, weil kein Slot der Flussvorlagen
+   * über dem Falz liegt – `layout/single-page.ts` zerlegt die Blätter, schiebt
+   * die neue Seite ein und paart neu. Kein Foto wechselt dabei seinen Platz im
+   * Buch, nur seine Blattzugehörigkeit.
+   *
+   * Der Titel wird ein Textblock und kein Textelement: Auf einer selbst gebauten
+   * Seite gibt es keine Vorlage, an deren Textplatz er hängen könnte – und frei
+   * gesetzt ist er ohnehin, was man von ihm erwartet.
+   *
+   * @param atPage Buchseite, vor der eingefügt wird, nullbasiert.
+   */
+  insertSinglePage(
+    atPage: number,
+    opts: { halfId?: string; title?: string } = {},
+  ): { ok: boolean; error?: string; index: number; bericht?: SinglePageResult['bericht'] } {
+    const halfId = opts.halfId ?? HALF_BLANK_ID;
+    const stelle = Math.min(Math.max(0, Math.trunc(atPage)), this.spreads.length * 2);
+    const id = `eigen-${Date.now().toString(36)}-${stelle}`;
+    const titel = opts.title?.trim();
+
+    // Die Nachbarseite gibt die Hintergrundfarbe: Eine weiße Seite mitten im
+    // Jahrgang 2019 wäre ein Loch in den Jahresfarben.
+    const nachbar = this.spreads[Math.floor(stelle / 2)] ?? this.spreads[this.spreads.length - 1];
+
+    const ergebnis = insertSinglePage(this.spreads, {
+      atPage: stelle,
+      halfId,
+      id,
+      ...(nachbar?.background !== undefined ? { background: nachbar.background } : {}),
+      ...(titel
+        ? {
+            blocks: [
+              {
+                id: `${id}-titel`,
+                content: titel,
+                // Auf der linken Halbseite, im unteren Drittel – dieselbe Lage
+                // wie der Titel eines Gruppenauftakts. Verschieben lässt er
+                // sich danach mit der Maus.
+                rect: { x: 0.08, y: 0.62, w: 0.34, h: 0.09 },
+                weight: 'semibold' as const,
+                fontSizePt: 28,
+                align: 'left' as const,
+              },
+            ],
+          }
+        : {}),
+    });
+
+    if (!ergebnis.ok) {
+      return { ok: false, ...(ergebnis.error ? { error: ergebnis.error } : {}), index: -1 };
+    }
+
+    this.spreads = ergebnis.spreads;
+    const index = this.spreads.findIndex((s) => s.id === id);
+
+    // Anker auf das erste Bild dahinter: Beim Neuanordnen soll das Blatt dort
+    // wieder auftauchen, nicht an einer Zahl.
+    const anker = this.ankerFuer(index + 1);
+    const eigene = new Set(this.spreads[index]?.slots.map((s) => s.photoId));
+    if (anker && !eigene.has(anker.anchor.photoId)) {
+      this.spreads[index]!.anchor = anker.anchor;
+    }
+
+    this.refreshReport();
+    return {
+      ok: true,
+      index,
+      ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+    };
+  }
+
+  /**
    * Der Anker für eine Seite an dieser Stelle.
    *
    * Gesucht wird das erste Foto der Doppelseite, vor der die neue steht – dann
@@ -1187,27 +1267,50 @@ export class Project {
     return { ok: true };
   }
 
-  /** Vorlagen, unter denen eine neu eingefügte Doppelseite wählen kann. */
+  /**
+   * Formen, unter denen eine neu eingefügte Seite wählen kann.
+   *
+   * Zwei Sorten in einer Liste, unterschieden durch `scope`: ganze Doppelseiten
+   * aus der Bibliothek und einzelne Buchseiten aus den eigenen Halbseiten. Die
+   * Oberfläche braucht beides nebeneinander, weil die Wahl „eine Seite oder
+   * zwei" vor allen anderen kommt.
+   */
   insertChoices(): {
     id: string;
     name: string;
+    scope: 'spread' | 'page';
     slotCount: number;
     slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
     hasTitle: boolean;
   }[] {
-    return insertTemplates().map((t) => ({
-      id: t.id,
-      name: t.name,
-      slotCount: t.slots.length,
-      slots: t.slots.map((s) => ({
-        x: s.x,
-        y: s.y,
-        w: s.w,
-        h: s.h,
-        ...(s.bleed ? { bleed: true } : {}),
+    const geometrie = (s: { x: number; y: number; w: number; h: number; bleed?: boolean }) => ({
+      x: s.x,
+      y: s.y,
+      w: s.w,
+      h: s.h,
+      ...(s.bleed ? { bleed: true } : {}),
+    });
+
+    return [
+      ...ownHalves().map((h) => ({
+        id: h.id,
+        name: h.slots.length === 0 ? 'Einzelne Seite, leer' : 'Einzelne Seite mit einem Bild',
+        scope: 'page' as const,
+        slotCount: h.slots.length,
+        slots: h.slots.map(geometrie),
+        // Auf einer einzelnen Seite entsteht der Titel als Textblock – frei
+        // gesetzt, in jeder Größe. Ein Textplatz der Vorlage gibt es dort nicht.
+        hasTitle: true,
       })),
-      hasTitle: (t.textSlots?.length ?? 0) > 0,
-    }));
+      ...insertTemplates().map((t) => ({
+        id: t.id,
+        name: t.name,
+        scope: 'spread' as const,
+        slotCount: t.slots.length,
+        slots: t.slots.map(geometrie),
+        hasTitle: (t.textSlots?.length ?? 0) > 0,
+      })),
+    ];
   }
 
   // ------------------------------------------------- Punktuelle Änderungen

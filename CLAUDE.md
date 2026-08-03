@@ -138,6 +138,16 @@ nicht einen Index, denn der stimmt nach einem Neuaufbau nicht mehr. Im
 Layout-Dokument steht sie als `keep: "<Kennung>"` ohne Inhalt. Begründung:
 `docs/konzept.md`, Abschnitt „Eigene Doppelseiten".
 
+**Auch eine einzelne Buchseite lässt sich einfügen** (`POST /api/spreads/page`,
+`layout/single-page.ts`). Das kippt die Parität: Was rechts stand, steht danach
+links. Verlustfrei möglich ist es, weil kein Slot der Flussvorlagen über dem Falz
+liegt – die Blätter zerfallen in Buchseiten (`templates/halves.ts`), die neue Seite
+wird eingeschoben, und die Folge wird neu gepaart. **Kein Foto wechselt dabei seinen
+Platz im Buch, nur seine Blattzugehörigkeit.** Auftakte, justierte Zeilen und
+festgehaltene Blätter bleiben ganz; vor einem solchen stellt eine leere Halbseite
+die Parität wieder her, und dahinter ist das Buch unverändert. Am echten Buch sind
+davon 1–2 Blätter betroffen, weil 57 von 80 unzerlegbar sind.
+
 **Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
 `layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
 jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die
