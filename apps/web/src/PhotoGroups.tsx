@@ -12,33 +12,21 @@
  * warum man die Liste verliert, in der man gerade war.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type FotoInfo as PhotoRow,
+  fotosLaden,
+  gruppeAendern,
+  gruppeErstellen,
+  gruppeErweitern,
+  gruppeLoeschen,
+  type Gruppe as Group,
+  gruppenLaden,
+  gruppenVerschmelzen,
+  gruppenVorschlagen,
+  gruppierungAufheben,
+} from './api.js';
 import { B, T } from './theme.js';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
-
-interface PhotoRow {
-  id: string;
-  fileName: string;
-  effectiveDate: string | null;
-  dateSource: string;
-  place?: { key: string; label: string };
-  camera?: string;
-  width: number;
-  height: number;
-}
-
-interface Group {
-  id: string;
-  title: string;
-  photoIds: string[];
-  coverPhotoId?: string;
-  origin: 'manual' | 'place' | 'calendar';
-  active: boolean;
-  /** Auftaktseite für diese Gruppe, unabhängig von der Vorgabe. */
-  opener?: boolean;
-  reason?: string;
-  /** Erste Doppelseite mit einem Foto dieser Gruppe; fehlt, wenn keins im Buch steht. */
-  firstSpreadIndex?: number;
-}
 
 type Filter = { kind: 'all' } | { kind: 'ungrouped' } | { kind: 'group'; id: string };
 
@@ -74,10 +62,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
   const [frageVorschlag, setFrageVorschlag] = useState(false);
 
   const load = useCallback(async () => {
-    const [p, g] = await Promise.all([
-      fetch('/api/photos').then((r) => r.json()),
-      fetch('/api/groups').then((r) => r.json()),
-    ]);
+    const [p, g] = await Promise.all([fotosLaden(), gruppenLaden()]);
     setPhotos(p.photos);
     setGroups(g.groups);
   }, []);
@@ -156,15 +141,17 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
     setSelected(next);
   }
 
-  async function call(url: string, init?: RequestInit) {
+  /**
+   * Eine Änderung an den Gruppen.
+   *
+   * Jeder dieser Endpunkte antwortet mit der vollständigen Gruppenliste – die
+   * Ansicht muss also nichts nachladen und nichts von Hand fortschreiben.
+   */
+  async function call<T extends { groups: Group[] }>(tun: () => Promise<T>): Promise<T> {
     setBusy('…');
     try {
-      const res = await fetch(url, {
-        ...init,
-        ...(init?.body ? { headers: { 'content-type': 'application/json' } } : {}),
-      });
-      const data = await res.json();
-      if (data.groups) setGroups(data.groups);
+      const data = await tun();
+      setGroups(data.groups);
       onChanged();
       return data;
     } finally {
@@ -175,20 +162,14 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
   async function gruppieren() {
     const titel = prompt(`${selected.size} Fotos gruppieren als:`);
     if (!titel?.trim()) return;
-    await call('/api/groups', {
-      method: 'POST',
-      body: JSON.stringify({ title: titel.trim(), photoIds: [...selected] }),
-    });
+    await call(() => gruppeErstellen(titel.trim(), [...selected]));
     setSelected(new Set());
     setNote(`Gruppe „${titel.trim()}" angelegt`);
   }
 
   async function vorschlagen(reset = false) {
     setFrageVorschlag(false);
-    const data = await call('/api/groups/suggest', {
-      method: 'POST',
-      body: JSON.stringify({ reset }),
-    });
+    const data = await call(() => gruppenVorschlagen(reset));
     setFilter({ kind: 'all' });
     setNote(
       reset
@@ -202,10 +183,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
   async function umbenennen(g: Group) {
     const titel = prompt('Neuer Titel:', g.title);
     if (!titel?.trim() || titel === g.title) return;
-    await call(`/api/groups/${g.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title: titel.trim() }),
-    });
+    await call(() => gruppeAendern(g.id, { title: titel.trim() }));
   }
 
   /**
@@ -382,10 +360,9 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
               </button>
               <button
                 onClick={() =>
-                  void call('/api/groups/ungroup', {
-                    method: 'POST',
-                    body: JSON.stringify({ photoIds: [...selected] }),
-                  }).then(() => setSelected(new Set()))
+                  void call(() => gruppierungAufheben([...selected])).then(() =>
+                    setSelected(new Set()),
+                  )
                 }
                 style={B.knopf}
               >
@@ -397,10 +374,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                 onChange={(e) => {
                   const id = e.target.value;
                   if (!id) return;
-                  void call(`/api/groups/${id}/add`, {
-                    method: 'POST',
-                    body: JSON.stringify({ photoIds: [...selected] }),
-                  }).then(() => {
+                  void call(() => gruppeErweitern(id, [...selected])).then(() => {
                     setSelected(new Set());
                     setNote(`${selected.size} Fotos zugeordnet`);
                   });
@@ -417,12 +391,11 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 
               {aktiveGruppe && selected.size === 1 && (
                 <button
-                  onClick={() =>
-                    void call(`/api/groups/${aktiveGruppe.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ coverPhotoId: [...selected][0] }),
-                    })
-                  }
+                  onClick={() => {
+                    const [erstes] = [...selected];
+                    if (erstes)
+                      void call(() => gruppeAendern(aktiveGruppe.id, { coverPhotoId: erstes }));
+                  }}
                   style={B.knopf}
                 >
                   Als Hauptbild
@@ -456,10 +429,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                   type="checkbox"
                   checked={aktiveGruppe.active}
                   onChange={(e) =>
-                    void call(`/api/groups/${aktiveGruppe.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ active: e.target.checked }),
-                    })
+                    void call(() => gruppeAendern(aktiveGruppe.id, { active: e.target.checked }))
                   }
                 />
                 gliedert das Buch
@@ -472,12 +442,11 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
               <select
                 value={aktiveGruppe.opener === undefined ? '' : String(aktiveGruppe.opener)}
                 onChange={(e) =>
-                  void call(`/api/groups/${aktiveGruppe.id}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
+                  void call(() =>
+                    gruppeAendern(aktiveGruppe.id, {
                       opener: e.target.value === '' ? null : e.target.value === 'true',
                     }),
-                  })
+                  )
                 }
                 style={B.auswahl}
                 title="Auftaktseite für diese Gruppe"
@@ -497,10 +466,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
                   const ziel = e.target.value;
                   if (!ziel) return;
                   const zielTitel = groups.find((g) => g.id === ziel)?.title ?? '';
-                  void call(`/api/groups/${aktiveGruppe.id}/merge`, {
-                    method: 'POST',
-                    body: JSON.stringify({ targetId: ziel }),
-                  }).then(() => {
+                  void call(() => gruppenVerschmelzen(aktiveGruppe.id, ziel)).then(() => {
                     setFilter({ kind: 'group', id: ziel });
                     setNote(`„${aktiveGruppe.title}" ging in „${zielTitel}" auf`);
                   });
@@ -519,7 +485,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 
               <button
                 onClick={() => {
-                  void call(`/api/groups/${aktiveGruppe.id}`, { method: 'DELETE' }).then(() =>
+                  void call(() => gruppeLoeschen(aktiveGruppe.id)).then(() =>
                     setNote(
                       `„${aktiveGruppe.title}" aufgelöst — die ${aktiveGruppe.photoIds.length} Fotos bleiben, ` +
                         `sind aber nicht mehr gruppiert`,

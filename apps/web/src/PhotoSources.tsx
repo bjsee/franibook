@@ -15,27 +15,17 @@
  * Auskunft dieser Ansicht.
  */
 import { useCallback, useEffect, useState } from 'react';
+import {
+  type Bildquelle as Source,
+  fehlertext,
+  type ImportDiff,
+  neuEinlesen,
+  quelleEntfernen,
+  quelleHinzufuegen,
+  quellenLaden,
+  quelleUmbenennen,
+} from './api.js';
 import { B, T } from './theme.js';
-
-interface Source {
-  id: string;
-  label: string;
-  root: string;
-  addedAt: string;
-  erreichbar: boolean;
-  photoCount: number;
-  /** Fotos dieser Quelle, die derzeit in einer Doppelseite stehen. */
-  inBookCount: number;
-}
-
-interface ImportDiff {
-  neu: string[];
-  verschwunden: string[];
-  unveraendert: number;
-  imBuchVerschwunden: string[];
-  offline: { label: string; photoCount: number }[];
-  photoCount: number;
-}
 
 interface PhotoSourcesProps {
   /** Nach jeder Änderung am Bestand: Projektinfo und Vorschau neu laden. */
@@ -51,10 +41,9 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
   const [fehler, setFehler] = useState<string | null>(null);
 
   const laden = useCallback(() => {
-    fetch('/api/sources')
-      .then((r) => r.json())
-      .then((d: { sources: Source[] }) => setSources(d.sources))
-      .catch((e: unknown) => setFehler(String(e)));
+    quellenLaden()
+      .then((d) => setSources(d.sources))
+      .catch((e: unknown) => setFehler(fehlertext(e)));
   }, []);
 
   useEffect(laden, [laden]);
@@ -72,26 +61,24 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
     return teile.join(', ');
   }
 
-  async function anfrage(
-    was: string,
-    url: string,
-    init: RequestInit,
-  ): Promise<Record<string, unknown> | null> {
+  /**
+   * Eine Änderung am Bestand, mit Statusanzeige.
+   *
+   * Der Aufrufer übergibt den Aufruf als Funktion, damit das Ergebnis seinen
+   * Typ behält – vorher kam hier ein `Record<string, unknown>` heraus, das an
+   * jeder Verwendungsstelle wieder zurechtgebogen werden musste.
+   */
+  async function anfrage<T>(was: string, tun: () => Promise<T>): Promise<T | null> {
     setBusy(was);
     setNote(null);
     setFehler(null);
     try {
-      const res = await fetch(url, init);
-      const d = (await res.json()) as Record<string, unknown>;
-      if (!res.ok) {
-        setFehler(String(d['error'] ?? res.statusText));
-        return null;
-      }
+      const d = await tun();
       laden();
       onChanged();
       return d;
     } catch (e: unknown) {
-      setFehler(String(e));
+      setFehler(fehlertext(e));
       return null;
     } finally {
       setBusy(null);
@@ -101,29 +88,22 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
   async function hinzufuegen() {
     const root = pfad.trim();
     if (!root) return;
-    const d = await anfrage('Lese Ordner ein …', '/api/sources', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ root, ...(name.trim() ? { label: name.trim() } : {}) }),
-    });
+    const d = await anfrage('Lese Ordner ein …', () =>
+      quelleHinzufuegen(root, name.trim() || undefined),
+    );
     if (d) {
       setPfad('');
       setName('');
-      setNote(meldung(d as unknown as ImportDiff));
+      setNote(meldung(d));
     }
   }
 
   async function einlesen(source?: Source) {
     const d = await anfrage(
       source ? `Lese „${source.label}" neu ein …` : 'Lese alle Quellen neu ein …',
-      '/api/import',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(source ? { sourceId: source.id } : {}),
-      },
+      () => neuEinlesen(source ? { sourceId: source.id } : undefined),
     );
-    if (d) setNote(meldung(d as unknown as ImportDiff));
+    if (d) setNote(meldung(d));
   }
 
   async function entfernen(source: Source) {
@@ -141,19 +121,13 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
       return;
     }
 
-    const d = await anfrage(`Entferne „${source.label}" …`, `/api/sources/${source.id}`, {
-      method: 'DELETE',
-    });
-    if (d) setNote(`„${source.label}" entfernt, ${String(d['entfernt'])} Fotos weniger`);
+    const d = await anfrage(`Entferne „${source.label}" …`, () => quelleEntfernen(source.id));
+    if (d) setNote(`„${source.label}" entfernt, ${d.entfernt} Fotos weniger`);
   }
 
   async function umbenennen(source: Source, label: string) {
     if (label.trim() === source.label || !label.trim()) return;
-    await anfrage('Benenne um …', `/api/sources/${source.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ label }),
-    });
+    await anfrage('Benenne um …', () => quelleUmbenennen(source.id, label));
   }
 
   const gesamt = (sources ?? []).reduce((n, q) => n + q.photoCount, 0);

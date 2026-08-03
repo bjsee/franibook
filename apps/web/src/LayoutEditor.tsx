@@ -13,20 +13,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
+import {
+  doppelseiteLaden,
+  fehlertext,
+  type LayoutErgebnis as ApplyResult,
+  layoutAnwenden,
+  layoutLaden,
+} from './api.js';
 import { B, T } from './theme.js';
-
-interface LayoutIssue {
-  severity: 'error' | 'warning';
-  spread?: number;
-  message: string;
-}
-
-interface ApplyResult {
-  ok: boolean;
-  issues: LayoutIssue[];
-  problems: { index: number; photoCount: number; message: string }[];
-  spreadCount: number;
-}
 
 interface PhotoEntry {
   file: string;
@@ -65,8 +59,7 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
 
   const load = useCallback(() => {
     setBusy(true);
-    fetch('/api/book/layout')
-      .then((r) => r.json())
+    layoutLaden()
       .then((d) => {
         setText(JSON.stringify(d, null, 2));
         setDoc(d);
@@ -90,8 +83,7 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
   }, [text]);
 
   useEffect(() => {
-    fetch(`/api/spreads/${cursorSpread}`)
-      .then((r) => (r.ok ? r.json() : null))
+    doppelseiteLaden(cursorSpread)
       .then(setPreview)
       .catch(() => setPreview(null));
   }, [cursorSpread]);
@@ -116,18 +108,13 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
     if (parseError) return;
     setBusy(true);
     try {
-      const res = await fetch('/api/book/layout', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: text,
-      });
-      const data: ApplyResult = await res.json();
+      const data = await layoutAnwenden(text);
       setResult(data);
       if (data.ok) onApplied();
     } catch (e) {
       setResult({
         ok: false,
-        issues: [{ severity: 'error', message: String(e) }],
+        issues: [{ severity: 'error', message: fehlertext(e) }],
         problems: [],
         spreadCount: 0,
       });

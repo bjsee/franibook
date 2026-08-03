@@ -1,0 +1,569 @@
+/**
+ * Der Zugang zum Server.
+ *
+ * Vorher stand `fetch(` in vierzehn Dateien: zehnmal in `App.tsx`, neunmal in
+ * `useSpreadEditor.ts`, dazu drei Ansichten mit je einem eigenen kleinen
+ * `schicke()`-Helfer. Jede Stelle wiederholte dieselben drei Zeilen — Methode,
+ * `content-type`, `JSON.stringify` — und jede behandelte Fehler anders: mal
+ * `res.ok`, mal `data.ok`, mal gar nicht. Ein vergessenes `res.ok` sah aus wie
+ * Erfolg und hinterließ eine Oberfläche, die etwas anderes zeigte als das Buch.
+ *
+ * Hier steht beides genau einmal: die Form der Anfrage und die Form des
+ * Fehlers. Was der Server kann, ist damit an einer Stelle ablesbar.
+ *
+ * Die Antworttypen stehen hier, weil sie den Server beschreiben und nicht die
+ * Ansicht. Drei Ausnahmen bleiben, wo sie sind, weil sie zugleich UI-Formen
+ * sind: `Report`, `TextBlockData` und `SpreadGroup` — als `import type` geholt,
+ * der zur Laufzeit verschwindet.
+ */
+import type {
+  CoverDesign,
+  Crop,
+  LayoutDocument,
+  MoveSource,
+  MoveTarget,
+  PhotoGroup,
+  RenderedCover,
+  RenderedSpread,
+  TimelineFootVariant,
+  TimelineSideVariant,
+} from '@franibook/core';
+import type { Report } from './Kennzahlen.js';
+import type { TextBlockData } from './TextBlocks.js';
+import type { SpreadGroup } from './spread/types.js';
+
+/**
+ * Ein Fehlschlag mit dem Satz, den der Server dazu geschrieben hat.
+ *
+ * Die Endpunkte antworten auf einen fachlichen Konflikt mit `409` und
+ * `{ ok: false, error: '…' }`, auf einen unbrauchbaren Parameter mit `400`.
+ * Der Text ist ein deutscher Satz für die Oberfläche — er wird angezeigt, nicht
+ * übersetzt.
+ */
+export class ApiFehler extends Error {
+  readonly status: number;
+
+  constructor(text: string, status: number) {
+    super(text);
+    this.name = 'ApiFehler';
+    this.status = status;
+  }
+}
+
+/** Der Satz zu einem Fehlschlag, gleich ob vom Server oder aus dem Netz. */
+export function fehlertext(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * Eine Anfrage und ihre Antwort.
+ *
+ * Geworfen wird auch bei `{ ok: false }` mit Status 200: Ein Endpunkt, der
+ * seinen Misserfolg meldet, ist kein Erfolg — und der Aufrufer soll nicht
+ * zwischen zwei Fehlerformen wählen müssen.
+ */
+async function ruf<T>(pfad: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(pfad, init);
+  const roh = await res.text();
+  const daten: unknown = roh ? JSON.parse(roh) : {};
+  const satz = (daten as { error?: string } | null)?.error;
+  const misserfolg = (daten as { ok?: boolean } | null)?.ok === false;
+  if (!res.ok || misserfolg) {
+    throw new ApiFehler(satz ?? `HTTP ${res.status} ${res.statusText}`.trim(), res.status);
+  }
+  return daten as T;
+}
+
+/** Ein GET. */
+function hole<T>(pfad: string): Promise<T> {
+  return ruf<T>(pfad);
+}
+
+/** Ein schreibender Aufruf mit JSON-Rumpf. `body` weglassen heißt: ohne Rumpf. */
+function sende<T>(methode: string, pfad: string, body?: unknown): Promise<T> {
+  return ruf<T>(pfad, {
+    method: methode,
+    ...(body === undefined
+      ? {}
+      : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  });
+}
+
+// ─── Projekt ────────────────────────────────────────────────────────────────
+
+/** Die Einstellungen, die das ganze Buch betreffen. */
+export interface Einstellungen {
+  targetPages: number;
+  chapterOpeners: boolean;
+  groupOpeners: boolean | 'auto';
+  timeline: boolean;
+  timelineStyle: 'foot' | 'side';
+  /** Fassung der Zeichnung, je Achse eine. */
+  timelineFootVariant: TimelineFootVariant;
+  timelineSideVariant: TimelineSideVariant;
+  /** `auto` oder ein Hexwert aus `TIMELINE_ACCENTS`. */
+  timelineAccent: string;
+  background: string;
+  chapterColors: boolean;
+  /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
+  tilt: number;
+  seed: number;
+  birthDate?: string;
+}
+
+/** Was ein Neuanordnen verwerfen würde. */
+export interface Handarbeit {
+  crops: number;
+  neigungen: number;
+  hintergruende: number;
+  zeitstrahl: number;
+  positionen: number;
+  texte: number;
+  festgehalten: number;
+}
+
+export interface Kapitel {
+  year: number;
+  photoCount: number;
+  firstSpreadIndex: number;
+}
+
+export interface ProjectInfo {
+  /** Die Ordner, aus denen das Buch gespeist wird. */
+  sources: { id: string; label: string; root: string; erreichbar: boolean }[];
+  /** Nur die Auflösungsschwellen: Der Editor bewertet damit jede Änderung sofort. */
+  profile: { resolution: { minDpi: number; targetDpi: number } };
+  settings: Einstellungen;
+  photoCount: number;
+  spreadCount: number;
+  skippedVideos: string[];
+  failed: { file: string; reason: string }[];
+  report: Report | null;
+  handwork: Handarbeit;
+  chapters: Kapitel[];
+  groupMarks: { spreadIndex: number; id: string; title: string }[];
+  /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
+  groupsPending: boolean;
+  undatedCount: number;
+}
+
+/** Was ein Import bewirkt hat. */
+export interface ImportDiff {
+  neu: string[];
+  verschwunden: string[];
+  unveraendert: number;
+  imBuchVerschwunden: string[];
+  offline: { label: string; photoCount: number }[];
+  photoCount: number;
+}
+
+export const projektLaden = () => hole<ProjectInfo>('/api/project');
+
+export const einstellungenAendern = (patch: Partial<Einstellungen>) =>
+  sende<unknown>('PATCH', '/api/settings', patch);
+
+/** Liest Bildquellen erneut ein — alle, oder nur eine. */
+export const neuEinlesen = (body?: { limit?: number; sourceId?: string }) =>
+  sende<ImportDiff>('POST', '/api/import', body ?? {});
+
+export const buchErzeugen = (patch: Record<string, unknown>) =>
+  sende<{ report: Report }>('POST', '/api/generate', patch);
+
+// ─── Doppelseiten ───────────────────────────────────────────────────────────
+
+/**
+ * Antwort auf `/api/spreads/:index`.
+ *
+ * `timelineOverride` und `groups` gehören nicht zum Rendered Spread Model – das
+ * eine ist die Entscheidung des Benutzers zu dieser Doppelseite und stellt nur
+ * den Schalter, das andere sagt, welche Gruppen hier liegen.
+ */
+export type SpreadResponse = RenderedSpread & {
+  timelineOverride?: boolean | null;
+  groups?: SpreadGroup[];
+  /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
+  blocks?: TextBlockData[];
+  /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
+  locked?: boolean;
+  /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
+  splittable?: boolean;
+};
+
+/** Was ein Umbau an Seiten hinterlassen hat. */
+export interface Umpaarbericht {
+  neuGepaart: number;
+  leerseiten: number;
+  leereBlaetter: number;
+}
+
+export const doppelseiteLaden = (index: number) => hole<SpreadResponse>(`/api/spreads/${index}`);
+
+export const doppelseiteFesthalten = (index: number, locked: boolean) =>
+  sende<{ spread?: SpreadResponse }>('PATCH', `/api/spreads/${index}/locked`, { locked });
+
+export const doppelseiteLoeschen = (index: number) =>
+  sende<{ ok: boolean; spreadCount: number; photoCount: number }>(
+    'DELETE',
+    `/api/spreads/${index}`,
+  );
+
+export const buchseiteLoeschen = (atPage: number) =>
+  sende<{
+    ok: boolean;
+    spreadCount: number;
+    photoCount: number;
+    bericht?: Umpaarbericht;
+  }>('DELETE', `/api/spreads/page/${atPage}`);
+
+/** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
+export const zeitstrahlSetzen = (index: number, timeline: boolean | null) =>
+  sende<unknown>('PATCH', `/api/spreads/${index}/timeline`, { timeline });
+
+export const hintergrundSetzen = (
+  index: number,
+  patch: { color?: string | null; photoId?: string | null },
+) => sende<{ hinweis?: string }>('PATCH', `/api/spreads/${index}/background`, patch);
+
+/** Papiertöne und Bildkandidaten für den Hintergrund. */
+export const hintergrundOptionenLaden = () =>
+  hole<{
+    colors: { id: string; name: string; hex: string }[];
+    candidates: { photoId: string; fileName: string; dpi: number; taugt: boolean }[];
+    minDpi: number;
+  }>('/api/background');
+
+// ─── Anordnung ──────────────────────────────────────────────────────────────
+
+/** Eine Anordnung für eine ganze Doppelseite. */
+export interface Vorlage {
+  id: string;
+  name: string;
+  slotCount: number;
+  slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
+  current: boolean;
+}
+
+/** Eine Anordnung für eine einzelne Buchseite, immer in Linksform. */
+export interface Halbseite {
+  id: string;
+  slotCount: number;
+  slots: { x: number; y: number; w: number; h: number }[];
+}
+
+export interface Anordnungen {
+  templates: Vorlage[];
+  halves: Halbseite[];
+  current: { left?: string; right?: string };
+  counts: { left: number; right: number };
+}
+
+/** Was eine geänderte Anordnung übrig lässt: Bilder ohne Platz. */
+export interface AnordnungErgebnis {
+  ok: boolean;
+  spread: SpreadResponse;
+  /** Bilder, die keinen Platz mehr fanden und jetzt im Pool liegen. */
+  leftover: string[];
+  report: Report | null;
+}
+
+export const anordnungenLaden = (index: number) =>
+  hole<Anordnungen>(`/api/spreads/${index}/templates`);
+
+export const vorlageSetzen = (index: number, templateId: string) =>
+  sende<AnordnungErgebnis>('PATCH', `/api/spreads/${index}/template`, { templateId });
+
+export const halbseiteSetzen = (index: number, side: 'left' | 'right', halfId: string) =>
+  sende<AnordnungErgebnis>('PATCH', `/api/spreads/${index}/half`, { side, halfId });
+
+// ─── Seiten einfügen ────────────────────────────────────────────────────────
+
+/** Eine Ausgangsform für eine neu eingefügte Seite. */
+export interface EinfuegeVorlage {
+  id: string;
+  name: string;
+  /** Ob diese Form eine ganze Doppelseite belegt oder eine einzelne Buchseite. */
+  scope: 'spread' | 'page';
+  slotCount: number;
+  slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
+  /** Ob ein Titel gesetzt werden kann – nur dann lohnt das Textfeld. */
+  hasTitle: boolean;
+}
+
+export const einfuegeVorlagenLaden = () =>
+  hole<{ templates: EinfuegeVorlage[] }>('/api/templates/insert');
+
+export const doppelseiteEinfuegen = (body: { at: number; templateId: string; title?: string }) =>
+  sende<{ ok: boolean; index: number; spreadCount: number; spread: SpreadResponse }>(
+    'POST',
+    '/api/spreads',
+    body,
+  );
+
+export const buchseiteEinfuegen = (body: { atPage: number; halfId: string; title?: string }) =>
+  sende<{
+    ok: boolean;
+    index: number;
+    spreadCount: number;
+    spread: SpreadResponse;
+    bericht?: Umpaarbericht;
+  }>('POST', '/api/spreads/page', body);
+
+// ─── Bilder auf der Doppelseite ─────────────────────────────────────────────
+
+/** Ein normiertes Rechteck im Endformat – dieselbe Einheit wie in den Vorlagen. */
+export interface NormRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Die Doppelseite, wie sie nach einer Änderung aussieht. */
+type SpreadAntwort = { spread?: SpreadResponse };
+
+export const ausschnittSetzen = (index: number, slotId: string, crop: Crop) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/crop`, {
+    x: crop.x,
+    y: crop.y,
+    w: crop.w,
+    h: crop.h,
+  });
+
+export const ausschnittZuruecksetzen = (index: number, slotId: string) =>
+  sende<SpreadAntwort>('DELETE', `/api/spreads/${index}/slots/${slotId}/crop`);
+
+/** `deg: null` heißt „wieder automatisch", `0` heißt „ausdrücklich gerade". */
+export const neigungSetzen = (index: number, slotId: string, deg: number | null) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/rotate`, { deg });
+
+export const rechteckSetzen = (index: number, slotId: string, rect: NormRect | null) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/rect`, { rect });
+
+/** Was ein Zug im Buch bewegt hat: die betroffenen Doppelseiten, fertig gerendert. */
+export interface Zugergebnis {
+  ok: boolean;
+  touched: number[];
+  spreads: SpreadResponse[];
+  report: Report | null;
+}
+
+export const fotoVerschieben = (source: MoveSource, target: MoveTarget) =>
+  sende<Zugergebnis>('POST', '/api/book/move', { source, target });
+
+// ─── Textblöcke ─────────────────────────────────────────────────────────────
+
+export const textErstellen = (index: number, patch: Partial<TextBlockData>) =>
+  sende<SpreadAntwort & { block?: TextBlockData }>('POST', `/api/spreads/${index}/texts`, patch);
+
+export const textAendern = (index: number, id: string, patch: Partial<TextBlockData>) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/texts/${id}`, patch);
+
+export const textLoeschen = (index: number, id: string) =>
+  sende<SpreadAntwort>('DELETE', `/api/spreads/${index}/texts/${id}`);
+
+// ─── Fotos ──────────────────────────────────────────────────────────────────
+
+/** Ein Bild, das derzeit in keiner Doppelseite steht. */
+export interface PoolFoto {
+  id: string;
+  fileName: string;
+  date: string | null;
+  width: number;
+  height: number;
+}
+
+/**
+ * Was der Server über ein Foto weiß – `PhotoView` aus `project.ts`.
+ *
+ * `effectiveDate` ist das Ergebnis der Datumskaskade, `dateSource` sagt, woher
+ * es stammt (`exif`, `filename`, `interpolated` …). Beides zusammen anzuzeigen
+ * ist der Punkt: Ein interpoliertes Datum sieht sonst so verbindlich aus wie
+ * ein ausgelesenes.
+ */
+export interface FotoInfo {
+  id: string;
+  fileName: string;
+  relPath: string;
+  width: number;
+  height: number;
+  bytes: number;
+  effectiveDate: string | null;
+  dateSource: string;
+  dateConfidence: string;
+  takenAt?: string;
+  gps?: { lat: number; lon: number };
+  place?: { key: string; label: string };
+  camera?: string;
+  issues: { code: string; detail?: string }[];
+}
+
+/** Was das Aussortieren eines Fotos bewirkt hat. */
+export interface AussortierErgebnis {
+  fileName: string;
+  /** Wohin die Datei verschoben wurde. */
+  papierkorb: string;
+  /** Slots im Buch, die dadurch leer stehen. */
+  imBuch: number;
+  spreads: number[];
+  photoCount: number;
+  /** Die betroffenen Doppelseiten, fertig gerendert. */
+  rendered: { index: number; spread: RenderedSpread }[];
+}
+
+export const fotopoolLaden = () => hole<{ photos: PoolFoto[] }>('/api/book/unplaced');
+
+export const fotosDerSeiteLaden = (index: number) =>
+  hole<{ photos: FotoInfo[] }>(`/api/spreads/${index}/photos`);
+
+export const fotosLaden = (nurProbleme = false) =>
+  hole<{ photos: FotoInfo[] }>(`/api/photos${nurProbleme ? '?problems=1' : ''}`);
+
+export const fotoAussortieren = (photoId: string) =>
+  sende<AussortierErgebnis>('DELETE', `/api/photos/${photoId}`);
+
+// ─── Gruppen ────────────────────────────────────────────────────────────────
+
+/**
+ * Eine Fotogruppe, wie der Server sie liefert.
+ *
+ * `firstSpreadIndex` fehlt, wenn keines der Fotos im Buch steht – etwa weil sie
+ * noch im Pool liegen.
+ */
+export type Gruppe = PhotoGroup & { firstSpreadIndex?: number };
+
+type GruppenAntwort = { groups: Gruppe[] };
+
+export const gruppenLaden = () => hole<GruppenAntwort>('/api/groups');
+
+export const gruppenVorschlagen = (reset = false) =>
+  sende<GruppenAntwort & { added: number }>('POST', '/api/groups/suggest', { reset });
+
+export const gruppeErstellen = (title: string, photoIds: string[]) =>
+  sende<GruppenAntwort>('POST', '/api/groups', { title, photoIds });
+
+export const gruppeAendern = (
+  id: string,
+  patch: {
+    title?: string;
+    coverPhotoId?: string;
+    active?: boolean;
+    photoIds?: string[];
+    /** Auftaktseite für diese Gruppe; `null` setzt sie auf die Vorgabe zurück. */
+    opener?: boolean | null;
+  },
+) => sende<GruppenAntwort>('PATCH', `/api/groups/${id}`, patch);
+
+export const gruppeLoeschen = (id: string) => sende<GruppenAntwort>('DELETE', `/api/groups/${id}`);
+
+export const gruppenVerschmelzen = (id: string, targetId: string) =>
+  sende<GruppenAntwort>('POST', `/api/groups/${id}/merge`, { targetId });
+
+export const gruppeErweitern = (id: string, photoIds: string[]) =>
+  sende<GruppenAntwort>('POST', `/api/groups/${id}/add`, { photoIds });
+
+export const gruppierungAufheben = (photoIds: string[]) =>
+  sende<GruppenAntwort>('POST', '/api/groups/ungroup', { photoIds });
+
+// ─── Bildquellen ────────────────────────────────────────────────────────────
+
+export interface Bildquelle {
+  id: string;
+  label: string;
+  root: string;
+  addedAt: string;
+  erreichbar: boolean;
+  photoCount: number;
+  /** Fotos dieser Quelle, die derzeit in einer Doppelseite stehen. */
+  inBookCount: number;
+}
+
+export const quellenLaden = () => hole<{ sources: Bildquelle[] }>('/api/sources');
+
+export const quelleHinzufuegen = (root: string, label?: string) =>
+  sende<{ source: Bildquelle } & ImportDiff>('POST', '/api/sources', {
+    root,
+    ...(label ? { label } : {}),
+  });
+
+export const quelleEntfernen = (id: string) =>
+  sende<{ source: Bildquelle; entfernt: number; imBuch: number }>('DELETE', `/api/sources/${id}`);
+
+export const quelleUmbenennen = (id: string, label: string) =>
+  sende<{ source: Bildquelle }>('PATCH', `/api/sources/${id}`, { label });
+
+// ─── Jahresereignisse ───────────────────────────────────────────────────────
+
+export const jahresereignisseLaden = () =>
+  hole<{ yearEvents: Record<string, string[]> }>('/api/chapters/events');
+
+/**
+ * `angewendet: false` heißt: gespeichert, aber im Buch noch nicht zu sehen —
+ * das Jahr hat keine Auftaktseite, auf der die Zeilen stehen könnten.
+ */
+export const jahresereignisseSpeichern = (year: number, events: string[]) =>
+  sende<{ angewendet: boolean }>('PUT', `/api/chapters/${year}/events`, { events });
+
+// ─── Umschlag ───────────────────────────────────────────────────────────────
+
+export interface Umschlag {
+  design: CoverDesign;
+  cover: RenderedCover;
+  candidates: { photoId: string; label: string }[];
+  hints: string[];
+  profileVerified: boolean;
+}
+
+export const umschlagLaden = () => hole<Umschlag>('/api/cover');
+
+export const umschlagAendern = (patch: Partial<CoverDesign>) =>
+  sende<Umschlag>('PATCH', '/api/cover', patch);
+
+export const umschlagExportieren = () =>
+  sende<{
+    outputPath: string;
+    widthMm: number;
+    heightMm: number;
+    spineMm: number;
+    pageCount: number;
+  }>('POST', '/api/export/cover', {});
+
+// ─── Layout-Dokument und Export ─────────────────────────────────────────────
+
+export interface LayoutProblem {
+  severity: 'error' | 'warning';
+  spread?: number;
+  message: string;
+}
+
+export interface LayoutErgebnis {
+  ok: boolean;
+  issues: LayoutProblem[];
+  problems: { index: number; photoCount: number; message: string }[];
+  spreadCount: number;
+}
+
+export const layoutLaden = () => hole<LayoutDocument>('/api/book/layout');
+
+/**
+ * Das bearbeitete Layout-Dokument, als Rohtext aus dem Editor.
+ *
+ * Hier geht ausnahmsweise kein Objekt hinaus, sondern der Text, den der Benutzer
+ * getippt hat: Er soll genau das prüfen lassen, was im Feld steht. Und die
+ * Antwort ist auch bei `ok: false` eine Auskunft — die Mängelliste ist das
+ * Ergebnis, kein Fehlschlag.
+ */
+export async function layoutAnwenden(rohtext: string): Promise<LayoutErgebnis> {
+  const res = await fetch('/api/book/layout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: rohtext,
+  });
+  return (await res.json()) as LayoutErgebnis;
+}
+
+export const pdfExportieren = (spreadIndex?: number) =>
+  sende<{ outputPath: string; pages: number; images: number }>(
+    'POST',
+    '/api/export/pdf',
+    spreadIndex === undefined ? {} : { spreadIndex },
+  );

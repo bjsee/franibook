@@ -10,16 +10,16 @@
  * sehen, was noch fehlt. Deshalb steht die Zahl der gefüllten Jahrgänge oben.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  fehlertext,
+  jahresereignisseLaden,
+  jahresereignisseSpeichern,
+  type Kapitel,
+} from './api.js';
 import { B, T } from './theme.js';
 
-interface Chapter {
-  year: number;
-  photoCount: number;
-  firstSpreadIndex: number;
-}
-
 interface YearEventsProps {
-  chapters: readonly Chapter[];
+  chapters: readonly Kapitel[];
   /** Springt zur Auftaktseite eines Jahres. */
   onOpen: (spreadIndex: number) => void;
 }
@@ -46,16 +46,15 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
   const gespeichert = useRef<Record<string, string>>({});
 
   const laden = useCallback(() => {
-    fetch('/api/chapters/events')
-      .then((r) => r.json())
-      .then((d: { yearEvents: Record<string, string[]> }) => {
+    jahresereignisseLaden()
+      .then((d) => {
         setEvents(d.yearEvents ?? {});
         gespeichert.current = Object.fromEntries(
           Object.entries(d.yearEvents ?? {}).map(([jahr, zeilen]) => [jahr, zeilen.join('\n')]),
         );
         setGeladen(true);
       })
-      .catch((e: unknown) => setStatus(String(e)));
+      .catch((e: unknown) => setStatus(fehlertext(e)));
   }, []);
 
   useEffect(laden, [laden]);
@@ -70,16 +69,13 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
       .filter((z) => z.length > 0)
       .slice(0, MAX_ZEILEN);
 
-    const res = await fetch(`/api/chapters/${year}/events`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ events: zeilen }),
-    });
-    if (!res.ok) {
+    let d: { angewendet: boolean };
+    try {
+      d = await jahresereignisseSpeichern(year, zeilen);
+    } catch {
       setStatus(`${year} konnte nicht gespeichert werden`);
       return;
     }
-    const d = (await res.json()) as { angewendet: boolean };
     gespeichert.current[key] = zeilen.join('\n');
     setStatus(
       d.angewendet

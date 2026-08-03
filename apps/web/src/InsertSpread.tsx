@@ -13,27 +13,21 @@
  * von ihr abweichen.
  */
 import { useEffect, useState } from 'react';
+import {
+  buchseiteEinfuegen,
+  doppelseiteEinfuegen,
+  type EinfuegeVorlage as Vorlage,
+  einfuegeVorlagenLaden,
+  fehlertext,
+  type Umpaarbericht,
+} from './api.js';
 import { B, T } from './theme.js';
-
-interface Vorlage {
-  id: string;
-  name: string;
-  /** Ob diese Form eine ganze Doppelseite belegt oder eine einzelne Buchseite. */
-  scope: 'spread' | 'page';
-  slotCount: number;
-  slots: { x: number; y: number; w: number; h: number; bleed?: boolean }[];
-  /** Ob ein Titel gesetzt werden kann – nur dann lohnt das Textfeld. */
-  hasTitle: boolean;
-}
 
 interface Props {
   /** Stelle im Buch: 0 heißt ganz vorn, `spreadCount` ganz hinten. */
   at: number;
   spreadCount: number;
-  onEingefuegt: (
-    index: number,
-    bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number },
-  ) => void;
+  onEingefuegt: (index: number, bericht?: Umpaarbericht) => void;
   onAbbrechen: () => void;
   onFehler: (text: string) => void;
 }
@@ -57,9 +51,8 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
   const [seite, setSeite] = useState<'left' | 'right'>('left');
 
   useEffect(() => {
-    fetch('/api/templates/insert')
-      .then((r) => r.json())
-      .then((d: { templates: Vorlage[] }) => {
+    einfuegeVorlagenLaden()
+      .then((d) => {
         setVorlagen(d.templates);
         setGewaehlt(d.templates[0]?.id ?? null);
       })
@@ -88,28 +81,19 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
     const titelText = vorlage.hasTitle && titel.trim() ? { title: titel.trim() } : {};
 
     try {
-      const res = await fetch(einzeln ? '/api/spreads/page' : '/api/spreads', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(
-          einzeln
-            ? { atPage: at * 2 + (seite === 'right' ? 1 : 0), halfId: gewaehlt, ...titelText }
-            : { at, templateId: gewaehlt, ...titelText },
-        ),
-      });
-      const daten = (await res.json()) as {
-        ok?: boolean;
-        index?: number;
-        error?: string;
-        bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
-      };
-      if (!res.ok || !daten.ok) {
-        onFehler(daten.error ?? `Seite nicht eingefügt (HTTP ${res.status})`);
-        return;
+      if (einzeln) {
+        const daten = await buchseiteEinfuegen({
+          atPage: at * 2 + (seite === 'right' ? 1 : 0),
+          halfId: gewaehlt,
+          ...titelText,
+        });
+        onEingefuegt(daten.index ?? at, daten.bericht);
+      } else {
+        const daten = await doppelseiteEinfuegen({ at, templateId: gewaehlt, ...titelText });
+        onEingefuegt(daten.index ?? at);
       }
-      onEingefuegt(daten.index ?? at, daten.bericht);
     } catch (e) {
-      onFehler(`Seite nicht eingefügt: ${String(e)}`);
+      onFehler(`Seite nicht eingefügt: ${fehlertext(e)}`);
     } finally {
       setBusy(false);
     }

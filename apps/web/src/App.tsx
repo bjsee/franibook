@@ -12,10 +12,25 @@
  * damit ein Wechsel der Variante keine Funktion kostet.
  */
 import { useCallback, useEffect, useState } from 'react';
-import type { RenderedSpread, TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
+import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
+import {
+  buchErzeugen,
+  buchseiteLoeschen,
+  doppelseiteFesthalten,
+  doppelseiteLaden,
+  doppelseiteLoeschen,
+  einstellungenAendern,
+  fehlertext,
+  neuEinlesen,
+  pdfExportieren,
+  type ProjectInfo,
+  projektLaden,
+  type SpreadResponse,
+  zeitstrahlSetzen,
+} from './api.js';
 import { B, T } from './theme.js';
-import { Kennzahlen, type Report } from './Kennzahlen.js';
+import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
 import { Overview } from './Overview.js';
@@ -25,72 +40,8 @@ import { PhotoSources } from './PhotoSources.js';
 import { YearEvents } from './YearEvents.js';
 import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
-import type { TextBlockData } from './TextBlocks.js';
-import type { SpreadAussen, SpreadGroup } from './spread/types.js';
+import type { SpreadAussen } from './spread/types.js';
 import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './spread/varianten.js';
-
-/**
- * Antwort auf `/api/spreads/:index`.
- *
- * `timelineOverride` und `groups` gehören nicht zum Rendered Spread Model – das
- * eine ist die Entscheidung des Benutzers zu dieser Doppelseite und stellt nur
- * den Schalter, das andere sagt, welche Gruppen hier liegen.
- */
-type SpreadResponse = RenderedSpread & {
-  timelineOverride?: boolean | null;
-  groups?: SpreadGroup[];
-  /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
-  blocks?: TextBlockData[];
-  /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
-  locked?: boolean;
-  /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
-  splittable?: boolean;
-};
-
-interface ProjectInfo {
-  /** Die Ordner, aus denen das Buch gespeist wird. */
-  sources: { id: string; label: string; root: string; erreichbar: boolean }[];
-  /** Nur die Auflösungsschwellen: Der Editor bewertet damit jede Änderung sofort. */
-  profile: { resolution: { minDpi: number; targetDpi: number } };
-  settings: {
-    targetPages: number;
-    chapterOpeners: boolean;
-    groupOpeners: boolean | 'auto';
-    timeline: boolean;
-    timelineStyle: 'foot' | 'side';
-    /** Fassung der Zeichnung, je Achse eine. */
-    timelineFootVariant: TimelineFootVariant;
-    timelineSideVariant: TimelineSideVariant;
-    /** `auto` oder ein Hexwert aus `TIMELINE_ACCENTS`. */
-    timelineAccent: string;
-    background: string;
-    chapterColors: boolean;
-    /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
-    tilt: number;
-    seed: number;
-    birthDate?: string;
-  };
-  photoCount: number;
-  spreadCount: number;
-  skippedVideos: string[];
-  failed: { file: string; reason: string }[];
-  report: Report | null;
-  /** Was ein Neuanordnen verwerfen würde. */
-  handwork: {
-    crops: number;
-    neigungen: number;
-    hintergruende: number;
-    zeitstrahl: number;
-    positionen: number;
-    texte: number;
-    festgehalten: number;
-  };
-  chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
-  groupMarks: { spreadIndex: number; id: string; title: string }[];
-  /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
-  groupsPending: boolean;
-  undatedCount: number;
-}
 
 type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit' | 'cover';
 
@@ -165,10 +116,9 @@ export function App() {
   const hatZeitstrahl = spread?.timelineOverride !== false;
 
   const loadInfo = useCallback(() => {
-    fetch('/api/project')
-      .then((r) => r.json())
+    projektLaden()
       .then(setInfo)
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => setError(fehlertext(e)));
   }, []);
 
   useEffect(loadInfo, [loadInfo]);
@@ -176,10 +126,9 @@ export function App() {
   useEffect(() => {
     if (view !== 'spread' && !bare) return;
     setSpread(null);
-    fetch(`/api/spreads/${index}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    doppelseiteLaden(index)
       .then(setSpread)
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => setError(fehlertext(e)));
   }, [index, view, bare, renderVersion]);
 
   // Beim Blättern gilt die Auswahl nicht weiter: Slotkennungen wiederholen
@@ -235,11 +184,7 @@ export function App() {
     timelineAccent?: string;
     tilt?: number;
   }) {
-    await fetch('/api/settings', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
+    await einstellungenAendern(patch);
     loadInfo();
     neuRendern();
   }
@@ -254,15 +199,7 @@ export function App() {
     setBusy('Lese Bilder neu ein …');
     setNote(null);
     try {
-      const res = await fetch('/api/import', { method: 'POST' });
-      const d = (await res.json()) as {
-        neu: string[];
-        verschwunden: string[];
-        unveraendert: number;
-        imBuchVerschwunden: string[];
-        offline: { label: string; photoCount: number }[];
-        photoCount: number;
-      };
+      const d = await neuEinlesen();
       loadInfo();
       neuRendern();
       const teile = [
@@ -283,7 +220,7 @@ export function App() {
       }
       setNote(teile.join(', '));
     } catch (e: unknown) {
-      setError(String(e));
+      setError(fehlertext(e));
     } finally {
       setBusy(null);
     }
@@ -298,16 +235,11 @@ export function App() {
    */
   async function setSpreadLocked(locked: boolean) {
     try {
-      const res = await fetch(`/api/spreads/${index}/locked`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ locked }),
-      });
-      const daten = (await res.json()) as { spread?: SpreadResponse };
+      const daten = await doppelseiteFesthalten(index, locked);
       if (daten.spread) setSpread(daten.spread);
       loadInfo();
     } catch (e) {
-      setNote(`Nicht geändert: ${String(e)}`);
+      setNote(`Nicht geändert: ${fehlertext(e)}`);
     }
   }
 
@@ -330,17 +262,12 @@ export function App() {
     }
 
     try {
-      const res = await fetch(`/api/spreads/${index}`, { method: 'DELETE' });
-      const daten = (await res.json()) as { ok?: boolean; error?: string; spreadCount?: number };
-      if (!res.ok || !daten.ok) {
-        setNote(daten.error ?? `Nicht gelöscht (HTTP ${res.status})`);
-        return;
-      }
+      const daten = await doppelseiteLoeschen(index);
       setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
       loadInfo();
       neuRendern();
     } catch (e) {
-      setNote(`Nicht gelöscht: ${String(e)}`);
+      setNote(`Nicht gelöscht: ${fehlertext(e)}`);
     }
   }
 
@@ -371,20 +298,7 @@ export function App() {
     }
 
     try {
-      const res = await fetch(`/api/spreads/page/${index * 2 + (seite === 'right' ? 1 : 0)}`, {
-        method: 'DELETE',
-      });
-      const daten = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        spreadCount?: number;
-        photoCount?: number;
-        bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
-      };
-      if (!res.ok || !daten.ok) {
-        setNote(daten.error ?? `Seite nicht entfernt (HTTP ${res.status})`);
-        return;
-      }
+      const daten = await buchseiteLoeschen(index * 2 + (seite === 'right' ? 1 : 0));
       setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
       loadInfo();
       neuRendern();
@@ -396,17 +310,13 @@ export function App() {
             : ''),
       );
     } catch (e) {
-      setNote(`Seite nicht entfernt: ${String(e)}`);
+      setNote(`Seite nicht entfernt: ${fehlertext(e)}`);
     }
   }
 
   /** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
   async function setSpreadTimeline(value: boolean | null) {
-    await fetch(`/api/spreads/${index}/timeline`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ timeline: value }),
-    });
+    await zeitstrahlSetzen(index, value);
     neuRendern();
   }
 
@@ -414,21 +324,16 @@ export function App() {
     setBusy('Erzeuge Buch neu …');
     setNote(null);
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      const data = await res.json();
+      const data = await buchErzeugen(patch);
       loadInfo();
       neuRendern();
-      const r: Report = data.report;
+      const r = data.report;
       setNote(
         `${r.spreadCount} Doppelseiten, ${r.pageCount} Seiten, ` +
           `${r.photosPerSpread.toFixed(1)} Fotos je Doppelseite`,
       );
     } catch (e) {
-      setNote(`Fehler: ${String(e)}`);
+      setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
       setBusy(null);
     }
@@ -438,15 +343,10 @@ export function App() {
     setBusy(all ? 'Exportiere ganzes Buch …' : 'Exportiere Doppelseite …');
     setNote(null);
     try {
-      const res = await fetch('/api/export/pdf', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(all ? {} : { spreadIndex: index }),
-      });
-      const data = await res.json();
+      const data = await pdfExportieren(all ? undefined : index);
       setNote(`${data.outputPath} — ${data.pages} Seiten, ${data.images} Bilder`);
     } catch (e) {
-      setNote(`Fehler: ${String(e)}`);
+      setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
       setBusy(null);
     }
