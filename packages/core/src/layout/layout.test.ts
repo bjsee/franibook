@@ -4,6 +4,7 @@ import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import { buildStructure } from '../structure/segment.js';
 import { requireTemplate, supportedSlotCounts, templateById } from '../templates/index.js';
+import { isJustified } from '../templates/justified.js';
 import { distributeBudget, groupChapter } from './grouping.js';
 import { assign, slotCost, slotGeometry } from './scoring.js';
 import { generateBook, mehrheitsGruppe } from './generate.js';
@@ -452,11 +453,28 @@ describe('generateBook', () => {
     expect(nummern.length).toBeGreaterThan(0);
   });
 
-  it('wiederholt dasselbe Template nicht unmittelbar', () => {
+  it('wiederholt dieselbe Anordnung nicht unmittelbar', () => {
     const result = generate({ chapterOpeners: false });
+
+    // Was „dieselbe Anordnung“ heißt, hängt an der Herkunft: Bei einer Vorlage
+    // genügt ihre Kennung, denn sie legt jeden Platz fest. Bei justierten Zeilen
+    // sagt die Kennung nur, wie viele Bilder darauf liegen – die Plätze kommen
+    // aus den Bildern, und zwei Seiten mit dreizehn Bildern sehen deshalb
+    // verschieden aus. Verglichen wird dort die Folge der Rechtecke.
+    const form = (spread: (typeof result.spreads)[number]) =>
+      isJustified(spread.templateId)
+        ? spread.slots
+            .map((sl) =>
+              sl.rect
+                ? `${sl.rect.x.toFixed(3)},${sl.rect.y.toFixed(3)},${sl.rect.w.toFixed(3)}`
+                : '',
+            )
+            .join(' ')
+        : spread.templateId;
+
     let wiederholungen = 0;
     for (let i = 1; i < result.spreads.length; i++) {
-      if (result.spreads[i]!.templateId === result.spreads[i - 1]!.templateId) wiederholungen++;
+      if (form(result.spreads[i]!) === form(result.spreads[i - 1]!)) wiederholungen++;
     }
     // Bei gleicher Gruppengröße in Folge ist eine Wiederholung manchmal
     // unvermeidlich, sie darf aber nicht die Regel sein.

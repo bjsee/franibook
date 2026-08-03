@@ -11,6 +11,7 @@ import type { Template, TemplateId, TemplateSlot } from '../model/template.js';
 import { mirrorTemplate } from '../model/template.js';
 import library from './library.json' with { type: 'json' };
 import { PAIR_PREFIX, pairTemplate } from './halves.js';
+import { JUSTIFIED_PREFIX, justifiedTemplate } from './justified.js';
 
 interface RawSlot {
   id: string;
@@ -147,6 +148,9 @@ export function allTemplates(): readonly Template[] {
  * 126 × 126 gäbe – sie wird aus ihrer Kennung gebaut, und weil das
  * deterministisch geschieht, überlebt sie Speichern und Laden wie jede andere.
  *
+ * Dasselbe gilt für `justiert.<n>`: Die Trägervorlage einer Doppelseite mit
+ * justierten Zeilen, deren Plätze aus den Bildern gerechnet werden.
+ *
  * Der Zwischenspeicher hält, was einmal zusammengesetzt wurde: Ein Buch mit
  * achtzig Doppelseiten fragt beim Rendern jede Vorlage mehrfach ab.
  */
@@ -154,13 +158,14 @@ export function templateById(id: TemplateId): Template | undefined {
   const bekannt = BY_ID.get(id);
   if (bekannt) return bekannt;
 
-  if (!id.startsWith(PAIR_PREFIX)) return undefined;
-  const zusammengesetzt = PAIRS.get(id) ?? pairTemplate(id);
+  if (!id.startsWith(PAIR_PREFIX) && !id.startsWith(JUSTIFIED_PREFIX)) return undefined;
+  const zusammengesetzt =
+    PAIRS.get(id) ?? (id.startsWith(PAIR_PREFIX) ? pairTemplate(id) : justifiedTemplate(id));
   if (zusammengesetzt) PAIRS.set(id, zusammengesetzt);
   return zusammengesetzt;
 }
 
-/** Zusammengesetzte Doppelseiten, einmal gebaut und dann behalten. */
+/** Abgeleitete Doppelseiten, einmal gebaut und dann behalten. */
 const PAIRS = new Map<TemplateId, Template>();
 
 export function requireTemplate(id: TemplateId): Template {

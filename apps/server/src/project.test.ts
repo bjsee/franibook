@@ -2,7 +2,14 @@ import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FULL_CROP, MAX_TILT_DEG, groupOpenerTemplates } from '@franibook/core';
+import {
+  FULL_CROP,
+  MAX_TILT_DEG,
+  groupOpenerTemplates,
+  isJustified,
+  justifiedTemplateId,
+  requireTemplate,
+} from '@franibook/core';
 import { Project, migriere } from './project.js';
 import { quellenId } from './sources.js';
 
@@ -248,6 +255,80 @@ describe('setSpreadTemplate', () => {
 
     expect(r.ok).toBe(false);
     expect(p.spreads[0]!.templateId).toBe('spread.3up.two-and-one');
+  });
+});
+
+describe('Justierte Doppelseiten im Projekt', () => {
+  /** Eine Doppelseite mit zwölf gemischt ausgerichteten Bildern. */
+  function projektMitZwoelf(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    const ids: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const id = `p${i}`;
+      ids.push(id);
+      const hoch = i % 2 === 1;
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: hoch ? 3000 : 4000,
+        height: hoch ? 4000 : 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.12up.mosaic-quer',
+        slots: ids.map((id, i) => ({
+          slotId: 'abcdefghijkl'[i]!,
+          photoId: id,
+          crop: { ...FULL_CROP },
+        })),
+      },
+    ];
+    return p;
+  }
+
+  it('bietet justierte Zeilen zur Wahl an, mit der Skizze dieser Bilder', () => {
+    const p = projektMitZwoelf();
+    const wahl = p.templateChoices(0).find((t) => isJustified(t.id));
+
+    expect(wahl).toBeDefined();
+    expect(wahl!.slotCount).toBe(12);
+    // Die Skizze zeigt die gerechneten Rechtecke, nicht das Rückfallgitter der
+    // Trägervorlage – sonst verspräche die Auswahl etwas anderes als das
+    // Ergebnis.
+    const traeger = requireTemplate(wahl!.id);
+    expect(wahl!.slots).not.toEqual(traeger.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })));
+  });
+
+  it('rechnet die Plätze, wenn man justierte Zeilen wählt', () => {
+    const p = projektMitZwoelf();
+    const r = p.setSpreadTemplate(0, justifiedTemplateId(12));
+
+    expect(r.ok).toBe(true);
+    expect(isJustified(p.spreads[0]!.templateId)).toBe(true);
+    expect(p.spreads[0]!.slots.every((sl) => sl.rect !== undefined)).toBe(true);
+  });
+
+  it('zählt gerechnete Rechtecke nicht als Handarbeit', () => {
+    // Sonst warnte die Oberfläche vor dem Neuanordnen, obwohl der Neuaufbau
+    // genau dieselben Rechtecke wiederherstellt.
+    const p = projektMitZwoelf();
+    p.setSpreadTemplate(0, justifiedTemplateId(12));
+
+    expect(p.handwork().positionen).toBe(0);
+  });
+
+  it('zählt Handpositionen weiter, wo eine Vorlage steht', () => {
+    const p = projektMitZwoelf();
+    p.spreads[0]!.slots[0]!.rect = { x: 0.1, y: 0.1, w: 0.2, h: 0.2 };
+
+    expect(p.handwork().positionen).toBe(1);
   });
 });
 

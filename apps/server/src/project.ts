@@ -44,6 +44,11 @@ import {
   generateBook,
   halfPages,
   halvesOfTemplate,
+  isJustified,
+  JUSTIFIED_MAX_PHOTOS,
+  JUSTIFIED_MIN_PHOTOS,
+  justifiedRects,
+  justifiedTemplateId,
   layoutSpread,
   movePhoto,
   addToGroup,
@@ -550,7 +555,10 @@ export class Project {
       // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
       // eine Entscheidung, die der Neuaufbau verwirft.
       neigungen += spread.slots.filter((sl) => sl.rotateDeg !== undefined).length;
-      positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
+      // Justierte Doppelseiten tragen in jedem Slot ein Rechteck, aber
+      // gerechnet und nicht gesetzt: Der Neuaufbau stellt es wieder her.
+      if (!isJustified(spread.templateId))
+        positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
       if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
@@ -1308,26 +1316,51 @@ export class Project {
           return true;
         });
 
-    return auswahl
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        slotCount: t.slots.length,
-        slots: t.slots.map((s) => ({
-          x: s.x,
-          y: s.y,
-          w: s.w,
-          h: s.h,
-          ...(s.bleed ? { bleed: true } : {}),
-        })),
-        current: t.id === spread.templateId,
-      }))
-      .sort(
-        (a, b) =>
-          Math.abs(a.slotCount - belegt) - Math.abs(b.slotCount - belegt) ||
-          a.slotCount - b.slotCount ||
-          a.id.localeCompare(b.id),
-      );
+    const eintraege = auswahl.map((t) => ({
+      id: t.id,
+      name: t.name,
+      slotCount: t.slots.length,
+      slots: t.slots.map((s) => ({
+        x: s.x,
+        y: s.y,
+        w: s.w,
+        h: s.h,
+        ...(s.bleed ? { bleed: true } : {}),
+      })),
+      current: t.id === spread.templateId,
+    }));
+
+    // Justierte Zeilen zur Wahl stellen, aber mit der Skizze dieser Bilder:
+    // Anders als eine Vorlage hat sie keine Form, bevor man weiß, was drin
+    // liegt. Die Trägervorlage würde ihr Rückfallgitter zeigen und damit etwas
+    // versprechen, was hinterher anders aussieht.
+    if (
+      !meta.chapterOnly &&
+      belegt >= JUSTIFIED_MIN_PHOTOS &&
+      belegt <= JUSTIFIED_MAX_PHOTOS &&
+      !hatText
+    ) {
+      const photos = spread.slots
+        .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
+        .filter((p): p is Photo => p !== undefined);
+      const rects = justifiedRects({ photos, profile: this.profile });
+      if (rects.length === photos.length) {
+        eintraege.push({
+          id: justifiedTemplateId(belegt),
+          name: 'Justierte Zeilen',
+          slotCount: belegt,
+          slots: rects,
+          current: isJustified(spread.templateId),
+        });
+      }
+    }
+
+    return eintraege.sort(
+      (a, b) =>
+        Math.abs(a.slotCount - belegt) - Math.abs(b.slotCount - belegt) ||
+        a.slotCount - b.slotCount ||
+        a.id.localeCompare(b.id),
+    );
   }
 
   /**

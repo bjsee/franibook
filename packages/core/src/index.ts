@@ -23,6 +23,7 @@ export * from './structure/suggest-groups.js';
 
 export * from './layout/scoring.js';
 export * from './layout/grouping.js';
+export * from './layout/justify.js';
 export * from './layout/generate.js';
 export * from './layout/document.js';
 export * from './layout/rebuild.js';
@@ -45,3 +46,4 @@ export * from './cover/render-cover.js';
 
 export * from './templates/index.js';
 export * from './templates/halves.js';
+export * from './templates/justified.js';

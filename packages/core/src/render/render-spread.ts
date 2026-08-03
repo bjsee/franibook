@@ -14,6 +14,7 @@ import type { SlotAssignment, Spread, TextBlock } from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
+import { isJustified } from '../templates/justified.js';
 import { spreadHeightMm, spreadWidthMm } from '../print/profile.js';
 import { templateMeta } from '../templates/index.js';
 import {
@@ -172,6 +173,7 @@ function buildImageBox(
   assignment: SlotAssignment,
   photo: Photo,
   ctx: RenderContext,
+  gerechnet: boolean,
 ): ImageBox {
   const { profile } = ctx;
   // Von Hand gesetzte Position schlägt den Platz der Vorlage. Alles Weitere –
@@ -214,7 +216,10 @@ function buildImageBox(
     crop,
     effectiveDpi: dpi,
     ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
-    ...(assignment.rect ? { manualRect: true as const } : {}),
+    // Auf justierten Doppelseiten trägt jeder Slot ein Rechteck, aber keines
+    // davon ist Handarbeit – der Neuaufbau rechnet sie wieder aus. Der Editor
+    // hätte sonst nichts zurückzunehmen und würde es doch anbieten.
+    ...(assignment.rect && !gerechnet ? { manualRect: true as const } : {}),
     warnings,
   };
 }
@@ -286,7 +291,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       continue;
     }
 
-    boxes.push(buildImageBox(slot, assignment, photo, ctx));
+    boxes.push(buildImageBox(slot, assignment, photo, ctx, isJustified(spread.templateId)));
   }
 
   const byTextSlotId = new Map((spread.texts ?? []).map((t) => [t.slotId, t]));
