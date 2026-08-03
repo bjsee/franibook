@@ -359,7 +359,20 @@ export function SpreadView({
             viewBox={`0 0 ${box.wMm} ${box.hMm}`}
             // Ober- und Unterlängen dürfen über den Kasten hinausreichen; ein
             // SVG beschneidet am viewBox, wenn man es nicht abstellt.
-            style={{ ...rect(box), overflow: 'visible' }}
+            style={{
+              ...rect(box),
+              overflow: 'visible',
+              // Der Drehpunkt kommt aus dem Modell: Bei mehrzeiligem Text ist
+              // es der Mittelpunkt des ganzen Blocks, nicht der dieser Zeile.
+              ...(box.rotateDeg
+                ? {
+                    transform: `rotate(${box.rotateDeg}deg)`,
+                    transformOrigin: box.rotateAboutMm
+                      ? `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`
+                      : 'center',
+                  }
+                : {}),
+            }}
           >
             <text
               x={xMm}

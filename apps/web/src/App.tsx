@@ -9,6 +9,7 @@ import { PhotoSources } from './PhotoSources.js';
 import { YearEvents } from './YearEvents.js';
 import { BackgroundPicker } from './BackgroundPicker.js';
 import { SpreadEditor } from './SpreadEditor.js';
+import type { TextBlockData } from './TextBlocks.js';
 
 interface Report {
   photoCount: number;
@@ -42,6 +43,8 @@ interface SpreadGroup {
 type SpreadResponse = RenderedSpread & {
   timelineOverride?: boolean | null;
   groups?: SpreadGroup[];
+  /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
+  blocks?: TextBlockData[];
 };
 
 interface ProjectInfo {

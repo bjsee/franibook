@@ -432,6 +432,90 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     ).toBeLessThan(MAX_DIFF_TIMELINE);
   });
 
+  /**
+   * Gedrehter Text ist die schärfste Probe auf die beiden Adapter.
+   *
+   * Die Vorschau dreht über `transform: rotate()` mit `transform-origin`, das
+   * PDF über `doc.rotate()` mit `origin` – zwei völlig verschiedene Wege zu
+   * derselben Matrix. Kommt dabei ein anderer Drehpunkt heraus, wandert der
+   * Text sichtbar, und bei mehrzeiligem Satz fächern die Zeilen auseinander.
+   * Deshalb steht hier ein Block mit zwei Zeilen und einem schrägen Winkel.
+   */
+  test('ein gedrehter Textblock deckt sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    const angelegt = await request.post('http://127.0.0.1:5174/api/spreads/0/texts', {
+      data: {
+        content: 'Kreta 2015\nzwei Wochen',
+        rect: { x: 0.12, y: 0.16, w: 0.3, h: 0.12 },
+        fontSizePt: 28,
+        weight: 'semibold',
+        rotateDeg: 17,
+      },
+    });
+    expect(angelegt.ok()).toBe(true);
+
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const zeilen = rsm.boxes.filter(
+      (b: { kind: string; rotateDeg?: number }) => b.kind === 'text' && b.rotateDeg === 17,
+    );
+    // Zwei Zeilen, ein Drehpunkt – sonst prüft der Vergleich das Falsche.
+    expect(zeilen).toHaveLength(2);
+    expect(zeilen[0].rotateAboutMm).toEqual(zeilen[1].rotateAboutMm);
+
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    const stage = page.getByTestId('spread');
+    await expect(stage).toBeVisible();
+    await page.waitForFunction(() => {
+      const imgs = Array.from(document.images);
+      return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    // Die Buchschrift muss geladen sein, sonst screenshottet der Test eine
+    // Ersatzschrift gegen die eingebettete – ein Unterschied, der nichts über
+    // die Drehung aussagt.
+    await page.evaluate(() => document.fonts.ready);
+    const shot = await stage.screenshot({ type: 'png' });
+    await writeFile(join(ARTIFACTS, 'preview-text.png'), shot);
+
+    const exportRes = await request.post('http://127.0.0.1:5174/api/export/pdf', {
+      data: { spreadIndex: 0, fileName: 'parity-text.pdf' },
+    });
+    expect(exportRes.ok()).toBe(true);
+
+    const rasterPrefix = join(ARTIFACTS, 'pdf-text');
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r',
+      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      '-singlefile',
+      join(OUT, 'parity-text.pdf'),
+      rasterPrefix,
+    ]);
+
+    const meta = await sharp(shot).metadata();
+    const width = meta.width ?? COMPARE_WIDTH;
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+
+    const a = await toPng(shot, width, height);
+    const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
+    const diff = new PNG({ width, height });
+    const differing = pixelmatch(a.data, b.data, diff.data, width, height, {
+      threshold: PIXEL_THRESHOLD,
+      includeAA: false,
+    });
+    await writeFile(join(ARTIFACTS, 'diff-text.png'), PNG.sync.write(diff));
+
+    const ratio = differing / (width * height);
+    console.log(`Parity (gedrehter Text): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit gedrehtem Text um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_TIMELINE);
+  });
+
   test('PDF trägt die richtigen Boxen', async () => {
     const { stdout } = await execFileAsync('pdfinfo', ['-box', join(OUT, 'parity.pdf')]);
 

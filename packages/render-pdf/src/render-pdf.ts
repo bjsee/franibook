@@ -164,6 +164,22 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
           }
         } else if (box.kind === 'text') {
           const baselineMm = box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt);
+          // Gedreht wird das Koordinatensystem, nicht der Text – dieselbe
+          // Festlegung wie beim Bild. Der Drehpunkt steht im Modell, damit die
+          // Zeilen eines Blocks um denselben Punkt fahren und nicht jede um
+          // ihre eigene Mitte.
+          const drehung = box.rotateDeg ?? 0;
+          if (drehung !== 0) {
+            const dreh = box.rotateAboutMm ?? {
+              xMm: box.xMm + box.wMm / 2,
+              yMm: box.yMm + box.hMm / 2,
+            };
+            doc.save();
+            doc.rotate(drehung, {
+              origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
+            });
+          }
+
           doc
             .font(box.weight)
             .fontSize(box.fontSizePt)
@@ -184,6 +200,8 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
               // Adapters, und genau die darf hier keine getroffen werden.
               baseline: 'alphabetic',
             });
+
+          if (drehung !== 0) doc.restore();
         } else if (box.kind === 'rect') {
           const x = mmToPt(box.xMm + slice.offsetXMm);
           const y = mmToPt(box.yMm);

@@ -47,12 +47,52 @@ export interface TextElement {
   slotId: string;
 }
 
+/**
+ * Ein von Hand gesetzter Textblock.
+ *
+ * Anders als `TextElement`: Das hängt an einem Textplatz der Vorlage und
+ * gehört ihr – Jahreszahl, Ereigniszeilen, Gruppentitel auf dem Auftakt. Ein
+ * `TextBlock` gehört niemandem als dem Benutzer: Er steht, wo er ihn hingesetzt
+ * hat, in der Größe und dem Winkel, die er gewählt hat, und keine Vorlage weiß
+ * von ihm.
+ *
+ * Die Schrift ist immer die Buchschrift – nur ihre beiden Schnitte stehen zur
+ * Wahl. Eine zweite Schriftfamilie hieße eine zweite Datei, und die Parität von
+ * Vorschau und PDF hängt daran, dass beide Adapter dieselbe laden.
+ */
+export interface TextBlock {
+  id: string;
+  content: string;
+  /** Position und Größe, normiert wie ein Templateslot. */
+  rect: { x: number; y: number; w: number; h: number };
+  /** Schnitt der Buchschrift. */
+  weight: 'regular' | 'semibold';
+  /**
+   * Schriftgröße in Punkt.
+   *
+   * Hier ausnahmsweise absolut und nicht als Versalhöhe im Kasten wie in
+   * `TEXT_STYLES`: Die Stile gelten für Vorlagen, die in zwei Buchformaten
+   * bestehen müssen. Wer selbst einen Block setzt, wählt eine Größe.
+   */
+  fontSizePt: number;
+  align: 'left' | 'center' | 'right';
+  /** Ohne Angabe die Textfarbe des Buches, passend zum Hintergrund. */
+  color?: string;
+  /** Drehung in Grad im Uhrzeigersinn, um den Mittelpunkt des Blocks. */
+  rotateDeg?: number;
+}
+
 export interface Spread {
   id: SpreadId;
   index: number;
   templateId: TemplateId;
   slots: SlotAssignment[];
   texts?: TextElement[];
+  /**
+   * Von Hand gesetzte Textblöcke. Überleben den Neuaufbau aus dem
+   * Layout-Dokument nicht – wie jede andere Handarbeit an der Doppelseite.
+   */
+  blocks?: TextBlock[];
   /** Von "Buch neu generieren" ausgenommen. */
   locked?: boolean;
   /**

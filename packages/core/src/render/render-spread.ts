@@ -5,12 +5,12 @@
  * in Millimeter übersetzt werden. Beide Renderer bekommen ausschließlich das
  * Ergebnis – keiner rechnet selbst.
  */
-import { effectiveDpi } from '../geometry/units.js';
+import { effectiveDpi, ptToMm } from '../geometry/units.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
 import type { EffectiveDate } from '../model/date.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
-import type { SlotAssignment, Spread } from '../model/spread.js';
+import type { SlotAssignment, Spread, TextBlock } from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -327,6 +327,12 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     });
   }
 
+  // Von Hand gesetzte Blöcke, nach den Bildern: Wer einen Text auf ein Foto
+  // legt, meint darüber und nicht darunter.
+  for (const block of spread.blocks ?? []) {
+    boxes.push(...buildTextBlock(block, profile, background));
+  }
+
   // Der Zeitstrahl kommt zuletzt: Er liegt im Fußraum, den kein Slot belegt,
   // und soll auch in der Zeichenreihenfolge nichts überdecken.
   if (ctx.timeline && spread.timeline !== false) {
@@ -344,6 +350,45 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     guides: buildGuides(profile),
   };
 }
+
+/**
+ * Boxen eines von Hand gesetzten Textblocks.
+ *
+ * Der Zeilenabstand ist das Anderthalbfache der Schriftgröße – ein üblicher
+ * Wert für Fließtext, und wichtiger: Er steht hier und nicht in einem Renderer.
+ * Sonst entschiede CSS `line-height` gegen pdfkit `lineGap`, und genau das ist
+ * die Art Abweichung, die der Parity-Test aufdecken soll.
+ *
+ * Gedreht wird der ganze Block um seine Mitte, nicht jede Zeile um ihre eigene:
+ * Deshalb tragen alle Zeilen denselben Drehpunkt.
+ */
+function buildTextBlock(block: TextBlock, profile: PrintProfile, background: string): RenderBox[] {
+  const zeilen = block.content.split('\n');
+  if (zeilen.every((z) => z.trim().length === 0)) return [];
+
+  const rect = toMm(block.rect, profile);
+  const zeilenHoeheMm = ptToMm(block.fontSizePt) * 1.5;
+  const mitte = { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
+  const drehung = block.rotateDeg ?? 0;
+
+  return zeilen.map((zeile, i) => ({
+    kind: 'text' as const,
+    xMm: rect.xMm,
+    yMm: rect.yMm + i * zeilenHoeheMm,
+    wMm: rect.wMm,
+    hMm: zeilenHoeheMm,
+    slotId: zeilen.length > 1 ? `${block.id}-${i}` : block.id,
+    content: zeile,
+    fontSizePt: block.fontSizePt,
+    weight: block.weight,
+    align: block.align,
+    color: block.color ?? textColorOn(background, TEXT_DEFAULT_COLOR),
+    ...(drehung !== 0 ? { rotateDeg: drehung, rotateAboutMm: mitte } : {}),
+  }));
+}
+
+/** Farbe eines Textblocks ohne eigene Wahl: dieselbe wie im Fließtext des Buches. */
+const TEXT_DEFAULT_COLOR = '#3f3f46';
 
 /**
  * Sammelt aus der Doppelseite, was der Zeitstrahl braucht.

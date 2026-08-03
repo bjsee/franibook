@@ -30,6 +30,7 @@ import { SpreadView, dragBild, type GuideVisibility } from '@franibook/render-do
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 import { SpreadNeighbors } from './SpreadNeighbors.js';
 import { TemplatePicker } from './TemplatePicker.js';
+import { TextBlocks, type TextBlockData } from './TextBlocks.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
 const SPEICHER_VERZOEGERUNG_MS = 250;
@@ -81,7 +82,7 @@ interface Zug {
 
 interface Props {
   index: number;
-  spread: RenderedSpread;
+  spread: RenderedSpread & { blocks?: TextBlockData[] };
   onSpread: (spread: RenderedSpread) => void;
   imageSrc: (photoId: string) => string;
   guides: GuideVisibility;
@@ -138,6 +139,13 @@ export function SpreadEditor({
    * Umschalter — eine Zusatztaste fände niemand.
    */
   const [werkzeug, setWerkzeug] = useState<'ausschnitt' | 'position'>('ausschnitt');
+  /** Der Textblock, an dem gerade gearbeitet wird. */
+  const [textId, setTextId] = useState<string | null>(null);
+  /** Kasten eines Textblocks, solange er noch nicht beim Server ist. */
+  const [pendingText, setPendingText] = useState<{
+    id: string;
+    rect: { x: number; y: number; w: number; h: number };
+  } | null>(null);
   /** Position und Größe, solange sie noch nicht beim Server sind. */
   const [pendingRect, setPendingRect] = useState<{
     x: number;
@@ -454,6 +462,69 @@ export function SpreadEditor({
     };
     setPendingRect(neu);
     await rechteckSpeichern(gewaehlteBox.slotId, neu);
+  }
+
+  /**
+   * Einen Textblock über die Seite ziehen.
+   *
+   * Derselbe Weg wie beim Bild: Während des Ziehens rechnet die Oberfläche in
+   * normierten Koordinaten und zeigt den Kasten, beim Loslassen geht der Wert
+   * einmal zum Server. Der Text selbst folgt erst danach – die Vorschau
+   * zeichnet nur, was im Modell steht.
+   */
+  function textZiehen(block: TextBlockData, e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setTextId(block.id);
+    onSelect(null);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const start = block.rect;
+
+    const onMove = (ev: PointerEvent) => {
+      setPendingText({
+        id: block.id,
+        rect: {
+          ...start,
+          x: start.x + (ev.clientX - startX) / pxPerMm / trimBreiteMm,
+          y: start.y + (ev.clientY - startY) / pxPerMm / trimHoeheMm,
+        },
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setPendingText((p) => {
+        if (p && p.id === block.id) void textRechteckSpeichern(block.id, p.rect);
+        return p;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  async function textRechteckSpeichern(
+    id: string,
+    rect: { x: number; y: number; w: number; h: number },
+  ) {
+    try {
+      const res = await fetch(`/api/spreads/${index}/texts/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ rect }),
+      });
+      const data = await res.json();
+      if (data.spread) {
+        onSpread(data.spread);
+        setPendingText(null);
+        setBuchVersion((v) => v + 1);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Position nicht gespeichert: ${String(e)}`);
+    }
   }
 
   /** Rechnet eine Box des RSM zurück in normierte Endformatkoordinaten. */
@@ -803,7 +874,14 @@ export function SpreadEditor({
         <PhotoInfoZeile info={gewaehlteBox ? infoVon(gewaehlteBox.photoId) : undefined} />
       )}
 
-      <div ref={stageRef} style={S.stage}>
+      <div ref={stageRef} style={{ ...S.stage, position: 'relative' }}>
+        {/*
+          Die Griffe der Textblöcke liegen als eigene Ebene über der Vorschau
+          und nicht in ihr: Die Vorschau bleibt eine reine Projektion des
+          Modells, die Bearbeitung darüber. Sonst müsste `render-dom` wissen,
+          was ein ausgewählter Block ist – eine Bedienungsentscheidung im
+          Renderer, und genau die soll es dort nicht geben.
+        */}
         <SpreadView
           spread={angezeigt}
           widthPx={stageWidth}
@@ -858,7 +936,49 @@ export function SpreadEditor({
               }
             : {})}
         />
+
+        {(spread.blocks ?? []).map((block) => {
+          const r = pendingText?.id === block.id ? pendingText.rect : block.rect;
+          const gewaehlt = block.id === textId;
+          return (
+            <div
+              key={block.id}
+              onPointerDown={(e) => textZiehen(block, e)}
+              title={`„${block.content.split('\n')[0] ?? ''}" verschieben`}
+              style={{
+                position: 'absolute',
+                left: `${(beschnittMm + r.x * trimBreiteMm) * pxPerMm}px`,
+                top: `${(beschnittMm + r.y * trimHoeheMm) * pxPerMm}px`,
+                width: `${r.w * trimBreiteMm * pxPerMm}px`,
+                height: `${r.h * trimHoeheMm * pxPerMm}px`,
+                border: gewaehlt ? '1px solid #1d4ed8' : '1px dashed rgba(29,78,216,0.35)',
+                background: gewaehlt ? 'rgba(29,78,216,0.06)' : 'transparent',
+                cursor: 'move',
+                touchAction: 'none',
+                ...(block.rotateDeg ? { transform: `rotate(${block.rotateDeg}deg)` } : {}),
+              }}
+            />
+          );
+        })}
       </div>
+
+      <TextBlocks
+        index={index}
+        blocks={spread.blocks ?? []}
+        selectedId={textId}
+        onSelect={(id) => {
+          setTextId(id);
+          // Beide Auswahlen zugleich wären zwei Werkzeuge auf denselben Tasten.
+          if (id) onSelect(null);
+        }}
+        onSpread={(neu) => {
+          onSpread(neu as RenderedSpread);
+          setPendingText(null);
+          setBuchVersion((v) => v + 1);
+          onChanged();
+        }}
+        onFehler={setNote}
+      />
 
       <SpreadNeighbors
         index={index}
