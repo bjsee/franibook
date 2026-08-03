@@ -14,6 +14,7 @@ import type { Template } from '../model/template.js';
 import type { TemplateId } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { templateById, templatesWithSlotCount, templatesWithoutTitle } from '../templates/index.js';
+import { HALF_BLANK_ID, halfPages, pairId } from '../templates/halves.js';
 import {
   JUSTIFIED_MAX_PHOTOS,
   JUSTIFIED_MIN_PHOTOS,
@@ -165,6 +166,52 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
 }
 
 const FULL_AUTO_CROP = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
+
+/**
+ * Die Doppelseite, die eine gewählte Halbseite mit der besten Gegenseite paart.
+ *
+ * Gebraucht, wenn jemand die Anordnung *einer* Buchseite wählt und die
+ * gegenüberliegende keine bekannte Halbseite ist – bei justierten Zeilen etwa,
+ * deren Rechtecke über die ganze Satzbreite gerechnet sind. Für die Gegenseite
+ * muss dann eine Anordnung gefunden werden, und das ist dieselbe Frage wie bei
+ * jeder Vorlagenwahl: welche trägt diese Bilder am besten.
+ *
+ * Gerechnet wird über `layoutSpread` mit den zusammengesetzten Doppelseiten als
+ * Kandidaten. Nicht mit den Halbseiten selbst: Ihre Kennung löst `templateById`
+ * nicht auf, und die Passung gilt ohnehin für die ganze Doppelseite – ein Bild
+ * neben dem Falz hat andere Nachbarn als eines am Außenrand.
+ *
+ * @param restCount Wie viele Bilder auf der Gegenseite liegen.
+ * @returns Paarkennung, oder `undefined`, wenn keine Halbseite so viele Bilder trägt.
+ */
+export function choosePairFor(opts: {
+  side: 'left' | 'right';
+  halfId: string;
+  /** Alle Bilder der Doppelseite – die Zuordnung entscheidet die Passung. */
+  photos: readonly Photo[];
+  restCount: number;
+  profile: PrintProfile;
+  weightOf?: (photoId: PhotoId) => PhotoWeight;
+}): string | undefined {
+  const gegen = halfPages().filter((h) => h.slots.length === opts.restCount);
+  const kandidatenIds = [
+    ...(opts.restCount === 0 ? [HALF_BLANK_ID] : []),
+    ...gegen.map((h) => h.id),
+  ].map((id) => (opts.side === 'left' ? pairId(opts.halfId, id) : pairId(id, opts.halfId)));
+
+  const kandidaten = kandidatenIds
+    .map((id) => templateById(id))
+    .filter((t): t is Template => t !== undefined);
+  if (kandidaten.length === 0) return undefined;
+
+  const ergebnis = layoutSpread({
+    photos: opts.photos,
+    profile: opts.profile,
+    ...(opts.weightOf ? { weightOf: opts.weightOf } : {}),
+    candidates: kandidaten,
+  });
+  return ergebnis?.templateId;
+}
 
 /**
  * Vorsprung, den die Bibliothek behält.

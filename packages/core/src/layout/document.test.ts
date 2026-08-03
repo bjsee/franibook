@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
-import { requireTemplate } from '../templates/index.js';
+import { requireTemplate, templateById } from '../templates/index.js';
+import { HALF_BLANK_ID, halvesOfTemplate } from '../templates/halves.js';
 import { exportLayout, parseLayout } from './document.js';
-import { rebuildSpreads } from './rebuild.js';
+import { choosePairFor, rebuildSpreads } from './rebuild.js';
 import type { Spread } from '../model/spread.js';
 
 const profile = saal as PrintProfile;
@@ -409,5 +410,49 @@ describe('Festgehaltene Doppelseiten im Dokument', () => {
 
     expect(rebuilt.spreads[0]!.templateId).toBe('spread.leer');
     expect(rebuilt.spreads.map((s) => s.index)).toEqual([0, 1]);
+  });
+});
+
+describe('Anordnung einer einzelnen Buchseite', () => {
+  it('nennt eine Hälfte ohne Bildplatz die leere Buchseite', () => {
+    // Vorher stand dort `undefined`, und die Oberfläche schloss daraus, die
+    // Doppelseite reiche über den Falz – womit sich bei jeder Vorlage mit einem
+    // einzigen Bild die freie Seite nicht mehr ändern ließ.
+    const halves = halvesOfTemplate(requireTemplate('spread.1up.hero-left'));
+    expect(halves.left).toBeDefined();
+    expect(halves.right).toBe(HALF_BLANK_ID);
+  });
+
+  it('paart eine gewählte Halbseite mit der besten Gegenseite', () => {
+    // Der Fall, der auffiel: Bei justierten Zeilen gibt es keine Halbseite, die
+    // die Gegenseite beschreibt. Statt aufzugeben wird eine gerechnet.
+    const photos = [...PHOTOS.values()];
+    const paar = choosePairFor({
+      side: 'right',
+      halfId: 'halb:spread.2up.pair:L',
+      photos,
+      restCount: 2,
+      profile,
+    });
+
+    expect(paar).toBeDefined();
+    expect(paar!.startsWith('paar:')).toBe(true);
+    // Die Kennung ist auflösbar, sonst stünde am Ende eine halbe Doppelseite.
+    // Ein Platz aus der gewählten Hälfte, zwei aus der gerechneten Gegenseite.
+    const template = templateById(paar!);
+    expect(template).toBeDefined();
+    expect(template!.slots).toHaveLength(3);
+  });
+
+  it('meldet, wenn keine Anordnung so viele Bilder trägt', () => {
+    expect(
+      choosePairFor({
+        side: 'left',
+        halfId: 'halb:spread.2up.pair:L',
+        photos: [...PHOTOS.values()],
+        restCount: 99,
+        profile,
+      }),
+    ).toBeUndefined();
   });
 });

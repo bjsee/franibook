@@ -193,7 +193,11 @@ export function halvesOfTemplate(template: Template): {
   if (links.length + rechts.length !== template.slots.length) return {};
 
   const finde = (slots: TemplateSlot[]) => {
-    if (slots.length === 0) return undefined;
+    // Eine Hälfte ohne Bildplatz ist die leere Buchseite und keine Unbekannte.
+    // Vorher stand hier `undefined`, und die Oberfläche schloss daraus, die
+    // Doppelseite reiche über den Falz – womit sich bei jeder Vorlage mit einem
+    // einzigen Bild die freie Seite nicht mehr ändern ließ.
+    if (slots.length === 0) return HALF_BLANK_ID;
     const sig = signature(slots);
     return ensureHalves().find((h) => signature(h.slots) === sig)?.id;
   };

@@ -33,11 +33,15 @@ import {
   BLANK_TEMPLATE_ID,
   HALF_BLANK_ID,
   allTemplates,
+  choosePairFor,
+  halfPageById,
   insertSinglePage,
   insertTemplates,
   removeSinglePage,
   isBlank,
+  isOwnHalf,
   ownHalves,
+  pairId,
   splitKept,
   bookStats,
   buildStructure,
@@ -1595,6 +1599,75 @@ export class Project {
     spread.slots = angeordnet.slots;
     this.refreshReport();
     return { ok: true, leftover: angeordnet.leftover };
+  }
+
+  /**
+   * Setzt die Anordnung einer einzelnen Buchseite; die andere bleibt stehen.
+   *
+   * Die Gegenseite muss dafür als Halbseite benannt sein – und genau das ist
+   * nicht immer der Fall. Bei justierten Zeilen liegen die Rechtecke über die
+   * ganze Satzbreite, es gibt dort keine Halbseite, die sie beschreibt. Vorher
+   * scheiterte der Griff daran und die Oberfläche sagte, die Doppelseite reiche
+   * über den Falz; sie war damit nicht mehr seitenweise zu ändern.
+   *
+   * Jetzt wird für die Gegenseite eine Anordnung gerechnet: die Halbseite, die
+   * ihre Bilder am besten trägt (`choosePairFor`). Das ist eine
+   * Layoutentscheidung, aber die verlangte – wer eine Seite neu anordnet, will
+   * die andere nicht verlieren.
+   */
+  setSpreadHalf(
+    index: number,
+    side: 'left' | 'right',
+    halfId: string,
+  ): { ok: boolean; error?: string; leftover: PhotoId[] } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
+    if (!halfPageById(halfId) && !isOwnHalf(halfId)) {
+      return { ok: false, error: `Anordnung ${halfId} gibt es nicht`, leftover: [] };
+    }
+
+    const template = templateById(spread.templateId);
+    const bekannt = template ? halvesOfTemplate(template) : {};
+    const gegenId = side === 'left' ? bekannt.right : bekannt.left;
+
+    // Wie viele Bilder auf der Gegenseite liegen. Über die Geometrie und nicht
+    // über die Slotkennung: Bei justierten Zeilen sagt allein das Rechteck, auf
+    // welcher Buchhälfte ein Bild steht.
+    const geo = new Map((template?.slots ?? []).map((s) => [s.id, s]));
+    const gegenBilder = spread.slots.filter((s) => {
+      if (!s.photoId) return false;
+      const platz = s.rect ?? geo.get(s.slotId);
+      if (!platz) return false;
+      const rechts = platz.x + platz.w / 2 >= 0.5;
+      return side === 'left' ? rechts : !rechts;
+    }).length;
+
+    const photos = spread.slots
+      .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
+      .filter((p): p is Photo => p !== undefined);
+
+    const paarId = gegenId
+      ? side === 'left'
+        ? pairId(halfId, gegenId)
+        : pairId(gegenId, halfId)
+      : choosePairFor({
+          side,
+          halfId,
+          photos,
+          restCount: gegenBilder,
+          profile: this.profile,
+          weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+        });
+
+    if (!paarId) {
+      return {
+        ok: false,
+        error: `Für ${gegenBilder} Bilder auf der Gegenseite gibt es keine Anordnung`,
+        leftover: [],
+      };
+    }
+
+    return this.setSpreadTemplate(index, paarId);
   }
 
   /**
