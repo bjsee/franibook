@@ -7338,6 +7338,560 @@
           "optional": true
         }
       ]
+    },
+    {
+      "id": "spread.3up.portraits",
+      "name": "Drei Hochformate, eines groß",
+      "tags": ["rhythmisch", "asymmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 60,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 154,
+          "y": 60,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 386,
+          "y": 50,
+          "w": 120,
+          "h": 160,
+          "prominence": 3,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.5up.portraits",
+      "name": "Fünf Hochformate",
+      "tags": ["rhythmisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 50,
+          "w": 120,
+          "h": 160,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 154,
+          "y": 50,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 316,
+          "y": 78,
+          "w": 82,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 406,
+          "y": 78,
+          "w": 82,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 496,
+          "y": 78,
+          "w": 82,
+          "h": 110,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.6up.portraits",
+      "name": "Sechs Hochformate",
+      "tags": ["ruhig", "symmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 112,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 202,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 316,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 406,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 496,
+          "y": 68,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.7up.portraits",
+      "name": "Sieben Hochformate, eines groß",
+      "tags": ["dicht", "asymmetrisch"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 60,
+          "w": 120,
+          "h": 160,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 154,
+          "y": 55,
+          "w": 55,
+          "h": 73,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 219,
+          "y": 55,
+          "w": 55,
+          "h": 73,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 154,
+          "y": 155,
+          "w": 55,
+          "h": 73,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 219,
+          "y": 155,
+          "w": 55,
+          "h": 73,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 316,
+          "y": 90,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 448,
+          "y": 90,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.8up.portraits",
+      "name": "Acht Hochformate im Raster",
+      "tags": ["ruhig", "symmetrisch", "dicht"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 42,
+          "y": 26,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 144,
+          "y": 26,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 42,
+          "y": 158,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 144,
+          "y": 158,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 366,
+          "y": 26,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 468,
+          "y": 26,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 366,
+          "y": 158,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 468,
+          "y": 158,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.9up.portraits",
+      "name": "Neun Hochformate",
+      "tags": ["dicht", "ruhig"],
+      "slots": [
+        {
+          "id": "a",
+          "x": 22,
+          "y": 45,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 112,
+          "y": 45,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 202,
+          "y": 45,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 22,
+          "y": 162,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 112,
+          "y": 162,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 202,
+          "y": 162,
+          "w": 80,
+          "h": 107,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 316,
+          "y": 62,
+          "w": 82,
+          "h": 110,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 406,
+          "y": 62,
+          "w": 82,
+          "h": 110,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "i",
+          "x": 496,
+          "y": 62,
+          "w": 82,
+          "h": 110,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.6up.quer",
+      "name": "Jahresauftakt, rechts sechs Querformate",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 316,
+          "y": 60,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 405,
+          "y": 60,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 494,
+          "y": 60,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 316,
+          "y": 133,
+          "w": 84,
+          "h": 63,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 405,
+          "y": 133,
+          "w": 84,
+          "h": 63,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 494,
+          "y": 133,
+          "w": 84,
+          "h": 63,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.6up.gemischt",
+      "name": "Jahresauftakt, rechts drei quer und drei hoch",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 316,
+          "y": 46,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 405,
+          "y": 46,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 494,
+          "y": 46,
+          "w": 84,
+          "h": 63,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 316,
+          "y": 124,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 405,
+          "y": 124,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 494,
+          "y": 124,
+          "w": 84,
+          "h": 112,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
     }
   ]
 }

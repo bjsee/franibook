@@ -10,6 +10,7 @@ import { coverCrop } from '../model/crop.js';
 import type { PhotoWeight } from '../model/date.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { SlotAssignment, Spread } from '../model/spread.js';
+import type { Template } from '../model/template.js';
 import type { TemplateId } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { templateById, templatesWithSlotCount, templatesWithoutTitle } from '../templates/index.js';
@@ -31,6 +32,15 @@ export interface LayoutSpreadOptions {
   templateId?: TemplateId;
   /** Erlaubt Vorlagen mit Überschriftenstreifen. Nur für Seiten mit Text. */
   withText?: boolean;
+  /**
+   * Eigene Auswahlliste statt der Vorlagen des Flusses.
+   *
+   * Für die Jahresauftakte: Sie werden gezielt vergeben und stehen nicht in
+   * `templatesWithoutTitle`. Die Frage – welche dieser Vorlagen trägt diese
+   * Bilder am besten? – ist aber dieselbe, und sie soll nur einmal beantwortet
+   * sein.
+   */
+  candidates?: readonly Template[];
 }
 
 export interface LayoutSpreadResult {
@@ -59,11 +69,13 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   const { photos, profile } = opts;
   const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
 
-  const candidates = opts.templateId
-    ? [templateById(opts.templateId)].filter((t) => t !== undefined)
-    : opts.withText
-      ? templatesWithSlotCount(photos.length)
-      : templatesWithoutTitle(photos.length);
+  const candidates = opts.candidates
+    ? opts.candidates
+    : opts.templateId
+      ? [templateById(opts.templateId)].filter((t) => t !== undefined)
+      : opts.withText
+        ? templatesWithSlotCount(photos.length)
+        : templatesWithoutTitle(photos.length);
 
   if (candidates.length === 0) return undefined;
 

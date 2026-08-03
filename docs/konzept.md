@@ -830,6 +830,39 @@ Fußstrahl nicht, sondern steht zur Wahl.
 
 Bleibt die Auftaktseite einer Gruppe: Sie trägt ihren Titel weiter groß, denn sie besteht aus nichts anderem.
 
+### Ausrichtung: Bibliothek gegen Bestand
+
+Am echten Buch gemessen standen **147 von 872 Bildern (16,9 %) in einem Slot der
+falschen Ausrichtung** — ein 16:9-Bild in einem 3:4-Platz behält 42 % seiner
+Fläche, der Rest fällt seitlich weg. Es sieht dann hochkant aus, obwohl es quer
+aufgenommen wurde.
+
+Die Ursache lag nicht bei den Dateien (kein einziges Foto des Bestands trägt eine
+EXIF-Drehmarke, der Import normalisiert die Maße ohnehin), sondern in der
+Bibliothek: Sie war querlastig. Für drei Bilder gab es **keine einzige** Vorlage
+mit Hochformat-Slots, für fünf, sechs, sieben und neun fast nur quer und
+quadratisch — bei einem Bestand aus 425 quer und 444 hoch.
+
+Zwei Eingriffe, beide gemessen:
+
+- **Sechs Hochformat-Vorlagen** ergänzt (3, 5, 6, 7, 8, 9 Bilder). Die
+  gespiegelten Fassungen entstehen beim Laden von selbst.
+- **Der Jahresauftakt wählt jetzt nach Passung.** Vorher nahm er die erste
+  Vorlage mit passender Bilderzahl, und weil die Sechserfassung nur Hochformate
+  hatte und immer griff, standen dort 47 von 108 Bildern falsch. Es gibt sie
+  jetzt dreimal – hoch, quer, gemischt –, und `layoutSpread` entscheidet.
+
+Ergebnis: **11,7 %**, auf den Auftakten von 49 auf 15 Fälle.
+
+Was bleibt, sind gemischte Gruppen auf großen Mosaikseiten: 94 der verbliebenen
+102 Fälle. Eine Doppelseite mit 13 Bildern in der Mischung 5 quer, 8 hoch
+braucht eine Vorlage mit genau dieser Mischung — bei 13 Bildern gibt es davon
+vierzehn, und der Bedarf verteilt sich über alle. Eine höhere Bestrafung hilft
+dort nicht: Bei 1,0, 1,5 und 2,5 statt 0,6 blieb das Ergebnis auf dieselben 102
+Fälle, die Engine wählt also bereits das Beste, was die Bibliothek hergibt. Der
+nächste Schritt wären Mosaikslots, die ihre Form dem zugewiesenen Bild anpassen —
+ein Konzeptwechsel, kein weiteres Template.
+
 ### Auftaktseiten
 
 Zwei Arten, unterschiedlich geregelt:
