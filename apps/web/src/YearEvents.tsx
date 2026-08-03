@@ -7,9 +7,10 @@
  *
  * Bewusst eine schlichte Liste über alle Jahrgänge statt einer Eingabe je
  * Auftaktseite: Wer die Jahre eines Buches füllt, tut das in einem Zug und will
- * sehen, was noch fehlt.
+ * sehen, was noch fehlt. Deshalb steht die Zahl der gefüllten Jahrgänge oben.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { B, T } from './theme.js';
 
 interface Chapter {
   year: number;
@@ -100,29 +101,28 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
   const gefuellt = chapters.filter((c) => (events[String(c.year)] ?? []).length > 0).length;
 
   return (
-    <div style={S.wrap}>
-      <div style={S.kopf}>
+    <div style={S.flaeche}>
+      <div style={S.spalte}>
         <h2 style={S.titel}>Was geschah in diesem Jahr?</h2>
-        <p style={S.hinweis}>
+        <p style={S.lead}>
           Eine Zeile je Ereignis, bis zu {MAX_ZEILEN}, je höchstens {ZEICHEN_WARNUNG} Zeichen. Sie
           stehen auf der Auftaktseite des Jahres, rechts neben der Jahreszahl. {gefuellt} von{' '}
           {chapters.length} Jahrgängen sind gefüllt.
         </p>
-      </div>
 
-      {status && <p style={S.status}>{status}</p>}
-      {!geladen && <p style={S.hinweis}>lädt …</p>}
+        {status && <p style={S.status}>{status}</p>}
+        {!geladen && <p style={B.leise}>lädt …</p>}
 
-      <div style={S.liste}>
         {chapters.map((c) => {
           const zeilen = events[String(c.year)] ?? [];
+          const lang = zuLang[String(c.year)] ?? [];
           return (
             <div key={c.year} style={S.zeile}>
-              <div style={S.jahrSpalte}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <button onClick={() => onOpen(c.firstSpreadIndex)} style={S.jahr} title="Zur Seite">
                   {c.year}
                 </button>
-                <span style={S.anzahl}>{c.photoCount} Fotos</span>
+                <span style={B.leiser}>{c.photoCount} Fotos</span>
               </div>
               <div>
                 <textarea
@@ -134,9 +134,9 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
                   spellCheck
                   style={S.feld}
                 />
-                {(zuLang[String(c.year)] ?? []).length > 0 && (
-                  <p style={S.warnung}>
-                    zu lang für den Platz: {(zuLang[String(c.year)] ?? []).join(', ')}
+                {lang.length > 0 && (
+                  <p style={{ ...B.leiser, marginTop: 4, color: T.warn }}>
+                    zu lang für den Platz: {lang.join(', ')}
                   </p>
                 )}
               </div>
@@ -149,48 +149,49 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
 }
 
 const S = {
-  wrap: { padding: '1rem 1.25rem', maxWidth: '52rem' },
-  kopf: { marginBottom: '1rem' },
-  titel: { fontSize: '1.1rem', margin: '0 0 0.35rem' },
-  hinweis: { margin: 0, fontSize: '0.85rem', color: '#52525b' },
+  flaeche: { flex: 1, overflowY: 'auto' as const, padding: '28px 32px 48px', minHeight: 0 },
+  spalte: { maxWidth: '52rem' },
+  titel: { fontSize: 24, marginBottom: 6 },
+  lead: { fontSize: 14, color: T.fg2, lineHeight: 1.55, marginBottom: 22 },
   status: {
-    margin: '0 0 0.75rem',
-    fontSize: '0.85rem',
-    color: '#166534',
-    background: '#f0fdf4',
-    padding: '0.35rem 0.6rem',
-    borderRadius: 4,
+    margin: '0 0 12px',
+    padding: '6px 10px',
+    fontSize: 13,
+    color: T.fg2,
+    background: T.bg3,
+    borderRadius: T.rMd,
   },
-  liste: { display: 'flex', flexDirection: 'column' as const, gap: '0.5rem' },
   zeile: {
     display: 'grid',
-    gridTemplateColumns: '6.5rem 1fr',
-    gap: '0.75rem',
+    gridTemplateColumns: '7rem 1fr',
+    gap: 16,
     alignItems: 'start',
-    paddingBottom: '0.5rem',
-    borderBottom: '1px solid #e4e4e7',
+    padding: '14px 0',
+    borderTop: `1px solid ${T.line}`,
   },
-  jahrSpalte: { display: 'flex', flexDirection: 'column' as const, gap: '0.15rem' },
   jahr: {
     background: 'none',
     border: 'none',
     padding: 0,
-    fontSize: '1.35rem',
+    fontFamily: T.display,
+    fontSize: 26,
+    fontWeight: 500,
     fontVariantNumeric: 'tabular-nums' as const,
     cursor: 'pointer',
     textAlign: 'left' as const,
-    color: '#18181b',
+    color: T.fg1,
   },
-  anzahl: { fontSize: '0.75rem', color: '#71717a' },
-  warnung: { margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#b45309' },
   feld: {
     width: '100%',
+    boxSizing: 'border-box' as const,
     font: 'inherit',
-    fontSize: '0.9rem',
-    lineHeight: 1.45,
-    padding: '0.4rem 0.5rem',
-    border: '1px solid #d4d4d8',
-    borderRadius: 4,
+    fontSize: 14,
+    lineHeight: 1.5,
+    padding: '10px 12px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
     resize: 'vertical' as const,
+    color: T.fg1,
+    background: T.bg1,
   },
 } satisfies Record<string, React.CSSProperties>;

@@ -9,8 +9,14 @@
  * Gezeigt werden Skizzen, keine Namen: `spread.4up.grid` sagt niemandem, wie
  * die Seite aussieht. Die Skizze kommt aus derselben Slotgeometrie, aus der
  * auch das Layout entsteht – sie kann deshalb nicht von der Vorlage abweichen.
+ *
+ * Ohne eigenen Aufklapper: Die Komponente ist der Inhalt eines Abschnitts, den
+ * die Spalte bzw. das schwebende Panel um sie herum setzt. Vorher stand hier ein
+ * „Anordnung ändern"-Knopf, hinter dem dieselbe Liste lag — zwei Klicks für
+ * etwas, das in der Spalte ohnehin sichtbar sein kann.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { B, T } from './theme.js';
 
 interface Vorlage {
   id: string;
@@ -45,11 +51,10 @@ interface Props {
 }
 
 /** Seitenverhältnis der Skizze: eine Doppelseite ist zwei Quadrate breit. */
-const SKIZZE_BREITE = 120;
-const SKIZZE_HOEHE = 60;
+const SKIZZE_BREITE = 76;
+const SKIZZE_HOEHE = 38;
 
 export function TemplatePicker({ index, photoCount, version, onApplied, onFehler }: Props) {
-  const [offen, setOffen] = useState(false);
   /**
    * Ganze Doppelseite oder einzelne Seiten.
    *
@@ -62,16 +67,13 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
   const [busy, setBusy] = useState<string | null>(null);
 
   const laden = useCallback(() => {
-    if (!offen) return;
     fetch(`/api/spreads/${index}/templates`)
       .then((r) => r.json())
       .then((d: Antwort) => setDaten(d))
       .catch(() => setDaten(null));
-  }, [index, offen, version]);
+  }, [index, version]);
 
   useEffect(laden, [laden]);
-
-  const vorlagen = daten?.templates ?? null;
 
   /**
    * Setzt eine Anordnung für eine einzelne Seite; die andere bleibt stehen.
@@ -112,13 +114,25 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
     }
   }
 
-  async function anwenden(templateId: string, busyId: string) {
-    setBusy(busyId);
+  async function waehlen(v: Vorlage) {
+    if (v.current) return;
+    // Beim Verkleinern gehen Bilder in den Pool. Das ist umkehrbar, aber nicht
+    // offensichtlich – deshalb vorher gefragt.
+    if (v.slotCount < photoCount) {
+      const zuviel = photoCount - v.slotCount;
+      const ok = window.confirm(
+        `Diese Anordnung hat ${v.slotCount} Plätze, auf der Doppelseite liegen ${photoCount} Bilder. ` +
+          `${zuviel === 1 ? 'Ein Bild wandert' : `${zuviel} Bilder wandern`} in den Fotopool.`,
+      );
+      if (!ok) return;
+    }
+
+    setBusy(v.id);
     try {
       const res = await fetch(`/api/spreads/${index}/template`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ templateId }),
+        body: JSON.stringify({ templateId: v.id }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -133,63 +147,36 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
     }
   }
 
-  async function waehlen(v: Vorlage) {
-    if (v.current) return;
-    // Beim Verkleinern gehen Bilder in den Pool. Das ist umkehrbar, aber nicht
-    // offensichtlich – deshalb vorher gefragt.
-    if (v.slotCount < photoCount) {
-      const zuviel = photoCount - v.slotCount;
-      const ok = window.confirm(
-        `Diese Anordnung hat ${v.slotCount} Plätze, auf der Doppelseite liegen ${photoCount} Bilder. ` +
-          `${zuviel === 1 ? 'Ein Bild wandert' : `${zuviel} Bilder wandern`} in den Fotopool.`,
-      );
-      if (!ok) return;
-    }
-
-    await anwenden(v.id, v.id);
-  }
+  if (daten === null) return <span style={B.leiser}>lade …</span>;
 
   return (
-    <section style={S.bereich}>
-      <div style={S.kopf}>
-        <button onClick={() => setOffen((o) => !o)} style={S.button}>
-          {offen ? 'Anordnung schließen' : 'Anordnung ändern'}
-        </button>
-        {offen && (
-          <>
-            {(
-              [
-                ['seiten', 'einzelne Seite'],
-                ['doppelseite', 'ganze Doppelseite'],
-              ] as const
-            ).map(([wert, text]) => (
-              <button
-                key={wert}
-                onClick={() => setModus(wert)}
-                style={modus === wert ? S.modusAktiv : S.modus}
-              >
-                {text}
-              </button>
-            ))}
-            <span style={S.hint}>
-              Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen
-              dabei neu.
-            </span>
-          </>
-        )}
+    <>
+      <div style={B.segRahmen}>
+        {(
+          [
+            ['seiten', 'einzelne Seite'],
+            ['doppelseite', 'ganze Doppelseite'],
+          ] as const
+        ).map(([wert, text]) => (
+          <button
+            key={wert}
+            onClick={() => setModus(wert)}
+            style={{ ...(modus === wert ? B.segAn : B.segAus), flex: 1, fontSize: 12 }}
+          >
+            {text}
+          </button>
+        ))}
       </div>
 
-      {offen && daten === null && <span style={S.hint}>lade …</span>}
-
-      {offen && daten && modus === 'doppelseite' && (
+      {modus === 'doppelseite' ? (
         <div style={S.gitter}>
-          {(vorlagen ?? []).map((v) => (
+          {daten.templates.map((v) => (
             <button
               key={v.id}
               onClick={() => void waehlen(v)}
               disabled={busy !== null}
               title={`${v.name} · ${v.slotCount} ${v.slotCount === 1 ? 'Bild' : 'Bilder'}`}
-              style={{ ...S.kachel, ...(v.current ? S.kachelAktiv : {}) }}
+              style={{ ...S.kachel, ...(v.current ? S.kachelAn : {}) }}
             >
               <Skizze slots={v.slots} />
               <span style={S.zahl}>
@@ -197,62 +184,63 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
                 {v.slotCount !== photoCount && (
                   <span style={S.abweichung}>
                     {v.slotCount > photoCount
-                      ? ` (+${v.slotCount - photoCount} leer)`
-                      : ` (−${photoCount - v.slotCount})`}
+                      ? ` +${v.slotCount - photoCount}`
+                      : ` −${photoCount - v.slotCount}`}
                   </span>
                 )}
               </span>
             </button>
           ))}
         </div>
+      ) : (
+        (['left', 'right'] as const).map((seite) => {
+          const bisher = seite === 'left' ? daten.counts.left : daten.counts.right;
+          return (
+            <div key={seite}>
+              <p style={S.seitenTitel}>
+                {seite === 'left' ? 'Linke Seite' : 'Rechte Seite'}
+                <span style={S.seitenZahl}>
+                  {bisher} {bisher === 1 ? 'Bild' : 'Bilder'}
+                </span>
+              </p>
+              <div style={S.gitter}>
+                {daten.halves.map((h) => {
+                  const aktiv =
+                    (seite === 'left' ? daten.current.left : daten.current.right) === h.id;
+                  return (
+                    <button
+                      key={`${seite}-${h.id}`}
+                      onClick={() => void halbseiteWaehlen(seite, h)}
+                      disabled={busy !== null}
+                      title={`${h.slotCount} ${h.slotCount === 1 ? 'Bild' : 'Bilder'} auf dieser Seite`}
+                      style={{ ...S.kachel, ...(aktiv ? S.kachelAn : {}) }}
+                    >
+                      {/* Für die rechte Seite gespiegelt – so wie die Engine sie einsetzt. */}
+                      <Skizze slots={h.slots} halb={seite} />
+                      <span style={S.zahl}>
+                        {h.slotCount}
+                        {h.slotCount !== bisher && (
+                          <span style={S.abweichung}>
+                            {h.slotCount > bisher
+                              ? ` +${h.slotCount - bisher}`
+                              : ` −${bisher - h.slotCount}`}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
       )}
 
-      {offen &&
-        daten &&
-        modus === 'seiten' &&
-        (['left', 'right'] as const).map((seite) => (
-          <div key={seite}>
-            <p style={S.seitenTitel}>
-              {seite === 'left' ? 'Linke Seite' : 'Rechte Seite'}
-              <span style={S.seitenZahl}>
-                {(() => {
-                  const n = seite === 'left' ? daten.counts.left : daten.counts.right;
-                  return `${n} ${n === 1 ? 'Bild' : 'Bilder'}`;
-                })()}
-              </span>
-            </p>
-            <div style={S.gitter}>
-              {daten.halves.map((h) => {
-                const aktiv =
-                  (seite === 'left' ? daten.current.left : daten.current.right) === h.id;
-                const bisher = seite === 'left' ? daten.counts.left : daten.counts.right;
-                return (
-                  <button
-                    key={`${seite}-${h.id}`}
-                    onClick={() => void halbseiteWaehlen(seite, h)}
-                    disabled={busy !== null}
-                    title={`${h.slotCount} ${h.slotCount === 1 ? 'Bild' : 'Bilder'} auf dieser Seite`}
-                    style={{ ...S.kachel, ...(aktiv ? S.kachelAktiv : {}) }}
-                  >
-                    {/* Für die rechte Seite gespiegelt – so wie die Engine sie einsetzt. */}
-                    <Skizze slots={h.slots} halb={seite} />
-                    <span style={S.zahl}>
-                      {h.slotCount}
-                      {h.slotCount !== bisher && (
-                        <span style={S.abweichung}>
-                          {h.slotCount > bisher
-                            ? ` (+${h.slotCount - bisher} leer)`
-                            : ` (−${bisher - h.slotCount})`}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-    </section>
+      <span style={B.leiser}>
+        Erst die linke, dann die rechte Seite — oder die ganze Doppelseite. Die Bilder werden den
+        neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.
+      </span>
+    </>
   );
 }
 
@@ -277,7 +265,7 @@ function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'rig
       }
       style={S.svg}
     >
-      <rect x={0} y={0} width={SKIZZE_BREITE} height={SKIZZE_HOEHE} fill="#f9fafb" />
+      <rect x={0} y={0} width={SKIZZE_BREITE} height={SKIZZE_HOEHE} fill="var(--bg-3)" />
       {gezeigt.map((s, i) => (
         <rect
           key={i}
@@ -285,7 +273,7 @@ function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'rig
           y={s.y * SKIZZE_HOEHE}
           width={s.w * SKIZZE_BREITE}
           height={s.h * SKIZZE_HOEHE}
-          fill={s.bleed ? '#c7d2fe' : '#d1d5db'}
+          fill={s.bleed ? 'var(--cyan-100)' : 'var(--warm-300)'}
         />
       ))}
       {/* Die Falzachse: Sie entscheidet mit, ob eine Anordnung taugt. */}
@@ -306,7 +294,7 @@ function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'rig
           y1={0}
           x2={halb === 'left' ? SKIZZE_BREITE / 2 - 0.5 : 0.5}
           y2={SKIZZE_HOEHE}
-          stroke="#9ca3af"
+          stroke="var(--warm-500)"
           strokeWidth={1}
           strokeDasharray="2 2"
         />
@@ -316,69 +304,48 @@ function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'rig
 }
 
 const S = {
-  bereich: { marginTop: '0.75rem' },
-  kopf: { display: 'flex', alignItems: 'center', gap: '0.6rem' },
-  button: {
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
-  },
-  hint: { fontSize: '0.72rem', color: '#9ca3af' },
+  /**
+   * Eigener Scrollbereich, und zwar aus einer gemessenen Not: Die Bibliothek hat
+   * über vierzig Halbseiten, und in einer Spalte von 336 Pixeln sind das rund
+   * zwanzig Reihen Skizzen. Ohne diese Grenze stünden Hintergrund und Text zwei
+   * Bildschirmhöhen weiter unten, und die Anordnung — der Griff, den man am
+   * seltensten braucht — hätte die Spalte für sich.
+   */
   gitter: {
     display: 'flex',
     flexWrap: 'wrap' as const,
-    gap: '0.4rem',
-    marginTop: '0.5rem',
-    maxHeight: '40vh',
+    gap: 6,
+    marginTop: 2,
+    maxHeight: 156,
     overflowY: 'auto' as const,
+    alignContent: 'flex-start' as const,
   },
   kachel: {
-    padding: '3px',
-    border: '1px solid #e5e7eb',
-    borderRadius: '4px',
-    background: '#fff',
+    padding: 3,
+    border: `1px solid ${T.line}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
     cursor: 'pointer',
     lineHeight: 0,
   },
-  kachelAktiv: { borderColor: '#1d4ed8', boxShadow: '0 0 0 2px #dbeafe' },
-  svg: { display: 'block', borderRadius: '2px' },
+  kachelAn: { borderColor: T.cyan },
+  svg: { display: 'block', borderRadius: T.rSm },
   zahl: {
     display: 'block',
-    fontSize: '0.68rem',
-    color: '#6b7280',
-    lineHeight: 1.6,
+    fontSize: 11,
+    color: T.fg3,
+    lineHeight: 1.7,
     fontVariantNumeric: 'tabular-nums' as const,
   },
-  abweichung: { color: '#b45309' },
-  modus: {
-    padding: '0.15rem 0.45rem',
-    border: '1px solid transparent',
-    borderRadius: '4px',
-    background: 'none',
-    color: '#6b7280',
-    cursor: 'pointer',
-    fontSize: '0.74rem',
-  },
-  modusAktiv: {
-    padding: '0.15rem 0.45rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    background: '#f9fafb',
-    color: '#111827',
-    cursor: 'pointer',
-    fontSize: '0.74rem',
-    fontWeight: 600,
-  },
+  abweichung: { color: T.warn },
   seitenTitel: {
     display: 'flex',
-    gap: '0.5rem',
+    gap: 8,
     alignItems: 'baseline',
-    fontSize: '0.78rem',
+    fontSize: 12,
     fontWeight: 600,
-    margin: '0.7rem 0 0',
+    margin: '8px 0 4px',
+    color: T.fg2,
   },
-  seitenZahl: { fontWeight: 400, color: '#9ca3af', fontSize: '0.72rem' },
+  seitenZahl: { fontWeight: 400, color: T.fg4, fontSize: 11 },
 } satisfies Record<string, React.CSSProperties>;

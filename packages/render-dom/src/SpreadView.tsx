@@ -77,12 +77,23 @@ export interface SpreadViewProps {
   slotOverlay?: (slot: { slotId: string; kind: 'image' | 'empty' }) => ReactNode;
 }
 
+/**
+ * Die Hilfslinien.
+ *
+ * Warme Töne statt Blau, und zwar aus einem inhaltlichen Grund: Diese Linien
+ * liegen über Fotos, und ein gesättigtes Blau daneben verschiebt, wie man deren
+ * Farbstich einschätzt. Nur die Beschnittkante bleibt rot – sie ist die eine
+ * Grenze, hinter der Fläche verloren geht.
+ *
+ * Der PDF-Renderer kennt Hilfslinien nicht; sie sind reine Bildschirmsache und
+ * damit keine Parity-Frage.
+ */
 const GUIDE_STYLES: Record<Guide['kind'], CSSProperties> = {
-  bleed: { outline: '1px solid rgba(220, 38, 38, 0.5)' },
-  trim: { outline: '1px solid rgba(37, 99, 235, 0.9)' },
-  safety: { outline: '1px dashed rgba(37, 99, 235, 0.45)' },
-  'gutter-zone': { background: 'rgba(120, 120, 120, 0.12)' },
-  gutter: { borderLeft: '1px dashed rgba(0, 0, 0, 0.5)' },
+  bleed: { outline: '1px solid rgba(185, 68, 43, 0.5)' },
+  trim: { outline: '1px solid rgba(136, 124, 114, 0.9)' },
+  safety: { outline: '1px dashed rgba(136, 124, 114, 0.55)' },
+  'gutter-zone': { background: 'rgba(84, 76, 70, 0.07)' },
+  gutter: { borderLeft: '1px dashed rgba(84, 76, 70, 0.45)' },
 };
 
 /**
@@ -136,14 +147,14 @@ export function dragBild(): HTMLElement {
     width: '28px',
     height: '28px',
     borderRadius: '5px',
-    background: '#1d4ed8',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+    background: '#00afcb',
+    boxShadow: '0 2px 6px rgba(84,76,70,0.35)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'none',
   } satisfies Partial<CSSStyleDeclaration>);
-  // Ein Bildsymbol: Rahmen mit Horizont und Sonne, in Weiß auf dem Blau.
+  // Ein Bildsymbol: Rahmen mit Horizont und Sonne, in Weiß auf dem Türkis.
   el.innerHTML =
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
@@ -274,13 +285,13 @@ export function SpreadView({
               userSelect: onSlotPointerDown ? 'none' : undefined,
               touchAction: onSlotPointerDown ? 'none' : undefined,
               background: missing
-                ? 'repeating-linear-gradient(45deg,#fee,#fee 6px,#fdd 6px,#fdd 12px)'
+                ? 'repeating-linear-gradient(45deg,#fbf1ee,#fbf1ee 6px,#f3ded8 6px,#f3ded8 12px)'
                 : undefined,
               outline:
                 selectedSlotId === box.slotId
-                  ? '2px solid #2563eb'
+                  ? '2px solid #00afcb'
                   : guides.diagnostics && severity !== 'none'
-                    ? `2px solid ${severity === 'error' ? '#dc2626' : '#f59e0b'}`
+                    ? `2px solid ${severity === 'error' ? '#b9442b' : '#c98a14'}`
                     : undefined,
               outlineOffset: '-2px',
             }}
@@ -305,10 +316,10 @@ export function SpreadView({
                   color: '#fff',
                   background:
                     severity === 'error'
-                      ? '#dc2626'
+                      ? '#b9442b'
                       : severity === 'warn'
-                        ? '#f59e0b'
-                        : 'rgba(0,0,0,0.6)',
+                        ? '#c98a14'
+                        : 'rgba(84,76,70,0.7)',
                 }}
               >
                 {box.slotId} · {Math.round(box.effectiveDpi)} dpi
@@ -328,9 +339,9 @@ export function SpreadView({
             {...dragProps(box.slotId, false)}
             style={{
               ...rect(box),
-              border: '1px dashed rgba(0,0,0,0.25)',
+              border: '1px dashed rgba(84,76,70,0.25)',
               cursor: onSlotClick ? 'pointer' : undefined,
-              outline: selectedSlotId === box.slotId ? '2px solid #2563eb' : undefined,
+              outline: selectedSlotId === box.slotId ? '2px solid #00afcb' : undefined,
               outlineOffset: '-2px',
             }}
           >

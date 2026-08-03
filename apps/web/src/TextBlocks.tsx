@@ -10,11 +10,12 @@
  * zweite Familie hieße eine zweite Datei, und die Parität von Vorschau und PDF
  * hängt daran, dass beide Adapter dieselbe laden.
  *
- * Verschoben und gedreht wird auf der Bühne, nicht hier: Diese Leiste hält den
+ * Verschoben und gedreht wird auf der Bühne, nicht hier: Diese Felder halten den
  * Text und seine Maße, die Lage bestimmt die Hand.
  */
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, type FontFamilyId, fontFamily } from '@franibook/core';
+import { B, T } from './theme.js';
 
 /**
  * Verzögerung, bis ein Reglerwert zum Server geht.
@@ -106,9 +107,8 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
   /**
    * Reglerwert übernehmen: sofort anzeigen, verzögert senden.
    *
-   * Dieselbe Verzögerung wie beim Ausschnitt im Editor. Der Timer wird bei
-   * jeder Bewegung neu gesetzt, es geht also genau eine Anfrage heraus – die
-   * mit dem Wert, bei dem die Hand stehen geblieben ist.
+   * Der Timer wird bei jeder Bewegung neu gesetzt, es geht also genau eine
+   * Anfrage heraus – die mit dem Wert, bei dem die Hand stehen geblieben ist.
    */
   function reglerSetzen(patch: { rotateDeg?: number; fontSizePt?: number }) {
     setRegler((r) => ({ ...r, ...patch }));
@@ -126,36 +126,32 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
   }
 
   return (
-    <section style={S.bereich}>
-      <div style={S.kopf}>
-        <button onClick={() => void anlegen()} style={S.button}>
-          Text hinzufügen
-        </button>
+    <>
+      <button onClick={() => void anlegen()} style={S.breit}>
+        Text hinzufügen
+      </button>
 
-        {blocks.length > 0 && (
-          <span style={S.liste}>
-            {blocks.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => onSelect(b.id === selectedId ? null : b.id)}
-                title={b.content || '(leer)'}
-                style={b.id === selectedId ? S.chipAktiv : S.chip}
-              >
-                {b.content.split('\n')[0]?.slice(0, 18) || '(leer)'}
-              </button>
-            ))}
-          </span>
-        )}
-
-        {blocks.length === 0 && (
-          <span style={S.hint}>
-            Für das, was kein Automatismus weiß — eine Zeile zum Bild, ein Zitat, ein Datum.
-          </span>
-        )}
-      </div>
+      {blocks.length === 0 ? (
+        <span style={B.leiser}>
+          Für das, was kein Automatismus weiß — eine Zeile zum Bild, ein Zitat, ein Datum.
+        </span>
+      ) : (
+        <div style={S.chips}>
+          {blocks.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => onSelect(b.id === selectedId ? null : b.id)}
+              title={b.content || '(leer)'}
+              style={b.id === selectedId ? B.chipAn : B.chip}
+            >
+              {b.content.split('\n')[0]?.slice(0, 18) || '(leer)'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {gewaehlt && (
-        <div style={S.zeile}>
+        <div style={S.felder}>
           <textarea
             value={entwurf ?? gewaehlt.content}
             onChange={(e) => setEntwurf(e.target.value)}
@@ -169,26 +165,46 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
             style={S.feld}
           />
 
-          <label style={S.check}>
-            Größe
-            <input
-              type="number"
-              min={5}
-              max={200}
-              step={0.5}
-              value={regler?.fontSizePt ?? gewaehlt.fontSizePt}
-              onChange={(e) => reglerSetzen({ fontSizePt: Number(e.target.value) })}
-              style={S.zahl}
-            />
-            pt
-          </label>
+          <div style={S.zeile}>
+            <label style={{ ...B.haken, flex: 1 }}>
+              Größe
+              <input
+                type="number"
+                min={5}
+                max={200}
+                step={0.5}
+                value={regler?.fontSizePt ?? gewaehlt.fontSizePt}
+                onChange={(e) => reglerSetzen({ fontSizePt: Number(e.target.value) })}
+                style={S.zahl}
+              />
+              pt
+            </label>
+            <label style={{ ...B.haken, flex: 1 }}>
+              Satz
+              <select
+                value={gewaehlt.align}
+                onChange={(e) =>
+                  void aendern({ align: e.target.value as 'left' | 'center' | 'right' })
+                }
+                style={S.auswahl}
+              >
+                <option value="left">links</option>
+                <option value="center">zentriert</option>
+                <option value="right">rechts</option>
+              </select>
+            </label>
+          </div>
 
-          <label style={S.check}>
+          <label style={B.haken}>
             Schrift
             <select
               value={gewaehlt.family ?? 'sans'}
               onChange={(e) => void aendern({ family: e.target.value as FontFamilyId })}
-              style={{ fontFamily: fontFamily(gewaehlt.family ?? 'sans').cssName }}
+              style={{
+                ...S.auswahl,
+                flex: 1,
+                fontFamily: fontFamily(gewaehlt.family ?? 'sans').cssName,
+              }}
             >
               {FONT_FAMILIES.map((f) => (
                 // Jeder Eintrag in seiner eigenen Schrift: Namen wie „Serife"
@@ -202,11 +218,12 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
 
           {/* Nur zeigen, wo es etwas zu wählen gibt – Abril hat einen Schnitt. */}
           {fontFamily(gewaehlt.family ?? 'sans').weights.length > 1 && (
-            <label style={S.check}>
+            <label style={B.haken}>
               Schnitt
               <select
                 value={gewaehlt.weight}
                 onChange={(e) => void aendern({ weight: e.target.value as 'regular' | 'semibold' })}
+                style={{ ...S.auswahl, flex: 1 }}
               >
                 <option value="regular">normal</option>
                 <option value="semibold">halbfett</option>
@@ -214,25 +231,11 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
             </label>
           )}
 
-          <label style={S.check}>
-            Satz
-            <select
-              value={gewaehlt.align}
-              onChange={(e) =>
-                void aendern({ align: e.target.value as 'left' | 'center' | 'right' })
-              }
-            >
-              <option value="left">links</option>
-              <option value="center">zentriert</option>
-              <option value="right">rechts</option>
-            </select>
-          </label>
-
           {/*
             Der Winkel als Regler und als Zahl: Der Regler ist zum Suchen, die
             Zahl zum Treffen — 90° stellt man nicht mit der Maus ein.
           */}
-          <label style={S.check} title="Drehung im Uhrzeigersinn">
+          <label style={B.haken} title="Drehung im Uhrzeigersinn">
             Drehung
             <input
               type="range"
@@ -241,7 +244,7 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
               step={1}
               value={regler?.rotateDeg ?? gewaehlt.rotateDeg ?? 0}
               onChange={(e) => reglerSetzen({ rotateDeg: Number(e.target.value) })}
-              style={S.regler}
+              style={{ flex: 1, minWidth: 0 }}
             />
             <input
               type="number"
@@ -255,91 +258,67 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
             °
           </label>
 
-          <button onClick={() => void entfernen()} style={S.weg}>
-            Entfernen
+          <button onClick={() => void entfernen()} style={{ ...B.knopfWeg, textAlign: 'left' }}>
+            Textblock entfernen
           </button>
         </div>
       )}
-    </section>
+    </>
   );
 }
 
 const S = {
-  bereich: { marginTop: '0.75rem' },
-  kopf: { display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' as const },
-  liste: { display: 'flex', gap: '0.3rem', flexWrap: 'wrap' as const },
-  hint: { fontSize: '0.72rem', color: '#9ca3af' },
-  button: {
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    background: '#fff',
+  breit: {
+    font: 'inherit',
+    fontSize: 13,
+    padding: '9px 12px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
+    color: T.fg1,
     cursor: 'pointer',
-    fontSize: '0.78rem',
+    textAlign: 'left' as const,
   },
-  chip: {
-    padding: '0.15rem 0.5rem',
-    border: '1px solid #e5e7eb',
-    borderRadius: '4px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.74rem',
-    maxWidth: '11rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  chipAktiv: {
-    padding: '0.15rem 0.5rem',
-    border: '1px solid #1d4ed8',
-    borderRadius: '4px',
-    background: '#eff6ff',
-    color: '#1d4ed8',
-    cursor: 'pointer',
-    fontSize: '0.74rem',
-    fontWeight: 600,
-    maxWidth: '11rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  zeile: {
+  chips: { display: 'flex', gap: 6, flexWrap: 'wrap' as const },
+  felder: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '0.6rem',
-    flexWrap: 'wrap' as const,
-    marginTop: '0.5rem',
+    flexDirection: 'column' as const,
+    gap: 10,
+    paddingTop: 10,
+    borderTop: `1px solid ${T.line}`,
   },
+  zeile: { display: 'flex', gap: 10, flexWrap: 'wrap' as const },
   feld: {
     font: 'inherit',
-    fontSize: '0.8rem',
-    padding: '0.3rem 0.4rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '5px',
-    minWidth: '18rem',
+    fontSize: 13,
+    padding: '8px 10px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
+    color: T.fg1,
     resize: 'vertical' as const,
-  },
-  check: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.3rem',
-    fontSize: '0.78rem',
-    color: '#374151',
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   zahl: {
     width: '4.2rem',
-    padding: '0.15rem 0.3rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
+    font: 'inherit',
+    fontSize: 13,
+    padding: '6px 8px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
+    color: T.fg1,
   },
-  regler: { width: '90px' },
-  weg: {
-    padding: '0.25rem 0.6rem',
-    border: '1px solid #fca5a5',
-    borderRadius: '5px',
-    background: '#fff',
-    color: '#991b1b',
+  auswahl: {
+    font: 'inherit',
+    fontSize: 13,
+    padding: '6px 8px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
+    color: T.fg1,
     cursor: 'pointer',
-    fontSize: '0.78rem',
+    minWidth: 0,
   },
 } satisfies Record<string, React.CSSProperties>;

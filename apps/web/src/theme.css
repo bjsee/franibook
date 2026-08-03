@@ -1,0 +1,182 @@
+/**
+ * Die Farben und Schriften der Oberfläche.
+ *
+ * Zwei Regeln tragen alles Weitere. **Türkis ist der einzige Akzent** — es
+ * markiert Auswahl und Aktion, sonst nichts. **Rot, Gelb und Grün tragen
+ * ausschließlich Zustände** des Buches: zu klein, knapp, in Ordnung, nicht
+ * erreichbar. Daraus folgt, dass eine farbige Fläche in dieser Oberfläche immer
+ * eine Aussage ist und niemals Schmuck.
+ *
+ * Die Neutraltöne sind warm und nicht grau, und die Textfarbe ist ein dunkles
+ * Braun statt Schwarz: Über einer Ansicht, die zu drei Vierteln aus Fotos
+ * besteht, wirkt ein kaltes Grau wie ein Fehler in der Bildwiedergabe.
+ *
+ * Als Custom Properties und nicht als TypeScript-Konstanten, weil die Werte an
+ * zwei Stellen gebraucht werden: in den Inline-Stilen der Komponenten (über
+ * `var()`, siehe `theme.ts`) und in den Grundstilen der Elemente hier unten.
+ * Eine zweite Fassung in JS wäre die Art Doppelung, die auseinanderläuft.
+ *
+ * Nicht betroffen ist die Buchschrift: Was auf der Doppelseite steht, kommt aus
+ * `core/render/typography.ts` und `fonts.css`. Dieses Blatt kleidet nur das
+ * Werkzeug, nicht das Werkstück — sonst liefe die Vorschau aus der Parität zum
+ * PDF.
+ */
+
+:root {
+  /* ── Warme Neutraltöne ── */
+  --warm-50: #fbfaf8; /* Arbeitsfläche */
+  --warm-100: #f5f2ef; /* Bühnenhintergrund, Chips */
+  --warm-200: #ebe5e0; /* Haarlinie */
+  --warm-300: #d6ccc4; /* sichtbarer Rahmen */
+  --warm-400: #b3a89e; /* Platzhalter, Zahlen im zweiten Rang */
+  --warm-500: #887c72;
+  --warm-700: #6b6058;
+  --warm-900: #544c46; /* Textfarbe */
+
+  /* ── Türkis: Auswahl und Aktion ── */
+  --cyan-50: #e6f8fb;
+  --cyan-100: #b8ecf3;
+  --cyan-500: #00afcb;
+  --cyan-700: #008ba2;
+
+  /* ── Zustände ── */
+  --ok: #2f8f5b;
+  --warn: #c98a14;
+  --warn-bg: #fdf8ec;
+  --warn-border: #f0e2c4;
+  --warn-text: #8a6a12;
+  --error: #b9442b;
+  --error-border: #eccdc6;
+
+  /* ── Bedeutung statt Farbnamen ── */
+  --fg-1: var(--warm-900);
+  --fg-2: var(--warm-700);
+  --fg-3: var(--warm-500);
+  --fg-4: var(--warm-400);
+  --bg-1: #ffffff;
+  --bg-2: var(--warm-50);
+  --bg-3: var(--warm-100);
+  --line: var(--warm-200);
+  --line-2: var(--warm-300);
+
+  /* ── Schrift ── */
+  --font-display: 'Outfit Variable', 'Outfit', 'Avenir Next', system-ui, sans-serif;
+  --font-body: 'Mulish Variable', 'Mulish', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --tracking-caps: 0.14em;
+  --tracking-tight: -0.02em;
+
+  /* ── Radien: geometrisch und ruhig, Pillen nur an Kleinteilen ── */
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 8px;
+  --r-pill: 999px;
+
+  /*
+   * Schatten nur für Schwebendes: die Bühne (damit das Papier über der Fläche
+   * liegt) und die Panels der Werkbank. In den Listen und Spalten trennen
+   * Haarlinien, nicht Schatten.
+   */
+  --shadow-stage: 0 1px 3px rgba(84, 76, 70, 0.14), 0 10px 30px rgba(84, 76, 70, 0.1);
+  --shadow-float: 0 8px 24px rgba(84, 76, 70, 0.14);
+  --shadow-seg: 0 1px 2px rgba(84, 76, 70, 0.1);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg-2);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Die App füllt das Fenster und scrollt nicht als Ganzes: Kopfzeile,
+ * Kennzahlenzeile und Seitenspalten sollen stehen bleiben, während die Liste
+ * darunter läuft. Eine Doppelseite beurteilt man am Rhythmus der Nachbarn, und
+ * dafür darf die Bühne nicht aus dem Bild scrollen.
+ */
+#root {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+}
+
+p {
+  margin: 0;
+}
+
+/*
+ * Tasten im Text. Sie stehen in dieser Oberfläche oft mitten im Satz
+ * („Pfeiltasten justieren fein, mit ⇧ gröber"), deshalb schmal und ohne
+ * Grundlinienversatz.
+ */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  padding: 0 4px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+}
+
+/*
+ * Bedienelemente des Browsers auf den Akzent stellen. Ein blauer Systemregler
+ * neben türkisen Knöpfen wäre die einzige Fremdfarbe in der Oberfläche.
+ */
+input[type='range'],
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--cyan-500);
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--cyan-500);
+  color: #fff;
+}
+
+/*
+ * Der Tastaturfokus muss sichtbar bleiben — die Oberfläche wird zu großen
+ * Teilen mit Tasten bedient (blättern, justieren, Hilfslinien). Türkis statt
+ * des Systemrings, damit er nicht als Fremdfarbe auffällt.
+ */
+:focus-visible {
+  outline: 2px solid var(--cyan-500);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

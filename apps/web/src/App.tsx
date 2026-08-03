@@ -1,38 +1,33 @@
+/**
+ * Das Gerüst: Kopfzeile, Kennzahlen, sieben Ansichten.
+ *
+ * Die App füllt das Fenster und scrollt nicht als Ganzes. Kopfzeile und
+ * Kennzahlenzeile stehen fest, darunter füllt die Ansicht den Rest — bei der
+ * Doppelseite heißt das, dass die Bühne so groß ist, wie der Bildschirm es
+ * erlaubt, ohne dass man sie sich zurechtscrollt.
+ *
+ * Was hier liegt, ist der Zustand des Projekts und die Handgriffe am Buchgerüst
+ * (blättern, festhalten, Seiten einfügen und löschen). Die Doppelseiten-Ansicht
+ * bekommt beides als `SpreadAussen` — dieselbe Naht für alle drei Varianten,
+ * damit ein Wechsel der Variante keine Funktion kostet.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
-import { MAX_TILT_DEG } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
+import { B, T } from './theme.js';
+import { Kennzahlen, type Report } from './Kennzahlen.js';
+import { BuchPanel } from './BuchPanel.js';
+import { Cover } from './Cover.js';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
 import { PhotoSources } from './PhotoSources.js';
 import { YearEvents } from './YearEvents.js';
-import { BackgroundPicker } from './BackgroundPicker.js';
 import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
 import type { TextBlockData } from './TextBlocks.js';
-
-interface Report {
-  photoCount: number;
-  placedCount: number;
-  spreadCount: number;
-  pageCount: number;
-  targetPages: number;
-  photosPerSpread: number;
-  worstDpi: number;
-  belowTargetDpi: number;
-  belowMinDpi: { photoId: string; spreadIndex: number; slotId: string; dpi: number }[];
-  feasibility: { achievable: boolean; minimumPages: number; maxPerSpread: number; hint?: string };
-}
-
-/** Eine Fotogruppe, soweit die Doppelseite sie betrifft. */
-interface SpreadGroup {
-  id: string;
-  title: string;
-  active: boolean;
-  /** Fotos dieser Gruppe auf dieser Doppelseite. */
-  count: number;
-}
+import type { SpreadAussen, SpreadGroup } from './spread/types.js';
+import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './spread/varianten.js';
 
 /**
  * Antwort auf `/api/spreads/:index`.
@@ -81,11 +76,8 @@ interface ProjectInfo {
     neigungen: number;
     hintergruende: number;
     zeitstrahl: number;
-    /** Von Hand gesetzte Bildpositionen. */
     positionen: number;
-    /** Textblöcke auf Seiten, die neu gebaut werden. */
     texte: number;
-    /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
     festgehalten: number;
   };
   chapters: { year: number; photoCount: number; firstSpreadIndex: number }[];
@@ -95,7 +87,17 @@ interface ProjectInfo {
   undatedCount: number;
 }
 
-type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit';
+type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit' | 'cover';
+
+const REITER: { id: View; label: string }[] = [
+  { id: 'overview', label: 'Übersicht' },
+  { id: 'spread', label: 'Doppelseite' },
+  { id: 'groups', label: 'Gruppen' },
+  { id: 'years', label: 'Jahre' },
+  { id: 'sources', label: 'Bildquellen' },
+  { id: 'edit', label: 'Aufteilung' },
+  { id: 'cover', label: 'Umschlag' },
+];
 
 /**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
@@ -122,9 +124,14 @@ export function App() {
     const p = new URLSearchParams(location.search).get('spread');
     return p ? Number(p) : 0;
   });
-  const [view, setView] = useState<View>(() =>
-    new URLSearchParams(location.search).has('spread') ? 'spread' : 'overview',
-  );
+  const [view, setView] = useState<View>(() => {
+    const q = new URLSearchParams(location.search);
+    // `?cover` war der Sonderweg zur Coveransicht, solange sie kein Reiter war.
+    // Die Adresse gilt weiter, sie wählt jetzt nur den Reiter.
+    if (q.has('cover')) return 'cover';
+    return q.has('spread') ? 'spread' : 'overview';
+  });
+  const [variante, setVariante] = useState<Variante>(varianteLesen);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -177,6 +184,9 @@ export function App() {
   useEffect(() => {
     if (bare) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) {
+        return;
+      }
       if (view === 'spread') {
         // Ist ein Slot gewählt, gehören die Pfeiltasten dem Ausschnitt-Editor.
         if (!selectedSlotId) {
@@ -199,6 +209,12 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [bare, info?.spreadCount, view, selectedSlotId]);
 
+  /** Die Doppelseite verwerfen und neu holen. */
+  const neuRendern = useCallback(() => {
+    setSpread(null);
+    setRenderVersion((v) => v + 1);
+  }, []);
+
   /**
    * Ändert eine Darstellungseinstellung.
    *
@@ -217,8 +233,7 @@ export function App() {
       body: JSON.stringify(patch),
     });
     loadInfo();
-    setSpread(null);
-    setRenderVersion((v) => v + 1);
+    neuRendern();
   }
 
   /**
@@ -241,8 +256,7 @@ export function App() {
         photoCount: number;
       };
       loadInfo();
-      setSpread(null);
-      setRenderVersion((v) => v + 1);
+      neuRendern();
       const teile = [
         `${d.photoCount} Fotos`,
         `${d.neu.length} neu`,
@@ -316,8 +330,7 @@ export function App() {
       }
       setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
       loadInfo();
-      setSpread(null);
-      setRenderVersion((v) => v + 1);
+      neuRendern();
     } catch (e) {
       setNote(`Nicht gelöscht: ${String(e)}`);
     }
@@ -366,8 +379,7 @@ export function App() {
       }
       setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
       loadInfo();
-      setSpread(null);
-      setRenderVersion((v) => v + 1);
+      neuRendern();
       setNote(
         `Seite entfernt` +
           (daten.photoCount ? `, ${daten.photoCount} Bild(er) im Fotopool` : '') +
@@ -387,8 +399,7 @@ export function App() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ timeline: value }),
     });
-    setSpread(null);
-    setRenderVersion((v) => v + 1);
+    neuRendern();
   }
 
   async function regenerate(patch: Record<string, unknown>) {
@@ -402,7 +413,7 @@ export function App() {
       });
       const data = await res.json();
       loadInfo();
-      setSpread(null);
+      neuRendern();
       const r: Report = data.report;
       setNote(
         `${r.spreadCount} Doppelseiten, ${r.pageCount} Seiten, ` +
@@ -433,16 +444,25 @@ export function App() {
     }
   }
 
+  function waehleVariante(v: Variante) {
+    setVariante(v);
+    varianteMerken(v);
+  }
+
   if (error) {
     return (
-      <main style={S.page}>
-        <p style={{ color: '#b91c1c' }}>Fehler: {error}</p>
-        <p style={S.muted}>Läuft der Server? `pnpm --filter @franibook/server dev`</p>
+      <main style={S.fehlerSeite}>
+        <h1>Fehler</h1>
+        <p style={{ ...B.fehlerfeld, marginTop: 12 }}>{error}</p>
+        <p style={{ ...B.leise, marginTop: 12 }}>
+          Läuft der Server? <code>pnpm --filter @franibook/server dev</code>
+        </p>
       </main>
     );
   }
 
-  // Der Parity-Test rendert die Doppelseite ohne jedes Beiwerk.
+  // Der Parity-Test rendert die Doppelseite ohne jedes Beiwerk – und prüft
+  // ausdrücklich, dass hier kein einziger Knopf steht.
   if (bare) {
     return spread ? (
       <SpreadView
@@ -455,68 +475,180 @@ export function App() {
   }
 
   const report = info?.report;
+  const jahre = info?.chapters ?? [];
+  const spanne =
+    jahre.length > 0 ? `${jahre[0]?.year} – ${jahre[jahre.length - 1]?.year}` : undefined;
+  const offline = info?.sources.filter((q) => !q.erreichbar) ?? [];
+
+  /** Der Jahrgang, zu dem eine Doppelseite gehört. */
+  const jahrVon = (i: number): number | undefined =>
+    [...jahre]
+      .sort((a, b) => a.firstSpreadIndex - b.firstSpreadIndex)
+      .filter((c) => c.firstSpreadIndex <= i)
+      .at(-1)?.year;
+
+  const aussen: SpreadAussen | null =
+    info && spread
+      ? {
+          index,
+          spreadCount: info.spreadCount,
+          jahr: jahrVon(index),
+          chapters: info.chapters,
+          gruppen: spread.groups ?? [],
+          locked: spread.locked ?? false,
+          splittable: spread.splittable ?? false,
+          hatZeitstrahl,
+          zeitstrahlGlobal: info.settings.timeline,
+          hintergrundGlobal: info.settings.background,
+          minDpi: info.profile.resolution.minDpi,
+          targetDpi: info.profile.resolution.targetDpi,
+          guides,
+          onGuides: setGuides,
+          onIndex: setIndex,
+          onLocked: (v) => void setSpreadLocked(v),
+          onZeitstrahl: (v) => void setSpreadTimeline(v),
+          onEinfuegen: setEinfuegenAn,
+          onSeiteLoeschen: (seite) => void removePage(seite),
+          onSpreadLoeschen: () => void removeSpread(),
+          onGruppeOeffnen: (id) => {
+            setGruppenFokus(id);
+            setView('groups');
+          },
+          onGeaendert: loadInfo,
+          onNeuRendern: () => {
+            loadInfo();
+            neuRendern();
+          },
+        }
+      : null;
 
   return (
-    <main style={S.page}>
-      <header style={S.header}>
-        <h1 style={S.title}>Franibook</h1>
-        {info && (
-          <span style={S.muted}>
-            {info.photoCount} Fotos · {info.spreadCount} Doppelseiten
-            {report && ` · ${report.pageCount} Seiten`}
+    <div style={S.app}>
+      <header style={S.kopf}>
+        <span style={S.marke}>
+          <strong style={S.name}>Franibook</strong>
+          {spanne && <span style={S.spanne}>{spanne}</span>}
+        </span>
+
+        <nav style={B.segRahmen}>
+          {REITER.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setView(r.id)}
+              style={view === r.id ? B.segAn : B.segAus}
+            >
+              {r.label}
+            </button>
+          ))}
+        </nav>
+
+        <span style={B.dehner} />
+
+        {/*
+          Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im PDF
+          fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
+        */}
+        {offline.length > 0 && (
+          <button onClick={() => setView('sources')} style={S.offline}>
+            <span style={S.punkt} />
+            {offline.length === 1
+              ? '1 Bildquelle offline'
+              : `${offline.length} Bildquellen offline`}
+          </button>
+        )}
+
+        {/*
+          Der Variantenumschalter steht nur bei der Doppelseite, weil er nur dort
+          etwas ändert. Er ist der eine Teil dieser Oberfläche, der wieder
+          verschwindet, sobald eine der drei gewonnen hat.
+        */}
+        {view === 'spread' && (
+          <span style={B.segRahmen} title="Rahmen um die Doppelseite (?ui=a|b|c)">
+            {VARIANTEN.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => waehleVariante(v.id)}
+                style={{
+                  ...(variante === v.id ? B.segAn : B.segAus),
+                  fontSize: 12,
+                  padding: '5px 10px',
+                }}
+                title={v.hinweis}
+              >
+                {v.name}
+              </button>
+            ))}
           </span>
         )}
-        {/*
-          Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im
-          PDF fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
-        */}
-        {info && info.sources.some((q) => !q.erreichbar) && (
-          <button onClick={() => setView('sources')} style={S.warnung}>
-            {info.sources.filter((q) => !q.erreichbar).length} Bildquelle(n) nicht erreichbar
+
+        {view !== 'cover' && (
+          <button
+            onClick={() => void exportPdf(view !== 'spread')}
+            disabled={!!busy}
+            style={B.knopfPrimaer}
+          >
+            {view === 'spread' ? 'Diese Seite als PDF' : 'Buch als PDF'}
           </button>
         )}
-        <span style={S.spacer} />
-        <div style={S.tabs}>
-          <button
-            onClick={() => setView('overview')}
-            style={view === 'overview' ? S.tabActive : S.tab}
-          >
-            Übersicht
-          </button>
-          <button onClick={() => setView('spread')} style={view === 'spread' ? S.tabActive : S.tab}>
-            Doppelseite
-          </button>
-          <button onClick={() => setView('groups')} style={view === 'groups' ? S.tabActive : S.tab}>
-            Gruppen
-          </button>
-          <button onClick={() => setView('years')} style={view === 'years' ? S.tabActive : S.tab}>
-            Jahre
-          </button>
-          <button
-            onClick={() => setView('sources')}
-            style={view === 'sources' ? S.tabActive : S.tab}
-          >
-            Bildquellen
-          </button>
-          <button onClick={() => setView('edit')} style={view === 'edit' ? S.tabActive : S.tab}>
-            Aufteilung (JSON)
-          </button>
-        </div>
       </header>
 
-      {report && <ReportBar report={report} undated={info?.undatedCount ?? 0} />}
-
-      {view === 'years' && info ? (
-        <YearEvents
-          chapters={info.chapters}
-          onOpen={(i) => {
+      {info && (
+        <Kennzahlen
+          report={report ?? null}
+          photoCount={info.photoCount}
+          spreadCount={info.spreadCount}
+          undated={info.undatedCount}
+          groupsPending={info.groupsPending}
+          busy={!!busy}
+          onZeigeSpread={(i) => {
             setIndex(i);
             setView('spread');
-            // Die Auftaktseite hat sich geändert, also neu holen.
-            setSpread(null);
-            setRenderVersion((v) => v + 1);
           }}
+          onNeuAnordnen={() => void regenerate({})}
         />
+      )}
+
+      {view === 'overview' && info ? (
+        <div style={S.inhaltReihe}>
+          <div style={S.scrollFlaeche}>
+            <Overview
+              key={renderVersion}
+              spreadCount={info.spreadCount}
+              chapters={info.chapters}
+              groupMarks={info.groupMarks}
+              imageSrc={imageSrc}
+              onOpen={(i) => {
+                setIndex(i);
+                setView('spread');
+              }}
+              onInsert={setEinfuegenAn}
+            />
+          </div>
+          <BuchPanel
+            settings={info.settings}
+            handwork={info.handwork}
+            busy={!!busy}
+            onNeuAnordnen={(patch) => void regenerate(patch)}
+            onDarstellung={(patch) => void setSetting(patch)}
+            onNeuEinlesen={() => void reimport()}
+          />
+        </div>
+      ) : view === 'spread' ? (
+        spread && aussen ? (
+          <SpreadEditor
+            spread={spread}
+            onSpread={setSpread}
+            imageSrc={imageSrc}
+            selectedSlotId={selectedSlotId}
+            onSelect={setSelectedSlotId}
+            variante={variante}
+            aussen={aussen}
+          />
+        ) : (
+          <div style={S.laedt}>
+            <span style={B.leise}>Lade Doppelseite …</span>
+          </div>
+        )
       ) : view === 'groups' ? (
         <PhotoGroups
           focusGroupId={gruppenFokus}
@@ -530,18 +662,26 @@ export function App() {
             // Gruppen. Eine aufgelöste oder umbenannte Gruppe wirkt damit
             // sofort – aber nur, wenn die gerenderte Doppelseite im Speicher
             // nicht weitergilt.
-            setSpread(null);
-            setRenderVersion((v) => v + 1);
+            neuRendern();
+          }}
+        />
+      ) : view === 'years' && info ? (
+        <YearEvents
+          chapters={info.chapters}
+          onOpen={(i) => {
+            setIndex(i);
+            setView('spread');
+            // Die Auftaktseite hat sich geändert, also neu holen.
+            neuRendern();
           }}
         />
       ) : view === 'sources' ? (
         <PhotoSources
           onChanged={() => {
             loadInfo();
-            // Fotos können hinzugekommen oder weggefallen sein – die
-            // gerenderte Doppelseite im Speicher gilt nicht weiter.
-            setSpread(null);
-            setRenderVersion((v) => v + 1);
+            // Fotos können hinzugekommen oder weggefallen sein – die gerenderte
+            // Doppelseite im Speicher gilt nicht weiter.
+            neuRendern();
           }}
         />
       ) : view === 'edit' ? (
@@ -549,696 +689,144 @@ export function App() {
           imageSrc={imageSrc}
           onApplied={() => {
             loadInfo();
-            setSpread(null);
+            neuRendern();
           }}
         />
+      ) : view === 'cover' ? (
+        <Cover imageSrc={imageSrc} />
       ) : (
-        <>
-          <div style={S.toolbar}>
-            {view === 'spread' && (
-              <>
-                <button
-                  onClick={() => setIndex((i) => Math.max(0, i - 1))}
-                  disabled={index === 0}
-                  style={S.button}
-                >
-                  ←
-                </button>
-                <span style={S.counter}>
-                  {index + 1} / {info?.spreadCount ?? '…'}
-                </span>
-                <button
-                  onClick={() => setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1))}
-                  disabled={!info || index >= info.spreadCount - 1}
-                  style={S.button}
-                >
-                  →
-                </button>
-
-                {info && (
-                  <BackgroundPicker
-                    spreadIndex={index}
-                    global={info.settings.background}
-                    onChanged={() => {
-                      loadInfo();
-                      setSpread(null);
-                      setRenderVersion((v) => v + 1);
-                    }}
-                  />
-                )}
-
-                {info?.settings.timeline && (
-                  <label style={S.check} title="Nur diese Doppelseite">
-                    <input
-                      type="checkbox"
-                      checked={hatZeitstrahl}
-                      onChange={(e) => void setSpreadTimeline(e.target.checked ? null : false)}
-                    />
-                    Zeitstrahl
-                  </label>
-                )}
-
-                {/*
-                  Festhalten, einfügen, löschen – die drei Griffe am Buchgerüst.
-                  Sie stehen hier und nicht im Editor, weil sie nicht die
-                  Doppelseite ändern, sondern ihren Platz im Buch.
-                */}
-                <label
-                  style={S.check}
-                  title="Diese Doppelseite beim Neuanordnen unverändert lassen"
-                >
-                  <input
-                    type="checkbox"
-                    checked={spread?.locked ?? false}
-                    onChange={(e) => void setSpreadLocked(e.target.checked)}
-                  />
-                  Festgehalten {spread?.locked ? '🔒' : ''}
-                </label>
-                <button
-                  onClick={() => setEinfuegenAn(index)}
-                  style={S.button}
-                  title="Eigene Doppelseite vor dieser einfügen"
-                >
-                  ＋ Seite davor
-                </button>
-                <button
-                  onClick={() => setEinfuegenAn(index + 1)}
-                  style={S.button}
-                  title="Eigene Doppelseite hinter dieser einfügen"
-                >
-                  ＋ Seite danach
-                </button>
-                {/*
-                  Drei Griffe, weil es drei verschiedene Eingriffe sind: eine
-                  einzelne Buchseite (alles dahinter rückt auf), oder das ganze
-                  Blatt. Bei einem Auftakt oder justierten Zeilen gibt es keine
-                  einzelne Seite – dort steht nur der letzte Knopf.
-                */}
-                <span style={S.loeschen}>
-                  <span style={S.muted}>Löschen:</span>
-                  {spread?.splittable && (
-                    <>
-                      <button
-                        onClick={() => void removePage('left')}
-                        style={S.buttonDanger}
-                        title="Nur die linke Buchseite herausnehmen. Alles dahinter rückt eine Seite auf."
-                      >
-                        linke Seite
-                      </button>
-                      <button
-                        onClick={() => void removePage('right')}
-                        style={S.buttonDanger}
-                        title="Nur die rechte Buchseite herausnehmen. Alles dahinter rückt eine Seite auf."
-                      >
-                        rechte Seite
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => void removeSpread()}
-                    style={S.buttonDanger}
-                    title="Die ganze Doppelseite aus dem Buch nehmen. Die Bilder gehen in den Fotopool."
-                    disabled={(info?.spreadCount ?? 0) <= 1}
-                  >
-                    ganze Doppelseite
-                  </button>
-                </span>
-
-                {/*
-                  Welche Gruppen hier liegen – und ein Weg zu ihnen. Der Name im
-                  Zeitstrahl kam bislang von irgendwoher; wer ihn ändern wollte,
-                  musste ihn in einer Liste von sechzig Gruppen suchen.
-                */}
-                <SpreadGroups
-                  groups={spread?.groups ?? []}
-                  onOpen={(id) => {
-                    setGruppenFokus(id);
-                    setView('groups');
-                  }}
-                />
-
-                {(['trim', 'safety', 'gutter', 'diagnostics'] as const).map((k) => (
-                  <label key={k} style={S.check}>
-                    <input
-                      type="checkbox"
-                      checked={guides[k] ?? false}
-                      onChange={(e) => setGuides((g) => ({ ...g, [k]: e.target.checked }))}
-                    />
-                    {LABELS[k]}
-                  </label>
-                ))}
-              </>
-            )}
-
-            {view === 'overview' && info && (
-              <>
-                <label style={S.check}>
-                  Seiten
-                  <input
-                    type="number"
-                    min={24}
-                    max={400}
-                    step={2}
-                    defaultValue={info.settings.targetPages}
-                    onBlur={(e) => {
-                      const v = Number(e.target.value);
-                      if (v !== info.settings.targetPages) void regenerate({ targetPages: v });
-                    }}
-                    style={S.number}
-                  />
-                </label>
-                <label style={S.check}>
-                  <input
-                    type="checkbox"
-                    checked={info.settings.chapterOpeners}
-                    onChange={(e) => void regenerate({ chapterOpeners: e.target.checked })}
-                  />
-                  Jahresauftakte
-                </label>
-                <label style={S.check} title="Jeder Jahrgang bekommt eine eigene Hintergrundfarbe">
-                  <input
-                    type="checkbox"
-                    checked={info.settings.chapterColors}
-                    onChange={(e) => void regenerate({ chapterColors: e.target.checked })}
-                  />
-                  Jahresfarben
-                </label>
-                <label style={S.check}>
-                  <input
-                    type="checkbox"
-                    checked={info.settings.timeline}
-                    onChange={(e) => void setSetting({ timeline: e.target.checked })}
-                  />
-                  Zeitstrahl
-                </label>
-                {/*
-                  Zwei Achsen, zwei Fragen: Der Fuß sagt, wie weit es seit der
-                  letzten Seite ist, der Rand, wo man im Buch steht. Beides
-                  entsteht beim Rendern – deshalb `setSetting`, kein Neuaufbau.
-                */}
-                {info.settings.timeline && (
-                  <label style={S.check} title="Achse am Seitenfuß oder am äußeren Rand">
-                    <select
-                      value={info.settings.timelineStyle}
-                      onChange={(e) =>
-                        void setSetting({ timelineStyle: e.target.value as 'foot' | 'side' })
-                      }
-                    >
-                      <option value="foot">im Fuß, mit Gruppentitel</option>
-                      <option value="side">am Rand, über alle Jahre</option>
-                    </select>
-                  </label>
-                )}
-                {/*
-                  Wie der Zeitstrahl eine reine Darstellungssache: Die Neigung
-                  entsteht beim Rendern und rührt die Fotoverteilung nicht an.
-                  Deshalb `setSetting` und nicht `regenerate` – sonst kostete
-                  ein Dreh am Regler jede handgemachte Korrektur im Buch.
-                */}
-                <label style={S.check} title="Wie schief die Bilder auf den Seiten liegen">
-                  Neigung
-                  <input
-                    type="range"
-                    min={0}
-                    max={MAX_TILT_DEG}
-                    step={0.1}
-                    value={info.settings.tilt}
-                    onChange={(e) => void setSetting({ tilt: Number(e.target.value) })}
-                    style={S.regler}
-                  />
-                  <span style={S.reglerWert}>
-                    {info.settings.tilt === 0 ? 'aus' : `${info.settings.tilt.toFixed(1)}°`}
-                  </span>
-                </label>
-                {/*
-                  Dreiwertig: „wie Zeitstrahl" ist die Vorgabe und bedeutet das
-                  Gegenteil von ihm – trägt der Zeitstrahl den Gruppentitel auf
-                  jeder Doppelseite, kostet ein eigener Auftakt nur zwei Seiten,
-                  ohne etwas hinzuzufügen. Anders als beim Zeitstrahl ändert
-                  sich hier die Fotoverteilung, also wird neu erzeugt.
-                */}
-                <label style={S.check}>
-                  Gruppenauftakte
-                  <select
-                    value={String(info.settings.groupOpeners)}
-                    onChange={(e) =>
-                      void regenerate({
-                        groupOpeners:
-                          e.target.value === 'auto' ? 'auto' : e.target.value === 'true',
-                      })
-                    }
-                  >
-                    <option value="auto">wie Zeitstrahl</option>
-                    <option value="true">immer</option>
-                    <option value="false">nie</option>
-                  </select>
-                </label>
-                {/*
-                  Der Knopf hieß „Anders anordnen", was zu harmlos klang: Er baut
-                  das ganze Buch neu und verwirft dabei jede Handarbeit an den
-                  Doppelseiten. Was verloren geht, steht jetzt daneben.
-                */}
-                <button
-                  onClick={() => {
-                    const h = info.handwork;
-                    const verlust = [
-                      h.crops > 0 ? `${h.crops} Ausschnitte` : null,
-                      h.neigungen > 0 ? `${h.neigungen} von Hand gesetzte Neigungen` : null,
-                      h.hintergruende > 0 ? `${h.hintergruende} Hintergründe` : null,
-                      h.zeitstrahl > 0 ? `${h.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
-                      h.positionen > 0 ? `${h.positionen} frei gesetzte Bilder` : null,
-                      h.texte > 0 ? `${h.texte} Textblöcke` : null,
-                    ].filter(Boolean);
-                    // Was bleibt, gehört genauso in die Warnung wie was geht:
-                    // Sonst klingt sie, als würde auch die selbst gebaute Seite
-                    // verworfen.
-                    const bleibt =
-                      h.festgehalten > 0
-                        ? `\n\n${h.festgehalten} festgehaltene Doppelseite(n) bleiben unangetastet.`
-                        : '';
-                    if (
-                      verlust.length > 0 &&
-                      !window.confirm(
-                        `Das Buch wird komplett neu gebaut. Verworfen werden: ${verlust.join(', ')}.\n\n` +
-                          'Fotos, Datumskorrekturen, Gruppen und Jahresereignisse bleiben erhalten.' +
-                          bleibt,
-                      )
-                    ) {
-                      return;
-                    }
-                    void regenerate({ seed: info.settings.seed + 1 });
-                  }}
-                  title="Baut das Buch neu und wählt andere Vorlagen. Bilder werden nicht neu eingelesen."
-                  style={S.button}
-                >
-                  Buch neu anordnen
-                  {info.handwork.crops +
-                    info.handwork.neigungen +
-                    info.handwork.hintergruende +
-                    info.handwork.zeitstrahl +
-                    info.handwork.positionen +
-                    info.handwork.texte >
-                    0 && ' ⚠'}
-                </button>
-                <button
-                  onClick={() => void reimport()}
-                  disabled={!!busy}
-                  title="Liest den Quellordner erneut ein. Das Buch bleibt stehen, neue Fotos landen im Fotopool."
-                  style={S.button}
-                >
-                  Bilder neu einlesen
-                </button>
-              </>
-            )}
-
-            <span style={S.spacer} />
-
-            <button
-              onClick={() => void exportPdf(view === 'overview')}
-              disabled={!!busy}
-              style={S.buttonPrimary}
-            >
-              {view === 'overview' ? 'Ganzes Buch als PDF' : 'Diese Doppelseite als PDF'}
-            </button>
-          </div>
-
-          {(busy || note) && <p style={S.note}>{busy ?? note}</p>}
-
-          {/*
-            Was an einer Gruppenänderung sofort wirkt, wirkt schon: Der
-            Zeitstrahl liest die Gruppen beim Rendern. Wie die Fotos auf die
-            Doppelseiten verteilt sind und wo Auftaktseiten stehen, entsteht
-            dagegen beim Erzeugen – und das verwirft jede Handarbeit. Deshalb
-            der Hinweis statt eines stillen Neuaufbaus.
-          */}
-          {info?.groupsPending && (
-            <p style={S.pending}>
-              Die Gruppen haben sich geändert. Beschriftungen im Zeitstrahl sind schon aktuell; die
-              Aufteilung der Fotos und die Auftaktseiten folgen erst beim{' '}
-              <button onClick={() => void regenerate({})} disabled={!!busy} style={S.pendingButton}>
-                Neuanordnen
-              </button>{' '}
-              — das verwirft handgemachte Ausschnitte.
-            </p>
-          )}
-
-          {view === 'overview' && info ? (
-            <div style={{ marginTop: '1.5rem' }}>
-              <Overview
-                key={renderVersion}
-                spreadCount={info.spreadCount}
-                chapters={info.chapters}
-                groupMarks={info.groupMarks}
-                imageSrc={imageSrc}
-                onOpen={(i) => {
-                  setIndex(i);
-                  setView('spread');
-                }}
-                onInsert={setEinfuegenAn}
-              />
-            </div>
-          ) : (
-            <>
-              {spread && info ? (
-                <SpreadEditor
-                  index={index}
-                  spread={spread}
-                  onSpread={setSpread}
-                  imageSrc={imageSrc}
-                  guides={guides}
-                  minDpi={info.profile.resolution.minDpi}
-                  targetDpi={info.profile.resolution.targetDpi}
-                  selectedSlotId={selectedSlotId}
-                  onSelect={setSelectedSlotId}
-                  onChanged={loadInfo}
-                  spreadCount={info.spreadCount}
-                  onOpenSpread={setIndex}
-                />
-              ) : (
-                <div style={S.stage}>
-                  <p style={S.muted}>Lade Doppelseite …</p>
-                </div>
-              )}
-              <p style={S.muted}>
-                Pfeiltasten blättern, <kbd>g</kbd> schaltet die Hilfslinien, <kbd>Esc</kbd> zur
-                Übersicht.
-              </p>
-            </>
-          )}
-
-          {/*
-            Nach dem Einfügen gleich zur neuen Seite: Sie ist leer, und alles
-            weitere – Textblock setzen, Bild hineinziehen – passiert dort.
-          */}
-          {einfuegenAn !== null && info && (
-            <InsertSpread
-              at={einfuegenAn}
-              spreadCount={info.spreadCount}
-              onAbbrechen={() => setEinfuegenAn(null)}
-              onFehler={(text) => {
-                setEinfuegenAn(null);
-                setNote(text);
-              }}
-              onEingefuegt={(neu, bericht) => {
-                setEinfuegenAn(null);
-                loadInfo();
-                setIndex(neu);
-                setSpread(null);
-                setRenderVersion((v) => v + 1);
-                setView('spread');
-                // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als
-                // die eine Stelle. Das gehört gesagt, sonst wundert man sich über
-                // die veränderten Nachbarseiten.
-                if (bericht && bericht.neuGepaart > 0) {
-                  setNote(
-                    `${bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt` +
-                      (bericht.leerseiten > 0
-                        ? `, ${bericht.leerseiten} leere Seite(n) für die Parität`
-                        : '') +
-                      (bericht.leereBlaetter > 0
-                        ? `, ${bericht.leereBlaetter} Doppelseite(n) ganz ohne Bild`
-                        : '') +
-                      ' — die Fotoverteilung ist unverändert.',
-                  );
-                }
-              }}
-            />
-          )}
-        </>
+        <div style={S.laedt}>
+          <span style={B.leise}>Lade Projekt …</span>
+        </div>
       )}
-    </main>
-  );
-}
 
-/**
- * Die Gruppen einer Doppelseite als Sprungmarken.
- *
- * Die erste aktive Gruppe ist die, deren Titel im Zeitstrahl steht – dieselbe
- * Rangfolge wie dort: die mit den meisten Fotos. Abgeschaltete Gruppen stehen
- * blass daneben; sie gliedern das Buch nicht, erklären aber, wohin die Bilder
- * gehören.
- */
-function SpreadGroups({
-  groups,
-  onOpen,
-}: {
-  groups: readonly SpreadGroup[];
-  onOpen: (id: string) => void;
-}) {
-  if (groups.length === 0) return null;
-
-  const beschriftend = groups.find((g) => g.active);
-
-  return (
-    <span style={S.gruppen}>
-      <span style={S.gruppenLabel}>Gruppe</span>
-      {groups.map((g) => (
-        <button
-          key={g.id}
-          onClick={() => onOpen(g.id)}
-          title={
-            (g.active
-              ? g.id === beschriftend?.id
-                ? 'Steht im Zeitstrahl dieser Doppelseite'
-                : 'Gliedert das Buch'
-              : 'Abgeschaltet — gliedert das Buch nicht') +
-            ` · ${g.count} ${g.count === 1 ? 'Foto' : 'Fotos'} hier · in der Gruppenansicht öffnen`
-          }
-          style={{
-            ...S.gruppenLink,
-            ...(g.id === beschriftend?.id ? S.gruppenLinkAktiv : {}),
-            ...(g.active ? {} : S.gruppenLinkAus),
+      {/*
+        Nach dem Einfügen gleich zur neuen Seite: Sie ist leer, und alles
+        weitere – Textblock setzen, Bild hineinziehen – passiert dort.
+      */}
+      {einfuegenAn !== null && info && (
+        <InsertSpread
+          at={einfuegenAn}
+          spreadCount={info.spreadCount}
+          onAbbrechen={() => setEinfuegenAn(null)}
+          onFehler={(text) => {
+            setEinfuegenAn(null);
+            setNote(text);
           }}
-        >
-          {g.active ? '' : '○ '}
-          {g.title} ↗
-        </button>
-      ))}
-    </span>
-  );
-}
+          onEingefuegt={(neu, bericht) => {
+            setEinfuegenAn(null);
+            loadInfo();
+            setIndex(neu);
+            neuRendern();
+            setView('spread');
+            // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als die
+            // eine Stelle. Das gehört gesagt, sonst wundert man sich über die
+            // veränderten Nachbarseiten.
+            if (bericht && bericht.neuGepaart > 0) {
+              setNote(
+                `${bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt` +
+                  (bericht.leerseiten > 0
+                    ? `, ${bericht.leerseiten} leere Seite(n) für die Parität`
+                    : '') +
+                  (bericht.leereBlaetter > 0
+                    ? `, ${bericht.leereBlaetter} Doppelseite(n) ganz ohne Bild`
+                    : '') +
+                  ' — die Fotoverteilung ist unverändert.',
+              );
+            }
+          }}
+        />
+      )}
 
-function ReportBar({ report, undated }: { report: Report; undated: number }) {
-  const probleme: string[] = [];
-  if (!report.feasibility.achievable) probleme.push(report.feasibility.hint ?? '');
-  if (report.belowMinDpi.length > 0) {
-    probleme.push(
-      `${report.belowMinDpi.length} Bilder unter der Mindestauflösung ` +
-        `(schlechtestes ${Math.round(report.worstDpi)} dpi) — für den Druck zu klein`,
-    );
-  }
-  if (undated > 0) probleme.push(`${undated} Fotos ohne Datum, nicht im Buch`);
-  const nichtPlatziert = report.photoCount - report.placedCount - undated;
-  if (nichtPlatziert > 0) probleme.push(`${nichtPlatziert} Fotos nicht platziert`);
-
-  return (
-    <div style={S.reportBar}>
-      <Stat label="Fotos im Buch" value={String(report.placedCount)} />
-      <Stat label="je Doppelseite" value={report.photosPerSpread.toFixed(1)} />
-      <Stat
-        label="Ziel"
-        value={`${report.pageCount} / ${report.targetPages} S.`}
-        warn={Math.abs(report.pageCount - report.targetPages) > report.targetPages * 0.15}
-      />
-      <Stat
-        label="schlechteste Auflösung"
-        value={`${Math.round(report.worstDpi)} dpi`}
-        warn={report.belowMinDpi.length > 0}
-      />
-      {probleme.length > 0 && (
-        <ul style={S.problems}>
-          {probleme.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
+      {(busy || note) && (
+        <div style={S.toast} role="status">
+          {busy ?? note}
+          {!busy && (
+            <button onClick={() => setNote(null)} style={S.toastZu} title="Ausblenden">
+              ×
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
 }
-
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
-  return (
-    <div style={S.stat}>
-      <span style={S.statLabel}>{label}</span>
-      <span style={{ ...S.statValue, color: warn ? '#b45309' : '#111827' }}>{value}</span>
-    </div>
-  );
-}
-
-const LABELS = {
-  trim: 'Endformat',
-  safety: 'Sicherheit',
-  gutter: 'Falz',
-  diagnostics: 'Diagnose',
-} as const;
 
 const S = {
-  page: {
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    padding: '1.5rem 2rem 4rem',
-    maxWidth: '1500px',
-    margin: '0 auto',
-    color: '#111827',
+  app: { height: '100%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' },
+  kopf: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 20,
+    padding: '0 20px',
+    minHeight: 60,
+    background: T.bg1,
+    borderBottom: `1px solid ${T.line}`,
+    flexShrink: 0,
+    flexWrap: 'wrap' as const,
   },
-  header: { display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '1rem' },
-  title: { fontSize: '1.25rem', fontWeight: 600, margin: 0 },
-  muted: { color: '#6b7280', fontSize: '0.875rem' },
-  warnung: {
-    font: 'inherit',
-    fontSize: '0.8rem',
-    color: '#b45309',
-    background: '#fffbeb',
-    border: '1px solid #fcd34d',
-    borderRadius: 4,
-    padding: '0.2rem 0.5rem',
-    cursor: 'pointer',
-  },
-  spacer: { flex: 1 },
-  tabs: { display: 'flex', gap: '0.25rem' },
-  tab: {
-    padding: '0.3rem 0.8rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    background: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
-  },
-  tabActive: {
-    padding: '0.3rem 0.8rem',
-    border: '1px solid #1d4ed8',
-    borderRadius: '6px',
-    background: '#eff6ff',
-    color: '#1d4ed8',
-    cursor: 'pointer',
-    fontSize: '0.8125rem',
+  marke: { display: 'flex', alignItems: 'baseline', gap: 10 },
+  name: {
+    fontFamily: T.display,
+    fontSize: 19,
     fontWeight: 600,
+    letterSpacing: 'var(--tracking-tight)',
   },
-  reportBar: {
+  spanne: { fontSize: 13, color: T.fg3, fontVariantNumeric: 'tabular-nums' as const },
+  offline: {
     display: 'flex',
-    gap: '2rem',
-    alignItems: 'flex-start',
-    padding: '0.75rem 1rem',
-    background: '#f9fafb',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    flexWrap: 'wrap' as const,
-    marginBottom: '0.75rem',
+    alignItems: 'center',
+    gap: 6,
+    font: 'inherit',
+    fontSize: 13,
+    color: T.warn,
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
   },
-  stat: { display: 'flex', flexDirection: 'column' as const, gap: '0.1rem' },
-  statLabel: {
-    fontSize: '0.6875rem',
-    color: '#6b7280',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.04em',
-  },
-  statValue: { fontSize: '1.05rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' as const },
-  problems: {
-    margin: 0,
-    paddingLeft: '1.1rem',
-    fontSize: '0.8125rem',
-    color: '#b45309',
+  punkt: { width: 7, height: 7, borderRadius: '50%', background: T.warn },
+
+  inhaltReihe: { flex: 1, display: 'flex', minHeight: 0 },
+  scrollFlaeche: { flex: 1, minWidth: 0, overflowY: 'auto' as const, padding: '20px 24px 32px' },
+  laedt: {
     flex: 1,
-    minWidth: '18rem',
-  },
-  toolbar: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem 0',
-    borderTop: '1px solid #e5e7eb',
-    borderBottom: '1px solid #e5e7eb',
-    flexWrap: 'wrap' as const,
+    justifyContent: 'center',
+    background: T.bg3,
   },
-  button: {
-    padding: '0.35rem 0.75rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    background: '#fff',
-    cursor: 'pointer',
-  },
-  buttonPrimary: {
-    padding: '0.35rem 0.9rem',
-    border: '1px solid #1d4ed8',
-    borderRadius: '6px',
-    background: '#2563eb',
-    color: '#fff',
-    cursor: 'pointer',
-  },
-  loeschen: { display: 'flex', alignItems: 'center', gap: '0.3rem' },
-  /** Rot wie beim Aussortieren eines Fotos: Der Griff nimmt etwas aus dem Buch. */
-  buttonDanger: {
-    padding: '0.35rem 0.75rem',
-    border: '1px solid #fecaca',
-    borderRadius: '6px',
-    background: '#fff',
-    color: '#b91c1c',
-    cursor: 'pointer',
-  },
-  number: {
-    width: '4.5rem',
-    padding: '0.2rem 0.35rem',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-  },
-  counter: {
-    fontVariantNumeric: 'tabular-nums' as const,
-    fontSize: '0.875rem',
-    minWidth: '5rem',
-    textAlign: 'center' as const,
-  },
-  check: {
+
+  fehlerSeite: { padding: '48px 32px', maxWidth: '46rem', margin: '0 auto' },
+
+  toast: {
+    position: 'fixed' as const,
+    left: '50%',
+    bottom: 20,
+    transform: 'translateX(-50%)',
+    zIndex: 70,
     display: 'flex',
     alignItems: 'center',
-    gap: '0.3rem',
-    fontSize: '0.8125rem',
-    color: '#374151',
-  },
-  regler: { width: '80px' },
-  reglerWert: {
-    fontVariantNumeric: 'tabular-nums' as const,
-    color: '#6b7280',
-    minWidth: '2.4rem',
-  },
-  note: { fontSize: '0.8125rem', color: '#065f46', fontFamily: 'ui-monospace, monospace' },
-  pending: {
-    fontSize: '0.8125rem',
-    color: '#78350f',
-    background: '#fffbeb',
-    border: '1px solid #fde68a',
-    borderRadius: '6px',
-    padding: '0.4rem 0.6rem',
-    margin: '0.5rem 0 0',
+    gap: 12,
+    maxWidth: 'min(720px, calc(100vw - 32px))',
+    padding: '10px 12px 10px 16px',
+    background: 'var(--warm-900)',
+    color: 'var(--warm-50)',
+    borderRadius: T.rLg,
+    boxShadow: '0 12px 32px rgba(84,76,70,0.32)',
+    fontSize: 13,
     lineHeight: 1.5,
+    fontFamily: T.mono,
   },
-  pendingButton: {
+  toastZu: {
+    font: 'inherit',
+    fontSize: 14,
+    lineHeight: 1,
     padding: 0,
     border: 'none',
     background: 'none',
-    color: '#b45309',
-    textDecoration: 'underline',
+    color: 'var(--warm-400)',
     cursor: 'pointer',
-    font: 'inherit',
-  },
-  gruppen: { display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' as const },
-  gruppenLabel: { fontSize: '0.7rem', color: '#9ca3af' },
-  gruppenLink: {
-    padding: '0.1rem 0.4rem',
-    border: '1px solid #e5e7eb',
-    borderRadius: '4px',
-    background: '#fff',
-    color: '#374151',
-    cursor: 'pointer',
-    fontSize: '0.75rem',
-    maxWidth: '14rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  gruppenLinkAktiv: { borderColor: '#bfdbfe', background: '#eff6ff', color: '#1d4ed8' },
-  gruppenLinkAus: { opacity: 0.55 },
-  stage: {
-    margin: '1.5rem 0',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08)',
-    lineHeight: 0,
+    flexShrink: 0,
   },
 } satisfies Record<string, React.CSSProperties>;
