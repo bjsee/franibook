@@ -67,6 +67,30 @@ const kontext: Kontext = {
   importLimit: IMPORT_LIMIT,
 };
 
+/**
+ * Was der Server gerade tut, solange er noch nicht auskunftsfähig ist.
+ *
+ * `null` heißt fertig. Der Server lauscht schon **vor** dem Import: Vite ist in
+ * Millisekunden oben, ein Kaltstart mit dem vollen Bestand braucht Sekunden, und
+ * in diesem Fenster lief jede Anfrage der Oberfläche in ein `ECONNREFUSED` –
+ * eine Fehlermeldung, die nach kaputtem Server aussieht, obwohl er nur noch
+ * arbeitet.
+ *
+ * Verworfen: einfach früher zu lauschen und die leeren Antworten auszuliefern.
+ * Die Oberfläche zeigte dann stumm ein Buch mit null Fotos, und das sieht aus
+ * wie Datenverlust. Ein `503` mit einem Satz ist die ehrlichere Antwort: Sie
+ * sagt, dass es gleich weitergeht, und die Oberfläche kann warten.
+ */
+let anlauf: string | null = 'Der Server startet.';
+
+app.addHook('onRequest', async (_req, reply) => {
+  if (anlauf === null) return;
+  // 503 und nicht 425 oder 409: Der Dienst ist vorübergehend nicht verfügbar,
+  // und genau das steht hier an. `Retry-After` in Sekunden, damit auch ein
+  // Aufrufer ohne eigene Wartelogik nicht im Sekundentakt anklopft.
+  return reply.code(503).header('retry-after', '1').send({ error: anlauf });
+});
+
 projektRouten(app, kontext);
 buchRouten(app, kontext);
 spreadRouten(app, kontext);
@@ -78,6 +102,13 @@ umschlagRouten(app, kontext);
 
 async function start(): Promise<void> {
   const t0 = Date.now();
+
+  // Erst lauschen, dann arbeiten. Bis `anlauf` auf `null` steht, beantwortet
+  // der Hook jede Anfrage mit 503 und dem Satz, der gerade zutrifft.
+  await app.listen({ port: PORT, host: '127.0.0.1' });
+  process.stdout.write(`Server auf http://127.0.0.1:${PORT}\n`);
+
+  anlauf = 'Das gespeicherte Projekt wird geladen.';
 
   // Ein gespeichertes Projekt hat Vorrang: Es enthält die Korrekturen des
   // Benutzers, die ein erneuter Import nicht wiederherstellen könnte. Es bringt
@@ -111,6 +142,7 @@ async function start(): Promise<void> {
       .list()
       .map((q) => q.root)
       .join(', ');
+    anlauf = `Die Bilder werden eingelesen (${roots}).`;
     process.stdout.write(`Importiere ${roots}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `);
     await project.importPhotos(IMPORT_LIMIT);
     process.stdout.write(`${project.photos.size} Fotos (${Date.now() - t0} ms)\n`);
@@ -122,6 +154,7 @@ async function start(): Promise<void> {
       process.stdout.write(`  ${project.failed.length} Dateien fehlerhaft\n`);
     }
 
+    anlauf = 'Das Buch wird erzeugt.';
     const r = project.generate().report;
     process.stdout.write(
       `Buch erzeugt: ${r.spreadCount} Doppelseiten, ${r.pageCount} Seiten, ` +
@@ -138,14 +171,16 @@ async function start(): Promise<void> {
     await project.save();
   }
 
+  // Ab hier ist der Server auskunftsfähig. Vor den Vorschauen: Die wärmen im
+  // Hintergrund, und auf sie zu warten hieße, die Oberfläche minutenlang
+  // hinzuhalten, obwohl sie längst blättern könnte.
+  anlauf = null;
+
   // Vorschauen im Hintergrund aufwärmen, damit die Oberfläche sofort nutzbar
   // ist. Wer schneller blättert, als der Cache füllt, erzeugt sie on demand.
   void previews
     .warm([...project.photos.values()], 'preview', 6)
     .then(() => process.stdout.write('Vorschaubilder vollständig\n'));
-
-  await app.listen({ port: PORT, host: '127.0.0.1' });
-  process.stdout.write(`Server auf http://127.0.0.1:${PORT}\n`);
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
