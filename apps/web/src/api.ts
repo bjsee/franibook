@@ -162,6 +162,14 @@ export interface ProjectInfo {
   groupMarks: { spreadIndex: number; id: string; title: string }[];
   /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
   groupsPending: boolean;
+  /**
+   * Ob die Kalendergliederung von der abweicht, aus der das Buch gebaut wurde.
+   *
+   * Datumskorrekturen, aussortierte Fotos, ein Nachimport. Nur wahr, wenn ein
+   * Neuaufbau tatsächlich etwas ändern würde — eine Korrektur um Minuten, die
+   * keine Reihenfolge kippt, meldet nichts.
+   */
+  structurePending: boolean;
   undatedCount: number;
   /** Was Cmd+Z und Cmd+Umschalt+Z gerade bedeuten. */
   undo: UndoAuskunft;
@@ -499,6 +507,46 @@ export interface FotoInfo {
   camera?: string;
   issues: { code: string; detail?: string }[];
 }
+
+/**
+ * Eine Datumskorrektur, wie der Server sie annimmt.
+ *
+ * `shift` verschiebt um einen Betrag und erhält damit die Abstände — der
+ * Kamera-Reset-Fall. `spread` verteilt über einen Zeitraum und liefert deshalb
+ * geschätzte Werte. `clear` gibt das Datum an die Datei zurück.
+ */
+export type Datumskorrektur =
+  | { kind: 'set'; value: string }
+  | {
+      kind: 'shift';
+      years?: number;
+      months?: number;
+      days?: number;
+      hours?: number;
+      minutes?: number;
+    }
+  | { kind: 'spread'; from: string; to: string }
+  | { kind: 'clear' };
+
+export interface Korrekturergebnis {
+  geaendert: number;
+  uebersprungen: { id: string; grund: string }[];
+  unbekannt: string[];
+  /** Die betroffenen Fotos mit neu aufgelöstem Datum. */
+  photos: FotoInfo[];
+  structurePending: boolean;
+  undatedCount: number;
+}
+
+/**
+ * Korrigiert das Datum mehrerer Fotos.
+ *
+ * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung** — beim
+ * Verteilen über einen Zeitraum bekommt das erste Foto den frühesten Zeitpunkt.
+ * Die Ansicht schickt also die Liste, die sie zeigt.
+ */
+export const datumKorrigieren = (ids: string[], date: Datumskorrektur) =>
+  sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, date });
 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {

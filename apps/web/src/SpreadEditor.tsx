@@ -46,6 +46,7 @@ export function SpreadEditor({
     selectedSlotId,
     onSelect,
     onChanged: aussen.onGeaendert,
+    onNeuRendern: aussen.onNeuRendern,
   });
 
   const Rahmen = variante === 'b' ? Werkbank : variante === 'c' ? Lesetisch : Inspektor;

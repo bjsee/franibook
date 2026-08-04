@@ -45,8 +45,13 @@ export interface UndoEintrag {
    *
    * Für die Griffe, deren Verlust auch einen Serverneustart überdauern soll:
    * Alles, was das ganze Buch anfasst oder den Bestand austauscht.
+   *
+   * Als Prädikat, wenn dieselbe Route je nach Umfang beides sein kann: Eine
+   * Datumskorrektur an einem Bild ist ein Handgriff, eine an vierzig ein
+   * Eingriff. Immer zu ankern würde die Liste der letzten zehn Anker mit
+   * Einzelklicks füllen und damit gerade die großen Griffe daraus verdrängen.
    */
-  anker?: true;
+  anker?: true | Ausleser<boolean>;
   /**
    * Danach ist der Verlauf leer.
    *
@@ -203,6 +208,17 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // Verlauf merkt sich beide Pfade und legt die Datei beim Zurücknehmen zurück
   // (`Project.deletePhoto`).
   'DELETE /api/photos/:id': { label: 'Foto aussortiert' },
+  // Kein Verschmelzschlüssel: Eine Korrektur ist eine Anfrage über die ganze
+  // Auswahl, kein Regler. Ein Anker fällt bei einer Serie – wer vierzig Bilder
+  // eines Kamera-Resets verschiebt und sich vertut, soll das auch nach einem
+  // Serverneustart noch heilen können.
+  'PATCH /api/photos': {
+    label: 'Datum korrigiert',
+    anker: (_p, body) => {
+      const ids = (body as { ids?: unknown } | null)?.ids;
+      return Array.isArray(ids) && ids.length >= 50;
+    },
+  },
   'POST /api/import': { label: 'Bildquellen neu eingelesen', anker: true, barriere: true },
   'POST /api/sources': { label: 'Bildquelle aufgenommen', anker: true, barriere: true },
   'DELETE /api/sources/:id': { label: 'Bildquelle entfernt', anker: true, barriere: true },
@@ -264,12 +280,16 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
     const eintrag = eintragFuer(req);
     if (!eintrag) return;
 
-    if (eintrag.anker) await project.notanker(eintrag.label);
+    const params = (req.params ?? {}) as Record<string, string>;
+
+    const ankern =
+      eintrag.anker === true ||
+      (typeof eintrag.anker === 'function' && eintrag.anker(params, req.body) === true);
+    if (ankern) await project.notanker(eintrag.label);
     // Eine Barriere hält keinen Stand fest – sie leert den Verlauf, sobald sie
     // durch ist. Ein Stand vorher wäre ein Zurücknehmen, das nur so aussieht.
     if (eintrag.barriere) return;
 
-    const params = (req.params ?? {}) as Record<string, string>;
     const schluessel = eintrag.schluessel?.(params, req.body);
     const spreadIndex = eintrag.spreadIndex?.(params, req.body);
 

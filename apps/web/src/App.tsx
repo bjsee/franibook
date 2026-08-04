@@ -38,6 +38,7 @@ import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
+import { Fotodaten } from './Fotodaten.js';
 import { Overview } from './Overview.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
@@ -58,13 +59,14 @@ import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './sprea
  */
 const ANLAUF_TAKT_MS = 1000;
 
-type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit' | 'cover';
+type View = 'overview' | 'spread' | 'groups' | 'years' | 'fotodaten' | 'sources' | 'edit' | 'cover';
 
 const REITER: { id: View; label: string }[] = [
   { id: 'overview', label: 'Übersicht' },
   { id: 'spread', label: 'Doppelseite' },
   { id: 'groups', label: 'Gruppen' },
   { id: 'years', label: 'Jahre' },
+  { id: 'fotodaten', label: 'Fotodaten' },
   { id: 'sources', label: 'Bildquellen' },
   { id: 'edit', label: 'Aufteilung' },
   { id: 'cover', label: 'Umschlag' },
@@ -670,6 +672,7 @@ export function App() {
           spreadCount={info.spreadCount}
           undated={info.undatedCount}
           groupsPending={info.groupsPending}
+          structurePending={info.structurePending}
           busy={!!busy}
           onZeigeSpread={(i) => {
             setIndex(i);
@@ -754,6 +757,17 @@ export function App() {
             setIndex(i);
             setView('spread');
             // Die Auftaktseite hat sich geändert, also neu holen.
+            neuRendern();
+          }}
+        />
+      ) : view === 'fotodaten' ? (
+        <Fotodaten
+          standVersion={standVersion}
+          onChanged={() => {
+            loadInfo();
+            // Ein korrigiertes Datum ändert das Buch nicht von selbst – aber die
+            // Zeitleiste am Fuß der Doppelseite liest die Daten beim Rendern,
+            // also gilt das gerenderte Blatt im Speicher nicht weiter.
             neuRendern();
           }}
         />

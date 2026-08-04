@@ -414,6 +414,16 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     url: `/api/photos/${photoIds[2]}`,
   }),
 
+  // Um einen Monat und nicht um Minuten: Damit wechselt das Foto vom März- ins
+  // Aprilsegment, und der Fall deckt neben den Overrides auch den Abdruck der
+  // Gliederung ab – das Feld, das `structurePending()` trägt und das nach einem
+  // Zurücknehmen wieder stimmen muss.
+  'PATCH /api/photos': ({ photoIds }) => ({
+    method: 'PATCH',
+    url: '/api/photos',
+    payload: { ids: [photoIds[0]], date: { kind: 'shift', months: 1 } },
+  }),
+
   'PATCH /api/sources/:id': ({ sourceId }) => ({
     method: 'PATCH',
     url: `/api/sources/${sourceId}`,

@@ -199,11 +199,31 @@ Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
 Alle Zeitangaben sind **naive lokale Zeit** (`YYYY-MM-DDTHH:mm:ss`) ohne Offset — ein
 Fotobuch ist chronologisch im Sinne des Erlebens, nicht im Sinne von UTC. Das effektive
 Datum entsteht in `model/date.ts` über eine Kaskade
-(`manual → exif → exifSecondary → filename → file → interpolated → unknown`) mit
+(`manual → interpolated → exif → exifSecondary → filename → file → unknown`) mit
 `confidence` und `issues`; die Quelle wird in der Oberfläche als Badge angezeigt.
 
 `Photo` (Importergebnis) und `PhotoOverride` (Benutzerkorrektur) sind strikt getrennt:
 Ein erneuter Import überschreibt `Photo`, niemals `PhotoOverride`.
+
+**Das Datum lässt sich korrigieren, das Buch folgt aber nicht von selbst.**
+`model/date-correction.ts` rechnet drei Arten — Zeitpunkt setzen, um einen Betrag
+verschieben (Kamera-Reset: die Abstände bleiben, der Nullpunkt wandert), über einen
+Zeitraum verteilen (Ergebnis gilt als `dateEstimated` und damit als Quelle
+`interpolated`). Jahre und Monate werden kalendarisch addiert und auf den
+Monatsletzten geklemmt, sonst verrutschen elf Schalttage einen geradegerichteten
+Reset um elf Tage. Geschrieben wird über **eine mengenwertige Route**
+(`PATCH /api/photos`), damit vierzig korrigierte Fotos ein Cmd+Z sind und nicht
+vierzig; **die Reihenfolge der Liste ist die Reihenfolge der Verteilung**.
+
+Ob das Buch danach veraltet ist, sagt `structurePending()` — gebaut wie
+`groupsPending()`, über einen Abdruck der Gliederung (`structureFingerprint`).
+Erfasst sind Segment, Reihenfolge, Serienschnitt und die undatierten Fotos, **nicht**
+die Zeitpunkte: Eine Korrektur um fünf Minuten, die nichts umstellt, meldet nichts,
+denn Fehlalarme entwerten den Hinweis. Korrigiert wird im Reiter `Fotodaten`
+(Stapel; undatierte Fotos stehen in keiner Doppelseite und sind sonst unerreichbar)
+und am Bild selbst (`spread/DatumGriff.tsx`, in allen drei Rahmen). Begründung und
+verworfene Fassungen (sofort neu anordnen, chirurgisch einsetzen, Nachbar-Anker):
+`docs/konzept.md`, Abschnitt „Reparaturwerkzeuge".
 
 ### Text und Schrift
 
