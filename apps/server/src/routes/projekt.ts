@@ -36,6 +36,10 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     // statt das Buch ungefragt neu zu bauen.
     groupsPending: project.groupsPending(),
     undatedCount: project.structure.undated.length,
+    // Was Cmd+Z und Cmd+Umschalt+Z gerade bedeuten. Hier und nicht in einem
+    // eigenen Endpunkt: Die Oberfläche holt diese Auskunft nach jeder Änderung
+    // ohnehin, und die Knöpfe sollen dabei mitgehen.
+    undo: project.verlauf.auskunft(),
   }));
 
   /** Erzeugt das Buch neu, etwa nach geänderter Seitenzahl. */

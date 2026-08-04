@@ -15,21 +15,13 @@
  * Datei, und eine Route war nur noch über die Suche zu finden.
  */
 import { resolve } from 'node:path';
-import Fastify from 'fastify';
+import { baueApp } from './app.js';
 import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
 import { Sources } from './sources.js';
 import { shutdownImport } from './import.js';
-import { buchRouten } from './routes/buch.js';
-import { fotoRouten } from './routes/fotos.js';
-import { gruppenRouten } from './routes/gruppen.js';
 import type { Kontext } from './routes/kontext.js';
-import { projektRouten } from './routes/projekt.js';
-import { quellenRouten } from './routes/quellen.js';
-import { slotRouten } from './routes/slots.js';
-import { spreadRouten } from './routes/spreads.js';
-import { umschlagRouten } from './routes/umschlag.js';
 
 const PORT = Number(process.env['PORT'] ?? 5174);
 const SOURCE_ROOT = resolve(
@@ -41,8 +33,6 @@ const OUT_DIR = resolve(process.env['FRANIBOOK_OUT'] ?? '.franibook-out');
 const IMPORT_LIMIT = process.env['FRANIBOOK_LIMIT']
   ? Number(process.env['FRANIBOOK_LIMIT'])
   : undefined;
-
-const app = Fastify({ logger: { level: 'warn' } });
 
 const PROJECT_DIR = resolve(process.env['FRANIBOOK_PROJECT'] ?? '.franibook-project');
 
@@ -83,22 +73,8 @@ const kontext: Kontext = {
  */
 let anlauf: string | null = 'Der Server startet.';
 
-app.addHook('onRequest', async (_req, reply) => {
-  if (anlauf === null) return;
-  // 503 und nicht 425 oder 409: Der Dienst ist vorübergehend nicht verfügbar,
-  // und genau das steht hier an. `Retry-After` in Sekunden, damit auch ein
-  // Aufrufer ohne eigene Wartelogik nicht im Sekundentakt anklopft.
-  return reply.code(503).header('retry-after', '1').send({ error: anlauf });
-});
-
-projektRouten(app, kontext);
-buchRouten(app, kontext);
-spreadRouten(app, kontext);
-slotRouten(app, kontext);
-gruppenRouten(app, kontext);
-fotoRouten(app, kontext);
-quellenRouten(app, kontext);
-umschlagRouten(app, kontext);
+// Der Hook dazu steht in `app.ts` und fragt den Satz bei jeder Anfrage neu ab.
+const { app } = baueApp({ kontext, anlauf: () => anlauf });
 
 async function start(): Promise<void> {
   const t0 = Date.now();

@@ -68,8 +68,16 @@ import * as bestand from './project/bestand.js';
 import type { ImportDiff, QuellenBericht } from './project/bestand.js';
 import * as gruppen from './project/gruppen.js';
 import * as layoutDokument from './project/layout-dokument.js';
+import {
+  type Anker,
+  ANKER_ORDNER,
+  ankerLegen,
+  ankerLesen,
+  ankerListe,
+} from './project/notanker.js';
 import * as seiten from './project/seiten.js';
 import * as umschlag from './project/umschlag.js';
+import { type Schritt, Verlauf } from './project/verlauf.js';
 import { type PhotoSource, quellenId, Sources } from './sources.js';
 
 /**
@@ -250,6 +258,30 @@ function zuSchema3(data: PersistedProject): PersistedProject {
   return { ...data, schemaVersion: 3, book: { spreads } };
 }
 
+/**
+ * Der veränderbare Stand des Projekts, wie ihn ein Undo-Schritt festhält.
+ *
+ * Fast dasselbe wie `PersistedProject` — und trotzdem ein eigener Typ, weil die
+ * Unterschiede Aussagen sind. Dabei sind `groupStamp` und `lastReport`: Ohne
+ * den Abdruck stünde `groupsPending()` nach einem Zurücknehmen falsch, ohne den
+ * Bericht die Kennzahlen. Nicht dabei ist die Kalendergliederung
+ * (`structure`) — sie ist abgeleitet und wird nach jedem Setzen neu gebildet —
+ * und nicht dabei ist der Importbefund (`importedAt`, `skippedVideos`,
+ * `failed`): Der gehört zum Import, und der ist eine Barriere im Verlauf.
+ */
+export interface Stand {
+  quellen: PhotoSource[];
+  photos: Map<PhotoId, Photo>;
+  overrides: Record<PhotoId, PhotoOverride>;
+  groups: PhotoGroup[];
+  groupStamp: string | undefined;
+  spreads: Spread[];
+  settings: ProjectSettings;
+  yearEvents: Record<string, string[]>;
+  cover: CoverDesign;
+  lastReport: GenerateResult['report'] | null;
+}
+
 export interface PhotoView extends Photo {
   effectiveDate: string | null;
   dateSource: string;
@@ -333,12 +365,103 @@ export class Project {
   failed: { file: string; reason: string }[] = [];
   importedAt = new Date().toISOString();
 
+  /**
+   * Was sich zurücknehmen lässt.
+   *
+   * Der Verlauf hält ganze Stände und rührt sie über zwei Funktionen an: Der
+   * Stand ist eine Kopie (`stand()`), das Setzen bildet die Kalendergliederung
+   * neu (`setzeStand()`). Dass die Bewegung einer Datei mitgeht, ist die dritte
+   * — und einzige, die scheitern kann.
+   */
+  readonly verlauf: Verlauf<Stand>;
+
   constructor(
     readonly sources: Sources,
     readonly previews: PreviewCache,
     readonly decodes: DecodeCache,
     private readonly projectPath: string,
-  ) {}
+  ) {
+    this.verlauf = new Verlauf<Stand>({
+      lies: () => this.stand(),
+      schreib: (stand) => this.setzeStand(stand),
+      verschiebe: async (zug, richtung) => {
+        const [von, nach] = richtung === 'zurueck' ? [zug.nach, zug.von] : [zug.von, zug.nach];
+        try {
+          await rename(von, nach);
+        } catch (fehler) {
+          // Ein deutscher Satz, kein Code: Die Oberfläche zeigt ihn unverändert.
+          // Etwa, wenn die Quelle gerade nicht eingehängt ist oder jemand die
+          // Datei im Finder selbst zurückgelegt hat.
+          throw new Error(`Die Datei ${basename(nach)} lässt sich nicht bewegen`, {
+            cause: fehler,
+          });
+        }
+      },
+    });
+  }
+
+  // --------------------------------------------------- Zurücknehmen und wieder
+
+  /**
+   * Der aktuelle Stand als eigene Kopie.
+   *
+   * `structuredClone` und nicht ein Umweg über JSON: Die Fotos liegen als `Map`
+   * im Speicher, und die bliebe dabei auf der Strecke. Gemessen an ~830 Fotos
+   * und ~80 Doppelseiten kostet die Kopie wenige Millisekunden — billiger als
+   * jede Buchführung darüber, was sich geändert hat.
+   */
+  stand(): Stand {
+    return structuredClone({
+      quellen: [...this.sources.list()],
+      photos: this.photos,
+      overrides: this.overrides,
+      groups: this.groups,
+      groupStamp: this.groupStamp,
+      spreads: this.spreads,
+      settings: this.settings,
+      yearEvents: this.yearEvents,
+      cover: this.cover,
+      lastReport: this.lastReport,
+    });
+  }
+
+  /** Setzt einen Stand wieder in Kraft. */
+  private setzeStand(stand: Stand): void {
+    this.sources.restore(stand.quellen);
+    // `photos` ist `readonly` und wird an vielen Stellen als dieselbe Map
+    // gehalten – also austauschen, nicht ersetzen.
+    this.photos.clear();
+    for (const [id, photo] of stand.photos) this.photos.set(id, photo);
+    this.overrides = stand.overrides;
+    this.groups = stand.groups;
+    this.groupStamp = stand.groupStamp;
+    this.spreads = stand.spreads;
+    this.settings = stand.settings;
+    this.yearEvents = stand.yearEvents;
+    this.cover = stand.cover;
+    this.lastReport = stand.lastReport;
+    this.rebuildStructure();
+  }
+
+  /**
+   * Nimmt den letzten Schritt zurück und speichert.
+   *
+   * @returns der zurückgenommene Schritt, oder `null` bei leerem Verlauf.
+   * @throws wenn eine Datei nicht zurückgelegt werden kann — dann ist nichts
+   * geschehen.
+   */
+  async zurueck(): Promise<Schritt<Stand> | null> {
+    const schritt = await this.verlauf.zurueck();
+    if (schritt) await this.save();
+    return schritt;
+  }
+
+  /** Das Gegenstück: wiederholt den zuletzt zurückgenommenen Schritt. */
+  async vor(): Promise<Schritt<Stand> | null> {
+    const schritt = await this.verlauf.vor();
+    if (schritt) await this.save();
+    return schritt;
+  }
 
   // ------------------------------------------------- Bestand und Bildquellen
 
@@ -358,13 +481,26 @@ export class Project {
     return bestand.vergessen(this, ids);
   }
 
-  deletePhoto(id: PhotoId): Promise<{
+  /**
+   * Sortiert ein Foto aus – und merkt sich den Weg zurück.
+   *
+   * Die einzige Aktion mit einer Wirkung außerhalb des Projektzustands. Der
+   * Verlauf hält deshalb nicht nur den Stand von vorher, sondern auch die beiden
+   * Pfade: Zurücknehmen heißt hier, die Datei aus `.franibook-geloescht` zu
+   * holen. Der Pfad wird nicht mit nach draußen gegeben – die Antwort nennt den
+   * Papierkorb, das genügt der Oberfläche.
+   */
+  async deletePhoto(id: PhotoId): Promise<{
     fileName: string;
     papierkorb: string;
     imBuch: number;
     spreads: number[];
   } | null> {
-    return bestand.deletePhoto(this, id);
+    const ergebnis = await bestand.deletePhoto(this, id);
+    if (!ergebnis) return null;
+    const { von, ...antwort } = ergebnis;
+    this.verlauf.merkeDateizug({ von, nach: antwort.papierkorb });
+    return antwort;
   }
 
   importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
@@ -1591,8 +1727,9 @@ export class Project {
     return this.schreibvorgang;
   }
 
-  private async schreibeJetzt(): Promise<void> {
-    const data: PersistedProject = {
+  /** Der Stand in der Form, in der er auf Platte geht. */
+  private daten(): PersistedProject {
+    return {
       schemaVersion: SCHEMA_VERSION,
       sources: [...this.sources.list()],
       settings: this.settings,
@@ -1605,6 +1742,10 @@ export class Project {
       cover: this.cover,
       importedAt: this.importedAt,
     };
+  }
+
+  private async schreibeJetzt(): Promise<void> {
+    const data = this.daten();
 
     const target = join(this.projectPath, 'project.json');
     // Eindeutiger Name je Vorgang: Die Serialisierung oben verhindert das
@@ -1625,6 +1766,70 @@ export class Project {
   }
 
   private schreibZaehler = 0;
+
+  // -------------------------------------------------------------- Notanker
+
+  private get ankerOrdner(): string {
+    return join(this.projectPath, ANKER_ORDNER);
+  }
+
+  /**
+   * Legt den ganzen Stand als Datei ab, vor einer großen Aktion.
+   *
+   * Aus dem Speicher heraus, nicht als Kopie von `project.json`: Die Datei kann
+   * fehlen oder älter sein, weil `save()` nebenläufig läuft.
+   */
+  async notanker(aktion: string): Promise<Anker | null> {
+    try {
+      await mkdir(this.ankerOrdner, { recursive: true });
+      return await ankerLegen(this.ankerOrdner, this.daten(), aktion);
+    } catch (fehler) {
+      // Ein misslungener Anker hält die Aktion nicht auf – er ist die
+      // Vorsichtsmaßnahme, nicht der Zweck. Gemeldet wird er trotzdem.
+      console.error(`Notanker nicht gelegt (${aktion}): ${String(fehler)}`);
+      return null;
+    }
+  }
+
+  /** Die abgelegten Notanker, neuester zuerst. */
+  ankerListe(): Promise<Anker[]> {
+    return ankerListe(this.ankerOrdner);
+  }
+
+  /**
+   * Holt einen Notanker zurück.
+   *
+   * Durch dieselbe `migriere()` wie beim Laden – ein Anker *ist* eine
+   * `project.json`, und ein Anker aus einer älteren Fassung ist genau der Fall,
+   * für den es Migrationen gibt. Was danach kommt, ist Sache des Aufrufers:
+   * Der Endpunkt legt vorher selbst einen Anker und hält den Stand im Verlauf
+   * fest, damit auch dieser Griff sich zurücknehmen lässt.
+   *
+   * @returns `false`, wenn es den Anker nicht gibt oder er unbrauchbar ist.
+   */
+  async ankerZurueck(name: string): Promise<boolean> {
+    const roh = await ankerLesen(this.ankerOrdner, name);
+    if (roh === null) return false;
+
+    const data = migriere(roh as PersistedProject);
+    if (data === null) return false;
+
+    if (data.sources?.length) this.sources.restore(data.sources);
+    this.photos.clear();
+    for (const p of data.photos) this.photos.set(p.id, p);
+    this.overrides = data.overrides ?? {};
+    this.groups = data.groups ?? [];
+    this.groupStamp = data.groupStamp;
+    this.yearEvents = data.yearEvents ?? {};
+    this.spreads = data.book?.spreads ?? [];
+    this.cover = data.cover ?? {};
+    this.settings = { ...this.settings, ...data.settings };
+    this.importedAt = data.importedAt ?? this.importedAt;
+    this.rebuildStructure();
+    this.refreshReport();
+    await this.save();
+    return true;
+  }
 
   /** @returns ob ein gespeichertes Projekt gefunden wurde. */
   async load(): Promise<boolean> {
