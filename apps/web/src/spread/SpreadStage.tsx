@@ -8,6 +8,10 @@
  * nicht in ihr, sonst müsste `render-dom` wissen, was ein ausgewählter Block ist
  * — eine Bedienungsentscheidung im Renderer, und genau die soll es dort nicht
  * geben.
+ *
+ * Auch ihre Breite bringt die Bühne mit (`model.stageBreite`) und nimmt sie nicht
+ * vom Rahmen entgegen: Papier und Griffe müssen mit demselben `pxPerMm` rechnen,
+ * und ein Rahmen, der die eine Zahl liefern darf, kann die andere verfehlen.
  */
 import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
@@ -46,14 +50,12 @@ interface Props {
   imageSrc: (photoId: string) => string;
   guides: GuideVisibility;
   blocks: readonly TextBlockData[];
-  /** Breite der Bühne in Pixeln, falls der Rahmen sie selbst bestimmt. */
-  breite?: number | undefined;
 }
 
-export function SpreadStage({ model, imageSrc, guides, blocks, breite }: Props) {
+export function SpreadStage({ model, imageSrc, guides, blocks }: Props) {
   const {
     stageRef,
-    stageWidth,
+    stageBreite,
     pxPerMm,
     angezeigt,
     beschnittMm,
@@ -69,8 +71,6 @@ export function SpreadStage({ model, imageSrc, guides, blocks, breite }: Props) 
     textId,
     pendingText,
   } = model;
-
-  const breitePx = breite ?? stageWidth;
 
   /**
    * Was über einem Slot liegt.
@@ -135,7 +135,7 @@ export function SpreadStage({ model, imageSrc, guides, blocks, breite }: Props) 
     <div ref={stageRef} style={S.wrap}>
       <SpreadView
         spread={angezeigt}
-        widthPx={breitePx}
+        widthPx={stageBreite}
         imageSrc={imageSrc}
         guides={guides}
         onSlotClick={model.slotClick}

@@ -26,7 +26,6 @@ import type { TextBlockData } from '../TextBlocks.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage, zeitpunkt } from './SpreadStage.js';
 import { miniaturSrc, useNachbarn } from './useNachbarn.js';
-import { usePlatz } from './usePlatz.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import type { SpreadAussen } from './types.js';
 
@@ -41,7 +40,6 @@ interface Props {
 }
 
 export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
-  const { ref, breite } = usePlatz(spread.widthMm / spread.heightMm);
   const [blatt, setBlatt] = useState<'pool' | 'anordnung' | null>(null);
 
   // `p` und `a` öffnen die beiden Blätter, `Esc` schließt sie. Dieselbe Prüfung
@@ -88,13 +86,12 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
         </span>
       </div>
 
-      <div ref={ref} style={S.buehnenPlatz}>
+      <div ref={model.platzRef} style={S.buehnenPlatz}>
         <SpreadStage
           model={model}
           imageSrc={imageSrc}
           guides={aussen.guides}
           blocks={spread.blocks ?? []}
-          breite={breite}
         />
       </div>
 

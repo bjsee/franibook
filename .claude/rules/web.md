@@ -41,6 +41,35 @@ Zustand und Serverzugriff einer größeren Ansicht gehören in einen Hook neben 
 Komponente (`spread/useSpreadEditor.ts`, `useNachbarn.ts`, `usePlatz.ts`), nicht
 in die JSX-Datei.
 
+## Die Doppelseite hat drei Rahmen — jede Funktion gilt in allen dreien
+
+Inspektor, Werkbank und Lesetisch (`spread/varianten.ts`) sind drei Rahmen um
+**eine** Bühne (`spread/SpreadStage.tsx`). Sie stehen zur Wahl, damit sich
+vergleichen lässt, welche **Anordnung** beim Durcharbeiten von achtzig
+Doppelseiten trägt — nicht, welcher Rahmen mehr kann. Eine Funktion, die nur in
+einem von ihnen erreichbar ist, macht genau diesen Vergleich wertlos: Man
+wechselt dann nicht, weil eine Anordnung besser liegt, sondern weil man etwas
+braucht. Wer eine Funktion ergänzt, ergänzt sie **dreimal** und sieht sie
+dreimal an (`?ui=a`, `?ui=b`, `?ui=c`).
+
+Daraus folgen zwei Handgriffe:
+
+**Das Verhalten liegt in `useSpreadEditor`, nie im Rahmen.** Der Rahmen
+entscheidet Anordnung und Wortlaut — feste Spalte, schwebende Karte, Leiste —,
+niemals Wirkung. Dieselbe Handlung dreimal zu schreiben ist dreimal die
+Gelegenheit, sie auseinanderlaufen zu lassen.
+
+**Und kein Rahmen liefert eine Zahl, die die Bühne selbst braucht.** Die
+Bühnenbreite stand vorher doppelt: `usePlatz` in jedem Rahmen für die Breite des
+Papiers, ein eigener `ResizeObserver` im Haken für `pxPerMm`. Dass beide dasselbe
+ergaben, war eine Absprache und keine Tatsache — und sie brach beim
+Variantenwechsel, weil der Haken den ausgehängten Kasten des alten Rahmens
+weiterbeobachtete und dafür 0 × 0 gemeldet bekam. `pxPerMm` wurde null, und damit
+lagen die Griffe als ein Punkt in der Ecke des Blattes und jede Zeigergeste war
+tot: Griffe, Drehen, Position, Ausschnitt, Textkästen. Der Rahmen sagt jetzt nur
+noch, _wo_ die Bühne steht (`model.platzRef`); wie breit sie ist, weiß sie selbst
+(`model.stageBreite`).
+
 ## Zugriff auf den Server
 
 **Kein `fetch(` außerhalb von `api.ts`** — der Architekturtest prüft das. Dort steht
