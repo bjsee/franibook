@@ -333,12 +333,16 @@ interface Project {
 > `rename`. Sie enthält Fotos, Overrides, Gruppen und Doppelseiten zusammen und
 > ist bei 820 Fotos rund 680 KB groß.
 >
-> Nicht umgesetzt: die Aufteilung in sechs Dateien, `history/`-Snapshots, das
-> Backup vor der Migration, `fsync`, debouncetes Autosave und `sendBeacon`.
-> Gespeichert wird nach jeder ändernden Anfrage. Migriert wird seit Schema 2
-> (Bildquellen als Liste) tatsächlich — `migriere()` in `project.ts` hebt den
-> alten Stand an, statt ihn zu verwerfen; ein unbekanntes Schema führt weiterhin
-> zum Neuimport.
+> Nicht umgesetzt: die Aufteilung in sechs Dateien, das Backup vor der
+> Migration, `fsync`, debouncetes Autosave und `sendBeacon`. Gespeichert wird
+> nach jeder ändernden Anfrage. Migriert wird seit Schema 2 (Bildquellen als
+> Liste) tatsächlich — `migriere()` in `project.ts` hebt den alten Stand an,
+> statt ihn zu verwerfen; ein unbekanntes Schema führt weiterhin zum Neuimport.
+>
+> `history/` gibt es seit dem 4. August 2026, aber nicht vor jedem Schreiben:
+> Ein Ausschnittsregler erzeugte damit eine Datei je Zehntelsekunde. Ein Anker
+> fällt vor den Griffen, deren Verlust weh tut — siehe
+> [Zurücknehmen](#zurücknehmen-ganze-stände-statt-patches).
 >
 > Das ist Phase 7 und bewusst aufgeschoben — solange das Projekt in Sekunden aus
 > dem Quellordner neu entsteht, ist der Verlust überschaubar.
@@ -371,6 +375,15 @@ Die Aufteilung in mehrere Dateien ist bewusst: `book.json` ändert sich bei jede
 Jede Datei wird atomar geschrieben (`write` in `*.tmp` im selben Verzeichnis, `fsync`, `rename`). Damit ist ein halb geschriebenes Projekt bei Absturz oder Stromausfall ausgeschlossen. Autosave läuft debounced 800 ms nach der letzten Änderung, zusätzlich beim Verlassen der Seite über `navigator.sendBeacon`.
 
 Vor jedem Schreiben von `book.json` wandert die vorherige Fassung nach `history/`. Das ist der Rettungsanker für „Buch neu generiert und das alte war besser“ – im Gegensatz zum Undo-Stack überlebt er einen Neustart.
+
+> **Korrektur (4. August 2026): vor den großen Griffen, nicht vor jedem Schreiben**
+>
+> Der Gedanke gilt, die Häufigkeit nicht. Ein Anker fällt vor „Buch neu
+> anordnen“, „Layout einspielen“, Import, Quellenwechsel, Gruppenvorschlägen und
+> vor dem Zurückholen eines Ankers – nicht vor jedem Schreibvorgang, denn
+> geschrieben wird nach _jeder_ Anfrage, und ein Ausschnittsregler ergäbe eine
+> Datei je Zehntelsekunde. Welche Route einen Anker wert ist, steht in
+> `UNDO_ROUTEN` (`apps/server/src/routes/undo.ts`) und nirgends sonst.
 
 ### Migration
 
@@ -1666,13 +1679,19 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 
 ## Zustandsverwaltung, Undo und Drag-and-drop
 
-> **Korrektur (2. August 2026): dieses Kapitel ist vollständig unumgesetzt**
+> **Korrektur (2. August 2026, ergänzt am 4. August 2026): dieses Kapitel ist
+> unumgesetzt — der Zweck aber erfüllt**
 >
 > Weder Zustand noch Immer noch dnd-kit sind im Projekt — das Frontend hat als
-> einzige Abhängigkeiten React und `render-dom`. Es gibt keinen Store, kein
-> Undo/Redo, keine Patches und keinen `/api/project/patch`-Endpunkt: Jede Änderung
-> geht als eigener Aufruf an den Server, der sein Projekt danach vollständig
-> schreibt.
+> einzige Abhängigkeiten React und `render-dom`. Es gibt keinen Store, keine
+> Patches und keinen `/api/project/patch`-Endpunkt: Jede Änderung geht als
+> eigener Aufruf an den Server, der sein Projekt danach vollständig schreibt.
+>
+> Undo und Redo gibt es seit dem 4. August 2026 — auf dem Server, mit ganzen
+> Ständen statt Patches. Siehe
+> [Zurücknehmen](#zurücknehmen-ganze-stände-statt-patches); der Abschnitt
+> [Zustandsmodell](#zustandsmodell) weiter unten beschreibt den nicht gegangenen
+> Weg.
 >
 > Kontext 1 (Fotos zwischen Slots) und Kontext 3 (Fotopool) sind inzwischen
 > umgesetzt, Kontext 2 (Timeline) nicht — **allerdings ohne dnd-kit**. Die
@@ -1688,9 +1707,78 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 >
 > Damit bleibt von der Zeile „Drag-and-drop" in der
 > [Technologieauswahl](#technologieauswahl) die Anforderung, nicht die
-> Bibliothek. Die Zeile „State" ist weiterhin Absicht: Eine Ausschnittsänderung
-> geht verzögert (250 ms) als eigener Aufruf an den Server, ein Undo gibt es
-> nicht — „Automatisch" stellt nur den berechneten Ausschnitt wieder her.
+> Bibliothek. Von der Zeile „State" ebenso: Undo/Redo gibt es, Immer nicht.
+
+### Zurücknehmen: ganze Stände statt Patches
+
+Ein Undo-Schritt hält den **ganzen veränderbaren Projektzustand** von vorher,
+nicht die Umkehrung einer Aktion. Er liegt im Server (`project/verlauf.ts`),
+nicht im Browser — dort ist die einzige Wahrheit, und Griffe wie „Buch neu
+anordnen“ oder „Buchseite einfügen“ rechnet ohnehin nur er.
+
+Das ist die grobe Lösung, und sie ist mit Absicht gewählt:
+
+- **Speicher ist hier billig.** Die `project.json` ist bei 820 Fotos 680 KB groß;
+  fünfzig Stände liegen in der Größenordnung von 30 MB. Für ein lokales
+  Einzelplatzwerkzeug ist das nichts.
+- **Es gibt keine Umkehrfunktion, die falsch sein kann.** Inverse Kommandos
+  hätten über dreißig Umkehrungen gebraucht, jede eine Fehlerquelle — und
+  `generateBook` oder `insertSinglePage` lassen sich praktisch nicht umkehren.
+  Mit ganzen Ständen ist „neu anordnen“ genauso rückholbar wie ein Ausschnitt.
+- **Immer war der teuerste Weg.** `produceWithPatches` verlangt, dass jede
+  Mutation durch einen Producer läuft; `project.ts` samt `project/*` sind über
+  zweitausend Zeilen imperative Mutation. Das wäre eine neue
+  Zustandsarchitektur gewesen, nicht eine Funktion.
+
+Im Stand stecken Quellen, Fotos, Overrides, Gruppen, `groupStamp`, Doppelseiten,
+Einstellungen, Jahresereignisse, Umschlag und der letzte Kennzahlenbericht.
+Nicht darin: die Kalendergliederung (abgeleitet, wird nach jedem Setzen neu
+gebildet) und der Importbefund. `groupStamp` und der Bericht sind ausdrücklich
+dabei — ohne sie stünden `groupsPending()` und die Kennzahlen nach einem
+Zurücknehmen falsch. Beide sind genau daran aufgefallen.
+
+**Wer den Stand festhält, ist ein Haken und keine Zeile im Handler.** Ein
+`punkt()` als erste Zeile in jedem der über dreißig Handler wäre naheliegend
+gewesen, und eine vergessene Zeile fiele niemandem auf, bis jemand das Falsche
+zurücknimmt. Stattdessen steht jede Route genau einmal in `UNDO_ROUTEN`
+(`routes/undo.ts`), mit Bezeichnung, Verschmelzschlüssel, Seitenbezug und den
+Merkmalen `anker` und `barriere`. Ein `preHandler` liest die Tabelle, ein
+`onSend` verwirft den Stand wieder, wenn die Antwort erfolglos war. Zwei Tests
+halten das zusammen: `undo.test.ts` prüft die Tabelle gegen die tatsächlich
+angemeldeten Routen (in beide Richtungen), `undo-rundlauf.test.ts` ruft jede
+davon auf und verlangt, dass der Stand danach zeichengleich der von vorher ist.
+Dafür wurde `main.ts` zur Fabrik (`app.ts`) — die Routenliste entsteht beim
+Anmelden und ist danach nicht mehr zu bekommen.
+
+**Zusammengefasst wird über Schlüssel und Zeitfenster** (1,5 s, das Fenster
+wandert mit): Ein Ziehen ist ein Schritt, ein getippter Satz ist ein Schritt.
+Die 250 ms, mit denen die Oberfläche ihre Schreibvorgänge verzögert, reichen
+dafür nicht — ein Ziehen mit Denkpausen erzeugt mehrere Anfragen. Gemessen über
+HTTP: fünf Ausschnittsanfragen, ein Schritt.
+
+**Drei Grenzfälle, die die Form bestimmt haben:**
+
+- **Aussortieren** ist die einzige Aktion mit einer Wirkung außerhalb des
+  Zustands. Der Schritt merkt sich beide Pfade und legt die Datei beim
+  Zurücknehmen aus `.franibook-geloescht` zurück. Scheitert das `rename`,
+  geschieht _nichts_ — ein Zustand, der auf eine fehlende Datei zeigt, wäre
+  schlimmer als ein abgelehntes Undo.
+- **Import und Quellenwechsel** leeren den Verlauf. Sie legen Fotos, Vorschauen
+  und aufgelöste Orte an; ein zurückgesetzter Stand ließe die halbe Wirkung
+  stehen. Der Notanker ist hier der ehrliche Weg zurück.
+- **Der verzögerte Schreibvorgang.** Wer zieht und sofort Cmd+Z drückt, setzte
+  den Stand von vor der Bewegung — und der ausstehende PATCH stellte sie danach
+  wieder her. Die Oberfläche schickt deshalb erst alles Geplante raus und wartet
+  auf alles Unterwegse (`ausstehend.ts`), bevor sie zurücknimmt. Das ist kein
+  Feinschliff, sondern die Voraussetzung dafür, dass ein Undo den Stand meint,
+  den man sieht.
+
+In der Oberfläche liegt entsprechend wenig: zwei Knöpfe mit der Bezeichnung des
+Schritts im Hinweis, Cmd+Z und Cmd+Umschalt+Z (im Textfeld gehört Cmd+Z dem
+Browser), ein Sprung zur betroffenen Doppelseite und ein Zähler, der als Prop in
+die Ladeabhängigkeit der selbstladenden Ansichten geht. Als `key` an der Ansicht
+wäre es eine Zeile weniger, würfe aber bei jedem Cmd+Z Auswahl, Filter und
+Scrollstand weg.
 
 ### Zwei Züge, unterschieden am Ziel
 
@@ -1971,6 +2059,14 @@ queuePersist(patches);        // dieselben Patches gehen ans Backend
 Undo/Redo und das Persistenz-Delta entstehen so aus einer Operation, ohne zweite Buchführung. Das Backend wendet die Patches auf seine Kopie an und schreibt debounced. Bei Konflikten – die es mit einem Benutzer praktisch nicht gibt – gewinnt das Frontend.
 
 Undo-Stack-Tiefe 100, mit Zusammenfassung schnell aufeinanderfolgender gleichartiger Aktionen (Crop-Ziehen erzeugt einen Undo-Schritt, nicht vierzig).
+
+> **Korrektur (4. August 2026): so nicht gebaut**
+>
+> Vom Abschnitt „Zustandsmodell“ gilt allein die Zusammenfassung — sie ist
+> umgesetzt, über Schlüssel und Zeitfenster im Server. Der Rest ist der nicht
+> gegangene Weg: kein Store, kein Immer, keine Patches, Tiefe 50 statt 100 (es
+> sind ganze Stände, nicht Patches von wenigen Bytes). Warum, steht in
+> [Zurücknehmen](#zurücknehmen-ganze-stände-statt-patches).
 
 ### Drag-and-drop
 

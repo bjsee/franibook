@@ -3,11 +3,12 @@
  *
  * Ein Schritt hält den **ganzen veränderbaren Stand** von vorher, nicht die
  * Umkehrung einer Aktion. Das ist die eine Entscheidung, aus der alles Weitere
- * folgt, und sie ist bewusst die grobe: Bei ~500 KB je Stand und Tiefe 50 sind
- * das ~25 MB im Speicher — für ein lokales Einzelplatzwerkzeug nichts —, und
- * dafür gibt es keine einzige Umkehrfunktion, die falsch sein kann. „Buch neu
- * anordnen" ist damit genauso rückholbar wie ein Ausschnitt; mit inversen
- * Kommandos wäre es das nie geworden.
+ * folgt, und sie ist bewusst die grobe: Die gespeicherte `project.json` ist bei
+ * 820 Fotos 680 KB groß, fünfzig Stände liegen damit in der Größenordnung von
+ * 30 MB — für ein lokales Einzelplatzwerkzeug nichts —, und dafür gibt es keine
+ * einzige Umkehrfunktion, die falsch sein kann. „Buch neu anordnen" ist damit
+ * genauso rückholbar wie ein Ausschnitt; mit inversen Kommandos wäre es das nie
+ * geworden.
  *
  * Verworfen wurde der Weg, den `docs/konzept.md` einmal vorsah: Immer mit
  * `produceWithPatches`, Patch und Inverse aus derselben Operation. Elegant und
@@ -56,8 +57,9 @@ export interface Schritt<S> {
  * Wie viele Schritte aufbewahrt werden.
  *
  * Fünfzig, nicht die hundert aus dem Konzept: Dort waren es Patches von
- * wenigen Bytes, hier sind es ganze Stände. Fünfzig Schritte sind eine lange
- * Sitzung am Buch, und wer weiter zurückwill, will in Wahrheit den Notanker.
+ * wenigen Bytes, hier sind es ganze Stände von je ~680 KB. Fünfzig Schritte sind
+ * eine lange Sitzung am Buch, und wer weiter zurückwill, will in Wahrheit den
+ * Notanker.
  */
 export const VERLAUF_TIEFE = 50;
 

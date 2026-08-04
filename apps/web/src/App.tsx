@@ -702,6 +702,15 @@ export function App() {
             onNeuAnordnen={(patch) => void regenerate(patch)}
             onDarstellung={(patch) => void setSetting(patch)}
             onNeuEinlesen={() => void reimport()}
+            onNotankerZurueck={(satz) => {
+              // Wie nach einem Zurücknehmen: Der Stand ist ein anderer, und
+              // welche Ansicht davon betroffen ist, weiß niemand.
+              loadInfo();
+              neuRendern();
+              setStandVersion((v) => v + 1);
+              setIndex(0);
+              setNote(satz);
+            }}
           />
         </div>
       ) : view === 'spread' ? (

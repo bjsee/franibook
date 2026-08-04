@@ -179,7 +179,8 @@ Die Chronologie in Ordnung bringen – die Voraussetzung dafür, dass ein automa
 - Mehrfachauswahl: Klick, Umschalt-Klick, Rechteckauswahl
 - Drag-and-drop mit Datumsinterpolation und benennendem Toast
 - Massenwerkzeuge: Zeitversatz anwenden, Zeitraum zuweisen, aus Nachbarn interpolieren, Datum aus Dateiname, Reihenfolge einfrieren
-- Undo/Redo über Immer-Patches, Autosave
+- ~~Undo/Redo über Immer-Patches~~, Autosave — beides steht, das Undo anders als
+  geplant ([Zurücknehmen](konzept.md#zurücknehmen-ganze-stände-statt-patches))
 
 **Fertig, wenn**
 
@@ -333,8 +334,11 @@ Den Entwurf komfortabel korrigieren können.
 > Zielslot, beim Zuschneiden laufend, und die Kennzahlen der Kopfzeile werden nach
 > jeder Änderung nachgezogen.
 >
-> Umgesetzt ist das ohne dnd-kit und ohne Undo; die Gründe stehen in
+> Umgesetzt ist das ohne dnd-kit; die Gründe stehen in
 > [Zustandsverwaltung, Undo und Drag-and-drop](konzept.md#zustandsverwaltung-undo-und-drag-and-drop).
+> **Undo und Redo gibt es seit dem 4. August 2026** — im Server, mit ganzen
+> Ständen statt Immer-Patches, samt Notanker für die großen Griffe
+> ([Zurücknehmen](konzept.md#zurücknehmen-ganze-stände-statt-patches)).
 >
 > Dazugekommen: **Hintergrundfarben** je Doppelseite und für das ganze Buch, mit
 > einer Farbe je Jahrgang beim Erzeugen; wahlweise ein **Hintergrundbild**, dessen
@@ -345,7 +349,7 @@ Den Entwurf komfortabel korrigieren können.
 > Neuanordnen sagt umgekehrt vorher an, welche Handarbeit er kostet.
 >
 > Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste,
-> Gewichtung setzen, Doppelseite sperren, Undo/Redo.
+> Gewichtung setzen, Doppelseite sperren.
 
 **Inhalt**
 
