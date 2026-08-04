@@ -105,7 +105,11 @@ export function buchRouten(
         resolvePhoto: (photoId) => {
           const photo = project.photo(photoId);
           if (!photo) return undefined;
-          return { path: sources.pfad(photo), orientation: photo.orientation };
+          return {
+            path: sources.pfad(photo),
+            orientation: photo.orientation,
+            ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+          };
         },
         // Zweiter Anlauf für Dateien, die sharp nicht dekodieren kann – ein
         // 13-MB-PNG im Bestand fiel dem ersten Vollexport zum Opfer.
@@ -118,7 +122,13 @@ export function buchRouten(
           const photo = project.photo(photoId);
           if (!photo) return undefined;
           const path = await decodes.rescue(photo);
-          return path ? { path, orientation: photo.orientation } : undefined;
+          return path
+            ? {
+                path,
+                orientation: photo.orientation,
+                ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+              }
+            : undefined;
         },
       });
 

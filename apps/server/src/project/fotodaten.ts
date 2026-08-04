@@ -155,6 +155,58 @@ export function setzeOrte(
 }
 
 /**
+ * Kippt die Ausrichtung mehrerer Fotos; `null` gibt sie an die Datei zurück.
+ *
+ * Gezählt wird in Vierteldrehungen im Uhrzeigersinn, und sie **addieren sich**:
+ * Zweimal 90° ergibt 180°, viermal wieder gerade. Alles andere wäre am Knopf
+ * überraschend — man dreht, bis es stimmt, und zählt nicht mit.
+ *
+ * Bei 90° und 270° tauschen Breite und Höhe (`effectivePhoto`). Das ändert die
+ * Vorlagenwahl, aber **nicht** die Gliederung: Das Buch bleibt, wie es ist, und
+ * das Bild steht bis zum Neuanordnen in einem Platz, der jetzt schlechter passt.
+ */
+export function kippeAusrichtung(
+  z: Fotodatenstand,
+  ids: readonly PhotoId[],
+  turns: 1 | 2 | 3 | null,
+): Korrekturergebnis | { fehler: string } {
+  if (ids.length === 0) return { fehler: 'Keine Fotos ausgewählt' };
+
+  const unbekannt: PhotoId[] = [];
+  const uebersprungen: { id: PhotoId; grund: string }[] = [];
+  let geaendert = 0;
+
+  for (const id of ids) {
+    if (!z.photos.has(id)) {
+      unbekannt.push(id);
+      continue;
+    }
+    const bestand = z.overrides[id] ?? {};
+    const vorher = bestand.orientationTurns ?? 0;
+    const nachher = turns === null ? 0 : (((vorher + turns) % 4) as 0 | 1 | 2 | 3);
+
+    if (nachher === vorher) {
+      uebersprungen.push({
+        id,
+        grund: turns === null ? 'Keine Ausrichtungskorrektur vorhanden' : 'Schon so ausgerichtet',
+      });
+      continue;
+    }
+
+    if (nachher === 0) {
+      const { orientationTurns: _weg, ...rest } = bestand;
+      if (Object.keys(rest).length === 0) delete z.overrides[id];
+      else z.overrides[id] = rest;
+    } else {
+      z.overrides[id] = { ...bestand, orientationTurns: nachher };
+    }
+    geaendert++;
+  }
+
+  return { geaendert, uebersprungen, unbekannt };
+}
+
+/**
  * Nimmt die Datumskorrektur zurück, sodass wieder die Datei entscheidet.
  *
  * Nicht dasselbe wie ein Undo: Das nimmt den letzten Griff zurück, dies nimmt

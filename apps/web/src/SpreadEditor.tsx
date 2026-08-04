@@ -47,6 +47,7 @@ export function SpreadEditor({
     onSelect,
     onChanged: aussen.onGeaendert,
     onNeuRendern: aussen.onNeuRendern,
+    onBildGeaendert: aussen.onBildGeaendert,
   });
 
   const Rahmen = variante === 'b' ? Werkbank : variante === 'c' ? Lesetisch : Inspektor;

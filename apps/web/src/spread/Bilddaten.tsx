@@ -1,5 +1,5 @@
 /**
- * Datum und Ort am gewählten Bild korrigieren.
+ * Datum, Ort und Ausrichtung am gewählten Bild korrigieren.
  *
  * Eine eigene Komponente und nicht drei Fassungen in Inspektor, Werkbank und
  * Lesetisch: Eine Funktion, die nur in einem Rahmen erreichbar ist, macht den
@@ -123,6 +123,48 @@ export function Bilddaten({ model }: { model: SpreadEditorModel }) {
               Ort an die Automatik zurückgeben
             </button>
           )}
+
+          {/*
+            Kippen und nicht drehen: Der Drehgriff am Bild ist eine
+            Gestaltungsaussage im Platz, dies korrigiert, wie das Bild überhaupt
+            liegt — und tauscht dabei Breite und Höhe. Beides an derselben Stelle
+            anzubieten wäre eine Einladung zum Verwechseln, deshalb steht das
+            Kippen hier bei den Daten und nicht bei der Neigung.
+          */}
+          <span style={S.marke}>Ausrichtung</span>
+          <div style={S.zeile}>
+            <button
+              type="button"
+              style={{ ...B.knopfKlein, flex: 1 }}
+              onClick={() => void model.ausrichtungKippen(3)}
+              title="Eine Vierteldrehung gegen den Uhrzeigersinn"
+            >
+              ↺ links
+            </button>
+            <button
+              type="button"
+              style={{ ...B.knopfKlein, flex: 1 }}
+              onClick={() => void model.ausrichtungKippen(1)}
+              title="Eine Vierteldrehung im Uhrzeigersinn"
+            >
+              ↻ rechts
+            </button>
+            {info.quarterTurns !== undefined && (
+              <button
+                type="button"
+                style={B.knopfKlein}
+                onClick={() => void model.ausrichtungKippen(null)}
+                title="Wieder die Ausrichtung aus der Datei gelten lassen"
+              >
+                zurück
+              </button>
+            )}
+          </div>
+          <p style={S.hinweis}>
+            {info.quarterTurns === undefined
+              ? 'Für Scans und Bilder, deren EXIF-Ausrichtung fehlt. Die Vorlage folgt beim Neuanordnen.'
+              : `Um ${info.quarterTurns * 90}° gekippt. Die Vorlage folgt beim Neuanordnen.`}
+          </p>
 
           <div style={S.zeile}>
             <div style={B.dehner} />

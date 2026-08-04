@@ -14,6 +14,8 @@
  * ausschließlich Orientierungshilfe. Beim Einlesen wird nur `file` ausgewertet;
  * alles andere darf veraltet oder gelöscht sein.
  */
+import type { PhotoOverride } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -178,6 +180,12 @@ function photoEntry(
 export interface ExportOptions {
   spreads: readonly Spread[];
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie stünden im Dokument die rohen Pixelmaße, und bei einem Bild mit
+   * korrigierter Ausrichtung wären Breite und Höhe vertauscht.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
   settings: {
     targetPages: number;
@@ -215,7 +223,8 @@ export interface ExportOptions {
 
 /** Erzeugt das Layout-Dokument aus der aktuellen Buchstruktur. */
 export function exportLayout(opts: ExportOptions): LayoutDocument {
-  const { spreads, photos, profile, settings } = opts;
+  const { spreads, profile, settings } = opts;
+  const photos = effectivePhotos(opts.photos, opts.overrides);
   const dateOf = opts.dateOf ?? ((p: Photo) => p.takenAt ?? p.secondaryDate);
 
   // Welche Gruppe gehört zu welchem Foto? Damit trägt jede Doppelseite ihren

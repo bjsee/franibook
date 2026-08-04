@@ -17,6 +17,7 @@ import {
   type FotoInfo,
   type Korrekturergebnis,
   type Ort,
+  ausrichtungKippen,
   datumKorrigieren,
   fehlertext,
   fotosLaden,
@@ -50,6 +51,8 @@ export interface FotodatenModell {
   orte: Ort[];
   /** Setzt den Ort der Auswahl; `null` gibt ihn an die Automatik zurück. */
   ortAnwenden: (ort: { label: string; key?: string } | null) => void;
+  /** Kippt die Ausrichtung der Auswahl; `null` gibt sie an die Datei zurück. */
+  ausrichtungAnwenden: (turns: 1 | 2 | 3 | null) => void;
   busy: boolean;
   note: string | null;
   fehler: string | null;
@@ -58,9 +61,17 @@ export interface FotodatenModell {
 export function useFotodaten(opts: {
   /** Nach jeder Korrektur: Projektinfo und Buchvorschau neu holen. */
   onChanged: () => void;
+  /**
+   * Nach einer Ausrichtungskorrektur: die Bildversion hochzählen.
+   *
+   * Ohne das zeigte der Browser die alte Ausrichtung weiter — Vorschauen gehen
+   * mit `Cache-Control: immutable` heraus, und die Fotokennung ändert sich beim
+   * Kippen nicht.
+   */
+  onBildGeaendert: () => void;
   standVersion?: number | undefined;
 }): FotodatenModell {
-  const { onChanged, standVersion } = opts;
+  const { onChanged, onBildGeaendert, standVersion } = opts;
 
   const [alle, setAlle] = useState<FotoInfo[] | null>(null);
   const [orte, setOrte] = useState<Ort[]>([]);
@@ -208,7 +219,10 @@ export function useFotodaten(opts: {
    * genau eine Zeile.
    */
   const ausfuehren = useCallback(
-    (aufruf: (ids: string[]) => Promise<Korrekturergebnis>, ortBetroffen = false) => {
+    (
+      aufruf: (ids: string[]) => Promise<Korrekturergebnis>,
+      nachher: { ort?: boolean; pixel?: boolean } = {},
+    ) => {
       if (auswahl.length === 0) return;
       setBusy(true);
       setFehler(null);
@@ -230,13 +244,14 @@ export function useFotodaten(opts: {
           setHandOrdnung(false);
           setNote(meldung(e));
           // Ein neuer Ortsname gehört ab jetzt in die Vervollständigung.
-          if (ortBetroffen) orteLaden();
+          if (nachher.ort) orteLaden();
+          if (nachher.pixel) onBildGeaendert();
           onChanged();
         })
         .catch((err: unknown) => setFehler(fehlertext(err)))
         .finally(() => setBusy(false));
     },
-    [auswahl, onChanged, orteLaden],
+    [auswahl, onChanged, onBildGeaendert, orteLaden],
   );
 
   const anwenden = useCallback(
@@ -245,7 +260,14 @@ export function useFotodaten(opts: {
   );
 
   const ortAnwenden = useCallback(
-    (ort: { label: string; key?: string } | null) => ausfuehren((ids) => ortSetzen(ids, ort), true),
+    (ort: { label: string; key?: string } | null) =>
+      ausfuehren((ids) => ortSetzen(ids, ort), { ort: true }),
+    [ausfuehren],
+  );
+
+  const ausrichtungAnwenden = useCallback(
+    (turns: 1 | 2 | 3 | null) =>
+      ausfuehren((ids) => ausrichtungKippen(ids, turns), { pixel: true }),
     [ausfuehren],
   );
 
@@ -264,6 +286,7 @@ export function useFotodaten(opts: {
     anwenden,
     orte,
     ortAnwenden,
+    ausrichtungAnwenden,
     busy,
     note,
     fehler,

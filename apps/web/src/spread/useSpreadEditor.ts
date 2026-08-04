@@ -38,6 +38,7 @@ import {
 } from '@franibook/core';
 import {
   ausschnittSetzen,
+  ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
   datumKorrigieren,
   fehlertext,
@@ -109,6 +110,8 @@ export interface SpreadEditorArgs {
    * korrigiertes Aufnahmedatum steht im Zeitstrahl am Fuß der Seite.
    */
   onNeuRendern: () => void;
+  /** Die Pixel eines Bildes haben sich geändert – Bildversion hochzählen. */
+  onBildGeaendert: () => void;
 }
 
 export type SpreadEditorModel = ReturnType<typeof useSpreadEditor>;
@@ -123,6 +126,7 @@ export function useSpreadEditor({
   onSelect,
   onChanged,
   onNeuRendern,
+  onBildGeaendert,
 }: SpreadEditorArgs) {
   /**
    * Wie breit das Blatt gezeichnet wird — **eine** Zahl für alle drei Rahmen.
@@ -1347,6 +1351,37 @@ export function useSpreadEditor({
     }
   }
 
+  /**
+   * Kippt die Ausrichtung des gewählten Bildes; `null` gibt sie an die Datei
+   * zurück.
+   *
+   * Anders als der Drehgriff am Bild: Der dreht das Bild **in seinem Platz** und
+   * ist eine Gestaltungsaussage; dies korrigiert, wie das Bild überhaupt liegt,
+   * und tauscht damit Breite und Höhe. Die Vorlage folgt erst beim Neuanordnen —
+   * bis dahin steht das Bild in einem Platz, der jetzt schlechter passt.
+   *
+   * Die Doppelseite wird neu geholt, weil der Ausschnitt sich auf das gedrehte
+   * Bild bezieht, und die Bildversion hochgezählt, weil sonst der Browser das
+   * alte Bild weiter zeigt.
+   */
+  async function ausrichtungKippen(turns: 1 | 2 | 3 | null): Promise<void> {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return;
+    setNote(null);
+    try {
+      const e = await apiAusrichtungKippen([photoId], turns);
+      const neu = e.photos.find((p) => p.id === photoId);
+      if (neu) setInfos((bestand) => new Map(bestand).set(photoId, neu));
+      if (e.uebersprungen[0]) setNote(e.uebersprungen[0].grund);
+      else setNote('Gekippt. Die Vorlage folgt erst beim Neuanordnen.');
+      onBildGeaendert();
+      onChanged();
+      onNeuRendern();
+    } catch (fehler) {
+      setNote(fehlertext(fehler));
+    }
+  }
+
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
@@ -1444,6 +1479,7 @@ export function useSpreadEditor({
     dateiname,
     datumSetzen,
     ortSetzen,
+    ausrichtungKippen,
     werkzeug,
     setWerkzeug,
     werkzeugHinweis,

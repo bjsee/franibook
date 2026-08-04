@@ -35,6 +35,25 @@ export interface Photo {
   height: number;
   /** Wie in der Datei vorgefunden, 1..8. Der PDF-Renderer braucht das noch. */
   orientation: number;
+  /**
+   * Zusätzliche Vierteldrehungen im Uhrzeigersinn, über die EXIF-Orientierung
+   * hinaus.
+   *
+   * Beim Import **immer** leer — die Datei kennt das nicht. Gesetzt wird es
+   * ausschließlich von `effectivePhoto` aus `PhotoOverride.orientationTurns`,
+   * für Scans und Bilder, deren EXIF-Orientierung fehlt oder falsch ist. Bei 1
+   * und 3 sind `width`/`height` in diesem Foto schon getauscht, das Layout
+   * rechnet also ohne Sonderfall.
+   *
+   * Es steht hier und nicht nur im Override, weil beide Renderer es brauchen und
+   * die Aufbereitung ohnehin `orientation` aus dem Foto liest: Ein zweiter Weg
+   * für dieselbe Frage wäre eine Gelegenheit, die zwei auseinanderlaufen zu
+   * lassen. Nicht als geänderte `orientation` (etwa 1 → 6), weil die Aufbereitung
+   * daraus nur *ob* liest und dann `.rotate()` ohne Argument aufruft — das nimmt
+   * die Orientierung aus der Datei, nicht aus dem Modell, und die Korrektur wäre
+   * wirkungslos.
+   */
+  quarterTurns?: 1 | 2 | 3;
 
   /** EXIF DateTimeOriginal – die verlässlichste Quelle. */
   takenAt?: NaiveDateTime;

@@ -12,6 +12,7 @@ import {
   type Photo,
   type PhotoGroup,
   type PhotoId,
+  type PhotoOverride,
   type PrintProfile,
   type RenderedCover,
   type Spread,
@@ -24,6 +25,7 @@ export interface Umschlagstand {
   cover: CoverDesign;
   spreads: Spread[];
   photos: ReadonlyMap<PhotoId, Photo>;
+  overrides: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
   structure: Structure;
   settings: { subjectName?: string };
@@ -74,6 +76,7 @@ export function renderCover(z: Umschlagstand): RenderedCover {
     profile: z.profile,
     pageCount: pageCount(z),
     photos: z.photos,
+    overrides: z.overrides,
   });
 }
 

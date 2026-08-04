@@ -54,4 +54,12 @@ export interface SpreadAussen {
   onGeaendert: () => void;
   /** Die Doppelseite verwerfen und neu holen – nach einer Darstellungsänderung. */
   onNeuRendern: () => void;
+  /**
+   * Die Pixel eines Bildes haben sich geändert (Ausrichtung gekippt).
+   *
+   * Zählt die Bildversion hoch, die an jeder Vorschau-Adresse hängt. Ohne das
+   * bliebe das gedrehte Bild unsichtbar, weil Vorschauen `immutable` ausgeliefert
+   * werden und die Fotokennung sich beim Kippen nicht ändert.
+   */
+  onBildGeaendert: () => void;
 }

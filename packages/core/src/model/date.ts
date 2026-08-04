@@ -65,6 +65,15 @@ export interface PhotoOverride {
    * Aufgelöst wird das in `effectivePhoto`; die `key`-Vergabe steht dort.
    */
   placeOverride?: { key: string; label: string };
+  /**
+   * Vierteldrehungen im Uhrzeigersinn, zusätzlich zur EXIF-Orientierung.
+   *
+   * Für Scans und Bilder ohne brauchbare Orientierung: Ohne Korrektur hat das
+   * Foto das vertauschte Seitenverhältnis, und die Vorlagenwahl arbeitet gegen
+   * das Bild (`orientationClash` in `layout/scoring.ts`). Aufgelöst in
+   * `effectivePhoto`, das dann auch `width`/`height` tauscht.
+   */
+  orientationTurns?: 1 | 2 | 3;
   /** Sortierung innerhalb derselben Sekunde, ohne das Datum zu verändern. */
   orderNudge?: number;
   excluded?: boolean;

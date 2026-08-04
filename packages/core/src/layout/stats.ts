@@ -16,6 +16,8 @@
  */
 import { effectiveDpi } from '../geometry/units.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
+import type { PhotoOverride } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -35,11 +37,18 @@ export interface BookStats {
 export interface BookStatsOptions {
   spreads: readonly Spread[];
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
 }
 
 export function bookStats(opts: BookStatsOptions): BookStats {
-  const { spreads, photos, profile } = opts;
+  const { spreads, profile } = opts;
+  const photos = effectivePhotos(opts.photos, opts.overrides);
 
   const platziert = new Set<PhotoId>();
   let worstDpi = Number.POSITIVE_INFINITY;

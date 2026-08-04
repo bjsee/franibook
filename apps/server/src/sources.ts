@@ -29,6 +29,15 @@ export interface PhotoRef {
   id: string;
   relPath: string;
   sourceId?: string;
+  /**
+   * Vierteldrehungen, die die Vorschau zusätzlich anwenden muss.
+   *
+   * Steht hier, weil `PreviewCache` sonst den ganzen `PhotoOverride` kennen
+   * müsste, um eine Ausrichtungskorrektur zu sehen — und weil sie in den
+   * Cache-Namen eingeht: Andere Ausrichtung, andere Datei, und damit bleibt das
+   * `immutable` der Bild-Endpunkte wahr.
+   */
+  quarterTurns?: 1 | 2 | 3;
 }
 
 /**

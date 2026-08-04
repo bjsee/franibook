@@ -38,12 +38,17 @@ const FILTER: { id: Filter; label: string; titel: string }[] = [
 
 export function Fotodaten({
   onChanged,
+  onBildGeaendert,
+  bildVersion,
   standVersion,
 }: {
   onChanged: () => void;
+  onBildGeaendert: () => void;
+  /** Hängt an den Miniaturen, damit eine gekippte Ausrichtung sichtbar wird. */
+  bildVersion: number;
   standVersion?: number;
 }) {
-  const m = useFotodaten({ onChanged, standVersion });
+  const m = useFotodaten({ onChanged, onBildGeaendert, standVersion });
 
   // Die Eingaben der drei Werkzeuge. Lokal und nicht im Haken: Sie sind
   // Formularzustand dieser Ansicht und bedeuten nichts, bis man anwendet.
@@ -101,7 +106,11 @@ export function Fotodaten({
                 title="Umschalt-Klick wählt bis hierher"
                 style={{ ...S.zeile, ...(platz >= 0 ? S.zeileAn : {}) }}
               >
-                <img src={`/api/photos/${f.id}/preview?size=thumb`} alt="" style={S.thumb} />
+                <img
+                  src={`/api/photos/${f.id}/preview?size=thumb${bildVersion > 0 ? `&v=${bildVersion}` : ''}`}
+                  alt=""
+                  style={S.thumb}
+                />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={B.dateiname}>{f.fileName}</div>
                   <div style={S.meta}>
@@ -334,6 +343,49 @@ export function Fotodaten({
             onClick={() => m.ortAnwenden(null)}
           >
             Ort an die Automatik zurückgeben
+          </button>
+        </div>
+
+        <div style={B.abschnitt}>
+          <div style={B.titel}>Ausrichtung kippen</div>
+          <p style={B.leiser}>
+            Für Scans und Bilder ohne brauchbare EXIF-Ausrichtung: Beim Kippen um 90° tauschen
+            Breite und Höhe, und die Vorlagenwahl sieht endlich das richtige Format. Die Drehungen
+            addieren sich; die Vorlage folgt beim Neuanordnen.
+          </p>
+          <div style={S.zeileRechts}>
+            <button
+              type="button"
+              style={{ ...B.knopf, flex: 1 }}
+              disabled={gesperrt}
+              onClick={() => m.ausrichtungAnwenden(3)}
+            >
+              ↺ links
+            </button>
+            <button
+              type="button"
+              style={{ ...B.knopf, flex: 1 }}
+              disabled={gesperrt}
+              onClick={() => m.ausrichtungAnwenden(1)}
+            >
+              ↻ rechts
+            </button>
+            <button
+              type="button"
+              style={{ ...B.knopf, flex: 1 }}
+              disabled={gesperrt}
+              onClick={() => m.ausrichtungAnwenden(2)}
+            >
+              180°
+            </button>
+          </div>
+          <button
+            type="button"
+            style={{ ...B.knopf, marginTop: 6 }}
+            disabled={gesperrt}
+            onClick={() => m.ausrichtungAnwenden(null)}
+          >
+            Ausrichtung an die Datei zurückgeben
           </button>
         </div>
 

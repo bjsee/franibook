@@ -180,6 +180,79 @@ describe('Ort setzen', () => {
   });
 });
 
+describe('Ausrichtung kippen', () => {
+  it('tauscht die Maße im geltenden Foto, nicht im Importergebnis', () => {
+    const p = projekt();
+    p.kippeAusrichtung(['a'], 1);
+
+    expect([p.photo('a')!.width, p.photo('a')!.height]).toEqual([3000, 4000]);
+    expect([p.photos.get('a')!.width, p.photos.get('a')!.height]).toEqual([4000, 3000]);
+  });
+
+  it('addiert weitere Drehungen und wird nach vier wieder gerade', () => {
+    // Am Knopf dreht man, bis es stimmt, statt mitzuzählen.
+    const p = projekt();
+    p.kippeAusrichtung(['a'], 1);
+    p.kippeAusrichtung(['a'], 1);
+    expect(p.overrides['a']?.orientationTurns).toBe(2);
+
+    p.kippeAusrichtung(['a'], 2);
+    // 2 + 2 = 4 = gerade, und ein leer gewordener Override verschwindet.
+    expect(p.overrides['a']).toBeUndefined();
+  });
+
+  it('gibt die Ausrichtung mit null an die Datei zurück', () => {
+    const p = projekt();
+    p.kippeAusrichtung(['a'], 3);
+    p.kippeAusrichtung(['a'], null);
+    expect(p.overrides['a']).toBeUndefined();
+    expect(p.photo('a')!.width).toBe(4000);
+  });
+
+  it('meldet ein Foto ohne Korrektur, statt still nichts zu tun', () => {
+    const p = projekt();
+    const r = p.kippeAusrichtung(['a'], null);
+    expect(r).toEqual({
+      geaendert: 0,
+      uebersprungen: [{ id: 'a', grund: 'Keine Ausrichtungskorrektur vorhanden' }],
+      unbekannt: [],
+    });
+  });
+
+  it('lässt andere Korrekturen am selben Foto stehen', () => {
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Kreta' });
+    p.kippeAusrichtung(['a'], 1);
+    p.kippeAusrichtung(['a'], null);
+    expect(p.overrides['a']).toEqual({ placeOverride: { key: 'manual:Kreta', label: 'Kreta' } });
+  });
+
+  it('ändert die Gliederung nicht – die Ausrichtung sagt nichts über die Zeit', () => {
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    p.kippeAusrichtung(['a', 'b'], 1);
+    expect(p.structurePending()).toBe(false);
+  });
+
+  it('wirkt auf die Vorlagenwahl beim Neuaufbau', () => {
+    // Der Zweck: Ein Bild, das im Modell querformatig steht und eigentlich
+    // hochkant ist, bekommt sonst einen querformatigen Platz. Nach dem Kippen
+    // sieht die Engine ein Hochformat.
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    const vorher = p.render(1);
+    p.kippeAusrichtung([...p.photos.keys()], 1);
+    p.generate();
+
+    // Nicht die Vorlage selbst wird geprüft, sondern dass sich überhaupt etwas
+    // geändert hat: Welche Vorlage bei welchem Verhältnis gewinnt, ist Sache der
+    // Bibliothek und darf sich ändern, ohne diesen Test zu brechen.
+    expect(JSON.stringify(p.render(1))).not.toBe(JSON.stringify(vorher));
+  });
+});
+
 describe('Orte des Bestands', () => {
   it('zählt die vorkommenden Orte, häufigste zuerst', () => {
     const p = projekt();

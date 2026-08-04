@@ -2437,6 +2437,63 @@ zeigt keine Liste, welche Orte es gibt, und einen getippten Namen stillschweigen
 auf eine fremde Kennung zu legen, weil er zufällig gleich lautet, wäre eine
 Vermutung an der falschen Stelle. Für den Stapel ist der Reiter „Fotodaten" da.
 
+#### Die Ausrichtung kippen
+
+Bei Scans und Bildern ohne brauchbare EXIF-Orientierung hat das Foto im Modell
+das **vertauschte Seitenverhältnis**, und `orientationClash` in `layout/scoring.ts`
+wählt für es die falsche Vorlage. `PhotoOverride.orientationTurns` (1–3
+Vierteldrehungen im Uhrzeigersinn) korrigiert das; bei 90° und 270° tauscht
+`effectivePhoto` Breite und Höhe, genau wie der Import es für die EXIF-Orientierung
+tut. Am Probestand hob das die Auflösung eines Bildes im hochkanten Platz von 348
+auf 464 dpi — dieselben Pixel, nur richtig herum.
+
+Die Drehungen **addieren sich**: Am Knopf dreht man, bis es stimmt, statt
+mitzuzählen; nach vier ist die Korrektur wieder weg.
+
+**Nicht** als geänderte `orientation` (etwa 1 → 6), obwohl das naheliegt: Die
+Bildaufbereitung liest daraus nur _ob_ gedreht werden muss und ruft dann
+`.rotate()` ohne Argument — das nimmt die Orientierung aus der **Datei**, nicht aus
+dem Modell, und die Korrektur wäre wirkungslos. Sie steht deshalb als eigenes Feld
+`Photo.quarterTurns`, das nur `effectivePhoto` setzt, und Vorschau wie PDF-Export
+drehen zusätzlich. Gemessen: sharp wendet EXIF-Orientierung und expliziten Winkel
+in _einer_ Kette zusammen an (`.rotate().rotate(90)`), ein Zwischenpuffer ist dafür
+nicht nötig.
+
+#### Drei Stellen, die das Kippen sonst übergangen hätten
+
+Aufgelöst wird an den **Eintrittsstellen des Kerns** (`effectivePhotos`), nicht an
+den zwanzig Stellen im Inneren, die `width`/`height` lesen: `generateBook`,
+`layoutSpread`, `rebuildSpreads`, `renderSpread`, `renderCover`, `bookStats`,
+`movePhoto`, `exportLayout`. Den Override bis in Ausschnittrechnung und
+Vorlagenwahl durchzureichen hieße fünfzehn Signaturen tiefer im Kern anzufassen —
+genau dort, wo der Parity-Test prüft. `tests/architektur/architektur.test.ts`
+erzwingt es: Jede Optionsschnittstelle mit `photos: ReadonlyMap` nimmt auch
+`overrides`. Der Test fand beim Schreiben sofort eine übersehene Stelle
+(`exportLayout`).
+
+Drei Dinge außerhalb des Kerns brauchten dasselbe: das **Vorwärmen der
+Vorschauen** (sonst entsteht die ungedrehte Fassung und die richtige wird später
+einzeln erzeugt, genau beim Scrollen), die **Prüfung „taugt als Hintergrund"** (sie
+stellt Pixelmaße gegen Seitenmaße) und `Project.photo()` — die Auskunft, aus der
+Vorschau, Export und Ausschnitt-Editor ihre Maße ziehen.
+
+#### Der Browser-Cache
+
+Vorschauen gehen mit `Cache-Control: immutable` heraus, weil die Fotokennung der
+Inhaltshash ist — und der ändert sich beim Kippen gerade **nicht**. Zwei Griffe
+halten die Zusage trotzdem: Der Cache auf Platte trägt die Fassung im Namen
+(`<hash>-q1.webp`), und die Oberfläche führt eine **Bildversion**, die als `?v=`
+an jeder Vorschau-Adresse hängt und bei jeder Ausrichtungskorrektur hochzählt. Der
+Server ignoriert den Parameter; er ist allein dazu da, dass die Adresse eine andere
+ist. Der Preis ist ein einmaliges Nachladen der sichtbaren Kacheln.
+
+Verworfen wurde, die Fassung je Foto in die Adresse zu ziehen: Die Stellen, die
+Bild-URLs bilden (`imageSrc`, `miniaturSrc`, vier Ansichten), kennen dort nur die
+Kennung, nicht die Korrektur. Eine offene Kante bleibt: `?original=1` — der
+Diagnosepfad des Parity-Tests — liefert die Datei ungedreht. Das ist für die
+Fixtures ohne Korrekturen bedeutungslos; soll der Parity-Test je gekippte Bilder
+prüfen, braucht er die Drehung im RSM.
+
 ### Fotogruppen
 
 Eine Gruppe fasst Fotos zu einem Buchabschnitt zusammen. Sie gehört dem Benutzer: Die Automatik schlägt vor, entschieden wird von Hand.

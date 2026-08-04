@@ -691,9 +691,13 @@ export class Project {
       if (patch.photoId === null) {
         delete spread.backgroundPhotoId;
       } else {
-        const photo = this.photos.get(patch.photoId);
-        if (!photo) return { ok: false };
+        const roh = this.photos.get(patch.photoId);
+        if (!roh) return { ok: false };
         spread.backgroundPhotoId = patch.photoId;
+        // Aufgelöst, weil die Prüfung „taugt als Hintergrund" die Pixelmaße
+        // gegen die Seitenmaße stellt – bei gekippter Ausrichtung sind das
+        // andere.
+        const photo = effectivePhoto(roh, this.overrides[roh.id]);
         const fit = backgroundFit(photo, this.profile);
         if (!fit.taugt) {
           return {
@@ -790,6 +794,7 @@ export class Project {
     const result = generateBook({
       structure: this.structure,
       photos: this.photos,
+      overrides: this.overrides,
       profile: this.profile,
       ...(kept.length > 0 ? { kept } : {}),
       targetPages: this.settings.targetPages,
@@ -898,6 +903,20 @@ export class Project {
     ort: { label: string; key?: string } | null,
   ): fotodaten.Korrekturergebnis | { fehler: string } {
     return fotodaten.setzeOrte(this, ids, ort);
+  }
+
+  /**
+   * Kippt die Ausrichtung mehrerer Fotos; `null` gibt sie an die Datei zurück.
+   *
+   * Ohne `rebuildStructure`: Die Ausrichtung sagt nichts über die Zeit. Sie
+   * ändert das Seitenverhältnis und damit, welche Vorlage passen *würde* — das
+   * Buch selbst bleibt stehen, bis jemand neu anordnet.
+   */
+  kippeAusrichtung(
+    ids: readonly PhotoId[],
+    turns: 1 | 2 | 3 | null,
+  ): fotodaten.Korrekturergebnis | { fehler: string } {
+    return fotodaten.kippeAusrichtung(this, ids, turns);
   }
 
   /**
@@ -1438,6 +1457,7 @@ export class Project {
     // beide Seiten neu an und braucht dafür die Maße jedes beteiligten Fotos.
     const result = movePhoto(this.spreads, source, target, {
       photos: this.photos,
+      overrides: this.overrides,
       profile: this.profile,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
     });
@@ -1520,7 +1540,12 @@ export class Project {
    */
   private refreshReport(): void {
     if (!this.lastReport) return;
-    const stats = bookStats({ spreads: this.spreads, photos: this.photos, profile: this.profile });
+    const stats = bookStats({
+      spreads: this.spreads,
+      photos: this.photos,
+      overrides: this.overrides,
+      profile: this.profile,
+    });
     this.lastReport = { ...this.lastReport, ...stats };
   }
 
@@ -1533,6 +1558,7 @@ export class Project {
       profile: this.profile,
       template: requireTemplate(spread.templateId),
       photos: this.photos,
+      overrides: this.overrides,
       background: this.settings.background,
       ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
       // Derselbe Seed wie beim Generieren: Ein neu angeordnetes Buch bekommt
@@ -1653,8 +1679,30 @@ export class Project {
     return umschlag.coverCandidates(this, limit);
   }
 
+  /**
+   * Ein Foto, wie es gilt — mit aufgelösten Korrekturen.
+   *
+   * Die Auskunft, aus der Vorschau, Export und Ausschnitt-Editor ihre Maße
+   * ziehen. Sie gibt deshalb das aufgelöste Foto: Ein Aufrufer, der hier das
+   * rohe Importergebnis bekäme, würde eine korrigierte Ausrichtung
+   * stillschweigend übergehen. Wer die Datei selbst meint, nimmt
+   * `sources.pfad()`.
+   */
   photo(id: PhotoId): Photo | undefined {
-    return this.photos.get(id);
+    const roh = this.photos.get(id);
+    return roh && effectivePhoto(roh, this.overrides[id]);
+  }
+
+  /**
+   * Der ganze Bestand mit aufgelösten Korrekturen.
+   *
+   * Für alles, was über *alle* Fotos läuft und ihre geltenden Maße braucht —
+   * insbesondere das Vorwärmen der Vorschauen: Ohne Auflösung entstünde dort die
+   * ungedrehte Fassung, und die korrigierte müsste später einzeln nachgezogen
+   * werden.
+   */
+  effectivePhotoList(): Photo[] {
+    return [...this.photos.values()].map((p) => effectivePhoto(p, this.overrides[p.id]));
   }
 
   /**

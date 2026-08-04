@@ -508,6 +508,13 @@ export interface FotoInfo {
   issues: { code: string; detail?: string }[];
   /** Ob `place` von Hand gesetzt ist statt über GPS aufgelöst. */
   placeManual?: boolean;
+  /**
+   * Vierteldrehungen aus einer Ausrichtungskorrektur.
+   *
+   * Sie gehört in die Bild-URL: Ohne sie zeigte der Browser das Bild weiter in
+   * der alten Ausrichtung, weil die Vorschauen `immutable` ausgeliefert werden.
+   */
+  quarterTurns?: 1 | 2 | 3;
 }
 
 /**
@@ -568,6 +575,15 @@ export const ortsListeLaden = () => hole<{ places: Ort[] }>('/api/photos/places'
  */
 export const ortSetzen = (ids: string[], place: { label: string; key?: string } | null) =>
   sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, place });
+
+/**
+ * Kippt die Ausrichtung mehrerer Fotos; `null` gibt sie an die Datei zurück.
+ *
+ * Die Vierteldrehungen **addieren sich** auf das schon Gesetzte: Am Knopf dreht
+ * man, bis es stimmt, statt mitzuzählen.
+ */
+export const ausrichtungKippen = (ids: string[], orientation: 1 | 2 | 3 | null) =>
+  sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, orientation });
 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {

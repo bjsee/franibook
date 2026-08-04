@@ -15,6 +15,7 @@ import {
   allTemplates,
   chapterTemplates,
   choosePairFor,
+  effectivePhoto,
   halfPageById,
   halfPages,
   halvesOfTemplate,
@@ -42,11 +43,19 @@ export interface Bestand {
 /** Die Gewichtung eines Fotos, wie die Engine sie erwartet. */
 const gewicht = (z: Bestand) => (id: PhotoId) => z.overrides[id]?.weight ?? 'normal';
 
-/** Die Fotos einer Doppelseite, in Slotreihenfolge und ohne Lücken. */
+/**
+ * Die Fotos einer Doppelseite, in Slotreihenfolge und ohne Lücken.
+ *
+ * Über `effectivePhoto`, weil `layoutSpread` eine Liste und keine Map bekommt und
+ * damit selbst nicht auflösen kann: Ohne das hätte ein Bild mit korrigierter
+ * Ausrichtung hier wieder sein vertauschtes Seitenverhältnis, und die Vorlage
+ * würde danach gewählt.
+ */
 function fotosVon(z: Bestand, spread: Spread): Photo[] {
   return spread.slots
     .map((s) => (s.photoId ? z.photos.get(s.photoId) : undefined))
-    .filter((p): p is Photo => p !== undefined);
+    .filter((p): p is Photo => p !== undefined)
+    .map((p) => effectivePhoto(p, z.overrides[p.id]));
 }
 
 /**

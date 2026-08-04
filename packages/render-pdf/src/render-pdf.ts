@@ -33,6 +33,12 @@ export interface PhotoSource {
   path: string;
   /** Orientierung wie in der Datei vorgefunden, 1..8. */
   orientation: number;
+  /**
+   * Vierteldrehungen aus einer Ausrichtungskorrektur, zusätzlich zur EXIF-
+   * Orientierung. Ohne sie zeigte das PDF ein Bild, das in der Vorschau schon
+   * gerade steht, weiter gekippt.
+   */
+  quarterTurns?: 1 | 2 | 3;
 }
 
 export interface RenderPdfOptions {
@@ -330,6 +336,7 @@ async function drawImage(
   const place = async (from: PhotoSource): Promise<void> => {
     const prepared = await prepareImage(from.path, {
       orientation: from.orientation,
+      ...(from.quarterTurns ? { quarterTurns: from.quarterTurns } : {}),
       crop: box.crop,
       widthMm: box.wMm,
       heightMm: box.hMm,

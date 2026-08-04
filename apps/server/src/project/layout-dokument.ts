@@ -57,6 +57,7 @@ export function exportLayout(
   return exportLayoutModel({
     spreads: z.spreads,
     photos: z.photos,
+    overrides: z.overrides,
     profile: z.profile,
     settings: {
       targetPages: z.settings.targetPages,
@@ -121,6 +122,7 @@ export function applyLayout(
   const rebuilt = rebuildSpreads({
     spreads: eingaben,
     photos: z.photos,
+    overrides: z.overrides,
     profile: z.profile,
     weightOf: (id) => z.overrides[id]?.weight ?? 'normal',
   });

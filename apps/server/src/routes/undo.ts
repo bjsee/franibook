@@ -29,8 +29,8 @@ export interface UndoEintrag {
    * Steht am Knopf („Zurück: Ausschnitt gesetzt") und im Namen des Notankers.
    *
    * Als Funktion, wenn eine Route mehr als eine Sache tut: `PATCH /api/photos`
-   * setzt Datum oder Ort, und „Datum korrigiert" wäre am Knopf dann die Hälfte
-   * der Zeit falsch. Ein Label, das lügt, ist schlimmer als kein Undo-Knopf.
+   * setzt Datum, Ort oder Ausrichtung, und „Datum korrigiert" wäre am Knopf dann
+   * meistens falsch. Ein Label, das lügt, ist schlimmer als kein Undo-Knopf.
    */
   label: string | Ausleser<string>;
   /**
@@ -217,10 +217,11 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // eines Kamera-Resets verschiebt und sich vertut, soll das auch nach einem
   // Serverneustart noch heilen können.
   'PATCH /api/photos': {
-    label: (_p, body) =>
-      (body as { place?: unknown } | null)?.place !== undefined
-        ? 'Ort gesetzt'
-        : 'Datum korrigiert',
+    label: (_p, body) => {
+      const b = (body ?? {}) as { place?: unknown; orientation?: unknown };
+      if (b.orientation !== undefined) return 'Bild gekippt';
+      return b.place !== undefined ? 'Ort gesetzt' : 'Datum korrigiert';
+    },
     anker: (_p, body) => {
       const ids = (body as { ids?: unknown } | null)?.ids;
       return Array.isArray(ids) && ids.length >= 50;

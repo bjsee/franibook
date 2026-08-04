@@ -155,7 +155,7 @@ async function start(): Promise<void> {
   // Vorschauen im Hintergrund aufwärmen, damit die Oberfläche sofort nutzbar
   // ist. Wer schneller blättert, als der Cache füllt, erzeugt sie on demand.
   void previews
-    .warm([...project.photos.values()], 'preview', 6)
+    .warm(project.effectivePhotoList(), 'preview', 6)
     .then(() => process.stdout.write('Vorschaubilder vollständig\n'));
 }
 
