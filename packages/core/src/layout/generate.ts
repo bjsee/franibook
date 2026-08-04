@@ -527,6 +527,11 @@ function buildChapterOpener(
       index,
       templateId: template.id,
       slots,
+      // Das Jahr steht am Spread und nicht bloß als Inhalt der Jahreszahl: Die
+      // Zahl ist editierbar, „2019 – das erste Jahr" wäre keine Zahl mehr, und
+      // die Kapitelnavigation soll davon nicht abhängen. Siehe
+      // `Spread.chapterYear`.
+      chapterYear: chapter.year,
       ...(texts.length > 0 ? { texts } : {}),
     },
     usedPhotoIds: verwendet.map((p) => p.id),

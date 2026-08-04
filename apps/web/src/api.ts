@@ -26,6 +26,7 @@ import type {
   PhotoGroup,
   RenderedCover,
   RenderedSpread,
+  TextElement,
   TimelineFootVariant,
   TimelineSideVariant,
 } from '@franibook/core';
@@ -126,6 +127,8 @@ export interface Handarbeit {
   zeitstrahl: number;
   positionen: number;
   texte: number;
+  /** Vorlagentexte, die von Hand verschoben, aufgezogen oder gedreht wurden. */
+  textplaetze: number;
   festgehalten: number;
 }
 
@@ -190,6 +193,13 @@ export type SpreadResponse = RenderedSpread & {
   groups?: SpreadGroup[];
   /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
   blocks?: TextBlockData[];
+  /**
+   * Rohdaten der Vorlagentexte, aus demselben Grund: Jahreszahl, Gruppentitel und
+   * Ereigniszeilen lassen sich verschieben, aufziehen und drehen.
+   */
+  texts?: TextElement[];
+  /** Die Vorlage dieser Doppelseite – dort stehen die Textplätze. */
+  templateId?: string | null;
   /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
   locked?: boolean;
   /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
@@ -375,6 +385,25 @@ export const textAendern = (index: number, id: string, patch: Partial<TextBlockD
 
 export const textLoeschen = (index: number, id: string) =>
   sende<SpreadAntwort>('DELETE', `/api/spreads/${index}/texts/${id}`);
+
+// ─── Vorlagentexte ──────────────────────────────────────────────────────────
+
+/**
+ * Wortlaut, Platz oder Winkel eines Vorlagentexts.
+ *
+ * Angesprochen über die Kennung des Textplatzes (`t-year`) – dieselbe, unter der
+ * er im RSM steht. `rect: null` bzw. `rotateDeg: null` stellt die Vorlage wieder
+ * her. Eine Schriftgröße gibt es hier nicht: Sie folgt der Kastenhöhe.
+ */
+export const vorlagentextAendern = (
+  index: number,
+  slotId: string,
+  patch: {
+    content?: string;
+    rect?: { x: number; y: number; w: number; h: number } | null;
+    rotateDeg?: number | null;
+  },
+) => sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/textslots/${slotId}`, patch);
 
 // ─── Fotos ──────────────────────────────────────────────────────────────────
 

@@ -24,6 +24,7 @@ import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { miniaturSrc } from './useNachbarn.js';
 import { useSpreadTiles } from './useSpreadTiles.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
+import { Vorlagentexte } from './Vorlagentexte.js';
 import type { SpreadAussen } from './types.js';
 
 /**
@@ -84,12 +85,7 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
         </div>
 
         <div ref={model.platzRef} style={S.buehnenPlatz}>
-          <SpreadStage
-            model={model}
-            imageSrc={imageSrc}
-            guides={aussen.guides}
-            blocks={spread.blocks ?? []}
-          />
+          <SpreadStage model={model} imageSrc={imageSrc} guides={aussen.guides} />
         </div>
 
         {/*
@@ -453,17 +449,25 @@ function SeitenKarte({
       )}
 
       {panel === 'text' && (
-        <TextBlocks
-          index={aussen.index}
-          blocks={spread.blocks ?? []}
-          selectedId={model.textId}
-          onSelect={(id) => {
-            model.setTextId(id);
-            if (id) model.auswahlAufheben();
-          }}
-          onSpread={(neu) => model.spreadGeaendert(neu as RenderedSpread)}
-          onFehler={model.setNote}
-        />
+        <>
+          <Vorlagentexte
+            index={aussen.index}
+            model={model}
+            onSpread={(neu) => model.spreadGeaendert(neu)}
+            onFehler={model.setNote}
+          />
+          <TextBlocks
+            index={aussen.index}
+            blocks={spread.blocks ?? []}
+            selectedId={model.textId}
+            onSelect={(id) => {
+              model.setTextId(id);
+              if (id) model.auswahlAufheben();
+            }}
+            onSpread={(neu) => model.spreadGeaendert(neu as RenderedSpread)}
+            onFehler={model.setNote}
+          />
+        </>
       )}
 
       {panel === 'blatt' && (

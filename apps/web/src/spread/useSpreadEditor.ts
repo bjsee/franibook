@@ -34,7 +34,6 @@ import {
   withCrop,
   withRect,
   withRotation,
-  withTextBlock,
   zoomCrop,
 } from '@franibook/core';
 import {
@@ -50,10 +49,13 @@ import {
   unterschriftSetzen,
   type PoolFoto as PoolPhoto,
   rechteckSetzen,
+  type SpreadResponse,
   textAendern,
+  vorlagentextAendern,
 } from '../api.js';
 import { fotoLoeschen, loeschMeldung } from '../deletePhoto.js';
-import type { TextBlockData } from '../TextBlocks.js';
+import type { Bewegtext } from './bewegtext.js';
+import { bewegtexte, mitOffenemStand } from './bewegtext.js';
 import { usePlatz } from './usePlatz.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
@@ -84,7 +86,11 @@ interface NormRect {
 
 export interface SpreadEditorArgs {
   index: number;
-  spread: RenderedSpread & { blocks?: TextBlockData[] };
+  /**
+   * Die Doppelseite, wie der Server sie liefert: das RSM plus die Rohdaten, aus
+   * denen sich Texte bearbeiten lassen (`SpreadResponse`).
+   */
+  spread: SpreadResponse;
   onSpread: (spread: RenderedSpread) => void;
   minDpi: number;
   targetDpi: number;
@@ -144,14 +150,14 @@ export function useSpreadEditor({
    * Umschalter — eine Zusatztaste fände niemand.
    */
   const [werkzeug, setWerkzeug] = useState<'ausschnitt' | 'position'>('ausschnitt');
-  /** Der Textblock, an dem gerade gearbeitet wird. */
+  /** Der Text, an dem gerade gearbeitet wird – Block oder Vorlagentext. */
   const [textId, setTextId] = useState<string | null>(null);
   /**
-   * Stand eines Textblocks, solange er noch nicht beim Server ist.
+   * Stand eines Textes, solange er noch nicht beim Server ist.
    *
-   * Kasten, Schriftgröße und Winkel in einem: Am Eckgriff ändern sich Kasten und
-   * Schriftgröße gemeinsam, und beide gehören in denselben Zwischenstand –
-   * sonst zeigte die Vorschau eine Mischung aus alt und neu.
+   * Kasten, Schriftgröße und Winkel in einem: Am Eckgriff eines Blocks ändern
+   * sich Kasten und Schriftgröße gemeinsam, und beide gehören in denselben
+   * Zwischenstand – sonst zeigte die Vorschau eine Mischung aus alt und neu.
    */
   const [pendingText, setPendingText] = useState<{
     id: string;
@@ -226,22 +232,24 @@ export function useSpreadEditor({
   const bildBoxVon = (s: RenderedSpread, slotId: string) =>
     imageBoxes(s).find((b) => b.slotId === slotId);
 
+  /**
+   * Die beweglichen Texte dieser Doppelseite: Blöcke und Vorlagentexte.
+   *
+   * Eine Liste und nicht zwei – wer zieht, dreht und aufzieht, macht mit beiden
+   * dasselbe (`bewegtext.ts`).
+   */
+  const texte = useMemo(() => bewegtexte(spread), [spread]);
+
   /** Die Doppelseite mit noch nicht gespeichertem Ausschnitt und Neigung. */
   const angezeigt = useMemo(() => {
     let s: RenderedSpread = spread;
 
-    // Der Textblock, an dem gerade gezogen wird – mit Kasten, Größe und Winkel,
-    // wie sie beim Loslassen gespeichert würden.
+    // Der Text, an dem gerade gezogen wird – mit Kasten, Größe und Winkel, wie
+    // sie beim Loslassen gespeichert würden. Für Block und Vorlagentext dieselbe
+    // Zeile: `mitOffenemStand` kennt den Unterschied.
     if (pendingText) {
-      const block = spread.blocks?.find((b) => b.id === pendingText.id);
-      if (block) {
-        s = withTextBlock(s, {
-          ...block,
-          rect: pendingText.rect,
-          ...(pendingText.fontSizePt !== undefined ? { fontSizePt: pendingText.fontSizePt } : {}),
-          ...(pendingText.rotateDeg !== undefined ? { rotateDeg: pendingText.rotateDeg } : {}),
-        });
-      }
+      const text = texte.find((t) => t.id === pendingText.id);
+      if (text) s = mitOffenemStand(s, text, pendingText);
     }
 
     if (!selectedSlotId) return s;
@@ -282,6 +290,7 @@ export function useSpreadEditor({
     pendingTilt,
     pendingRect,
     pendingText,
+    texte,
     selectedSlotId,
     beschnittMm,
     trimBreiteMm,
@@ -731,28 +740,28 @@ export function useSpreadEditor({
   }
 
   /**
-   * Einen Textblock über die Seite ziehen.
+   * Einen Text über die Seite ziehen.
    *
    * Derselbe Weg wie beim Bild: Während des Ziehens rechnet die Oberfläche in
    * normierten Koordinaten, beim Loslassen geht der Wert einmal zum Server. Der
-   * Text folgt dabei mit – `withTextBlock` baut seine Boxen mit derselben
-   * Funktion wie der Renderer. Vorher lief nur ein Rahmen voraus und der Satz
+   * Text folgt dabei mit – `mitOffenemStand` baut seine Boxen mit denselben
+   * Funktionen wie der Renderer. Vorher lief nur ein Rahmen voraus und der Satz
    * sprang beim Loslassen nach.
    */
-  function textZiehen(block: TextBlockData, e: React.PointerEvent<HTMLDivElement>) {
+  function textZiehen(text: Bewegtext, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    // Der Griff auf einen fremden Block wählt ihn erst einmal aus. Der Klick, der
+    // Der Griff auf einen fremden Text wählt ihn erst einmal aus. Der Klick, der
     // gleich darauf folgt, darf die Griffe deshalb noch nicht umschalten – sonst
     // stünde man nach dem ersten Antippen im Drehmodus.
-    if (textId !== block.id) frischGewaehlt.current = true;
-    setTextId(block.id);
+    if (textId !== text.id) frischGewaehlt.current = true;
+    setTextId(text.id);
     onSelect(null);
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const start = block.rect;
+    const start = text.rect;
     gezogen.current = false;
 
     const onMove = (ev: PointerEvent) => {
@@ -760,7 +769,7 @@ export function useSpreadEditor({
         gezogen.current = true;
       }
       setPendingText({
-        id: block.id,
+        id: text.id,
         rect: {
           ...start,
           x: start.x + (ev.clientX - startX) / pxPerMm / trimBreiteMm,
@@ -771,20 +780,20 @@ export function useSpreadEditor({
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      textStandSpeichern(block.id);
+      textStandSpeichern(text);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
 
   /**
-   * Klick auf einen Textblock: auswählen, dann Griffe umschalten.
+   * Klick auf einen Text: auswählen, dann Griffe umschalten.
    *
    * Dieselbe Geste wie am Bild (`slotClick`) und aus demselben Grund – wer beides
-   * auf einer Doppelseite anfasst, soll nicht umlernen müssen. Ein Textblock
-   * kennt keine Papierkante, also gibt es hier auch keine Ausnahme.
+   * auf einer Doppelseite anfasst, soll nicht umlernen müssen. Ein Text kennt
+   * keine Papierkante, also gibt es hier auch keine Ausnahme.
    */
-  function textClick(block: TextBlockData) {
+  function textClick(text: Bewegtext) {
     if (gezogen.current) {
       gezogen.current = false;
       return;
@@ -793,31 +802,38 @@ export function useSpreadEditor({
       frischGewaehlt.current = false;
       return;
     }
-    if (textId !== block.id) {
-      setTextId(block.id);
+    if (textId !== text.id) {
+      setTextId(text.id);
       setGriffModus('groesse');
       return;
     }
     setGriffModus((m) => (m === 'groesse' ? 'drehen' : 'groesse'));
   }
 
-  /** Ob der Zeigerdruck den Block gerade erst ausgewählt hat. */
+  /** Ob der Zeigerdruck den Text gerade erst ausgewählt hat. */
   const frischGewaehlt = useRef(false);
 
   /**
-   * Größe eines Textblocks am Griff ziehen.
+   * Größe eines Textes am Griff ziehen.
    *
-   * An den **Ecken** wächst der Block mitsamt seiner Schrift: Ein Text ist nicht
+   * An den **Ecken** wächst der Text mitsamt seiner Schrift: Ein Text ist nicht
    * ein Kasten mit Inhalt, sondern eine Zeile in einer Größe – wer ihn am Eck
-   * aufzieht, meint größere Buchstaben. An den **Kanten** ändert sich nur der
-   * Kasten; er entscheidet, wo eine zentrierte oder rechts gesetzte Zeile steht,
-   * und das ist eine eigene Frage.
+   * aufzieht, meint größere Buchstaben. An den **Kanten** ändert sich beim Block
+   * nur der Kasten; er entscheidet, wo eine zentrierte oder rechts gesetzte Zeile
+   * steht, und das ist eine eigene Frage.
+   *
+   * **Am Vorlagentext zieht die Höhenkante die Schrift mit**, weil seine Größe die
+   * Versalhöhe im Kasten ist (`TEXT_STYLES`) und er darum keine eigene Punktzahl
+   * hat. Das ist der einzige Unterschied der beiden Sorten an den Griffen, und er
+   * ist keine Unachtsamkeit: Ein Vorlagentext hat keinen Kasten *mit Luft darin* –
+   * der Kasten ist die Größe. Frei bleibt damit die Breite, und die ist auch das,
+   * was man an einer Jahreszahl über zwei Seiten wirklich justiert.
    *
    * Gerechnet wird wie beim Bild im gedrehten Bezugssystem, mit der
    * gegenüberliegenden Ecke als Festpunkt (`griffZiehen`).
    */
   function textGriffZiehen(
-    block: TextBlockData,
+    text: Bewegtext,
     sx: -1 | 0 | 1,
     sy: -1 | 0 | 1,
     e: React.PointerEvent<HTMLDivElement>,
@@ -826,10 +842,10 @@ export function useSpreadEditor({
     e.preventDefault();
     e.stopPropagation();
 
-    const start = block.rect;
+    const start = text.rect;
     const w0 = start.w * trimBreiteMm;
     const h0 = start.h * trimHoeheMm;
-    const winkel = ((block.rotateDeg ?? 0) * Math.PI) / 180;
+    const winkel = ((text.rotateDeg ?? 0) * Math.PI) / 180;
     const cos = Math.cos(winkel);
     const sin = Math.sin(winkel);
     const dreh = (x: number, y: number) => ({ x: x * cos - y * sin, y: x * sin + y * cos });
@@ -863,46 +879,58 @@ export function useSpreadEditor({
 
       // Der Server klemmt auf 5 bis 200 pt; hier stünde sonst eine Zahl, die
       // gleich danach eine andere ist.
-      const pt = eck
-        ? Math.min(200, Math.max(5, Math.round(block.fontSizePt * f * 2) / 2))
-        : block.fontSizePt;
+      const pt =
+        text.fontSizePt === undefined
+          ? undefined
+          : eck
+            ? Math.min(200, Math.max(5, Math.round(text.fontSizePt * f * 2) / 2))
+            : text.fontSizePt;
 
       setPendingText({
-        id: block.id,
+        id: text.id,
         rect: normiert({
           xMm: neueMitte.xMm - w / 2,
           yMm: neueMitte.yMm - h / 2,
           wMm: w,
           hMm: h,
         }),
-        ...(eck ? { fontSizePt: pt } : {}),
+        ...(eck && pt !== undefined ? { fontSizePt: pt } : {}),
       });
-      setGriffAnzeige(eck ? `${pt.toString().replace('.', ',')} pt` : `${Math.round(w)} mm breit`);
+      // Am Vorlagentext gibt es keine Punktzahl zu zeigen – die Höhe *ist* die
+      // Größe. Millimeter sind dort die ehrlichere Angabe; sie nachzurechnen
+      // wäre eine zweite Fassung der Formel aus `typography.ts`.
+      setGriffAnzeige(
+        eck && pt !== undefined
+          ? `${pt.toString().replace('.', ',')} pt`
+          : sx === 0
+            ? `${Math.round(h)} mm hoch`
+            : `${Math.round(w)} mm breit`,
+      );
     };
 
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       setGriffAnzeige(null);
-      textStandSpeichern(block.id);
+      textStandSpeichern(text);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }
 
   /**
-   * Einen Textblock am Eckgriff drehen.
+   * Einen Text am Eckgriff drehen.
    *
    * Wie am Bild, nur ohne Ausnahme für die Papierkante. Der Winkel geht als Wert
    * zwischen 0 und 359 zum Server – das ist die Schreibweise, die der Regler im
    * Textpanel zeigt.
    */
-  function textDrehZiehen(block: TextBlockData, e: React.PointerEvent<HTMLDivElement>) {
+  function textDrehZiehen(text: Bewegtext, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
 
-    const rect = pendingText?.id === block.id ? pendingText.rect : block.rect;
+    const rect = pendingText?.id === text.id ? pendingText.rect : text.rect;
     const mitte = {
       xMm: beschnittMm + (rect.x + rect.w / 2) * trimBreiteMm,
       yMm: beschnittMm + (rect.y + rect.h / 2) * trimHoeheMm,
@@ -913,13 +941,13 @@ export function useSpreadEditor({
     };
 
     const startWinkel = zeigerWinkel(e);
-    const startDrehung = pendingText?.rotateDeg ?? block.rotateDeg ?? 0;
+    const startDrehung = pendingText?.rotateDeg ?? text.rotateDeg ?? 0;
 
     const onMove = (ev: PointerEvent) => {
       const roh = startDrehung + (zeigerWinkel(ev) - startWinkel);
       const gerastet = ev.shiftKey ? Math.round(roh / 15) * 15 : Math.round(roh);
       const grad = ((gerastet % 360) + 360) % 360;
-      setPendingText({ id: block.id, rect, rotateDeg: grad });
+      setPendingText({ id: text.id, rect, rotateDeg: grad });
       setGriffAnzeige(`${grad}°`);
     };
 
@@ -927,7 +955,7 @@ export function useSpreadEditor({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       setGriffAnzeige(null);
-      textStandSpeichern(block.id);
+      textStandSpeichern(text);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -937,25 +965,40 @@ export function useSpreadEditor({
   const MIN_TEXTKANTE_MM = 5;
 
   /**
-   * Schickt den offenen Stand eines Textblocks zum Server.
+   * Schickt den offenen Stand eines Textes zum Server.
    *
    * Einmal am Ende des Ziehens und mit allem, was daran hängt – Kasten,
    * Schriftgröße, Winkel. Ein Aufruf je Mausbewegung wäre ein Schreibvorgang auf
    * das ganze Projekt-JSON, hundertmal in der Sekunde.
    */
-  function textStandSpeichern(id: string) {
+  function textStandSpeichern(text: Bewegtext) {
     setPendingText((p) => {
-      if (p && p.id === id) {
+      if (p && p.id === text.id) {
         const { id: _kennung, ...patch } = p;
-        void textPatchSpeichern(id, patch);
+        void textPatchSpeichern(text, patch);
       }
       return p;
     });
   }
 
-  async function textPatchSpeichern(id: string, patch: Partial<TextBlockData>) {
+  /**
+   * Der eine Punkt, an dem die beiden Sorten auseinandergehen: ihr Endpunkt.
+   *
+   * Der Vorlagentext kennt keine Schriftgröße – sie steckt in der Kastenhöhe, die
+   * mit dem Rechteck ohnehin mitgeht.
+   */
+  async function textPatchSpeichern(
+    text: Bewegtext,
+    patch: { rect: NormRect; fontSizePt?: number; rotateDeg?: number },
+  ) {
     try {
-      const data = await textAendern(index, id, patch);
+      const data =
+        text.art === 'block'
+          ? await textAendern(index, text.id, patch)
+          : await vorlagentextAendern(index, text.id, {
+              rect: patch.rect,
+              ...(patch.rotateDeg !== undefined ? { rotateDeg: patch.rotateDeg } : {}),
+            });
       if (data.spread) {
         onSpread(data.spread);
         setPendingText(null);
@@ -963,7 +1006,7 @@ export function useSpreadEditor({
         onChanged();
       }
     } catch (e) {
-      setNote(`Textblock nicht gespeichert: ${fehlertext(e)}`);
+      setNote(`Text nicht gespeichert: ${fehlertext(e)}`);
     }
   }
 
@@ -1345,6 +1388,7 @@ export function useSpreadEditor({
     // Text
     textId,
     setTextId,
+    texte,
     textZiehen,
     textClick,
     textGriffZiehen,

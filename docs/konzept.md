@@ -1830,6 +1830,94 @@ Stands mit `textBlockBoxes` — derselben Funktion, die `renderSpread` benutzt. 
 zweite Fassung wäre eine zweite Wahrheit über Zeilenabstand, Schnitt und
 Drehpunkt, und sie wäre genau während des Ziehens sichtbar.
 
+### Vorlagentexte von Hand setzen
+
+Jahreszahl, Überschrift und Ereigniszeilen kommen aus der Vorlage, lassen sich
+aber verschieben, aufziehen, drehen und umbenennen: `TextElement` trägt dafür
+`rect` und `rotateDeg`, `content` war ohnehin ein Feld. `undefined` heißt „Platz
+aus der Vorlage" — dieselbe Unterscheidung wie bei `SlotAssignment.rect`, und aus
+demselben Grund normiert, damit ein Wechsel des Druckprofils die Handarbeit nicht
+zerreißt. Das betrifft sieben Jahresauftakte, 51 Gruppenauftakte und die sieben
+Ereignislisten; `caption` und `place` stehen im Typ, in keiner Vorlage.
+
+**Warum kein Textblock daraus wird.** Der Block kann längst alles davon, und
+`generateBook` könnte die Jahreszahl gleich als Block schreiben. Er überlebt
+aber keinen Neuaufbau — eine Jahreszahl, die beim Neuanordnen verschwindet, ist
+kein Gestaltungsmittel, sondern Datenverlust am prominentesten Element des
+Buchs. Dazu verlöre `role: 'year'` sein Zuhause, und daran hängt die
+Auftakterkennung. Die Grenze zwischen den beiden Begriffen liegt seither nicht
+mehr in der Beweglichkeit, sondern hier: **Position, Größe und Winkel sind
+Aussagen über diese Seite; Schrift, Schnitt und Farbe sind Aussagen über das
+Buch** und bleiben in `TEXT_STYLES`. Eine Jahreszahl in Kalam auf Seite 12 und in
+der Buchschrift auf Seite 34 ist kein Wunsch, das ist ein Versehen.
+
+**Keine Punktgröße.** Die Schriftgröße ist in `TEXT_STYLES` die Versalhöhe als
+Anteil der Kastenhöhe (`capHeightRatio: 0,462`), hängt also schon am Rechteck: Ein
+doppelt so hoher Kasten ist doppelt so große Schrift. Ein Feld `fontSizePt` wäre
+eine zweite Wahrheit über dieselbe Sache und stünde im 21×21-Buch mit der Zahl
+aus dem 30×30 da. Verworfen wurde auch ein Faktor auf den Vorlagenwert — dasselbe
+Problem mit einem Zwischenschritt. Nebeneffekt der Entscheidung: Die
+`lines`-Rechnung der Ereigniszeilen („drei Ereignisse sollen so groß stehen wie
+fünf") gilt unverändert weiter, nur mit einer anderen Kastenhöhe.
+
+**Verworfen: die Handarbeit über den Neuaufbau retten.** `yearEvents` zeigt, wie
+es gehen könnte — jahresbezogen am Projekt, ins Layout-Dokument, beim Erzeugen
+wieder eingesetzt. Für eine Position trägt das nicht: **Ein Inhalt ist
+vorlagenunabhängig, eine Position nicht.** „Geburt, erster Zahn" passt in jeden
+Auftakt, den die Engine wählt; ein Rechteck nicht. Beim Umschalten von
+`chapterOpenersDense` wechselt der Auftakt von sechs Bildern rechts auf neun über
+beide Seiten, und die gespeicherte Jahreszahl läge mitten in einem Foto — das
+Band, das laut Entwurf kein Bild berühren soll, verletzt durch gespeicherte
+Absicht, die niemand mehr prüft. Ein angesagter Verlust ist besser als eine
+Position, die stillschweigend falsch wird. Für die 51 Gruppentitel gäbe es
+ohnehin kein Zuhause: Ihre Vorlage kann sich bei jedem Neuaufbau ändern.
+
+Die Handarbeit gilt deshalb als Handarbeit wie jede andere — `handwork()` zählt
+sie als `textplaetze`, der Knopf „Neu anordnen" sagt sie vorher an, und wer eine
+Auftaktseite fertig gesetzt hat, hält sie mit `locked` fest.
+
+**`Spread.chapterYear`.** Erst durch die Editierbarkeit fiel auf, dass das Jahr
+einer Seite aus dem _Anzeigetext_ ihrer Jahreszahl gelesen wurde
+(`Number(text.content)`). „2020 – das erste Jahr" ergab `NaN`: `chapters()` fand
+das Jahr nicht, die Kapitelnavigation sprang auf Seite 1, und `setYearEvents`
+fand seinen Auftakt nicht mehr. Das Jahr steht jetzt am Spread; der Inhalt ist
+nur noch Rückfall für Stände, die vor dem Feld erzeugt wurden. Ein Jahr ist eine
+Aussage über den Bestand, kein Nebenprodukt einer Beschriftung — derselbe
+Gedanke, mit dem `buildTimeline` seine Daten selbst sammelt. Alle neuen Felder
+sind optional, `SCHEMA_VERSION` blieb bei 3.
+
+**Ein Textbegriff in der Oberfläche.** Block und Vorlagentext werden auf
+`Bewegtext` abgebildet (`spread/bewegtext.ts`); Bühne und Griffe kennen nur den.
+Eine zweite Overlay-Liste neben der bestehenden wäre eine fast wortgleiche Kopie
+von Ziehen, Klickumschaltung und Griffen gewesen — und `Griffe.tsx` kannte danach
+drei Zieltypen, von denen sich zwei nur darin unterschieden, wohin sie
+gespeichert werden. Genau eine Stelle verzweigt: der Endpunkt
+(`PATCH /api/spreads/:index/textslots/:slotId`).
+
+Eine echte Verhaltensdifferenz bleibt, und sie steht als `if` mit Begründung in
+den Ziehfunktionen: **Am Vorlagentext zieht die Höhenkante die Schriftgröße mit**,
+weil die Höhe die Größe _ist_. Frei bleibt die Breite — und die ist auch das, was
+man an einer Jahreszahl über zwei Seiten wirklich justiert. Ein Vorlagentext hat
+keinen Kasten mit Luft darin.
+
+Die Drehung war in diesem Zweig vorher gar nicht vorgesehen; `textElementBoxes`
+setzt `rotateDeg` und `rotateAboutMm` jetzt für alle Zeilen auf die Mitte des
+**Platzes**, nicht auf die des gesetzten Textes — sonst wanderte eine gedrehte
+Ereignisliste, sobald eine Zeile dazukommt. Der Parity-Test hat dafür einen
+eigenen Fall, weil das ein anderer Codepfad ist als der des Textblocks
+(gemessen 0,259 %).
+
+**Zu lang für den Kasten heißt kleiner, nicht überlaufen.** Dieselbe Regel wie im
+Fuß des Polaroids und mit derselben Näherung (`estimatedTextWidthMm`): Umbrechen
+bräuchte eine Zeilenlogik, die der Kern nicht hat, und ein Satz, der über den
+Falz und über die Bilder der Gegenseite läuft, ist im Druck ein Fehler. Aufgefallen
+ist das erst am fertigen Stand in der laufenden Oberfläche — „2008 – das erste
+Jahr" ragte quer über die rechte Seite, während „2008" nie irgendwo anstieß. Maß
+nimmt die **längste** Zeile, und die kleinere Größe gilt für alle: Zeilen desselben
+Textes in zwei Größen wären kein Satz, sondern ein Versehen. Der Parity-Fall trägt
+deshalb einen absichtlich zu langen Wortlaut und prüft beides in einem Durchgang;
+ein zweiter Fall wäre ein zweiter PDF-Export für dieselbe Aussage.
+
 ### Anordnung von Hand wählen
 
 Die Engine sucht die Vorlage nach Passung — Auflösung, Ausrichtung, Gewicht. Das

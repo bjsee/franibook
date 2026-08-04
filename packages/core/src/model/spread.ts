@@ -72,6 +72,29 @@ export interface TextElement {
   content: string;
   /** Verweist auf einen Textslot des Templates. */
   slotId: string;
+  /**
+   * Von Hand gesetzte Position und Größe, normiert wie ein Templateslot.
+   *
+   * Ohne Angabe gilt der Platz aus der Vorlage. Dieselbe Unterscheidung wie bei
+   * `SlotAssignment.rect`, und aus demselben Grund normiert: Ein Wechsel des
+   * Druckprofils von 30×30 auf 21×21 cm soll die Handarbeit nicht zerreißen.
+   *
+   * **Es gibt kein Größenfeld daneben.** Die Schriftgröße ist in `TEXT_STYLES`
+   * die Versalhöhe als Anteil der Kastenhöhe, hängt also schon am Rechteck –
+   * ein höherer Kasten ist eine größere Schrift. Eine zweite Angabe in Punkt
+   * wäre eine zweite Wahrheit über dieselbe Sache und bräche beim Formatwechsel
+   * genau das, was die Normierung retten soll.
+   */
+  rect?: { x: number; y: number; w: number; h: number };
+  /**
+   * Von Hand gesetzte Drehung in Grad im Uhrzeigersinn, um die Mitte des
+   * Kastens. Ohne Angabe steht der Text waagerecht wie in der Vorlage.
+   *
+   * Anders als bei `SlotAssignment.rotateDeg` gibt es hier keine Automatik, die
+   * eine gesetzte `0` übersteuern könnte: Vorlagentexte werden nicht geneigt.
+   * `0` und `undefined` bedeuten am Text deshalb dasselbe.
+   */
+  rotateDeg?: number;
 }
 
 /**
@@ -82,6 +105,14 @@ export interface TextElement {
  * `TextBlock` gehört niemandem als dem Benutzer: Er steht, wo er ihn hingesetzt
  * hat, in der Größe und dem Winkel, die er gewählt hat, und keine Vorlage weiß
  * von ihm.
+ *
+ * Verschieben, aufziehen und drehen lässt sich inzwischen auch ein
+ * `TextElement` (`rect`, `rotateDeg`) – die Grenze zwischen beiden liegt
+ * seither nicht mehr in der Beweglichkeit, sondern in zwei anderen Punkten:
+ * Schrift, Schnitt und Farbe wählt nur der Block, weil das Aussagen über das
+ * Buch sind und nicht über eine Seite; und nur der Block überlebt keinen
+ * Neuaufbau, weil ihn keine Vorlage wieder hinstellt. Wer für einen
+ * Vorlagentext eine andere Schrift will, will keinen Vorlagentext mehr.
  *
  * Zur Wahl stehen die Schriften aus `FONT_FAMILIES` – die Buchschrift und drei
  * weitere für Zwecke, die sie nicht abdeckt. Alle liegen als Datei im Repo und
@@ -130,6 +161,20 @@ export interface Spread {
   templateId: TemplateId;
   slots: SlotAssignment[];
   texts?: TextElement[];
+  /**
+   * Das Jahr, dessen Kapitel diese Doppelseite aufmacht.
+   *
+   * Nur der Jahresauftakt trägt es. Bis dahin war das Jahr einer Seite aus dem
+   * Inhalt ihrer Jahreszahl gelesen (`Number(text.content)`) – das ging so
+   * lange, wie die Zahl nicht editierbar war. Wer den Auftakt „2019 – das erste
+   * Jahr" nennt, bekäme sonst `NaN`: Die Kapitelnavigation sprang auf Seite 1,
+   * und die Ereigniszeilen fanden ihren Auftakt nicht mehr.
+   *
+   * Das Jahr ist eine Aussage über den Bestand, kein Nebenprodukt einer
+   * Beschriftung – derselbe Gedanke, mit dem `buildTimeline` seine Daten selbst
+   * sammelt statt sie dem Zeitstrahl zu überlassen.
+   */
+  chapterYear?: number;
   /**
    * Von Hand gesetzte Textblöcke. Überleben den Neuaufbau aus dem
    * Layout-Dokument nicht – wie jede andere Handarbeit an der Doppelseite.

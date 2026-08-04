@@ -54,6 +54,12 @@ export function spreadAntwort(project: Project, index: number) {
     timelineOverride: spread?.timeline ?? null,
     groups: project.spreadGroups(index),
     blocks: spread?.blocks ?? [],
+    // Die Vorlagentexte samt Vorlage: Sie lassen sich verschieben, aufziehen und
+    // drehen, und die Oberfläche braucht dafür beides – den Text mit seiner
+    // Handarbeit und den Platz, an dem er ohne sie hängt (Stil, Ausrichtung,
+    // Zeilenzahl stehen dort). Im RSM steht davon nur das Ergebnis.
+    texts: spread?.texts ?? [],
+    templateId: spread?.templateId ?? null,
     // Ob diese Seite das Neuanordnen übersteht. Die Oberfläche zeigt das
     // Schloss – sonst wäre nicht zu sehen, welche Seiten selbst gebaut sind.
     locked: spread?.locked ?? false,

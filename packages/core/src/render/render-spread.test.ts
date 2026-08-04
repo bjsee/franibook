@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime, Photo } from '../model/photo.js';
-import type { Spread } from '../model/spread.js';
+import type { Spread, TextElement } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
 import { DEFAULT_TILT_DEG } from './tilt.js';
 import { imageBoxes } from './rendered-spread.js';
+import { estimatedTextWidthMm } from './typography.js';
 
 const profile = saal as PrintProfile;
 const template = requireTemplate('spread.4up.grid');
@@ -440,6 +441,121 @@ describe('Mehrzeilige Texte', () => {
     const rsm = renderSpread(spread, { ...ctx, template: chapter });
     const jahr = rsm.boxes.find((b) => b.kind === 'text' && b.slotId === 't-year');
     expect(jahr?.kind === 'text' && jahr.content).toBe('2017');
+  });
+});
+
+describe('Von Hand gesetzte Vorlagentexte', () => {
+  const chapter = requireTemplate('spread.chapter.year');
+  const jahrSlot = chapter.textSlots!.find((t) => t.role === 'year')!;
+
+  /** Die Jahreszahl dieser Doppelseite, mit oder ohne Handarbeit daran. */
+  function jahrBox(handarbeit: Partial<TextElement> = {}) {
+    const spread: Spread = {
+      ...spreadOfTemplate(chapter.id, ['p1']),
+      texts: [
+        { id: 't1', role: 'year' as const, content: '2017', slotId: jahrSlot.id, ...handarbeit },
+      ],
+    };
+    const rsm = renderSpread(spread, { ...ctx, template: chapter });
+    const box = rsm.boxes.find((b) => b.kind === 'text' && b.slotId === jahrSlot.id);
+    if (box?.kind !== 'text') throw new Error('keine Jahreszahl im RSM');
+    return box;
+  }
+
+  it('nimmt das eigene Rechteck vor dem Platz der Vorlage', () => {
+    const ausVorlage = jahrBox();
+    const bewegt = jahrBox({ rect: { x: 0.55, y: 0.1, w: 0.3, h: 0.09 } });
+
+    const trimSpreadW = 2 * profile.page.trimWidthMm;
+    expect(bewegt.xMm).toBeCloseTo(profile.page.bleedMm + 0.55 * trimSpreadW, 6);
+    expect(bewegt.yMm).toBeCloseTo(profile.page.bleedMm + 0.1 * profile.page.trimHeightMm, 6);
+    expect(bewegt.wMm).toBeCloseTo(0.3 * trimSpreadW, 6);
+    expect(bewegt.xMm).not.toBeCloseTo(ausVorlage.xMm, 3);
+  });
+
+  it('rechnet die Schriftgröße aus der Kastenhöhe – ein höherer Kasten ist größere Schrift', () => {
+    // Der Grund, warum ein bewegter Vorlagentext keine Punktgröße braucht: Sie
+    // steht in `TEXT_STYLES` als Versalhöhe im Kasten und hängt damit schon am
+    // Rechteck. Doppelte Höhe, doppelte Schrift.
+    const einfach = jahrBox({ rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.1 } });
+    const doppelt = jahrBox({ rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.2 } });
+    expect(doppelt.fontSizePt).toBeCloseTo(2 * einfach.fontSizePt, 6);
+  });
+
+  it('dreht alle Zeilen um die Mitte des Kastens, nicht jede um ihre eigene', () => {
+    const eventSlot = chapter.textSlots!.find((t) => t.id === 't-events')!;
+    const spread: Spread = {
+      ...spreadOfTemplate(chapter.id, ['p1']),
+      texts: [
+        {
+          id: 't2',
+          role: 'freeText' as const,
+          content: 'Erste Zeile\nZweite Zeile',
+          slotId: eventSlot.id,
+          rotateDeg: 12,
+        },
+      ],
+    };
+    const rsm = renderSpread(spread, { ...ctx, template: chapter });
+    const zeilen = rsm.boxes.filter((b) => b.kind === 'text' && b.slotId.startsWith('t-events'));
+    expect(zeilen).toHaveLength(2);
+
+    const punkte = zeilen.map((b) => (b.kind === 'text' ? b.rotateAboutMm : undefined));
+    expect(punkte[0]).toEqual(punkte[1]);
+    expect(zeilen.every((b) => b.kind === 'text' && b.rotateDeg === 12)).toBe(true);
+
+    // Der Drehpunkt ist die Mitte des Platzes für fünf Zeilen und nicht die der
+    // zwei gesetzten: Sonst wanderte der Text, sobald eine Zeile dazukommt.
+    const mitteY =
+      profile.page.bleedMm + (eventSlot.y + eventSlot.h / 2) * profile.page.trimHeightMm;
+    expect(punkte[0]?.yMm).toBeCloseTo(mitteY, 6);
+  });
+
+  it('lässt einen Text ohne Drehung ungedreht – 0 und nicht gesetzt sind dasselbe', () => {
+    expect(jahrBox().rotateDeg).toBeUndefined();
+    expect(jahrBox({ rotateDeg: 0 }).rotateDeg).toBeUndefined();
+  });
+
+  it('verkleinert die Schrift, wenn der Wortlaut nicht in die Breite passt', () => {
+    // Dieselbe Regel wie im Fuß des Polaroids: kleiner setzen, nicht umbrechen
+    // und erst recht nicht überlaufen lassen. Erreichbar wurde das erst mit dem
+    // editierbaren Wortlaut – „2017" passte immer.
+    const kurz = jahrBox();
+    const lang = jahrBox({ content: '2017 – das Jahr mit dem langen Sommer und der Reise' });
+
+    expect(lang.fontSizePt).toBeLessThan(kurz.fontSizePt);
+    // Und zwar so weit, dass der Satz in den Kasten passt.
+    expect(estimatedTextWidthMm(lang.content, lang.fontSizePt)).toBeLessThanOrEqual(
+      lang.wMm + 0.001,
+    );
+  });
+
+  it('nimmt für alle Zeilen eine Größe, gemessen an der längsten', () => {
+    const eventSlot = chapter.textSlots!.find((t) => t.id === 't-events')!;
+    const spread: Spread = {
+      ...spreadOfTemplate(chapter.id, ['p1']),
+      texts: [
+        {
+          id: 't2',
+          role: 'freeText' as const,
+          content: 'kurz\nund eine deutlich längere Zeile, die über den Kasten hinausreicht',
+          slotId: eventSlot.id,
+        },
+      ],
+    };
+    const rsm = renderSpread(spread, { ...ctx, template: chapter });
+    const zeilen = rsm.boxes.filter((b) => b.kind === 'text' && b.slotId.startsWith('t-events'));
+
+    // Zwei Zeilen desselben Textes in zwei Größen wären kein Satz, sondern ein
+    // Versehen – die längste gibt das Maß für beide.
+    const groessen = new Set(zeilen.map((b) => (b.kind === 'text' ? b.fontSizePt : 0)));
+    expect(groessen.size).toBe(1);
+
+    const lang = zeilen.find((b) => b.kind === 'text' && b.content.startsWith('und eine'));
+    if (lang?.kind !== 'text') throw new Error('lange Zeile fehlt');
+    expect(estimatedTextWidthMm(lang.content, lang.fontSizePt)).toBeLessThanOrEqual(
+      lang.wMm + 0.001,
+    );
   });
 });
 

@@ -88,6 +88,7 @@ export interface Handarbeit {
   zeitstrahl: number;
   positionen: number;
   texte: number;
+  textplaetze: number;
   festgehalten: number;
 }
 
@@ -128,6 +129,7 @@ export function BuchPanel({
     handwork.zeitstrahl > 0 ? `${handwork.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
     handwork.positionen > 0 ? `${handwork.positionen} frei gesetzte Bilder` : null,
     handwork.texte > 0 ? `${handwork.texte} Textblöcke` : null,
+    handwork.textplaetze > 0 ? `${handwork.textplaetze} bewegte Vorlagentexte` : null,
   ].filter((s): s is string => s !== null);
 
   // `auto` heißt „aus dem Hintergrund ableiten" – dann bekommt der Kern gar

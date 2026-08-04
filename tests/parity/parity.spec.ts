@@ -24,6 +24,10 @@ import { type APIRequestContext, type Page, expect, test } from '@playwright/tes
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
+// Aus dem Kern und nicht nachgebaut: Ob ein Satz in seinen Kasten passt,
+// entscheidet dort `estimatedTextWidthMm`, und der Test soll dieselbe Näherung
+// benutzen. Relativ, weil das Wurzelpaket den Kern nicht als Abhängigkeit führt.
+import { estimatedTextWidthMm } from '../../packages/core/src/render/typography.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -599,6 +603,104 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     expect(
       ratio,
       `Vorschau und PDF weichen mit gedrehtem Text um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_TIMELINE);
+  });
+
+  /**
+   * Dasselbe für einen Text, der an einem Platz der Vorlage hängt.
+   *
+   * Kein Nachbau des Falles darüber, sondern ein **anderer Codepfad**: Ein
+   * Textblock bekommt seine Boxen aus `textBlockBoxes` mit eigener Punktgröße,
+   * ein Vorlagentext aus `textElementBoxes` – dort kommt die Schriftgröße aus der
+   * Kastenhöhe (`TEXT_STYLES`), die Zeilenhöhe aus `textSlot.lines`, und die
+   * Drehung war bis zuletzt gar nicht vorgesehen. Genau solche Zweige laufen
+   * auseinander, ohne dass ein Vitest es merkt: Er prüft das RSM, nicht die
+   * Grundlinie im PDF.
+   *
+   * Zwei Zeilen in einem Platz für eine: Dann fächern sie auf, und ein
+   * abweichender Drehpunkt fällt sofort auf. `t-title` tragen alle
+   * Flussvorlagen mit vier Bildern.
+   *
+   * Der Wortlaut ist absichtlich zu lang für den Kasten, damit derselbe Fall die
+   * **Verkleinerung** mitprüft: Beide Adapter müssen die kleinere Punktgröße aus
+   * dem RSM nehmen, statt selbst zu entscheiden, was mit einem zu langen Satz
+   * geschieht. Ein eigener Testfall dafür wäre ein zweiter PDF-Export für
+   * dieselbe Aussage.
+   */
+  test('ein gedrehter Vorlagentext deckt sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    const gesetzt = await request.patch('http://127.0.0.1:5174/api/spreads/0/textslots/t-title', {
+      data: {
+        content: 'Kreta 2015 – zwei Wochen am Meer\nmit Oma und Opa',
+        rect: { x: 0.14, y: 0.14, w: 0.32, h: 0.13 },
+        rotateDeg: 17,
+      },
+    });
+    expect(gesetzt.ok(), await gesetzt.text()).toBe(true);
+
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const zeilen = rsm.boxes.filter(
+      (b: { kind: string; slotId?: string }) =>
+        b.kind === 'text' && b.slotId?.startsWith('t-title'),
+    );
+    // Zwei Zeilen, ein Drehpunkt – sonst prüft der Vergleich das Falsche.
+    expect(zeilen).toHaveLength(2);
+    expect(zeilen[0].rotateDeg).toBe(17);
+    expect(zeilen[0].rotateAboutMm).toEqual(zeilen[1].rotateAboutMm);
+    // Die längere Zeile gibt das Maß, und beide stehen in derselben Größe.
+    expect(zeilen[0].fontSizePt).toBe(zeilen[1].fontSizePt);
+    expect(estimatedTextWidthMm(zeilen[0].content, zeilen[0].fontSizePt)).toBeLessThanOrEqual(
+      zeilen[0].wMm + 0.001,
+    );
+
+    await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
+    const stage = page.getByTestId('spread');
+    await expect(stage).toBeVisible();
+    await page.waitForFunction(() => {
+      const imgs = Array.from(document.images);
+      return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    await page.evaluate(() => document.fonts.ready);
+    const shot = await stage.screenshot({ type: 'png' });
+    await writeFile(join(ARTIFACTS, 'preview-textslot.png'), shot);
+
+    const exportRes = await request.post('http://127.0.0.1:5174/api/export/pdf', {
+      data: { spreadIndex: 0, fileName: 'parity-textslot.pdf' },
+    });
+    expect(exportRes.ok()).toBe(true);
+
+    const rasterPrefix = join(ARTIFACTS, 'pdf-textslot');
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r',
+      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      '-singlefile',
+      join(OUT, 'parity-textslot.pdf'),
+      rasterPrefix,
+    ]);
+
+    const meta = await sharp(shot).metadata();
+    const width = meta.width ?? COMPARE_WIDTH;
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+
+    const a = await toPng(shot, width, height);
+    const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
+    const diff = new PNG({ width, height });
+    const differing = pixelmatch(a.data, b.data, diff.data, width, height, {
+      threshold: PIXEL_THRESHOLD,
+      includeAA: false,
+    });
+    await writeFile(join(ARTIFACTS, 'diff-textslot.png'), PNG.sync.write(diff));
+
+    const ratio = differing / (width * height);
+    console.log(`Parity (gedrehter Vorlagentext): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit gedrehtem Vorlagentext um ${(ratio * 100).toFixed(3)} % ab. ` +
         `Vergleichsbilder in ${ARTIFACTS}`,
     ).toBeLessThan(MAX_DIFF_TIMELINE);
   });

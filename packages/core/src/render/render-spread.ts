@@ -10,8 +10,8 @@ import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
 import type { EffectiveDate } from '../model/date.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
-import type { SlotAssignment, Spread, TextBlock } from '../model/spread.js';
-import type { Template, TemplateSlot } from '../model/template.js';
+import type { SlotAssignment, Spread, TextBlock, TextElement } from '../model/spread.js';
+import type { Template, TemplateSlot, TemplateTextSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { isJustified } from '../templates/justified.js';
@@ -39,7 +39,7 @@ import { sideTimelineBoxes } from './side-timeline.js';
 import type { TimelineFootVariant } from './timeline.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
 import { randabfallend, tiltDeg } from './tilt.js';
-import { resolveWeight, textFontSizePt, textStyle } from './typography.js';
+import { estimatedTextWidthMm, resolveWeight, textFontSizePt, textStyle } from './typography.js';
 
 /**
  * Was der Zeitstrahl über die Doppelseite hinaus wissen muss.
@@ -127,14 +127,27 @@ function toMm(
   slot: Pick<TemplateSlot, 'x' | 'y' | 'w' | 'h'>,
   profile: PrintProfile,
 ): { xMm: number; yMm: number; wMm: number; hMm: number } {
-  const trimSpreadW = 2 * profile.page.trimWidthMm;
-  const trimH = profile.page.trimHeightMm;
-  const bleed = profile.page.bleedMm;
+  return rectMm(slot, profile.page);
+}
+
+/**
+ * Dieselbe Rechnung, aber ohne Druckprofil.
+ *
+ * Die Oberfläche rechnet beim Ziehen an den Griffen mit, kennt dabei aber nur
+ * die Maße aus dem fertigen `RenderedSpread` und kein Profil – dieselbe
+ * Begründung wie bei `TextBlockArea`. Die Formel steht deshalb hier einmal,
+ * statt an drei Stellen gleich zu lauten und irgendwann auseinanderzugehen.
+ */
+function rectMm(
+  rect: { x: number; y: number; w: number; h: number },
+  area: TextBlockArea,
+): { xMm: number; yMm: number; wMm: number; hMm: number } {
+  const trimSpreadW = 2 * area.trimWidthMm;
   return {
-    xMm: bleed + slot.x * trimSpreadW,
-    yMm: bleed + slot.y * trimH,
-    wMm: slot.w * trimSpreadW,
-    hMm: slot.h * trimH,
+    xMm: area.bleedMm + rect.x * trimSpreadW,
+    yMm: area.bleedMm + rect.y * area.trimHeightMm,
+    wMm: rect.w * trimSpreadW,
+    hMm: rect.h * area.trimHeightMm,
   };
 }
 
@@ -407,39 +420,8 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   const byTextSlotId = new Map((spread.texts ?? []).map((t) => [t.slotId, t]));
   for (const textSlot of template.textSlots ?? []) {
     const text = byTextSlotId.get(textSlot.id);
-    if (!text?.content) continue;
-    const rect = toMm(textSlot, profile);
-    const style = textStyle(textSlot.style);
-    const zeilen = text.content.split('\n').filter((z) => z.trim().length > 0);
-
-    // Mehrzeilige Texte werden hier in einzelne Boxen zerlegt, statt sie einem
-    // Renderer zu überlassen. Sonst müsste jeder Adapter den Zeilenabstand
-    // selbst bestimmen – CSS `line-height` gegen pdfkit `lineGap` –, und genau
-    // das wäre eine Layoutentscheidung im Renderer, die der Parity-Test
-    // aufdecken soll. Der Zeilenabstand steckt deshalb in der Geometrie.
-    // Die Zeilenhöhe folgt der Absicht des Templates, nicht der Zahl der
-    // gesetzten Zeilen: Drei Ereignisse sollen so groß stehen wie fünf.
-    const zeilenZahl = Math.max(textSlot.lines ?? zeilen.length, zeilen.length, 1);
-    const zeilenHoeheMm = zeilenZahl > 1 ? rect.hMm / zeilenZahl : rect.hMm;
-    // Größe, Schnitt und Farbe kommen aus dem Textstil (render/typography.ts);
-    // die Renderer bekommen fertige Werte, keine Regeln.
-    const fontSizePt = textFontSizePt(zeilenHoeheMm, style);
-
-    zeilen.forEach((zeile, i) => {
-      boxes.push({
-        kind: 'text',
-        xMm: rect.xMm,
-        yMm: rect.yMm + i * zeilenHoeheMm,
-        wMm: rect.wMm,
-        hMm: zeilenHoeheMm,
-        slotId: zeilen.length > 1 ? `${textSlot.id}-${i}` : textSlot.id,
-        content: zeile,
-        fontSizePt,
-        weight: style.weight,
-        align: textSlot.align ?? 'left',
-        color: textColorOn(background, style.color),
-      });
-    });
+    if (!text) continue;
+    boxes.push(...textElementBoxes(text, textSlot, profile.page, background));
   }
 
   // Von Hand gesetzte Blöcke, nach den Bildern: Wer einen Text auf ein Foto
@@ -477,6 +459,86 @@ export interface TextBlockArea {
   bleedMm: number;
   trimWidthMm: number;
   trimHeightMm: number;
+}
+
+/**
+ * Boxen eines Textes, der an einem Textplatz der Vorlage hängt.
+ *
+ * Position und Größe kommen aus dem Platz – es sei denn, jemand hat den Text
+ * von Hand aufgezogen (`TextElement.rect`). Dann gilt sein Rechteck, und weil
+ * die Schriftgröße in `TEXT_STYLES` die Versalhöhe als Anteil der Kastenhöhe
+ * ist, wächst die Schrift damit von selbst mit. Genau deshalb braucht ein
+ * bewegter Vorlagentext keine eigene Punktgröße.
+ *
+ * Exportiert aus demselben Grund wie `textBlockBoxes`: Der Editor zeigt beim
+ * Ziehen an den Griffen den offenen Stand und muss dazu dieselbe Regel benutzen
+ * – sonst zeigte die Vorschau während des Ziehens etwas anderes als danach.
+ */
+export function textElementBoxes(
+  text: TextElement,
+  textSlot: TemplateTextSlot,
+  area: TextBlockArea,
+  background: string,
+): RenderBox[] {
+  const zeilen = text.content.split('\n').filter((z) => z.trim().length > 0);
+  if (zeilen.length === 0) return [];
+
+  const rect = rectMm(text.rect ?? textSlot, area);
+  const style = textStyle(textSlot.style);
+
+  // Mehrzeilige Texte werden hier in einzelne Boxen zerlegt, statt sie einem
+  // Renderer zu überlassen. Sonst müsste jeder Adapter den Zeilenabstand
+  // selbst bestimmen – CSS `line-height` gegen pdfkit `lineGap` –, und genau
+  // das wäre eine Layoutentscheidung im Renderer, die der Parity-Test
+  // aufdecken soll. Der Zeilenabstand steckt deshalb in der Geometrie.
+  // Die Zeilenhöhe folgt der Absicht des Templates, nicht der Zahl der
+  // gesetzten Zeilen: Drei Ereignisse sollen so groß stehen wie fünf. Das gilt
+  // auch für einen von Hand aufgezogenen Kasten – wer ihn höher zieht, will
+  // größere Zeilen, nicht mehr davon.
+  const zeilenZahl = Math.max(textSlot.lines ?? zeilen.length, zeilen.length, 1);
+  const zeilenHoeheMm = zeilenZahl > 1 ? rect.hMm / zeilenZahl : rect.hMm;
+  // Größe, Schnitt und Farbe kommen aus dem Textstil (render/typography.ts);
+  // die Renderer bekommen fertige Werte, keine Regeln.
+  const ausHoehe = textFontSizePt(zeilenHoeheMm, style);
+
+  // Passt der Satz nicht in die Breite, wird die Schrift kleiner – dieselbe
+  // Regel wie im Fuß des Polaroids (`frame.ts`), und aus demselben Grund:
+  // Umbrechen bräuchte eine Zeilenlogik, die der Kern nicht hat, und
+  // überlaufen ist im Druck ein Fehler. Vorher konnte das kaum auffallen, weil
+  // in einem Jahresauftakt „2019" stand; seit der Wortlaut editierbar ist,
+  // steht dort auch „2019 – das erste Jahr" und lief über den Falz.
+  //
+  // Maß nimmt die **längste** Zeile, und die kleinere Größe gilt für alle:
+  // Zeilen desselben Textes in zwei Größen wären kein Satz, sondern ein
+  // Versehen. `estimatedTextWidthMm` ist bewusst eine Näherung im Kern und
+  // nicht die echte Breite eines Adapters – sonst entschiede jeder Adapter
+  // anders und die Parität ginge auseinander.
+  const laengste = zeilen.reduce((a, b) => (b.length > a.length ? b : a), '');
+  const gebraucht = estimatedTextWidthMm(laengste, ausHoehe);
+  const fontSizePt =
+    gebraucht > rect.wMm && gebraucht > 0 ? ausHoehe * (rect.wMm / gebraucht) : ausHoehe;
+
+  // Gedreht wird um die Mitte des ganzen Kastens, nicht um die jeder Zeile –
+  // wie beim Textblock. Bei einem Platz für fünf Zeilen ist das die Mitte des
+  // Platzes und nicht die des gesetzten Textes: Sonst wanderte eine gedrehte
+  // Ereignisliste, sobald eine Zeile dazukommt.
+  const drehung = text.rotateDeg ?? 0;
+  const mitte = { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
+
+  return zeilen.map((zeile, i) => ({
+    kind: 'text' as const,
+    xMm: rect.xMm,
+    yMm: rect.yMm + i * zeilenHoeheMm,
+    wMm: rect.wMm,
+    hMm: zeilenHoeheMm,
+    slotId: zeilen.length > 1 ? `${textSlot.id}-${i}` : textSlot.id,
+    content: zeile,
+    fontSizePt,
+    weight: style.weight,
+    align: textSlot.align ?? 'left',
+    color: textColorOn(background, style.color),
+    ...(drehung !== 0 ? { rotateDeg: drehung, rotateAboutMm: mitte } : {}),
+  }));
 }
 
 /**

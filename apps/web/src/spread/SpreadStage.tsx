@@ -11,13 +11,15 @@
  *
  * Auch ihre Breite bringt die Bühne mit (`model.stageBreite`) und nimmt sie nicht
  * vom Rahmen entgegen: Papier und Griffe müssen mit demselben `pxPerMm` rechnen,
- * und ein Rahmen, der die eine Zahl liefern darf, kann die andere verfehlen.
+ * und ein Rahmen, der die eine Zahl liefern darf, kann die andere verfehlen. Aus
+ * demselben Grund kommen die beweglichen Texte aus `model.texte`: Griffkästen und
+ * Griffe müssen über derselben Liste liegen.
  */
 import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { dpiInSlot } from '@franibook/core';
 import { T, dpiFarbe } from '../theme.js';
-import type { TextBlockData } from '../TextBlocks.js';
+import { textName } from './bewegtext.js';
 import { Griffe } from './Griffe.js';
 import type { PhotoInfo, SpreadEditorModel } from './useSpreadEditor.js';
 
@@ -49,10 +51,9 @@ interface Props {
   model: SpreadEditorModel;
   imageSrc: (photoId: string) => string;
   guides: GuideVisibility;
-  blocks: readonly TextBlockData[];
 }
 
-export function SpreadStage({ model, imageSrc, guides, blocks }: Props) {
+export function SpreadStage({ model, imageSrc, guides }: Props) {
   const {
     stageRef,
     stageBreite,
@@ -70,6 +71,7 @@ export function SpreadStage({ model, imageSrc, guides, blocks }: Props) {
     infoVon,
     textId,
     pendingText,
+    texte,
   } = model;
 
   /**
@@ -149,20 +151,20 @@ export function SpreadStage({ model, imageSrc, guides, blocks }: Props) {
         slotOverlay={overlay}
       />
 
-      {blocks.map((block) => {
-        const stand = pendingText?.id === block.id ? pendingText : undefined;
-        const r = stand?.rect ?? block.rect;
-        const drehung = stand?.rotateDeg ?? block.rotateDeg;
-        const gewaehlt = block.id === textId;
+      {texte.map((text) => {
+        const stand = pendingText?.id === text.id ? pendingText : undefined;
+        const r = stand?.rect ?? text.rect;
+        const drehung = stand?.rotateDeg ?? text.rotateDeg;
+        const gewaehlt = text.id === textId;
         return (
           <div
-            key={block.id}
-            onPointerDown={(e) => model.textZiehen(block, e)}
-            // Wie am Bild: Der Klick auf den schon gewählten Block schaltet
+            key={text.id}
+            onPointerDown={(e) => model.textZiehen(text, e)}
+            // Wie am Bild: Der Klick auf den schon gewählten Text schaltet
             // zwischen Größen- und Drehgriffen um. Das Verschieben liegt auf dem
             // Ziehen und stört sich daran nicht.
-            onClick={() => model.textClick(block)}
-            title={`„${block.content.split('\n')[0] ?? ''}" verschieben`}
+            onClick={() => model.textClick(text)}
+            title={`„${textName(text)}" verschieben`}
             style={{
               position: 'absolute',
               left: `${(beschnittMm + r.x * trimBreiteMm) * pxPerMm}px`,
@@ -180,11 +182,11 @@ export function SpreadStage({ model, imageSrc, guides, blocks }: Props) {
       })}
 
       {/*
-        Zuletzt und damit obenauf: Die Griffe müssen auch über einem Textblock
+        Zuletzt und damit obenauf: Die Griffe müssen auch über einem Text
         liegen, der zufällig auf dem gewählten Bild sitzt – sonst greift man ins
         Leere, wo man eine Ecke sieht.
       */}
-      <Griffe model={model} blocks={blocks} />
+      <Griffe model={model} />
     </div>
   );
 }

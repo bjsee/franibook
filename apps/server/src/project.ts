@@ -402,6 +402,18 @@ export class Project {
     positionen: number;
     /** Von Hand gesetzte Textblöcke auf Seiten, die neu gebaut werden. */
     texte: number;
+    /**
+     * Vorlagentexte, die von Hand verschoben, aufgezogen oder gedreht wurden –
+     * Jahreszahlen, Gruppentitel, Ereigniszeilen. Der Neuaufbau stellt sie an
+     * den Platz der Vorlage zurück.
+     *
+     * Gezählt wird die Geometrie, dazu der Wortlaut der Jahreszahl, wo er von
+     * `chapterYear` abweicht. Ein umbenannter Gruppentitel bleibt ungezählt:
+     * Was die Automatik hinschreiben würde, steht in der Gruppe und wäre hier
+     * ein zweiter Weg zur Wahrheit – die Zahl soll eine untere Schranke sein,
+     * keine geratene.
+     */
+    textplaetze: number;
     /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
     festgehalten: number;
   } {
@@ -413,6 +425,7 @@ export class Project {
     let zeitstrahl = 0;
     let positionen = 0;
     let texte = 0;
+    let textplaetze = 0;
     let festgehalten = 0;
     for (const spread of this.spreads) {
       if (spread.locked) {
@@ -420,6 +433,14 @@ export class Project {
         continue;
       }
       texte += spread.blocks?.length ?? 0;
+      textplaetze += (spread.texts ?? []).filter(
+        (t) =>
+          t.rect !== undefined ||
+          t.rotateDeg !== undefined ||
+          (t.role === 'year' &&
+            spread.chapterYear !== undefined &&
+            t.content !== String(spread.chapterYear)),
+      ).length;
       crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
       // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
       // eine Entscheidung, die der Neuaufbau verwirft.
@@ -445,6 +466,7 @@ export class Project {
       zeitstrahl,
       positionen,
       texte,
+      textplaetze,
       festgehalten,
     };
   }
@@ -580,9 +602,7 @@ export class Project {
     if (sauber.length === 0) delete this.yearEvents[String(year)];
     else this.yearEvents[String(year)] = [...sauber];
 
-    const auftakt = this.spreads.find((s) =>
-      s.texts?.some((t) => t.role === 'year' && t.content === String(year)),
-    );
+    const auftakt = this.spreads.find((s) => this.istJahresauftakt(s, year));
     if (!auftakt) return false;
 
     const slot = requireTemplate(auftakt.templateId).textSlots?.find((t) => t.id === 't-events');
@@ -974,19 +994,107 @@ export class Project {
     }
     if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
 
-    // Der Beschnitt in normierten Einheiten: So weit darf ein Bild über das
+    slot.rect = this.aufsBlatt(rect);
+    return { ok: true };
+  }
+
+  /**
+   * Hält ein normiertes Rechteck auf dem Blatt.
+   *
+   * Über die Endformatkante hinaus darf es sehr wohl – randabfallend ist
+   * gewollt, dafür ist der Beschnitt da. Ganz außerhalb der Seite wäre dagegen
+   * kein Gestaltungsmittel, sondern ein verlorenes Element.
+   */
+  private aufsBlatt(rect: { x: number; y: number; w: number; h: number }): {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } {
+    // Der Beschnitt in normierten Einheiten: So weit darf etwas über das
     // Endformat hinausragen, ohne dass es aus dem Blatt fällt.
     const { bleedMm, trimWidthMm, trimHeightMm } = this.profile.page;
     const randX = bleedMm / (2 * trimWidthMm);
     const randY = bleedMm / trimHeightMm;
     const klemme = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-    slot.rect = {
+    return {
       x: klemme(rect.x, -randX, 1 + randX - rect.w),
       y: klemme(rect.y, -randY, 1 + randY - rect.h),
       w: klemme(rect.w, 0.02, 1 + 2 * randX),
       h: klemme(rect.h, 0.02, 1 + 2 * randY),
     };
+  }
+
+  // --------------------------------------------------------- Vorlagentexte
+
+  /**
+   * Ändert einen Text, der an einem Textplatz der Vorlage hängt.
+   *
+   * Anders als beim Textblock sind hier nur drei Dinge einstellbar: Wortlaut,
+   * Rechteck und Winkel. Schrift, Schnitt und Farbe kommen aus dem Textstil und
+   * bleiben es – sie sind Aussagen über das Buch, nicht über diese Seite. Wer
+   * eine andere Schrift will, will keinen Vorlagentext mehr, sondern einen
+   * Block; den gibt es daneben.
+   *
+   * Eine Größe in Punkt gibt es nicht: Die Schriftgröße hängt an der Kastenhöhe
+   * (`TEXT_STYLES`, Versalhöhe als Anteil), ein höheres Rechteck ist also eine
+   * größere Schrift. Siehe `TextElement.rect`.
+   *
+   * `rect: null` bzw. `rotateDeg: null` stellt den Stand der Vorlage wieder her.
+   */
+  updateTextElement(
+    index: number,
+    slotId: string,
+    patch: {
+      content?: string;
+      rect?: { x: number; y: number; w: number; h: number } | null;
+      rotateDeg?: number | null;
+    },
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const textSlot = requireTemplate(spread.templateId).textSlots?.find((t) => t.id === slotId);
+    if (!textSlot) return { ok: false, error: 'Diese Vorlage hat dort keinen Textplatz' };
+
+    let text = spread.texts?.find((t) => t.slotId === slotId);
+    if (!text) {
+      // Ein optionaler Platz kann leer geblieben sein – der Gruppentitel auf
+      // einem Auftakt ohne bestätigte Gruppe etwa. Ihn hier anzulegen ist der
+      // einzige Weg, ihn überhaupt zu beschriften; ein 404 wäre eine Sackgasse.
+      text = { id: `${spread.id}-${slotId}`, role: textSlot.role, content: '', slotId };
+      spread.texts = [...(spread.texts ?? []), text];
+    }
+
+    if (patch.content !== undefined) {
+      // Wie beim Textblock löscht ein leerer Wortlaut nichts: Der Platz bleibt
+      // greifbar, sonst verschwände er beim Leeren des Feldes unter den Händen.
+      // Die Grenze ist großzügiger als bei einer Bildunterschrift, weil hier
+      // auch die Ereigniszeilen eines Jahrgangs stehen – fünf Zeilen Text.
+      text.content = patch.content.slice(0, 400);
+    }
+
+    if (patch.rect === null) delete text.rect;
+    else if (patch.rect) {
+      const { x, y, w, h } = patch.rect;
+      if (![x, y, w, h].every((v) => Number.isFinite(v))) {
+        return { ok: false, error: 'Position ist keine Zahl' };
+      }
+      if (w <= 0 || h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
+      text.rect = this.aufsBlatt(patch.rect);
+    }
+
+    if (patch.rotateDeg === null) delete text.rotateDeg;
+    else if (patch.rotateDeg !== undefined && Number.isFinite(patch.rotateDeg)) {
+      const winkel = ((patch.rotateDeg % 360) + 360) % 360;
+      // `0` und „nicht gesetzt" bedeuten am Vorlagentext dasselbe – es gibt hier
+      // keine Automatik, die eine ausdrückliche Null übersteuern könnte (anders
+      // als bei der Bildneigung).
+      if (winkel === 0) delete text.rotateDeg;
+      else text.rotateDeg = winkel;
+    }
+
     return { ok: true };
   }
 
@@ -1417,9 +1525,20 @@ export class Project {
     }
   }
 
+  /**
+   * Das Jahr, in das diese Doppelseite gehört.
+   *
+   * `chapterYear` zuerst, denn das ist die Aussage der Engine. Der Inhalt der
+   * Jahreszahl kommt nur noch als Rückfall für Stände, die vor dem Feld erzeugt
+   * wurden – und nur, wenn er sich als Zahl lesen lässt: Seit die Jahreszahl
+   * editierbar ist, kann dort „2019 – das erste Jahr" stehen, und ein `NaN`
+   * hätte die Kapitelnavigation auf Seite 1 geschickt.
+   */
   private yearOf(spread: Spread): number | undefined {
+    if (spread.chapterYear !== undefined) return spread.chapterYear;
     const text = spread.texts?.find((t) => t.role === 'year');
-    if (text) return Number(text.content);
+    const ausText = text ? Number(text.content) : Number.NaN;
+    if (Number.isInteger(ausText)) return ausText;
     for (const slot of spread.slots) {
       if (!slot.photoId) continue;
       const photo = this.photos.get(slot.photoId);
@@ -1427,6 +1546,18 @@ export class Project {
       if (date) return Number(date.slice(0, 4));
     }
     return undefined;
+  }
+
+  /**
+   * Ist das die Auftaktseite dieses Jahrgangs?
+   *
+   * Schärfer als `yearOf`, und zwar mit Absicht: Dort darf das Jahr auch aus den
+   * Fotos kommen, hier nicht – die Jahresereignisse gehören auf den Auftakt und
+   * nicht auf die erste Seite, die zufällig Bilder aus dem Jahr trägt.
+   */
+  private istJahresauftakt(spread: Spread, year: number): boolean {
+    if (spread.chapterYear !== undefined) return spread.chapterYear === year;
+    return spread.texts?.some((t) => t.role === 'year' && t.content === String(year)) === true;
   }
 
   // ------------------------------------------------------------ Persistenz
