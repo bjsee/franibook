@@ -8,7 +8,29 @@
 import { createReadStream } from 'node:fs';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { type DateEdit, istDateEdit } from '@franibook/core';
 import { type Kontext, spreadAntwort } from './kontext.js';
+
+/**
+ * Eine Datumskorrektur, wie sie im Körper der Anfrage steht.
+ *
+ * `clear` steht nur hier und nicht im Kern-Typ: Zurücknehmen ist keine Rechnung,
+ * sondern das Löschen zweier Felder – `applyDateEdit` mit einem vierten Zweig zu
+ * belasten, der nichts rechnet, hätte den Rückgabetyp verwässert.
+ */
+type Datumsbefehl = DateEdit | { kind: 'clear' };
+
+function istDatumsbefehl(v: unknown): v is Datumsbefehl {
+  if (istDateEdit(v)) return true;
+  return typeof v === 'object' && v !== null && (v as { kind?: unknown }).kind === 'clear';
+}
+
+/** Eine nichtleere Liste von Fotokennungen, oder nichts. */
+function leseIds(v: unknown): string[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  if (!v.every((id): id is string => typeof id === 'string' && id.length > 0)) return undefined;
+  return v;
+}
 
 export function fotoRouten(
   app: FastifyInstance,
@@ -18,6 +40,47 @@ export function fotoRouten(
   app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
     const views = project.photoViews(req.query.problems !== undefined);
     return { count: views.length, photos: views };
+  });
+
+  /**
+   * Korrigiert das Datum mehrerer Fotos.
+   *
+   * Mengenwertig, auch für ein einzelnes Bild: Datumsfehler kommen in Serien –
+   * ein Kamera-Reset trifft dutzende Aufnahmen –, und eine Route je Foto wäre
+   * ein Undo-Schritt je Foto. So sind vierzig korrigierte Bilder ein Cmd+Z.
+   *
+   * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung.** Sortiert
+   * wird in der Oberfläche, nicht hier (`project/fotodaten.ts`).
+   *
+   * Das Buch bleibt unangetastet. Ob ein Neuaufbau jetzt etwas ändern würde,
+   * steht als `structurePending` in der Antwort – so muss die Oberfläche nach
+   * einer Korrektur nicht das ganze Projekt nachladen, um es zu erfahren.
+   */
+  app.patch<{ Body: { ids?: unknown; date?: unknown } }>('/api/photos', async (req, reply) => {
+    const ids = leseIds(req.body?.ids);
+    if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
+
+    const befehl = req.body?.date;
+    if (!istDatumsbefehl(befehl)) {
+      return reply.code(400).send({ error: 'Keine brauchbare Datumskorrektur angegeben' });
+    }
+
+    const ergebnis =
+      befehl.kind === 'clear'
+        ? project.verwirfDatumskorrektur(ids)
+        : project.korrigiereDaten(ids, befehl);
+
+    // Eine unausführbare Korrektur hat nichts angefasst – eine halb angewandte
+    // Stapelkorrektur wäre schlimmer als eine abgelehnte.
+    if ('fehler' in ergebnis) return reply.code(400).send({ error: ergebnis.fehler });
+
+    await project.save();
+    return {
+      ...ergebnis,
+      photos: project.photoViewsOf(ids),
+      structurePending: project.structurePending(),
+      undatedCount: project.structure.undated.length,
+    };
   });
 
   app.get<{ Params: { id: string }; Querystring: { size?: string } }>(

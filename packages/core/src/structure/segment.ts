@@ -15,6 +15,7 @@
  *
  * Messwerte in docs/spikes/bestandsanalyse.md.
  */
+import { fnv1a } from '../model/fingerprint.js';
 import type { NaiveDateTime, PhotoId } from '../model/photo.js';
 
 export interface DatedPhoto {
@@ -184,6 +185,28 @@ export function buildStructure(
 /** Alle Segmente eines Buches in Buchreihenfolge. */
 export function allSegments(structure: Structure): Segment[] {
   return structure.chapters.flatMap((c) => c.segments);
+}
+
+/**
+ * Abdruck der Gliederung, um zu erkennen, ob ein Neuaufbau etwas ändern würde.
+ *
+ * Erfasst genau das, woraus die Fotoverteilung entsteht: Segmentzugehörigkeit,
+ * Reihenfolge innerhalb des Segments, Serienschnitt und die Liste der
+ * undatierten Fotos. **Nicht** erfasst sind die Zeitpunkte selbst — eine
+ * Korrektur um fünf Minuten, die keine Reihenfolge und keine Serie kippt, ändert
+ * das Buch nicht, und ein Hinweis darauf wäre ein Fehlalarm. Was sie ändert, ist
+ * der Zeitstrahl, und der liest die Daten beim Rendern.
+ *
+ * Die undatierten werden sortiert, weil ihre Reihenfolge aus der Iteration über
+ * den Bestand stammt und nichts bedeutet: Ein Reimport dürfte sie umstellen,
+ * ohne dass das Buch veraltet.
+ */
+export function structureFingerprint(structure: Structure): string {
+  const zeilen = structure.chapters.flatMap((c) =>
+    c.segments.map((s) => `${s.id}|${s.series.map((r) => r.photoIds.join(',')).join(';')}`),
+  );
+  zeilen.push(`undated:${[...structure.undated].sort().join(',')}`);
+  return fnv1a(zeilen.join('\n'));
 }
 
 /** Deutscher Monatsname – für Titel und Beschriftungen. */

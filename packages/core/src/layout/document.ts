@@ -158,8 +158,12 @@ function formatGps(photo: Photo): { gps?: string; map?: string } {
   };
 }
 
-function photoEntry(photo: Photo, extras: { dpi?: number; warn?: string } = {}): LayoutPhotoEntry {
-  const date = formatDate(photo.takenAt ?? photo.secondaryDate);
+function photoEntry(
+  photo: Photo,
+  dateOf: (photo: Photo) => string | null | undefined,
+  extras: { dpi?: number; warn?: string } = {},
+): LayoutPhotoEntry {
+  const date = formatDate(dateOf(photo) ?? undefined);
   return {
     file: photo.fileName,
     ...(date ? { date } : {}),
@@ -182,6 +186,19 @@ export interface ExportOptions {
     timeline: boolean;
     groupOpeners: boolean | 'auto';
   };
+  /**
+   * Das effektive Datum eines Fotos.
+   *
+   * Als Funktion und nicht als `overrides`-Tabelle, weil die Kaskade außer den
+   * Korrekturen auch einen Kontext braucht (Importzeitpunkt, Sammelsekunden) –
+   * und der gehört dem Server. Dasselbe Muster wie `weightOf` beim Erzeugen.
+   *
+   * Ohne Angabe steht das rohe Aufnahmedatum im Dokument. Das ist für Tests
+   * bequem und für den echten Aufrufer falsch: Eine Datumskorrektur wäre dort
+   * nicht zu sehen, und das Dokument ist die Fassung, in der man das Buch von
+   * Hand liest.
+   */
+  dateOf?: (photo: Photo) => string | null | undefined;
   /** Fotos, die in keiner Doppelseite stehen. */
   unplaced?: readonly PhotoId[];
   /** Ereignisse je Jahr, zur Bearbeitung im Dokument. */
@@ -199,6 +216,7 @@ export interface ExportOptions {
 /** Erzeugt das Layout-Dokument aus der aktuellen Buchstruktur. */
 export function exportLayout(opts: ExportOptions): LayoutDocument {
   const { spreads, photos, profile, settings } = opts;
+  const dateOf = opts.dateOf ?? ((p: Photo) => p.takenAt ?? p.secondaryDate);
 
   // Welche Gruppe gehört zu welchem Foto? Damit trägt jede Doppelseite ihren
   // Gruppennamen und man sieht beim Bearbeiten sofort, was zusammengehört.
@@ -232,7 +250,10 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
       }
 
       photoEntries.push(
-        photoEntry(photo, { ...(dpi !== undefined ? { dpi } : {}), ...(warn ? { warn } : {}) }),
+        photoEntry(photo, dateOf, {
+          ...(dpi !== undefined ? { dpi } : {}),
+          ...(warn ? { warn } : {}),
+        }),
       );
     }
 
@@ -283,7 +304,7 @@ export function exportLayout(opts: ExportOptions): LayoutDocument {
     unplaced: (opts.unplaced ?? [])
       .map((id) => photos.get(id))
       .filter((p): p is Photo => p !== undefined)
-      .map((p) => photoEntry(p)),
+      .map((p) => photoEntry(p, dateOf)),
   };
 }
 

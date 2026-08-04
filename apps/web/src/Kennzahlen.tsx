@@ -43,6 +43,8 @@ interface Props {
   undated: number;
   /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
   groupsPending: boolean;
+  /** Ob die Kalendergliederung abweicht – Datumskorrekturen, aussortierte Fotos. */
+  structurePending: boolean;
   onZeigeSpread: (index: number) => void;
   onNeuAnordnen: () => void;
   busy: boolean;
@@ -54,6 +56,7 @@ export function Kennzahlen({
   spreadCount,
   undated,
   groupsPending,
+  structurePending,
   onZeigeSpread,
   onNeuAnordnen,
   busy,
@@ -78,7 +81,14 @@ export function Kennzahlen({
           </>
         )}
         <span style={B.dehner} />
-        {groupsPending && <GruppenHinweis onNeuAnordnen={onNeuAnordnen} busy={busy} />}
+        {(groupsPending || structurePending) && (
+          <PendingHinweis
+            gruppen={groupsPending}
+            gliederung={structurePending}
+            onNeuAnordnen={onNeuAnordnen}
+            busy={busy}
+          />
+        )}
       </div>
     );
   }
@@ -160,26 +170,57 @@ export function Kennzahlen({
         </span>
       )}
 
-      {groupsPending && <GruppenHinweis onNeuAnordnen={onNeuAnordnen} busy={busy} />}
+      {(groupsPending || structurePending) && (
+        <PendingHinweis
+          gruppen={groupsPending}
+          gliederung={structurePending}
+          onNeuAnordnen={onNeuAnordnen}
+          busy={busy}
+        />
+      )}
     </div>
   );
 }
 
 /**
- * Was an einer Gruppenänderung sofort wirkt, wirkt schon: Der Zeitstrahl liest
- * die Gruppen beim Rendern. Wie die Fotos verteilt sind und wo Auftakte stehen,
+ * Was an einer Änderung sofort wirkt, wirkt schon: Der Zeitstrahl liest Gruppen
+ * und Daten beim Rendern. Wie die Fotos verteilt sind und wo Auftakte stehen,
  * entsteht dagegen beim Erzeugen – und das verwirft Handarbeit. Deshalb der
  * Hinweis statt eines stillen Neuaufbaus.
+ *
+ * Eine Pille für beide Quellen und nicht zwei nebeneinander: Der Griff ist
+ * derselbe, und zwei Knöpfe „neu anordnen" in einer 44 Pixel hohen Zeile lesen
+ * sich wie zwei verschiedene Handlungen.
  */
-function GruppenHinweis({ onNeuAnordnen, busy }: { onNeuAnordnen: () => void; busy: boolean }) {
+function PendingHinweis({
+  gruppen,
+  gliederung,
+  onNeuAnordnen,
+  busy,
+}: {
+  gruppen: boolean;
+  gliederung: boolean;
+  onNeuAnordnen: () => void;
+  busy: boolean;
+}) {
+  const was =
+    gruppen && gliederung
+      ? 'Gruppen und Gliederung geändert'
+      : gruppen
+        ? 'Gruppen geändert'
+        : 'Gliederung geändert';
   return (
     <span style={S.pending}>
-      Gruppen geändert
+      {was}
       <button
         onClick={onNeuAnordnen}
         disabled={busy}
         style={B.knopfText}
-        title="Die Aufteilung der Fotos und die Auftaktseiten folgen erst beim Neuanordnen — das verwirft Handarbeit"
+        title={
+          gliederung
+            ? 'Ein Foto gehört jetzt an eine andere Stelle im Buch. Die Verteilung folgt erst beim Neuanordnen — das verwirft Handarbeit'
+            : 'Die Aufteilung der Fotos und die Auftaktseiten folgen erst beim Neuanordnen — das verwirft Handarbeit'
+        }
       >
         neu anordnen
       </button>

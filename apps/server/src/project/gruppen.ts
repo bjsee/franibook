@@ -12,6 +12,7 @@ import {
   type PhotoId,
   type PhotoOverride,
   type Spread,
+  fnv1a,
   mergeSuggestions,
   propagatePlaces,
   resolveEffectiveDate,
@@ -106,15 +107,7 @@ export function groupFingerprint(z: Gruppenstand): string {
       ].join('|'),
     );
 
-  // FNV-1a: kurz, stabil und ohne Abhängigkeit. Kollisionen sind hier
-  // folgenlos – im schlimmsten Fall bleibt ein Hinweis aus.
-  let hash = 0x811c9dc5;
-  const text = zeilen.join('\n');
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(36);
+  return fnv1a(zeilen.join('\n'));
 }
 
 /** Gruppen in Buchreihenfolge, also nach dem frühesten enthaltenen Foto. */

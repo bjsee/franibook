@@ -65,6 +65,27 @@ describe('Kaskade', () => {
     expect(r.confidence).toBe('none');
     expect(r.issues.map((i) => i.code)).toContain('noDate');
   });
+
+  it('weist ein geschätztes Datum als solches aus', () => {
+    const r = resolveEffectiveDate(photo({ takenAt: '2015-06-12T14:12:33' }), {
+      dateOverride: '2014-07-01T12:00:00',
+      dateEstimated: true,
+    });
+    expect(r.value).toBe('2014-07-01T12:00:00');
+    // Derselbe Wert wie eine Handeingabe, aber nicht dieselbe Aussage: Ein aus
+    // einem Zeitraum gerechneter Zeitpunkt darf im Buch nicht so verbindlich
+    // aussehen wie ein EXIF-Zeitstempel.
+    expect(r.source).toBe('interpolated');
+    expect(r.confidence).toBe('medium');
+  });
+
+  it('schlägt mit dem geschätzten Datum jede Quelle aus der Datei', () => {
+    const r = resolveEffectiveDate(photo({ takenAt: '2015-06-12T14:12:33' }), {
+      dateOverride: '2014-07-01T12:00:00',
+      dateEstimated: true,
+    });
+    expect(r.value).not.toBe('2015-06-12T14:12:33');
+  });
 });
 
 describe('Plausibilitätsprüfungen', () => {
@@ -90,6 +111,18 @@ describe('Plausibilitätsprüfungen', () => {
         r.issues.map((i) => i.code),
         d,
       ).toContain('epochDate');
+    }
+  });
+
+  it('hält einen von Hand gesetzten Reset-Tag nicht für einen Kamera-Reset', () => {
+    // „Typisches Datum nach einem Kamera-Reset" ist eine Aussage über eine
+    // Kamera. Wer den 1.1.2000 selbst einträgt, meint ihn.
+    for (const override of [
+      { dateOverride: '2000-01-01T12:00:00' },
+      { dateOverride: '2000-01-01T12:00:00', dateEstimated: true },
+    ]) {
+      const r = resolveEffectiveDate(photo(), override);
+      expect(r.issues.map((i) => i.code)).not.toContain('epochDate');
     }
   });
 

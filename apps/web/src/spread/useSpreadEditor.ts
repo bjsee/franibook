@@ -39,6 +39,7 @@ import {
 import {
   ausschnittSetzen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
+  datumKorrigieren,
   fehlertext,
   type FotoInfo as PhotoInfo,
   fotopoolLaden,
@@ -99,6 +100,14 @@ export interface SpreadEditorArgs {
   onSelect: (slotId: string | null) => void;
   /** Nach jeder Änderung: Kennzahlen der Kopfzeile neu laden. */
   onChanged: () => void;
+  /**
+   * Die gerenderte Doppelseite verwerfen und neu holen.
+   *
+   * Gebraucht, wenn sich etwas geändert hat, das der Renderer aus dem Projekt
+   * liest, ohne dass die Antwort ein neues Blatt mitgebracht hätte — ein
+   * korrigiertes Aufnahmedatum steht im Zeitstrahl am Fuß der Seite.
+   */
+  onNeuRendern: () => void;
 }
 
 export type SpreadEditorModel = ReturnType<typeof useSpreadEditor>;
@@ -112,6 +121,7 @@ export function useSpreadEditor({
   selectedSlotId,
   onSelect,
   onChanged,
+  onNeuRendern,
 }: SpreadEditorArgs) {
   /**
    * Wie breit das Blatt gezeichnet wird — **eine** Zahl für alle drei Rahmen.
@@ -1271,6 +1281,42 @@ export function useSpreadEditor({
     onChanged();
   }
 
+  /**
+   * Korrigiert das Aufnahmedatum des gewählten Bildes.
+   *
+   * Hier und nicht im Rahmen, damit der Griff in Inspektor, Werkbank und
+   * Lesetisch derselbe ist. `null` gibt das Datum an die Datei zurück.
+   *
+   * Das Buch wird dabei **nicht** neu angeordnet – ein Bild, das jetzt in ein
+   * anderes Jahr gehört, bleibt an seinem Platz, und die Kennzahlenzeile sagt
+   * über `structurePending`, dass ein Neuaufbau etwas ändern würde. Neu geholt
+   * werden nur die Fotoinfos: Das Datum steht in dieser Spalte und im Zeitstrahl
+   * am Fuß der Seite.
+   */
+  async function datumSetzen(wert: string | null): Promise<void> {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return;
+    setNote(null);
+    try {
+      const e = await datumKorrigieren(
+        [photoId],
+        wert === null ? { kind: 'clear' } : { kind: 'set', value: wert },
+      );
+      const neu = e.photos.find((p) => p.id === photoId);
+      if (neu) setInfos((bestand) => new Map(bestand).set(photoId, neu));
+      if (e.uebersprungen[0]) setNote(e.uebersprungen[0].grund);
+      else if (e.structurePending) {
+        setNote('Datum gesetzt. Das Buch würde nach einem Neuanordnen anders aussehen.');
+      }
+      // Die Kennzahlenzeile trägt den Hinweis, und der Zeitstrahl liest die
+      // Daten beim Rendern – beides gehört nachgezogen.
+      onChanged();
+      onNeuRendern();
+    } catch (fehler) {
+      setNote(fehlertext(fehler));
+    }
+  }
+
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
@@ -1366,6 +1412,7 @@ export function useSpreadEditor({
     istFreiGesetzt,
     infoVon,
     dateiname,
+    datumSetzen,
     werkzeug,
     setWerkzeug,
     werkzeugHinweis,

@@ -36,8 +36,18 @@ export interface Layoutstand {
   sortedGroups(): PhotoGroup[];
 }
 
-/** Die Buchaufteilung als lesbares, bearbeitbares JSON. */
-export function exportLayout(z: Layoutstand): LayoutDocument {
+/**
+ * Die Buchaufteilung als lesbares, bearbeitbares JSON.
+ *
+ * `dateOf` kommt von außen, weil die Datumskaskade einen Kontext braucht, den
+ * nur die Projektklasse hat. Ohne sie stünde im Dokument das rohe EXIF-Datum —
+ * und das Dokument ist gerade die Fassung, in der man nachsieht, warum ein Bild
+ * dort steht, wo es steht.
+ */
+export function exportLayout(
+  z: Layoutstand,
+  dateOf: (photo: Photo) => string | null,
+): LayoutDocument {
   const platziert = new Set<PhotoId>();
   for (const spread of z.spreads) {
     for (const slot of spread.slots) if (slot.photoId) platziert.add(slot.photoId);
@@ -55,6 +65,7 @@ export function exportLayout(z: Layoutstand): LayoutDocument {
       timeline: z.settings.timeline,
       groupOpeners: z.settings.groupOpeners,
     },
+    dateOf,
     yearEvents: z.yearEvents,
     unplaced,
     groups: z.sortedGroups(),

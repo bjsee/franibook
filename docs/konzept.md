@@ -446,6 +446,77 @@ Die Prüfungen sind nur so wertvoll wie die Korrekturen, die sie ermöglichen. A
 - **Datum aus Dateinamen übernehmen** – für ganze Auswahlen.
 - **Reihenfolge einfrieren** – die aktuelle Reihenfolge wird über `orderNudge` festgeschrieben, ohne Datumsangaben zu erfinden.
 
+> **Korrektur (4. August 2026): drei Werkzeuge statt fünf, und `interpolated` heißt Zeitraum**
+>
+> Gebaut sind **setzen**, **verschieben** und **über einen Zeitraum verteilen**
+> (`core/model/date-correction.ts`), dazu das Zurücknehmen einer Korrektur. Die
+> Abweichungen von der Liste oben sind Absicht:
+>
+> - **Aus Nachbarn interpolieren** ist zur Zeitraum-Verteilung geworden.
+>   `resolveEffectiveDate` ist eine reine Funktion über _ein_ Foto; Nachbarn
+>   müssten also durch den `DateContext`, und ein interpolierter Anker erzeugt
+>   Rekursion, die abgefangen werden müsste. Die Verteilung über einen genannten
+>   Zeitraum ist reine Arithmetik, braucht keinen Kontext — und trifft, wie man
+>   über solche Bilder spricht („das war im Sommer 2015“) genauer als „zwischen
+>   Foto 341 und 342“. Die Quelle heißt weiter `interpolated`, das Etikett in der
+>   Oberfläche „geschätzt“.
+> - **Reihenfolge einfrieren** ist entfallen, und damit bleibt `orderNudge`
+>   ungenutzt im Modell. Die Verteilung erzeugt verschiedene Zeitstempel, das
+>   Setzen zählt bei mehreren Fotos Sekunden hoch — beides legt die Reihenfolge
+>   schon fest. Ein zweiter Sortierbegriff durch die halbe Kaskade wäre Aufwand
+>   ohne zusätzliche Aussage.
+> - **Datum aus Dateinamen übernehmen** ist entfallen: `nameDate` steht bereits
+>   in der Kaskade und greift von selbst, sobald keine EXIF-Quelle trägt.
+>
+> Zwei Feinheiten, die im Bauen aufgefallen sind: Jahre und Monate werden
+> **kalendarisch** addiert und auf den Monatsletzten geklemmt (über 45 Jahre
+> liegen elf Schalttage; ohne das verrutscht ein geradegerichteter Kamera-Reset
+> um elf Tage, und der 31. Januar plus ein Monat wäre der 3. März). Und
+> `epochDate` prüft nur noch Automatikquellen — „typisches Datum nach einem
+> Kamera-Reset“ ist eine Aussage über eine Kamera, nicht über einen Benutzer, der
+> den 1.1.2000 selbst einträgt.
+
+#### Das Buch folgt nicht von selbst
+
+Eine Korrektur ändert das Buch **nicht**. Sie ändert die Kalendergliederung, und
+ob das Buch damit veraltet ist, sagt `structurePending()` — gebaut wie
+`groupsPending()`: Beim Erzeugen wird ein Abdruck der Gliederung gespeichert
+(`structureFingerprint`, `core/structure/segment.ts`), und weicht er später ab,
+schreibt die Kennzahlenzeile „Gliederung geändert“ mit einem Knopf zum
+Neuanordnen.
+
+Der Abdruck erfasst Segmentzugehörigkeit, Reihenfolge im Segment, Serienschnitt
+und die Liste der undatierten Fotos — **nicht** die Zeitpunkte selbst. Eine
+Korrektur um fünf Minuten, die keine Reihenfolge und keine Serie kippt, meldet
+deshalb nichts: Sie ändert nur den Zeitstrahl, und der liest die Daten beim
+Rendern. Fehlalarme entwerten genau den Hinweis, der bei einem echten
+Jahreswechsel gebraucht wird.
+
+Verworfen wurden zwei Alternativen. **Sofort neu anordnen** verwirft bei jedem
+Klick die ganze Handarbeit (am echten Buch dreistellig viele Stücke laut
+`handwork()`), und Datumsfehler kommen in Serien — ein Kamera-Reset wären vierzig
+Neuaufbauten. **Chirurgisch einsetzen**, also das Foto aus seinem Platz nehmen
+und am neuen Ort einschieben, ist bei einem Jahreswechsel nicht wohldefiniert: Im
+Zielkapitel ist kein Platz frei, das Budget stand vorher fest, und Auftaktseiten
+wanderten nicht mit.
+
+#### Wo korrigiert wird
+
+Zwei Orte, weil es zwei Anlässe gibt. Der Reiter **Fotodaten**
+(`apps/web/src/Fotodaten.tsx`) zeigt vorgabegemäß die zweifelhaften Fotos und ist
+der Platz, an dem man sie abarbeitet — mit Stapelauswahl, denn undatierte Fotos
+stehen in `Structure.undated` und damit oft in keiner Doppelseite, wären über das
+Buch also unerreichbar. Der Griff am Bild (`spread/DatumGriff.tsx`, in allen drei
+Rahmen) ist für den anderen Fall: Man bemerkt den Fehler, weil das Bild an der
+falschen Stelle im Buch steht.
+
+Die Route ist **mengenwertig**, auch für ein einzelnes Bild
+(`PATCH /api/photos`): So sind vierzig korrigierte Fotos ein Cmd+Z und nicht
+vierzig. Ab fünfzig Fotos fällt zusätzlich ein Notanker. **Die Reihenfolge der
+Liste ist die Reihenfolge der Verteilung** — sortiert wird in der Oberfläche
+(Vorgabe Dateiname, umsortierbar per Ziehen), nicht im Server; ein
+Server-Sortierbegriff könnte der Ansicht widersprechen.
+
 ## Layout-Engine
 
 > **Korrektur (2. August 2026): Kalender statt Ereignisse, Jahr statt Ereignis**

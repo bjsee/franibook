@@ -44,6 +44,16 @@ export interface EffectiveDate {
 /** Benutzerkorrekturen, getrennt vom unveränderlichen Importergebnis. */
 export interface PhotoOverride {
   dateOverride?: NaiveDateTime;
+  /**
+   * Ob `dateOverride` geschätzt ist statt gewusst.
+   *
+   * Entsteht beim Verteilen mehrerer Fotos über einen Zeitraum: Der Zeitraum
+   * ist die Aussage, der Zeitpunkt darin ist gerechnet. Getrennt vom Wert
+   * gespeichert und nicht als eigenes Feld daneben, damit die Kaskade nur einen
+   * Wert kennt und ausschließlich die *Quelle* sich unterscheidet – ein
+   * geschätztes Datum sortiert genauso, sieht in der Oberfläche aber anders aus.
+   */
+  dateEstimated?: boolean;
   /** Sortierung innerhalb derselben Sekunde, ohne das Datum zu verändern. */
   orderNudge?: number;
   excluded?: boolean;
@@ -69,13 +79,32 @@ export interface DateContext {
 /** Kamera-Resets nach leerer Knopfzelle landen zuverlässig auf diesen Tagen. */
 const EPOCH_DATES = new Set(['1970-01-01', '1980-01-01', '2000-01-01', '2002-12-08']);
 
+/** Ob der Wert vom Benutzer kommt und nicht aus der Datei. */
+function istBenutzerquelle(source: DateSource): boolean {
+  return source === 'manual' || source === 'interpolated';
+}
+
 /** Reihenfolge der Quellen. Der erste Treffer gewinnt. */
 const CASCADE: {
   source: DateSource;
   confidence: DateConfidence;
   pick: (p: Photo, ov?: PhotoOverride) => NaiveDateTime | undefined;
 }[] = [
-  { source: 'manual', confidence: 'high', pick: (_p, ov) => ov?.dateOverride },
+  // Zwei Schritte für ein Feld: `dateOverride` trägt den Wert, `dateEstimated`
+  // entscheidet, als was er gilt. Ein gesetztes Datum ist eine Aussage des
+  // Benutzers und bleibt hoch bewertet; ein aus einem Zeitraum gerechnetes ist
+  // eine Schätzung und muss als solche zu sehen sein – sonst sieht es im Buch
+  // so verbindlich aus wie ein EXIF-Zeitstempel.
+  {
+    source: 'manual',
+    confidence: 'high',
+    pick: (_p, ov) => (ov?.dateEstimated ? undefined : ov?.dateOverride),
+  },
+  {
+    source: 'interpolated',
+    confidence: 'medium',
+    pick: (_p, ov) => (ov?.dateEstimated ? ov.dateOverride : undefined),
+  },
   { source: 'exif', confidence: 'high', pick: (p) => p.takenAt },
   { source: 'exifSecondary', confidence: 'medium', pick: (p) => p.secondaryDate },
   { source: 'filename', confidence: 'medium', pick: (p) => p.nameDate },
@@ -178,7 +207,11 @@ function checkPlausibility(
     });
   }
 
-  if (EPOCH_DATES.has(datePart(value))) {
+  // Nur bei Automatikquellen: „typisches Datum nach einem Kamera-Reset" ist
+  // eine Aussage über eine Kamera, nicht über einen Benutzer. Wer den 1.1.2000
+  // von Hand einträgt oder in einen Zeitraum fallen lässt, der ihn enthält, meint
+  // ihn – ein Reset-Befund wäre dort schlicht falsch.
+  if (!istBenutzerquelle(source) && EPOCH_DATES.has(datePart(value))) {
     issues.push({ code: 'epochDate', detail: 'typisches Datum nach einem Kamera-Reset' });
   }
 

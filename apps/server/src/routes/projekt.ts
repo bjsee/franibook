@@ -35,6 +35,10 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     // Verteilung und Auftaktseiten erst beim Neuanordnen. Die Oberfläche sagt es,
     // statt das Buch ungefragt neu zu bauen.
     groupsPending: project.groupsPending(),
+    // Dasselbe für die andere Hälfte der Eingaben: Datumskorrekturen,
+    // aussortierte Fotos, ein Nachimport. Die Gliederung weicht dann von der ab,
+    // aus der das Buch gebaut wurde.
+    structurePending: project.structurePending(),
     undatedCount: project.structure.undated.length,
     // Was Cmd+Z und Cmd+Umschalt+Z gerade bedeuten. Hier und nicht in einem
     // eigenen Endpunkt: Die Oberfläche holt diese Auskunft nach jeder Änderung

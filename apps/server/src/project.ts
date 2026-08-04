@@ -11,6 +11,7 @@ import {
   type CoverDesign,
   type Crop,
   type DateContext,
+  type DateEdit,
   type FrameId,
   type GenerateResult,
   type LayoutDocument,
@@ -57,6 +58,7 @@ import {
   resolveEffectiveDate,
   sortKey,
   removeGroup,
+  structureFingerprint,
   templateById,
   ungroupPhotos,
   updateGroup,
@@ -66,6 +68,7 @@ import type { PreviewCache } from './previews.js';
 import * as anordnung from './project/anordnung.js';
 import * as bestand from './project/bestand.js';
 import type { ImportDiff, QuellenBericht } from './project/bestand.js';
+import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
 import * as layoutDokument from './project/layout-dokument.js';
 import {
@@ -182,6 +185,8 @@ interface PersistedProject {
   groups: PhotoGroup[];
   /** Stand der Gruppen beim letzten Erzeugen; fehlt in älteren Projekten. */
   groupStamp?: string;
+  /** Stand der Kalendergliederung beim letzten Erzeugen; fehlt in älteren Projekten. */
+  structureStamp?: string;
   yearEvents?: Record<string, string[]>;
   /** Erst ab Umschlagunterstützung vorhanden; ältere Projekte haben es nicht. */
   cover?: CoverDesign;
@@ -262,8 +267,9 @@ function zuSchema3(data: PersistedProject): PersistedProject {
  * Der veränderbare Stand des Projekts, wie ihn ein Undo-Schritt festhält.
  *
  * Fast dasselbe wie `PersistedProject` — und trotzdem ein eigener Typ, weil die
- * Unterschiede Aussagen sind. Dabei sind `groupStamp` und `lastReport`: Ohne
- * den Abdruck stünde `groupsPending()` nach einem Zurücknehmen falsch, ohne den
+ * Unterschiede Aussagen sind. Dabei sind die beiden Abdrücke und `lastReport`:
+ * Ohne sie stünden `groupsPending()` und `structurePending()` nach einem
+ * Zurücknehmen falsch, ohne den
  * Bericht die Kennzahlen. Nicht dabei ist die Kalendergliederung
  * (`structure`) — sie ist abgeleitet und wird nach jedem Setzen neu gebildet —
  * und nicht dabei ist der Importbefund (`importedAt`, `skippedVideos`,
@@ -275,6 +281,7 @@ export interface Stand {
   overrides: Record<PhotoId, PhotoOverride>;
   groups: PhotoGroup[];
   groupStamp: string | undefined;
+  structureStamp: string | undefined;
   spreads: Spread[];
   settings: ProjectSettings;
   yearEvents: Record<string, string[]>;
@@ -299,6 +306,8 @@ export class Project {
   lastReport: GenerateResult['report'] | null = null;
   /** Stand der Gruppen, aus dem das aktuelle Buch gebaut wurde. */
   private groupStamp: string | undefined;
+  /** Stand der Kalendergliederung, aus dem das aktuelle Buch gebaut wurde. */
+  private structureStamp: string | undefined;
 
   /**
    * Gestaltung des Umschlags.
@@ -417,6 +426,7 @@ export class Project {
       overrides: this.overrides,
       groups: this.groups,
       groupStamp: this.groupStamp,
+      structureStamp: this.structureStamp,
       spreads: this.spreads,
       settings: this.settings,
       yearEvents: this.yearEvents,
@@ -435,6 +445,7 @@ export class Project {
     this.overrides = stand.overrides;
     this.groups = stand.groups;
     this.groupStamp = stand.groupStamp;
+    this.structureStamp = stand.structureStamp;
     this.spreads = stand.spreads;
     this.settings = stand.settings;
     this.yearEvents = stand.yearEvents;
@@ -796,6 +807,7 @@ export class Project {
     this.spreads = result.spreads;
     this.lastReport = result.report;
     this.groupStamp = gruppen.groupFingerprint(this);
+    this.structureStamp = structureFingerprint(this.structure);
     return result;
   }
 
@@ -820,6 +832,55 @@ export class Project {
    */
   groupsPending(): boolean {
     return this.groupStamp !== undefined && this.groupStamp !== gruppen.groupFingerprint(this);
+  }
+
+  /**
+   * Ob sich die Kalendergliederung geändert hat, seit das Buch gebaut wurde.
+   *
+   * Dasselbe Versprechen wie `groupsPending()`, für die andere Hälfte der
+   * Eingaben: Datumskorrekturen, aussortierte Fotos, ein Nachimport. Verglichen
+   * wird die *Gliederung* und nicht die Korrekturen — eine Korrektur um fünf
+   * Minuten, die keine Reihenfolge kippt, meldet deshalb nichts, und eine, die
+   * ein Foto in ein anderes Jahr trägt, meldet auch dann, wenn sie über
+   * mehrere Griffe entstanden ist. Was der Abdruck genau erfasst, steht bei
+   * `structureFingerprint` im Kern.
+   *
+   * Ohne gespeicherten Abdruck (Projekt aus einer älteren Fassung) gilt das Buch
+   * als aktuell, wie bei den Gruppen.
+   */
+  structurePending(): boolean {
+    return (
+      this.structureStamp !== undefined &&
+      this.structureStamp !== structureFingerprint(this.structure)
+    );
+  }
+
+  // -------------------------------------------------------- Metadatenkorrektur
+
+  /**
+   * Korrigiert das Datum mehrerer Fotos und baut die Gliederung neu.
+   *
+   * Das Buch bleibt, wie es ist. Ein Foto, das jetzt in ein anderes Jahr
+   * gehört, steht weiter an seinem alten Platz — `structurePending()` sagt es,
+   * und der Neuaufbau bleibt ein ausdrücklicher Griff. Stillschweigend neu zu
+   * bauen würde jede Handarbeit verwerfen, und bei einer Serienkorrektur
+   * vierzigmal.
+   */
+  korrigiereDaten(
+    ids: readonly PhotoId[],
+    edit: DateEdit,
+  ): fotodaten.Korrekturergebnis | { fehler: string } {
+    const ergebnis = fotodaten.korrigiereDaten(this, ids, edit, this.dateContext());
+    if ('fehler' in ergebnis) return ergebnis;
+    this.rebuildStructure();
+    return ergebnis;
+  }
+
+  /** Nimmt die Datumskorrektur mehrerer Fotos zurück. */
+  verwirfDatumskorrektur(ids: readonly PhotoId[]): fotodaten.Korrekturergebnis {
+    const ergebnis = fotodaten.verwirfDatumskorrektur(this, ids);
+    this.rebuildStructure();
+    return ergebnis;
   }
 
   sortedGroups(): PhotoGroup[] {
@@ -885,7 +946,13 @@ export class Project {
   // ------------------------------------------------------- Layout-Dokument
 
   exportLayout(): LayoutDocument {
-    return layoutDokument.exportLayout(this);
+    // Der Kontext einmal für das ganze Dokument: `findBulkSeconds` läuft über
+    // den Bestand, und je Foto neu wäre es ein quadratischer Durchlauf.
+    const ctx = this.dateContext();
+    return layoutDokument.exportLayout(
+      this,
+      (photo) => resolveEffectiveDate(photo, this.overrides[photo.id], ctx).value,
+    );
   }
 
   applyLayout(raw: unknown): {
@@ -1615,7 +1682,8 @@ export class Project {
     const result: { year: number; photoCount: number; firstSpreadIndex: number }[] = [];
     // Der erste Spread eines Jahres ist der Kapitelauftakt bzw. der erste,
     // dessen Fotos in dieses Jahr fallen.
-    const yearOfSpread = this.spreads.map((s) => this.yearOf(s));
+    const jahrVon = this.jahrJeFoto();
+    const yearOfSpread = this.spreads.map((s) => this.yearOf(s, jahrVon));
     for (const chapter of this.structure.chapters) {
       const idx = yearOfSpread.indexOf(chapter.year);
       result.push({
@@ -1669,19 +1737,36 @@ export class Project {
    * wurden – und nur, wenn er sich als Zahl lesen lässt: Seit die Jahreszahl
    * editierbar ist, kann dort „2019 – das erste Jahr" stehen, und ein `NaN`
    * hätte die Kapitelnavigation auf Seite 1 geschickt.
+   *
+   * Der letzte Rückfall liest das Jahr aus der Kalendergliederung und nicht mehr
+   * aus dem rohen `takenAt` des ersten Bildes: Sonst stünde ein Bild mit
+   * korrigiertem Datum in einem anderen Jahr als dem, in dem die Gliederung es
+   * führt, und die Kapitelnavigation sprang ins falsche Kapitel. Die Map baut
+   * der Aufrufer einmal — je Doppelseite über den Bestand zu laufen wäre bei
+   * achtzig Blättern achtzigmal derselbe Durchlauf.
    */
-  private yearOf(spread: Spread): number | undefined {
+  private yearOf(spread: Spread, jahrVon: ReadonlyMap<PhotoId, number>): number | undefined {
     if (spread.chapterYear !== undefined) return spread.chapterYear;
     const text = spread.texts?.find((t) => t.role === 'year');
     const ausText = text ? Number(text.content) : Number.NaN;
     if (Number.isInteger(ausText)) return ausText;
     for (const slot of spread.slots) {
       if (!slot.photoId) continue;
-      const photo = this.photos.get(slot.photoId);
-      const date = photo?.takenAt ?? photo?.secondaryDate;
-      if (date) return Number(date.slice(0, 4));
+      const jahr = jahrVon.get(slot.photoId);
+      if (jahr !== undefined) return jahr;
     }
     return undefined;
+  }
+
+  /** Jahr je Foto, wie die Kalendergliederung es sieht. */
+  private jahrJeFoto(): Map<PhotoId, number> {
+    const map = new Map<PhotoId, number>();
+    for (const kapitel of this.structure.chapters) {
+      for (const segment of kapitel.segments) {
+        for (const id of segment.photoIds) map.set(id, kapitel.year);
+      }
+    }
+    return map;
   }
 
   /**
@@ -1737,6 +1822,7 @@ export class Project {
       overrides: this.overrides,
       groups: this.groups,
       ...(this.groupStamp !== undefined ? { groupStamp: this.groupStamp } : {}),
+      ...(this.structureStamp !== undefined ? { structureStamp: this.structureStamp } : {}),
       yearEvents: this.yearEvents,
       book: { spreads: this.spreads },
       cover: this.cover,
@@ -1820,6 +1906,7 @@ export class Project {
     this.overrides = data.overrides ?? {};
     this.groups = data.groups ?? [];
     this.groupStamp = data.groupStamp;
+    this.structureStamp = data.structureStamp;
     this.yearEvents = data.yearEvents ?? {};
     this.spreads = data.book?.spreads ?? [];
     this.cover = data.cover ?? {};
@@ -1857,6 +1944,7 @@ export class Project {
       this.overrides = data.overrides ?? {};
       this.groups = data.groups ?? [];
       this.groupStamp = data.groupStamp;
+      this.structureStamp = data.structureStamp;
       this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
       this.cover = data.cover ?? {};
