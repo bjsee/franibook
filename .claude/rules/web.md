@@ -70,6 +70,36 @@ tot: Griffe, Drehen, Position, Ausschnitt, Textkästen. Der Rahmen sagt jetzt nu
 noch, _wo_ die Bühne steht (`model.platzRef`); wie breit sie ist, weiß sie selbst
 (`model.stageBreite`).
 
+## Navigation: die Adresse ist der Zustand
+
+Welche Ansicht offen ist und welche Doppelseite gezeigt wird, steht im Pfad und
+kommt aus `useRoute` (`router.tsx`) — nicht aus `useState` in `App.tsx`. Nur so
+gibt es Browser-Zurück, einen zweiten Tab und einen Link, den man verschicken
+kann.
+
+**Im Pfad steht, _was_ man ansieht; in der Query bleibt, _wie_ es dargestellt
+wird.** `/doppelseite/12`, `/gruppen/<id>`, `/umschlag` sind Stationen im
+Verlauf; `?ui=a|b|c`, `?bare`, `?original`, `?width` sind Einstellungen und
+überdauern jede Navigation. Die Pfade sind deutsch wie die Reiterbeschriftungen,
+und die Doppelseite zählt darin ab 1 — der Index im Code bleibt bei 0.
+
+Drei Regeln folgen daraus:
+
+- **`history.pushState` steht nur in `router.tsx`** (Ausnahme: der
+  Variantenumschalter, der `?ui=` ersetzt). Der Architekturtest prüft das.
+- **Was in der Adresse steht, muss dort ankommen.** Eine Ansicht, die einen
+  Zustand aus der Adresse bekommt (die Gruppenliste ihren Filter), meldet dessen
+  Wechsel zurück — sonst zeigt die Adresse etwas anderes als die Ansicht.
+  Zurückgemeldet wird mit `ersetzen: true`: eine Verfeinerung ist keine Station.
+- **Eine Folge gleichartiger Sprünge ist eine Station.** Blättern nutzt
+  `verschmelzen: 'blaettern'`, damit achtzig Pfeiltastenanschläge nicht achtzig
+  Verlaufseinträge sind. Ein Sprung aus der Übersicht bekommt dagegen seinen
+  eigenen Eintrag.
+
+Ein Ziel, das man auch in einem neuen Tab öffnen will — Reiter, Kachel der
+Übersicht —, ist ein `Link` aus `router.tsx` und kein `<button>`: nur ein `href`
+gibt ⌘-Klick und „Adresse kopieren".
+
 ## Zugriff auf den Server
 
 **Kein `fetch(` außerhalb von `api.ts`** — der Architekturtest prüft das. Dort steht

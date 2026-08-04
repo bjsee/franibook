@@ -41,8 +41,21 @@ type Sortierung = 'buch' | 'name';
 
 interface Props {
   onChanged: () => void;
-  /** Gruppe, die beim Öffnen der Ansicht gewählt sein soll – Sprung aus der Doppelseite. */
+  /**
+   * Gruppe, die gewählt sein soll – sie steht in der Adresse (`/gruppen/<id>`)
+   * und kommt von dort auch beim Sprung aus der Doppelseite und beim Zurück des
+   * Browsers.
+   */
   focusGroupId?: string | null;
+  /**
+   * Meldet, welche Gruppe gefiltert ist – `null` heißt: keine.
+   *
+   * Damit die Adresse nicht lügt: Sie nennt die Gruppe, also muss jeder
+   * Filterwechsel dort ankommen, gleich ob er von einem Chip kommt oder aus einer
+   * Aktion folgt (nach dem Auflösen einer Gruppe steht die Liste wieder auf
+   * „alle").
+   */
+  onGruppeGewaehlt?: (id: string | null) => void;
   /** Springt zu einer Doppelseite des Buches. */
   onOpenSpread?: (index: number) => void;
   /**
@@ -55,7 +68,13 @@ interface Props {
   standVersion?: number;
 }
 
-export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread, standVersion }: Props) {
+export function PhotoGroups({
+  onChanged,
+  focusGroupId,
+  onGruppeGewaehlt,
+  onOpenSpread,
+  standVersion,
+}: Props) {
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -80,10 +99,18 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread, standVersio
   }, [load, standVersion]);
 
   // Ein Sprung aus der Doppelseiten-Ansicht wählt die Gruppe aus, auch wenn
-  // diese Ansicht schon offen war.
+  // diese Ansicht schon offen war – ebenso das Zurück des Browsers.
   useEffect(() => {
     if (focusGroupId) setFilter({ kind: 'group', id: focusGroupId });
   }, [focusGroupId]);
+
+  // …und umgekehrt: Was hier gewählt wird, gehört in die Adresse. Als Effekt und
+  // nicht an den fünf Stellen, die `setFilter` aufrufen – vier davon sind Folgen
+  // einer Aktion, und eine davon zu vergessen wäre eine Adresse, die etwas
+  // anderes behauptet als die Liste zeigt.
+  useEffect(() => {
+    onGruppeGewaehlt?.(filter.kind === 'group' ? filter.id : null);
+  }, [filter, onGruppeGewaehlt]);
 
   /**
    * Legt die Datei in den Papierkorb ihrer Quelle.

@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T } from './theme.js';
+import { Link } from './router.js';
 import { useSpreadTiles } from './spread/useSpreadTiles.js';
 
 interface OverviewProps {
@@ -100,8 +101,15 @@ export function Overview({
               </button>
             )}
 
-            <button
-              onClick={() => onOpen(i)}
+            {/*
+              Die Kachel ist ein Link und kein Knopf, damit ⌘-Klick die
+              Doppelseite in einem neuen Tab öffnet – beim Durchsehen von achtzig
+              Seiten der Handgriff, der zwei Stellen vergleichbar macht. Was beim
+              Klick geschieht, entscheidet weiterhin `onOpen`.
+            */}
+            <Link
+              route={{ view: 'spread', index: i }}
+              onNavigieren={() => onOpen(i)}
               style={{ ...B.kachel, width: KACHEL_PX, ...(spread?.locked ? S.fest : {}) }}
               title={`Doppelseite ${i + 1} öffnen`}
             >
@@ -110,7 +118,7 @@ export function Overview({
               ) : (
                 <div style={{ ...S.platzhalter, width: KACHEL_PX, height: KACHEL_PX / 2 }} />
               )}
-            </button>
+            </Link>
 
             <span style={S.fuss}>
               {/* Das Schloss sagt: Diese Seite übersteht ein Neuanordnen. */}

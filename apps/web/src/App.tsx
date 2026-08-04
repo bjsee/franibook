@@ -10,6 +10,11 @@
  * (blättern, festhalten, Seiten einfügen und löschen). Die Doppelseiten-Ansicht
  * bekommt beides als `SpreadAussen` — dieselbe Naht für alle drei Varianten,
  * damit ein Wechsel der Variante keine Funktion kostet.
+ *
+ * **Welche Ansicht offen ist, hält die App nicht selbst** — das steht in der
+ * Adresse und kommt aus `useRoute` (`router.tsx`). Vorher war es `useState`, und
+ * damit war jede Stelle im Buch unteilbar: kein Zurück, kein neuer Tab, kein
+ * Link an jemand anderen.
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
@@ -48,6 +53,7 @@ import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
 import type { SpreadAussen } from './spread/types.js';
 import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './spread/varianten.js';
+import { Link, type NavOptionen, type Route, useRoute, type View } from './router.js';
 
 /**
  * Abstand zwischen zwei Anfragen, solange der Server anläuft.
@@ -58,8 +64,6 @@ import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './sprea
  * dann soll die Oberfläche auch in Sekunden da sein.
  */
 const ANLAUF_TAKT_MS = 1000;
-
-type View = 'overview' | 'spread' | 'groups' | 'years' | 'fotodaten' | 'sources' | 'edit' | 'cover';
 
 const REITER: { id: View; label: string }[] = [
   { id: 'overview', label: 'Übersicht' },
@@ -123,17 +127,20 @@ export function App() {
    * Kippen gerade nicht.
    */
   const [bildVersion, setBildVersion] = useState(0);
-  const [index, setIndex] = useState(() => {
-    const p = new URLSearchParams(location.search).get('spread');
-    return p ? Number(p) : 0;
-  });
-  const [view, setView] = useState<View>(() => {
-    const q = new URLSearchParams(location.search);
-    // `?cover` war der Sonderweg zur Coveransicht, solange sie kein Reiter war.
-    // Die Adresse gilt weiter, sie wählt jetzt nur den Reiter.
-    if (q.has('cover')) return 'cover';
-    return q.has('spread') ? 'spread' : 'overview';
-  });
+  const [route, navigieren] = useRoute();
+  const view = route.view;
+  /**
+   * Zuletzt gezeigte Doppelseite.
+   *
+   * Der Index steht in der Adresse, aber nur, solange die Doppelseite offen ist.
+   * Wer von Seite 34 zu den Gruppen wechselt und den Reiter „Doppelseite" wieder
+   * anklickt, will zurück zu 34 und nicht an den Anfang des Buches — der Reiter
+   * trägt deshalb die gemerkte Nummer in seinem `href`.
+   */
+  const [letzterSpread, setLetzterSpread] = useState(() =>
+    route.view === 'spread' ? route.index : 0,
+  );
+  const index = route.view === 'spread' ? route.index : letzterSpread;
   const [variante, setVariante] = useState<Variante>(varianteLesen);
   const [error, setError] = useState<string | null>(null);
   /** Was der Server gerade tut, solange er noch nicht antwortet. `null` = läuft. */
@@ -146,8 +153,6 @@ export function App() {
    * Pfeiltasten den Ausschnitt statt zu blättern.
    */
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  /** Gruppe, auf die die Gruppenansicht beim Wechsel dorthin springen soll. */
-  const [gruppenFokus, setGruppenFokus] = useState<string | null>(null);
   /**
    * Stelle, an der eine eigene Doppelseite entstehen soll – `null` heißt: kein
    * Dialog offen. Die Zahl ist die Einfügestelle, nicht der Index einer
@@ -163,6 +168,48 @@ export function App() {
   const imageSrc = useImageSrc(bildVersion);
 
   const hatZeitstrahl = spread?.timelineOverride !== false;
+
+  // --------------------------------------------------------------- Navigation
+
+  /** Zu einer Doppelseite. */
+  const zeigeSpread = useCallback(
+    (i: number, opt?: NavOptionen) => navigieren({ view: 'spread', index: i }, opt),
+    [navigieren],
+  );
+
+  /**
+   * Blättern – eine Station im Verlauf für die ganze Folge.
+   *
+   * Mit Pfeiltasten durch achtzig Doppelseiten zu gehen, darf nicht achtzig
+   * Verlaufseinträge kosten: Dann wäre die Zurück-Taste kein Weg zurück, sondern
+   * eine Kurbel. Also verschmelzen aufeinanderfolgende Blättersprünge, solange
+   * sie schneller als 1,5 s kommen — dieselbe Regel wie beim Zurücknehmen am
+   * Server. Der Klick auf eine Kachel in der Übersicht bekommt dagegen seine
+   * eigene Station, denn er ist ein Sprung und keine Folge.
+   */
+  const blaettern = useCallback(
+    (i: number) => zeigeSpread(i, { verschmelzen: 'blaettern' }),
+    [zeigeSpread],
+  );
+
+  /** Die Adresse, auf die ein Reiter zeigt. */
+  const reiterRoute = (v: View): Route =>
+    v === 'spread' ? { view: 'spread', index: letzterSpread } : { view: v };
+
+  /**
+   * Gewählte Gruppe in die Adresse. `useCallback`, weil die Gruppenliste sie aus
+   * einem Effekt heraus aufruft: Eine bei jedem Rendern neue Funktion wäre eine
+   * Meldung bei jedem Rendern.
+   */
+  const gruppeInAdresse = useCallback(
+    (id: string | null) =>
+      navigieren({ view: 'groups', ...(id ? { groupId: id } : {}) }, { ersetzen: true }),
+    [navigieren],
+  );
+
+  useEffect(() => {
+    if (route.view === 'spread') setLetzterSpread(route.index);
+  }, [route]);
 
   /**
    * Projektdaten holen – und warten, solange der Server noch anläuft.
@@ -240,16 +287,17 @@ export function App() {
       setStandVersion((v) => v + 1);
       // Zur betroffenen Stelle: Sonst nimmt man etwas zurück, das man nicht
       // sieht – und der zweite Anschlag geschieht im Blindflug.
-      if (d.spreadIndex !== undefined) {
-        setIndex(d.spreadIndex);
-        setView('spread');
-      }
+      //
+      // Ersetzend, weil ein Zurücknehmen keine Station im Verlauf ist: Die
+      // Browser-Zurück-Taste würde sonst zwischen zwei Bedeutungen von „zurück"
+      // hin und her springen.
+      if (d.spreadIndex !== undefined) zeigeSpread(d.spreadIndex, { ersetzen: true });
       setNote(
         `${wort}: ${d.label}` +
           (d.spreadIndex !== undefined ? ` (Doppelseite ${d.spreadIndex + 1})` : ''),
       );
     },
-    [loadInfo, neuRendern],
+    [loadInfo, neuRendern, zeigeSpread],
   );
 
   const zurueck = useCallback(async () => {
@@ -290,13 +338,12 @@ export function App() {
       if (view === 'spread') {
         // Ist ein Slot gewählt, gehören die Pfeiltasten dem Ausschnitt-Editor.
         if (!selectedSlotId) {
-          if (e.key === 'ArrowRight')
-            setIndex((i) => Math.min(i + 1, (info?.spreadCount ?? 1) - 1));
-          if (e.key === 'ArrowLeft') setIndex((i) => Math.max(0, i - 1));
+          if (e.key === 'ArrowRight') blaettern(Math.min(index + 1, (info?.spreadCount ?? 1) - 1));
+          if (e.key === 'ArrowLeft') blaettern(Math.max(0, index - 1));
         }
         if (e.key === 'Escape') {
           if (selectedSlotId) setSelectedSlotId(null);
-          else setView('overview');
+          else navigieren({ view: 'overview' });
         }
       }
       if (e.key === 'g') {
@@ -307,7 +354,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [bare, info?.spreadCount, view, selectedSlotId, zurueck, vor]);
+  }, [bare, info?.spreadCount, view, index, selectedSlotId, zurueck, vor, blaettern, navigieren]);
 
   /**
    * Ändert eine Darstellungseinstellung.
@@ -403,7 +450,9 @@ export function App() {
 
     try {
       const daten = await doppelseiteLoeschen(index);
-      setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
+      // Ersetzend: Die gelöschte Seite soll keine Station bleiben, zu der die
+      // Zurück-Taste zurückführt – dort ist jetzt eine andere Seite.
+      zeigeSpread(Math.max(0, Math.min(index, (daten.spreadCount ?? 1) - 1)), { ersetzen: true });
       loadInfo();
       neuRendern();
     } catch (e) {
@@ -439,7 +488,7 @@ export function App() {
 
     try {
       const daten = await buchseiteLoeschen(index * 2 + (seite === 'right' ? 1 : 0));
-      setIndex((i) => Math.max(0, Math.min(i, (daten.spreadCount ?? 1) - 1)));
+      zeigeSpread(Math.max(0, Math.min(index, (daten.spreadCount ?? 1) - 1)), { ersetzen: true });
       loadInfo();
       neuRendern();
       setNote(
@@ -567,16 +616,13 @@ export function App() {
           targetDpi: info.profile.resolution.targetDpi,
           guides,
           onGuides: setGuides,
-          onIndex: setIndex,
+          onIndex: blaettern,
           onLocked: (v) => void setSpreadLocked(v),
           onZeitstrahl: (v) => void setSpreadTimeline(v),
           onEinfuegen: setEinfuegenAn,
           onSeiteLoeschen: (seite) => void removePage(seite),
           onSpreadLoeschen: () => void removeSpread(),
-          onGruppeOeffnen: (id) => {
-            setGruppenFokus(id);
-            setView('groups');
-          },
+          onGruppeOeffnen: (id) => navigieren({ view: 'groups', groupId: id }),
           onGeaendert: loadInfo,
           onNeuRendern: () => {
             loadInfo();
@@ -594,15 +640,22 @@ export function App() {
           {spanne && <span style={S.spanne}>{spanne}</span>}
         </span>
 
+        {/*
+          Echte Links und keine Knöpfe: Damit öffnet ⌘-Klick den Reiter in einem
+          neuen Tab, und „Adresse kopieren" liefert die Stelle, die man jemandem
+          schicken will. Der einfache Klick wird abgefangen, sonst lädt der
+          Browser die Anwendung neu.
+        */}
         <nav style={B.segRahmen}>
           {REITER.map((r) => (
-            <button
+            <Link
               key={r.id}
-              onClick={() => setView(r.id)}
+              route={reiterRoute(r.id)}
+              onNavigieren={navigieren}
               style={view === r.id ? B.segAn : B.segAus}
             >
               {r.label}
-            </button>
+            </Link>
           ))}
         </nav>
 
@@ -643,7 +696,7 @@ export function App() {
           fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
         */}
         {offline.length > 0 && (
-          <button onClick={() => setView('sources')} style={S.offline}>
+          <button onClick={() => navigieren({ view: 'sources' })} style={S.offline}>
             <span style={S.punkt} />
             {offline.length === 1
               ? '1 Bildquelle offline'
@@ -695,10 +748,7 @@ export function App() {
           groupsPending={info.groupsPending}
           structurePending={info.structurePending}
           busy={!!busy}
-          onZeigeSpread={(i) => {
-            setIndex(i);
-            setView('spread');
-          }}
+          onZeigeSpread={(i) => zeigeSpread(i)}
           onNeuAnordnen={() => void regenerate({})}
         />
       )}
@@ -712,10 +762,7 @@ export function App() {
               chapters={info.chapters}
               groupMarks={info.groupMarks}
               imageSrc={imageSrc}
-              onOpen={(i) => {
-                setIndex(i);
-                setView('spread');
-              }}
+              onOpen={(i) => zeigeSpread(i)}
               onInsert={setEinfuegenAn}
             />
           </div>
@@ -732,7 +779,10 @@ export function App() {
               loadInfo();
               neuRendern();
               setStandVersion((v) => v + 1);
-              setIndex(0);
+              // Nur die gemerkte Stelle, nicht die Ansicht: Der Notanker wird
+              // aus der Übersicht geworfen, und dort soll man auch bleiben. Die
+              // Seitenzahl von vorher gilt danach aber für ein anderes Buch.
+              setLetzterSpread(0);
               setNote(satz);
             }}
           />
@@ -755,12 +805,14 @@ export function App() {
         )
       ) : view === 'groups' ? (
         <PhotoGroups
-          focusGroupId={gruppenFokus}
+          focusGroupId={route.view === 'groups' ? (route.groupId ?? null) : null}
+          // Die gewählte Gruppe steht in der Adresse, also muss ein Wechsel des
+          // Filters dort ankommen – sonst zeigt sie eine Gruppe, die längst nicht
+          // mehr gefiltert ist. Ersetzend, denn ein Filterklick ist eine
+          // Verfeinerung derselben Ansicht und keine neue Station.
+          onGruppeGewaehlt={gruppeInAdresse}
           standVersion={standVersion}
-          onOpenSpread={(i) => {
-            setIndex(i);
-            setView('spread');
-          }}
+          onOpenSpread={(i) => zeigeSpread(i)}
           onChanged={() => {
             loadInfo();
             // Der Zeitstrahl holt seine Beschriftung bei jedem Rendern aus den
@@ -775,8 +827,7 @@ export function App() {
           chapters={info.chapters}
           standVersion={standVersion}
           onOpen={(i) => {
-            setIndex(i);
-            setView('spread');
+            zeigeSpread(i);
             // Die Auftaktseite hat sich geändert, also neu holen.
             neuRendern();
           }}
@@ -836,9 +887,8 @@ export function App() {
           onEingefuegt={(neu, bericht) => {
             setEinfuegenAn(null);
             loadInfo();
-            setIndex(neu);
             neuRendern();
-            setView('spread');
+            zeigeSpread(neu);
             // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als die
             // eine Stelle. Das gehört gesagt, sonst wundert man sich über die
             // veränderten Nachbarseiten.
