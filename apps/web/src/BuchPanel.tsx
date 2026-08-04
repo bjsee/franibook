@@ -21,6 +21,7 @@ import {
   type TimelineFootVariant,
   type TimelineSideVariant,
 } from '@franibook/core';
+import { Notanker } from './Notanker.js';
 import { B, T } from './theme.js';
 import { ZeitleisteMini } from './ZeitleisteMini.js';
 
@@ -109,6 +110,8 @@ interface Props {
     frame?: FrameId;
   }) => void;
   onNeuEinlesen: () => void;
+  /** Nach dem Zurückholen eines Notankers: alles neu laden. */
+  onNotankerZurueck: (satz: string) => void;
 }
 
 export function BuchPanel({
@@ -118,6 +121,7 @@ export function BuchPanel({
   onNeuAnordnen,
   onDarstellung,
   onNeuEinlesen,
+  onNotankerZurueck,
 }: Props) {
   /** Was ein Neuaufbau kosten würde, in Stücken. */
   const verlust = [
@@ -427,6 +431,13 @@ export function BuchPanel({
           {handwork.festgehalten > 0 &&
             ` ${handwork.festgehalten} festgehaltene Doppelseite(n) bleiben unangetastet.`}
         </p>
+
+        {/*
+          Ganz unten und zugeklappt: Der Notanker gehört zu den Knöpfen darüber –
+          vor jedem von ihnen fällt einer –, ist aber der Notausgang und nicht
+          eine Einstellung.
+        */}
+        <Notanker onZurueckgeholt={onNotankerZurueck} busy={busy} />
       </div>
     </aside>
   );

@@ -23,7 +23,7 @@ export const ANKER_ORDNER = 'history';
 /**
  * Wie viele Anker aufbewahrt werden.
  *
- * Zehn à ~500 KB sind ~5 MB. Mehr hilft nicht: Wer zwanzig Anker zurückwill,
+ * Zehn à ~680 KB sind ~7 MB. Mehr hilft nicht: Wer zwanzig Anker zurückwill,
  * sucht nicht mehr einen Stand, sondern eine Sicherung.
  */
 export const ANKER_ZAHL = 10;

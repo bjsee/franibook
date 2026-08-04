@@ -12,7 +12,8 @@ Engine.
 ## Der Zuschnitt
 
 ```
-main.ts             Aufbau und Start: Umgebung, die vier Objekte, Anmeldung, Import
+main.ts             Start: Umgebung, die vier Objekte, lauschen, Import
+app.ts              die Fabrik: Haken und Routen anmelden, Routenliste zurückgeben
 routes/kontext.ts   was jedes Routenmodul kennt — und die drei geteilten Antwortformen
 routes/*.ts         die Endpunkte je Ressource
 project.ts          der Zustand, die Persistenz, Erzeugen und Rendern
@@ -29,8 +30,9 @@ Statuscode. Steht in einer Route eine Schleife über Spreads oder eine Rechnung
 mit Millimetern, gehört sie nach `project.ts` oder in den Kern.
 
 **Ein neuer Endpunkt kommt in das Modul seiner Ressource** (`projekt`, `buch`,
-`spreads`, `slots`, `gruppen`, `fotos`, `quellen`, `umschlag`) und bekommt seine
-Abhängigkeiten aus dem `Kontext`. Die Module sind schlichte Funktionen
+`spreads`, `slots`, `gruppen`, `fotos`, `quellen`, `umschlag`, `undo`) und bekommt
+seine Abhängigkeiten aus dem `Kontext`. **Ändert er den Projektzustand, gehört er
+in `UNDO_ROUTEN`** (siehe unten) — `routes/undo.test.ts` fällt sonst. Die Module sind schlichte Funktionen
 `(app, kontext) => void`, keine Fastify-Plugins: Die Kapselung, die ein Plugin
 brächte — eigene Hooks, eigene Fehlerbehandlung je Zweig — braucht dieser Server
 nirgends, und `app.register` hätte jede Anmeldung asynchron gemacht.
@@ -109,6 +111,37 @@ sonst im Hintergrund über den alten Stand.
 
 Foto-Kennung ist `contentHash` (Dateigröße + SHA-256 über die ersten und letzten
 64 KB). Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
+
+## Zurücknehmen
+
+**Ein Undo-Schritt hält den ganzen Stand von vorher**, nicht die Umkehrung einer
+Aktion (`project/verlauf.ts`). Kein Handler ruft den Verlauf: Ein
+`preHandler`-Haken tut es, und **welche Route etwas ändert, steht genau einmal in
+`UNDO_ROUTEN`** (`routes/undo.ts`) — mit Bezeichnung (deutscher Satzanfang für
+die Oberfläche), Verschmelzschlüssel, Seitenbezug und den Merkmalen `anker` und
+`barriere`. `null` heißt „ändert den Projektzustand nicht" und ist eine Aussage,
+kein Auslassen.
+
+Drei Handgriffe folgen daraus:
+
+- **Neue mutierende Route → Eintrag in der Tabelle.** `undo.test.ts` zählt die
+  angemeldeten Routen auf und vergleicht in beide Richtungen; `undo-rundlauf.test.ts`
+  ruft jede auf und verlangt einen zeichengleichen Stand nach dem Zurücknehmen.
+  Deshalb ist `main.ts` eine Fabrik (`app.ts`) — die Routenliste entsteht beim
+  Anmelden.
+- **Ein Schlüssel gehört an das, was man zieht oder tippt.** Dort erzeugt eine
+  Bewegung viele Anfragen (`ausschnitt:<seite>:<slot>`). Ohne Schlüssel
+  verschmilzt nie, und das ist die richtige Vorgabe.
+- **Neue Haken vor den Routenmodulen anmelden.** Fastify bindet die Haken einer
+  Instanz beim Anmelden einer Route an sie; später hinzugefügt greifen sie für
+  keine einzige.
+
+Eine Wirkung außerhalb des Projektzustands braucht einen `Dateizug` am Schritt
+(`merkeDateizug`), und sie muss umkehrbar sein — beim Aussortieren ist es ein
+`rename` zurück. Scheitert er, geschieht nichts: Ein Zustand, der auf eine
+fehlende Datei zeigt, ist schlimmer als ein abgelehntes Undo. Was sich nicht
+sinnvoll zurücknehmen lässt (Import, Quellenwechsel), ist eine `barriere` und
+leert den Verlauf.
 
 ## Der Umgang mit fremden Dateien
 

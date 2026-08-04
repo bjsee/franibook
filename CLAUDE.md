@@ -225,6 +225,21 @@ selbst: pdfkit setzt mit `baseline: 'alphabetic'`, die Vorschau als SVG-`<text>`
 in `main.ts`); die Oberfläche zeigt ihn und fragt weiter. Vorher lauschte er erst
 nach dem Import, und ein Kaltstart quittierte jede Anfrage mit `ECONNREFUSED`.
 
+**Zurücknehmen hält ganze Stände.** Ein Undo-Schritt (`project/verlauf.ts`) ist
+eine tiefe Kopie des veränderbaren Projektzustands von vorher, keine Umkehrung
+einer Aktion: Bei ~680 KB je Stand und Tiefe 50 kostet das ~30 MB Speicher, und
+dafür gibt es keine Umkehrfunktion, die falsch sein kann — „Buch neu anordnen"
+ist so rückholbar wie ein Ausschnitt. Den Stand hält ein `preHandler`-Haken fest,
+**welche Route etwas ändert, steht in `UNDO_ROUTEN`** (`routes/undo.ts`) mit
+Bezeichnung, Verschmelzschlüssel und Seitenbezug. **Eine neue mutierende Route
+gehört dort eingetragen** — sonst fällt `routes/undo.test.ts`. Gleicher Schlüssel
+innerhalb 1,5 s verschmilzt zu einem Schritt. Import und Quellenwechsel sind
+Barrieren (`barriere`), weil ein zurückgesetzter Stand ihre halbe Wirkung stehen
+ließe; vor den großen Griffen fällt zusätzlich ein Notanker nach
+`<projekt>/history/` (`project/notanker.ts`, die letzten zehn). Begründung und
+verworfene Fassungen (Immer-Patches, inverse Kommandos): `docs/konzept.md`,
+Abschnitt „Zurücknehmen".
+
 `apps/server/src/project.ts` hält genau ein Projekt im Speicher (Fotos, Overrides,
 Gruppen, Spreads) und schreibt es atomar als JSON (`rename`) nach `FRANIBOOK_PROJECT`.
 Keine Datenbank. Der Server bindet nur an `127.0.0.1` und hat keine Authentifizierung —

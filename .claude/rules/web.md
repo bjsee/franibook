@@ -85,6 +85,19 @@ Braucht eine Ansicht eine Statusanzeige um den Aufruf herum (`busy`, `note`), ni
 ihr lokaler Helfer den Aufruf als Funktion entgegen und nicht als URL — sonst
 verliert das Ergebnis unterwegs seinen Typ (`PhotoGroups.tsx`, `PhotoSources.tsx`).
 
+**Ein verzögerter Schreibvorgang muss sich vorziehen lassen.** Wer einen
+Timer setzt (Regler, Textfeld), meldet den Sender mit `planeSofort` an
+(`ausstehend.ts`) und im Aufräumen wieder ab. Cmd+Z leert damit vor dem
+Zurücknehmen, was noch aussteht; ohne das trifft der PATCH nach dem Undo ein und
+stellt genau das wieder her, was zurückgenommen wurde. Wer eine neue Ziehstelle
+baut, macht das mit — ein Test dafür steht in `ausstehend.test.ts`.
+
+**Was ein Zurücknehmen ändert, weiß niemand.** Eine Ansicht, die ihre Daten
+selbst lädt, nimmt darum `standVersion` in ihre Ladeabhängigkeit
+(`useEffect(laden, [laden, standVersion])`) und lädt neu, ohne neu einzuhängen:
+Auswahl, Filter und Scrollstand bleiben. Ein `key` an der Ansicht wäre eine Zeile
+weniger und würfe sie bei jedem Cmd+Z weg.
+
 ## Was aus dem Kern kommen darf
 
 `@franibook/core` ist I/O-frei und im Browser lauffähig. Die Oberfläche nutzt
