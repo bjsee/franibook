@@ -23,7 +23,7 @@ import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import type { TextBlockData } from '../TextBlocks.js';
-import { DatumGriff } from './DatumGriff.js';
+import { Bilddaten } from './Bilddaten.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage, zeitpunkt } from './SpreadStage.js';
 import { miniaturSrc, useNachbarn } from './useNachbarn.js';
@@ -223,7 +223,7 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
       <span style={{ fontSize: 12, color: T.fg3 }}>
         {info ? (zeitpunkt(info) ?? 'ohne Datum') : '…'}
       </span>
-      <DatumGriff model={model} />
+      <Bilddaten model={model} />
       <span style={B.trenner} />
       {(
         [

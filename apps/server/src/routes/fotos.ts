@@ -32,6 +32,22 @@ function leseIds(v: unknown): string[] | undefined {
   return v;
 }
 
+/**
+ * Ein Ort im Körper der Anfrage. `null` heißt „zurück zur Automatik".
+ *
+ * `undefined` bedeutet dagegen „nicht gemeint" – der Unterschied trägt, weil
+ * dieselbe Route Datum und Ort annimmt und eine Anfrage nur eines von beiden
+ * betreffen darf.
+ */
+type Ortsbefehl = { label: string; key?: string } | null;
+
+function istOrtsbefehl(v: unknown): v is Ortsbefehl {
+  if (v === null) return true;
+  if (typeof v !== 'object') return false;
+  const { label, key } = v as { label?: unknown; key?: unknown };
+  return typeof label === 'string' && (key === undefined || typeof key === 'string');
+}
+
 export function fotoRouten(
   app: FastifyInstance,
   { project, sources, previews, decodes }: Kontext,
@@ -42,8 +58,11 @@ export function fotoRouten(
     return { count: views.length, photos: views };
   });
 
+  /** Die Orte des Bestands, häufigste zuerst – Grundlage der Vervollständigung. */
+  app.get('/api/photos/places', async () => ({ places: project.orte() }));
+
   /**
-   * Korrigiert das Datum mehrerer Fotos.
+   * Korrigiert Datum oder Ort mehrerer Fotos.
    *
    * Mengenwertig, auch für ein einzelnes Bild: Datumsfehler kommen in Serien –
    * ein Kamera-Reset trifft dutzende Aufnahmen –, und eine Route je Foto wäre
@@ -52,36 +71,52 @@ export function fotoRouten(
    * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung.** Sortiert
    * wird in der Oberfläche, nicht hier (`project/fotodaten.ts`).
    *
+   * Genau eines von `date` und `place` je Anfrage: Beides zusammen wäre ein
+   * Schritt, der zwei Dinge zurücknimmt, und die Meldung könnte nicht sagen,
+   * welches davon gewirkt hat.
+   *
    * Das Buch bleibt unangetastet. Ob ein Neuaufbau jetzt etwas ändern würde,
    * steht als `structurePending` in der Antwort – so muss die Oberfläche nach
    * einer Korrektur nicht das ganze Projekt nachladen, um es zu erfahren.
    */
-  app.patch<{ Body: { ids?: unknown; date?: unknown } }>('/api/photos', async (req, reply) => {
-    const ids = leseIds(req.body?.ids);
-    if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
+  app.patch<{ Body: { ids?: unknown; date?: unknown; place?: unknown } }>(
+    '/api/photos',
+    async (req, reply) => {
+      const ids = leseIds(req.body?.ids);
+      if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
 
-    const befehl = req.body?.date;
-    if (!istDatumsbefehl(befehl)) {
-      return reply.code(400).send({ error: 'Keine brauchbare Datumskorrektur angegeben' });
-    }
+      const datum = req.body?.date;
+      const ort = req.body?.place;
+      if (datum !== undefined && ort !== undefined) {
+        return reply.code(400).send({ error: 'Datum und Ort bitte getrennt setzen' });
+      }
 
-    const ergebnis =
-      befehl.kind === 'clear'
-        ? project.verwirfDatumskorrektur(ids)
-        : project.korrigiereDaten(ids, befehl);
+      let ergebnis: Awaited<ReturnType<typeof project.korrigiereDaten>>;
+      if (ort !== undefined) {
+        if (!istOrtsbefehl(ort)) return reply.code(400).send({ error: 'Kein brauchbarer Ort' });
+        ergebnis = project.setzeOrte(ids, ort);
+      } else if (istDatumsbefehl(datum)) {
+        ergebnis =
+          datum.kind === 'clear'
+            ? project.verwirfDatumskorrektur(ids)
+            : project.korrigiereDaten(ids, datum);
+      } else {
+        return reply.code(400).send({ error: 'Keine brauchbare Korrektur angegeben' });
+      }
 
-    // Eine unausführbare Korrektur hat nichts angefasst – eine halb angewandte
-    // Stapelkorrektur wäre schlimmer als eine abgelehnte.
-    if ('fehler' in ergebnis) return reply.code(400).send({ error: ergebnis.fehler });
+      // Eine unausführbare Korrektur hat nichts angefasst – eine halb angewandte
+      // Stapelkorrektur wäre schlimmer als eine abgelehnte.
+      if ('fehler' in ergebnis) return reply.code(400).send({ error: ergebnis.fehler });
 
-    await project.save();
-    return {
-      ...ergebnis,
-      photos: project.photoViewsOf(ids),
-      structurePending: project.structurePending(),
-      undatedCount: project.structure.undated.length,
-    };
-  });
+      await project.save();
+      return {
+        ...ergebnis,
+        photos: project.photoViewsOf(ids),
+        structurePending: project.structurePending(),
+        undatedCount: project.structure.undated.length,
+      };
+    },
+  );
 
   app.get<{ Params: { id: string }; Querystring: { size?: string } }>(
     '/api/photos/:id/preview',

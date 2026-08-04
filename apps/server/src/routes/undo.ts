@@ -27,8 +27,12 @@ export interface UndoEintrag {
    * Was zurückgenommen würde, als deutscher Satzanfang.
    *
    * Steht am Knopf („Zurück: Ausschnitt gesetzt") und im Namen des Notankers.
+   *
+   * Als Funktion, wenn eine Route mehr als eine Sache tut: `PATCH /api/photos`
+   * setzt Datum oder Ort, und „Datum korrigiert" wäre am Knopf dann die Hälfte
+   * der Zeit falsch. Ein Label, das lügt, ist schlimmer als kein Undo-Knopf.
    */
-  label: string;
+  label: string | Ausleser<string>;
   /**
    * Gleicher Schlüssel in kurzer Folge verschmilzt zu einem Schritt.
    *
@@ -213,7 +217,10 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // eines Kamera-Resets verschiebt und sich vertut, soll das auch nach einem
   // Serverneustart noch heilen können.
   'PATCH /api/photos': {
-    label: 'Datum korrigiert',
+    label: (_p, body) =>
+      (body as { place?: unknown } | null)?.place !== undefined
+        ? 'Ort gesetzt'
+        : 'Datum korrigiert',
     anker: (_p, body) => {
       const ids = (body as { ids?: unknown } | null)?.ids;
       return Array.isArray(ids) && ids.length >= 50;
@@ -281,11 +288,15 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
     if (!eintrag) return;
 
     const params = (req.params ?? {}) as Record<string, string>;
+    const label =
+      typeof eintrag.label === 'string'
+        ? eintrag.label
+        : (eintrag.label(params, req.body) ?? 'Geändert');
 
     const ankern =
       eintrag.anker === true ||
       (typeof eintrag.anker === 'function' && eintrag.anker(params, req.body) === true);
-    if (ankern) await project.notanker(eintrag.label);
+    if (ankern) await project.notanker(label);
     // Eine Barriere hält keinen Stand fest – sie leert den Verlauf, sobald sie
     // durch ist. Ein Stand vorher wäre ein Zurücknehmen, das nur so aussieht.
     if (eintrag.barriere) return;
@@ -295,7 +306,7 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
 
     angelegt.set(
       req,
-      project.verlauf.punkt(eintrag.label, {
+      project.verlauf.punkt(label, {
         ...(schluessel !== undefined ? { schluessel } : {}),
         ...(spreadIndex !== undefined ? { spreadIndex } : {}),
       }),

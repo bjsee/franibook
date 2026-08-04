@@ -11,6 +11,11 @@
  * Oberfläche zu widersprechen, sobald man dort umsortiert. Die Oberfläche
  * schickt also die Liste, die sie zeigt; die Vorgabe „nach Dateiname" ist eine
  * Aussage über die Ansicht, nicht über diese Rechnung.
+ *
+ * Der **Ort** ist ein Name und keine Koordinate. Niemand kennt seine
+ * Koordinaten, und die Engine liest ohnehin nur `place`: Koordinaten eintippen
+ * wäre ein Umweg durch die Ortsdatenbank, um am Ende denselben String zu
+ * erzeugen.
  */
 import {
   type DateContext,
@@ -20,6 +25,7 @@ import {
   type PhotoId,
   type PhotoOverride,
   applyDateEdit,
+  manualPlaceKey,
   resolveEffectiveDate,
   validateDateEdit,
 } from '@franibook/core';
@@ -90,6 +96,62 @@ export function korrigiereDaten(
     uebersprungen: ergebnis.skipped.map((s) => ({ id: s.id, grund: s.reason })),
     unbekannt,
   };
+}
+
+/**
+ * Setzt den Ort mehrerer Fotos, oder gibt ihn an die Automatik zurück.
+ *
+ * `null` heißt „zurück zur Vorgabe" — dieselbe Bedeutung wie beim Hintergrund
+ * einer Doppelseite. Ohne `key` entsteht einer aus dem Namen; wer den Ort aus
+ * der Vorschlagsliste wählt, schickt dessen vorhandene Kennung mit, und nur dann
+ * fällt das Foto mit den über GPS aufgelösten desselben Ortes in *einen*
+ * Gruppenvorschlag.
+ *
+ * Die Gruppen selbst ändert das nicht: Vorschläge müssen bestätigt werden. Was
+ * sich ändert, sind die Vorschläge beim nächsten Aufruf von `suggestGroups` —
+ * und dort wird ein gesetzter Ort zum Anker für die Nachbarn ohne GPS.
+ */
+export function setzeOrte(
+  z: Fotodatenstand,
+  ids: readonly PhotoId[],
+  ort: { label: string; key?: string } | null,
+): Korrekturergebnis | { fehler: string } {
+  if (ids.length === 0) return { fehler: 'Keine Fotos ausgewählt' };
+
+  const label = ort?.label.trim();
+  if (ort && !label) return { fehler: 'Kein Ortsname angegeben' };
+
+  const unbekannt: PhotoId[] = [];
+  const uebersprungen: { id: PhotoId; grund: string }[] = [];
+  let geaendert = 0;
+
+  for (const id of ids) {
+    if (!z.photos.has(id)) {
+      unbekannt.push(id);
+      continue;
+    }
+    const bestand = z.overrides[id] ?? {};
+
+    if (ort === null) {
+      if (!bestand.placeOverride) {
+        uebersprungen.push({ id, grund: 'Kein von Hand gesetzter Ort vorhanden' });
+        continue;
+      }
+      const { placeOverride: _weg, ...rest } = bestand;
+      if (Object.keys(rest).length === 0) delete z.overrides[id];
+      else z.overrides[id] = rest;
+      geaendert++;
+      continue;
+    }
+
+    z.overrides[id] = {
+      ...bestand,
+      placeOverride: { key: ort.key?.trim() || manualPlaceKey(label!), label: label! },
+    };
+    geaendert++;
+  }
+
+  return { geaendert, uebersprungen, unbekannt };
 }
 
 /**

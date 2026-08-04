@@ -127,6 +127,81 @@ describe('Korrektur zurücknehmen', () => {
   });
 });
 
+describe('Ort setzen', () => {
+  it('legt den Ort in den Overrides ab und liefert ihn in der Fotosicht', () => {
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Kreta' });
+
+    expect(p.overrides['a']?.placeOverride).toEqual({ key: 'manual:Kreta', label: 'Kreta' });
+    // Das Importergebnis bleibt unangetastet, die Sicht zeigt den geltenden Ort.
+    expect(p.photos.get('a')?.place).toBeUndefined();
+    const sicht = p.photoViewsOf(['a'])[0]!;
+    expect(sicht.place?.label).toBe('Kreta');
+    expect(sicht.placeManual).toBe(true);
+  });
+
+  it('übernimmt eine mitgeschickte Kennung, damit der Ort mit den GPS-Fotos zusammenfällt', () => {
+    // Der Punkt der Vorschlagsliste: Wer „Bremerhaven" daraus wählt, bekommt
+    // `city:Bremerhaven` und landet mit den aufgelösten Fotos in einem Vorschlag.
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Bremerhaven', key: 'city:Bremerhaven' });
+    expect(p.overrides['a']?.placeOverride?.key).toBe('city:Bremerhaven');
+  });
+
+  it('gibt den Ort mit null an die Automatik zurück', () => {
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Kreta' });
+    p.setzeOrte(['a'], null);
+    expect(p.overrides['a']).toBeUndefined();
+  });
+
+  it('lässt andere Korrekturen am selben Foto stehen', () => {
+    const p = projekt();
+    p.korrigiereDaten(['a'], { kind: 'set', value: '2010-01-01T10:00:00' });
+    p.setzeOrte(['a'], { label: 'Kreta' });
+    p.setzeOrte(['a'], null);
+
+    expect(p.overrides['a']?.dateOverride).toBe('2010-01-01T10:00:00');
+    expect(p.overrides['a']).not.toHaveProperty('placeOverride');
+  });
+
+  it('lehnt einen leeren Ortsnamen ab, ohne etwas anzufassen', () => {
+    const p = projekt();
+    expect(p.setzeOrte(['a'], { label: '   ' })).toEqual({ fehler: 'Kein Ortsname angegeben' });
+    expect(p.overrides['a']).toBeUndefined();
+  });
+
+  it('ändert die Gliederung nicht – der Ort gliedert das Buch nicht', () => {
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    p.setzeOrte(['a', 'b'], { label: 'Kreta' });
+    expect(p.structurePending()).toBe(false);
+  });
+});
+
+describe('Orte des Bestands', () => {
+  it('zählt die vorkommenden Orte, häufigste zuerst', () => {
+    const p = projekt();
+    p.setzeOrte(['a', 'b', 'c'], { label: 'Kreta' });
+    p.setzeOrte(['d'], { label: 'Wien' });
+
+    expect(p.orte()).toEqual([
+      { key: 'manual:Kreta', label: 'Kreta', count: 3 },
+      { key: 'manual:Wien', label: 'Wien', count: 1 },
+    ]);
+  });
+
+  it('fasst gleiche Kennungen zusammen, auch über verschiedene Herkunft', () => {
+    const p = projekt();
+    // Ein Foto mit aufgelöstem Ort, eines von Hand auf dieselbe Kennung gesetzt.
+    p.photos.set('mitGps', { ...roh('mitGps'), place: { key: 'city:Wien', label: 'Wien' } });
+    p.setzeOrte(['a'], { label: 'Wien', key: 'city:Wien' });
+
+    expect(p.orte()).toEqual([{ key: 'city:Wien', label: 'Wien', count: 2 }]);
+  });
+});
+
 describe('structurePending', () => {
   it('gilt ohne gebautes Buch als aktuell', () => {
     // Ohne Abdruck (Projekt aus einer älteren Fassung) wäre ein Hinweis bei

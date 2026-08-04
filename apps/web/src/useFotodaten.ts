@@ -16,9 +16,12 @@ import {
   type Datumskorrektur,
   type FotoInfo,
   type Korrekturergebnis,
+  type Ort,
   datumKorrigieren,
   fehlertext,
   fotosLaden,
+  ortSetzen,
+  ortsListeLaden,
 } from './api.js';
 
 /** Welche Fotos die Liste zeigt. */
@@ -43,6 +46,10 @@ export interface FotodatenModell {
   handOrdnung: boolean;
   nachDateinamen: () => void;
   anwenden: (korrektur: Datumskorrektur) => void;
+  /** Die Orte des Bestands, häufigste zuerst – für die Vervollständigung. */
+  orte: Ort[];
+  /** Setzt den Ort der Auswahl; `null` gibt ihn an die Automatik zurück. */
+  ortAnwenden: (ort: { label: string; key?: string } | null) => void;
   busy: boolean;
   note: string | null;
   fehler: string | null;
@@ -56,6 +63,7 @@ export function useFotodaten(opts: {
   const { onChanged, standVersion } = opts;
 
   const [alle, setAlle] = useState<FotoInfo[] | null>(null);
+  const [orte, setOrte] = useState<Ort[]>([]);
   const [filter, setFilter] = useState<Filter>('zweifelhaft');
   const [auswahl, setAuswahl] = useState<string[]>([]);
   const [handOrdnung, setHandOrdnung] = useState(false);
@@ -73,6 +81,24 @@ export function useFotodaten(opts: {
   }, []);
 
   useEffect(laden, [laden, standVersion]);
+
+  /**
+   * Die Ortsliste kommt vom Server und wird nicht aus den geladenen Fotos
+   * abgeleitet.
+   *
+   * Ableiten wäre eine Anfrage weniger und eine zweite Fassung derselben
+   * Rechnung — dort entscheidet sich, welche Kennung ein gewählter Ort bekommt,
+   * und davon hängt ab, ob das Foto mit den GPS-aufgelösten in *einen*
+   * Gruppenvorschlag fällt. Diese Regel gehört an eine Stelle, und die hat einen
+   * Test (`project/fotodaten.test.ts`).
+   */
+  const orteLaden = useCallback(() => {
+    ortsListeLaden()
+      .then((d) => setOrte(d.places))
+      .catch(() => setOrte([]));
+  }, []);
+
+  useEffect(orteLaden, [orteLaden, standVersion]);
 
   const fotos = useMemo(() => {
     if (!alle) return null;
@@ -173,13 +199,21 @@ export function useFotodaten(opts: {
     return `${teile.join(', ')}.`;
   }
 
-  const anwenden = useCallback(
-    (korrektur: Datumskorrektur) => {
+  /**
+   * Führt eine Korrektur aus und zieht die Ansicht nach.
+   *
+   * Nimmt den Aufruf als Funktion und nicht als Feldnamen: So behält das
+   * Ergebnis seinen Typ, und Datum und Ort teilen den ganzen Umgang mit
+   * Wartezustand, Meldung und Auswahl — die Unterschiede zwischen beiden sind
+   * genau eine Zeile.
+   */
+  const ausfuehren = useCallback(
+    (aufruf: (ids: string[]) => Promise<Korrekturergebnis>, ortBetroffen = false) => {
       if (auswahl.length === 0) return;
       setBusy(true);
       setFehler(null);
       setNote(null);
-      datumKorrigieren(auswahl, korrektur)
+      aufruf(auswahl)
         .then((e) => {
           // Die zurückgegebenen Sichten einsetzen statt alles neu zu laden: Der
           // Filter und der Scrollstand bleiben damit stehen, und ein korrigiertes
@@ -195,12 +229,24 @@ export function useFotodaten(opts: {
           setAuswahl([]);
           setHandOrdnung(false);
           setNote(meldung(e));
+          // Ein neuer Ortsname gehört ab jetzt in die Vervollständigung.
+          if (ortBetroffen) orteLaden();
           onChanged();
         })
         .catch((err: unknown) => setFehler(fehlertext(err)))
         .finally(() => setBusy(false));
     },
-    [auswahl, onChanged],
+    [auswahl, onChanged, orteLaden],
+  );
+
+  const anwenden = useCallback(
+    (korrektur: Datumskorrektur) => ausfuehren((ids) => datumKorrigieren(ids, korrektur)),
+    [ausfuehren],
+  );
+
+  const ortAnwenden = useCallback(
+    (ort: { label: string; key?: string } | null) => ausfuehren((ids) => ortSetzen(ids, ort), true),
+    [ausfuehren],
   );
 
   return {
@@ -216,6 +262,8 @@ export function useFotodaten(opts: {
     handOrdnung,
     nachDateinamen,
     anwenden,
+    orte,
+    ortAnwenden,
     busy,
     note,
     fehler,

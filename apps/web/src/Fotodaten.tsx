@@ -12,6 +12,8 @@
  * anwenden.** Die Werkzeuge stehen dabei nach der Frage geordnet, die sie
  * beantworten — *ich kenne den Zeitpunkt* (setzen), *die Abstände stimmen, der
  * Nullpunkt nicht* (verschieben), *ich kenne nur einen Zeitraum* (verteilen).
+ * Danach der Ort, denn er ist die zweite Angabe, die das Buch aus einem Foto
+ * liest: Er beschriftet nichts von selbst, speist aber die Gruppenvorschläge.
  *
  * Die Reihenfolge der Auswahl ist sichtbar und ziehbar, weil sie beim Verteilen
  * eine Aussage trägt: Das erste Bild bekommt den frühesten Zeitpunkt. Gezogen
@@ -49,6 +51,7 @@ export function Fotodaten({
   const [betrag, setBetrag] = useState({ years: 0, months: 0, days: 0, hours: 0, minutes: 0 });
   const [von, setVon] = useState('');
   const [bis, setBis] = useState('');
+  const [ortname, setOrtname] = useState('');
   const [gezogen, setGezogen] = useState<number | null>(null);
 
   const n = m.auswahl.length;
@@ -108,6 +111,16 @@ export function Fotodaten({
                     <span style={quellenStil(f.dateSource)}>
                       {DATUMSQUELLE[f.dateSource] ?? f.dateSource}
                     </span>
+                    {/* Der Ort gehört in die Zeile, weil er hier gesetzt wird —
+                        und „von Hand" dazu, aus demselben Grund wie beim Datum:
+                        Ein stillschweigend ersetzter Wert wäre nicht mehr als
+                        Entscheidung erkennbar. */}
+                    {f.place && (
+                      <span style={S.ort}>
+                        {f.place.label}
+                        {f.placeManual && <span style={S.ortHand}> von Hand</span>}
+                      </span>
+                    )}
                     {f.issues.map((i) => (
                       <span key={i.code} style={S.befund} title={i.detail}>
                         {i.detail ?? i.code}
@@ -272,7 +285,60 @@ export function Fotodaten({
         </div>
 
         <div style={B.abschnitt}>
-          <div style={B.titel}>Korrektur zurücknehmen</div>
+          <div style={B.titel}>Ort setzen</div>
+          <p style={B.leiser}>
+            Nur jedes vierte Foto trägt Koordinaten. Ein gesetzter Ort speist die Gruppenvorschläge
+            und wird dort zum Anker für die Nachbarn ohne GPS.
+          </p>
+          {/*
+            Vervollständigung aus dem Bestand, freier Text bleibt möglich: Wer
+            „Bremerhaven" aus der Liste nimmt, bekommt dessen Kennung und fällt
+            mit den über GPS aufgelösten Fotos in *einen* Vorschlag. Getippt
+            entstünde eine eigene — zwei Vorschläge für denselben Ort, ohne dass
+            man sieht, warum. Ein `datalist` kann beides, ein `select` nicht.
+          */}
+          <div style={S.zeileRechts}>
+            <input
+              list="franibook-orte"
+              value={ortname}
+              placeholder="Ortsname"
+              onChange={(e) => setOrtname(e.target.value)}
+              style={{ ...B.feld, flex: 1, minWidth: 0 }}
+            />
+            <button
+              type="button"
+              style={B.knopfPrimaer}
+              disabled={gesperrt || ortname.trim() === ''}
+              onClick={() => {
+                const treffer = m.orte.find((o) => o.label === ortname.trim());
+                m.ortAnwenden({
+                  label: ortname.trim(),
+                  ...(treffer ? { key: treffer.key } : {}),
+                });
+              }}
+            >
+              setzen
+            </button>
+          </div>
+          <datalist id="franibook-orte">
+            {m.orte.map((o) => (
+              <option key={o.key} value={o.label}>
+                {`${o.count} ${o.count === 1 ? 'Foto' : 'Fotos'}`}
+              </option>
+            ))}
+          </datalist>
+          <button
+            type="button"
+            style={{ ...B.knopf, marginTop: 6 }}
+            disabled={gesperrt}
+            onClick={() => m.ortAnwenden(null)}
+          >
+            Ort an die Automatik zurückgeben
+          </button>
+        </div>
+
+        <div style={B.abschnitt}>
+          <div style={B.titel}>Datumskorrektur zurücknehmen</div>
           <p style={B.leiser}>
             Gibt das Datum an die Datei zurück. Anders als Cmd+Z auch dann noch, wenn seither
             anderes geschehen ist.
@@ -352,6 +418,8 @@ const S = {
   quelle: { fontSize: 11, color: T.fg3 },
   quelleSchwach: { fontSize: 11, color: T.warnText },
   quelleGeschaetzt: { fontSize: 11, color: T.fg3, fontStyle: 'italic' as const },
+  ort: { fontSize: 11, color: T.fg2 },
+  ortHand: { color: T.fg3 },
   befund: {
     fontSize: 11,
     color: T.warnText,

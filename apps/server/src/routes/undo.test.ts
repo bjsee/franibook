@@ -59,10 +59,21 @@ describe('Undo-Tabelle', () => {
   });
 
   it('gibt jeder ändernden Route eine deutsche Bezeichnung', () => {
+    const SATZ = /^[A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ ]+$/;
     for (const [kennung, eintrag] of Object.entries(UNDO_ROUTEN)) {
       if (eintrag === null) continue;
       // Kein Code, kein Routenname: Der Satz steht am Knopf und im Hinweis.
-      expect(eintrag.label, kennung).toMatch(/^[A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ ]+$/);
+      if (typeof eintrag.label === 'string') {
+        expect(eintrag.label, kennung).toMatch(SATZ);
+        continue;
+      }
+      // Ein Label darf vom Körper der Anfrage abhängen, wenn eine Route mehr als
+      // eine Sache tut. Die Regel gilt dann für jeden Zweig – geprüft an beiden
+      // Formen, die vorkommen: mit und ohne die Felder, an denen es sich
+      // entscheidet.
+      for (const body of [undefined, {}, { place: null }, { place: { label: 'Kreta' } }]) {
+        expect(eintrag.label({}, body), `${kennung} bei ${JSON.stringify(body)}`).toMatch(SATZ);
+      }
     }
   });
 });

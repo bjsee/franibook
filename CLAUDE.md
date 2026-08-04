@@ -221,9 +221,24 @@ Erfasst sind Segment, Reihenfolge, Serienschnitt und die undatierten Fotos, **ni
 die Zeitpunkte: Eine Korrektur um fünf Minuten, die nichts umstellt, meldet nichts,
 denn Fehlalarme entwerten den Hinweis. Korrigiert wird im Reiter `Fotodaten`
 (Stapel; undatierte Fotos stehen in keiner Doppelseite und sind sonst unerreichbar)
-und am Bild selbst (`spread/DatumGriff.tsx`, in allen drei Rahmen). Begründung und
+und am Bild selbst (`spread/Bilddaten.tsx`, in allen drei Rahmen). Begründung und
 verworfene Fassungen (sofort neu anordnen, chirurgisch einsetzen, Nachbar-Anker):
 `docs/konzept.md`, Abschnitt „Reparaturwerkzeuge".
+
+**Auch der Ort lässt sich setzen** (`placeOverride`, aufgelöst in
+`effectivePhoto` — `model/effective-photo.ts`): der Ortsname, nicht die Koordinate,
+denn nach dem Import liest nichts mehr `gps`. Entscheidend ist die Kennung
+`<art>:<name>`, denn daran hängt, welche Fotos zu _einem_ Gruppenvorschlag
+zusammenfallen: Aus der Vervollständigung (`GET /api/photos/places`) kommt die
+vorhandene mit, frei getippt entsteht `manual:<Name>`. Ein gesetzter Ort wird in
+`suggestGroups` zum Anker für `propagatePlaces` und zieht Nachbarn ohne GPS mit.
+Die Gliederung ändert er nicht, also kein `structurePending`. Dieselbe Route
+`PATCH /api/photos` nimmt Datum **oder** Ort, nie beides — deshalb darf
+`UndoEintrag.label` eine Funktion sein.
+
+**`effectivePhoto` löst die Korrekturen am Foto auf, das Datum aber nicht:**
+`resolveEffectiveDate` liefert Quelle, Konfidenz und Befunde, und das lässt sich
+nicht in ein `Photo` pressen. `takenAt` bleibt also „EXIF DateTimeOriginal".
 
 ### Text und Schrift
 

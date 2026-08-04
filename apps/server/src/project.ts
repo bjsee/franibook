@@ -43,6 +43,7 @@ import {
   normalizeRotation,
   backgroundFit,
   defaultProfile,
+  effectivePhoto,
   findBulkSeconds,
   FULL_CROP,
   generateBook,
@@ -294,6 +295,8 @@ export interface PhotoView extends Photo {
   dateSource: string;
   dateConfidence: string;
   issues: { code: string; detail?: string }[];
+  /** Ob `place` von Hand gesetzt ist statt über GPS aufgelöst. */
+  placeManual?: boolean;
 }
 
 export class Project {
@@ -881,6 +884,45 @@ export class Project {
     const ergebnis = fotodaten.verwirfDatumskorrektur(this, ids);
     this.rebuildStructure();
     return ergebnis;
+  }
+
+  /**
+   * Setzt den Ort mehrerer Fotos; `null` gibt ihn an die Automatik zurück.
+   *
+   * Ohne `rebuildStructure`: Der Ort gliedert das Buch nicht — das tut der
+   * Kalender. Er speist die Gruppenvorschläge, und die sind Vorschläge, bis
+   * jemand sie bestätigt.
+   */
+  setzeOrte(
+    ids: readonly PhotoId[],
+    ort: { label: string; key?: string } | null,
+  ): fotodaten.Korrekturergebnis | { fehler: string } {
+    return fotodaten.setzeOrte(this, ids, ort);
+  }
+
+  /**
+   * Die Orte, die im Bestand vorkommen — mit Kennung und Häufigkeit.
+   *
+   * Grundlage der Vervollständigung in der Oberfläche. Sie liefert die *Kennung*
+   * mit, und das ist der Punkt: Wer „Hamburg" aus der Liste wählt, bekommt
+   * `city:Hamburg` und fällt damit mit den über GPS aufgelösten Hamburg-Fotos in
+   * einen Gruppenvorschlag. Von Hand getippt entstünde `manual:Hamburg` — zwei
+   * Vorschläge für denselben Ort, ohne dass man sieht, warum.
+   */
+  orte(): { key: string; label: string; count: number }[] {
+    const zaehler = new Map<string, { key: string; label: string; count: number }>();
+    for (const roh of this.photos.values()) {
+      const { place } = effectivePhoto(roh, this.overrides[roh.id]);
+      if (!place) continue;
+      const eintrag = zaehler.get(place.key);
+      if (eintrag) eintrag.count++;
+      else zaehler.set(place.key, { key: place.key, label: place.label, count: 1 });
+    }
+    // Häufigste zuerst: Die Vervollständigung soll den Wohnort nicht hinter
+    // einem einmaligen Ausflugsort verstecken.
+    return [...zaehler.values()].sort(
+      (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'de'),
+    );
   }
 
   sortedGroups(): PhotoGroup[] {
@@ -1634,21 +1676,40 @@ export class Project {
     };
   }
 
+  /**
+   * Ein Foto, wie die Oberfläche es sieht: mit Korrekturen und Befunden.
+   *
+   * Über `effectivePhoto`, damit ein von Hand gesetzter Ort überall gilt, wo die
+   * Oberfläche einen Ort zeigt — Fotoliste, Gruppenansicht, Inspektor. Dass die
+   * Korrektur eine ist, steht als `placeManual` daneben: Dasselbe Versprechen wie
+   * beim Datum, wo die Quelle als Etikett erscheint. Ein stillschweigend
+   * ersetzter Wert wäre nicht mehr als Entscheidung erkennbar.
+   */
+  private photoView(photo: Photo, ctx: DateContext): PhotoView {
+    const override = this.overrides[photo.id];
+    const e = resolveEffectiveDate(photo, override, ctx);
+    return {
+      ...effectivePhoto(photo, override),
+      effectiveDate: e.value,
+      dateSource: e.source,
+      dateConfidence: e.confidence,
+      issues: e.issues,
+      ...(override?.placeOverride ? { placeManual: true } : {}),
+    };
+  }
+
   /** Fotos mit Datumsangabe und Befunden, für Timeline und Problemliste. */
   photoViews(onlyProblems = false): PhotoView[] {
     const ctx = this.dateContext();
 
     const views: PhotoView[] = [];
     for (const photo of this.photos.values()) {
-      const e = resolveEffectiveDate(photo, this.overrides[photo.id], ctx);
-      if (onlyProblems && !needsAttention(e)) continue;
-      views.push({
-        ...photo,
-        effectiveDate: e.value,
-        dateSource: e.source,
-        dateConfidence: e.confidence,
-        issues: e.issues,
-      });
+      if (
+        onlyProblems &&
+        !needsAttention(resolveEffectiveDate(photo, this.overrides[photo.id], ctx))
+      )
+        continue;
+      views.push(this.photoView(photo, ctx));
     }
     return views.sort((a, b) => (a.effectiveDate ?? '￿').localeCompare(b.effectiveDate ?? '￿'));
   }
@@ -1666,14 +1727,7 @@ export class Project {
     for (const id of ids) {
       const photo = this.photos.get(id);
       if (!photo) continue;
-      const e = resolveEffectiveDate(photo, this.overrides[id], ctx);
-      views.push({
-        ...photo,
-        effectiveDate: e.value,
-        dateSource: e.source,
-        dateConfidence: e.confidence,
-        issues: e.issues,
-      });
+      views.push(this.photoView(photo, ctx));
     }
     return views;
   }
