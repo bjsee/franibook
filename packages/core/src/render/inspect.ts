@@ -15,9 +15,11 @@
 import { effectiveDpi } from '../geometry/units.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
 import type { Crop } from '../model/crop.js';
-import type { TextBlock } from '../model/spread.js';
+import type { TextBlock, TextElement } from '../model/spread.js';
+import type { TemplateTextSlot } from '../model/template.js';
 import type { ImageBox, Rect, RenderBox, RenderedSpread } from './rendered-spread.js';
-import { textBlockBoxes } from './render-spread.js';
+import type { TextBlockArea } from './render-spread.js';
+import { textBlockBoxes, textElementBoxes } from './render-spread.js';
 
 /**
  * Dieselbe Doppelseite mit einem anderen Ausschnitt in einem Slot.
@@ -95,30 +97,58 @@ export function withRotation(
  * Rahmen, der ihm vorausläuft. Gebaut wird mit `textBlockBoxes`, also mit
  * derselben Funktion wie beim Rendern – eine zweite Fassung wäre eine zweite
  * Wahrheit über Zeilenabstand, Schnitt und Drehpunkt.
+ */
+export function withTextBlock(spread: RenderedSpread, block: TextBlock): RenderedSpread {
+  return mitTextBoxen(spread, block.id, (area) => textBlockBoxes(block, area, spread.background));
+}
+
+/**
+ * Dieselbe Doppelseite mit einem geänderten Vorlagentext.
+ *
+ * Das Gegenstück zu `withTextBlock` für Jahreszahl, Gruppentitel und
+ * Ereigniszeilen – und aus demselben Grund über `textElementBoxes` gebaut: Die
+ * Schriftgröße hängt am Kasten, und wer ihn aufzieht, soll die Schrift dabei
+ * mitwachsen sehen. Nachrechnen in der Oberfläche wäre eine zweite Wahrheit.
+ *
+ * Den Textplatz muss der Aufrufer mitgeben: Stil, Ausrichtung und Zeilenzahl
+ * stehen dort und nicht am Text.
+ */
+export function withTextElement(
+  spread: RenderedSpread,
+  text: TextElement,
+  textSlot: TemplateTextSlot,
+): RenderedSpread {
+  return mitTextBoxen(spread, textSlot.id, (area) =>
+    textElementBoxes(text, textSlot, area, spread.background),
+  );
+}
+
+/**
+ * Ersetzt die Textboxen einer Kennung durch neu gerechnete.
+ *
+ * Die neuen stehen an der Stelle der alten, damit die Zeichenreihenfolge bleibt –
+ * ein Text liegt über den Bildern und unter dem Zeitstrahl. Hat er noch keine Box
+ * (leerer Inhalt), kommen sie ans Ende.
  *
  * Die Fläche kommt aus dem RSM selbst: Beschnitt und Gesamtmaße stehen dort, und
  * der Editor kennt kein Druckprofil.
- *
- * Die neuen Boxen stehen an der Stelle der alten, damit die Zeichenreihenfolge
- * bleibt – ein Textblock liegt über den Bildern und unter dem Zeitstrahl. Hat der
- * Block noch keine Box (leerer Inhalt), kommen sie ans Ende.
  */
-export function withTextBlock(spread: RenderedSpread, block: TextBlock): RenderedSpread {
+function mitTextBoxen(
+  spread: RenderedSpread,
+  id: string,
+  baue: (area: TextBlockArea) => RenderBox[],
+): RenderedSpread {
   const trimWidthMm = (spread.widthMm - 2 * spread.bleedMm) / 2;
   const trimHeightMm = spread.heightMm - 2 * spread.bleedMm;
-  const neu = textBlockBoxes(
-    block,
-    { bleedMm: spread.bleedMm, trimWidthMm, trimHeightMm },
-    spread.background,
-  );
+  const neu = baue({ bleedMm: spread.bleedMm, trimWidthMm, trimHeightMm });
 
-  const gehoertZuBlock = (box: RenderBox) =>
-    box.kind === 'text' && (box.slotId === block.id || box.slotId.startsWith(`${block.id}-`));
+  const gehoertDazu = (box: RenderBox) =>
+    box.kind === 'text' && (box.slotId === id || box.slotId.startsWith(`${id}-`));
 
   let gesetzt = false;
   const boxes: RenderBox[] = [];
   for (const box of spread.boxes) {
-    if (!gehoertZuBlock(box)) {
+    if (!gehoertDazu(box)) {
       boxes.push(box);
       continue;
     }

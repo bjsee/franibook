@@ -79,12 +79,7 @@ export function Inspektor({ model, aussen, spread, imageSrc }: Props) {
         </div>
 
         <div ref={model.platzRef} style={S.buehnenPlatz}>
-          <SpreadStage
-            model={model}
-            imageSrc={imageSrc}
-            guides={aussen.guides}
-            blocks={spread.blocks ?? []}
-          />
+          <SpreadStage model={model} imageSrc={imageSrc} guides={aussen.guides} />
         </div>
 
         {/*

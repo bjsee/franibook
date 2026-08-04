@@ -17,6 +17,7 @@ import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import type { SpreadAussen } from './types.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
+import { Vorlagentexte } from './Vorlagentexte.js';
 
 interface Props {
   model: SpreadEditorModel;
@@ -89,6 +90,12 @@ export function SeitenPanel({ model, aussen, spread }: Props) {
 
       <div style={{ ...B.abschnitt, borderBottom: 'none' }}>
         <span style={B.marke}>Text &amp; Seiten</span>
+        <Vorlagentexte
+          index={aussen.index}
+          model={model}
+          onSpread={(neu) => model.spreadGeaendert(neu)}
+          onFehler={model.setNote}
+        />
         <TextBlocks
           index={aussen.index}
           blocks={spread.blocks ?? []}

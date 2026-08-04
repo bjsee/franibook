@@ -26,7 +26,6 @@
  */
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { T } from '../theme.js';
-import type { TextBlockData } from '../TextBlocks.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
 
 /** Ecken und Kantenmitten, in Vorzeichen des Kastens. */
@@ -55,6 +54,10 @@ const HINWEIS = {
   bildDrehen: 'Ziehen dreht das Bild · Umschalt rastet auf 15° · Klick aufs Bild schaltet zurück',
   textGroesse:
     'Ecke zieht Kasten und Schrift, Kante nur den Kasten · Klick auf den Text schaltet aufs Drehen',
+  // Am Vorlagentext ist die Kastenhöhe die Schriftgröße, es gibt dort keine
+  // eigene Punktzahl – also sagt der Hinweis auch etwas anderes als am Block.
+  platzGroesse:
+    'Höhe ändert die Schriftgröße, Breite nur den Kasten · Klick auf den Text schaltet aufs Drehen',
   textDrehen:
     'Ziehen dreht den Text · Umschalt rastet auf 15° · Klick auf den Text schaltet zurück',
 };
@@ -125,19 +128,13 @@ function GriffRahmen({
   );
 }
 
-export function Griffe({
-  model,
-  blocks,
-}: {
-  model: SpreadEditorModel;
-  blocks: readonly TextBlockData[];
-}) {
+export function Griffe({ model }: { model: SpreadEditorModel }) {
   const { gewaehlteBox, pxPerMm, griffModus, griffAnzeige, neigungGesperrt } = model;
 
-  /** Der Textblock, an dem gerade gearbeitet wird. */
-  const block = model.textId ? blocks.find((b) => b.id === model.textId) : undefined;
+  /** Der Text, an dem gerade gearbeitet wird – Block oder Vorlagentext. */
+  const text = model.textId ? model.texte.find((t) => t.id === model.textId) : undefined;
 
-  // Beides gleichzeitig gibt es nicht: Ein Griff an einem Textblock hebt die
+  // Beides gleichzeitig gibt es nicht: Ein Griff an einem Text hebt die
   // Bildauswahl auf und umgekehrt.
   let rahmen: RahmenProps | undefined;
 
@@ -154,20 +151,24 @@ export function Griffe({
       onGriff: model.griffZiehen,
       onDreh: model.drehZiehen,
     };
-  } else if (block) {
-    const stand = model.pendingText?.id === block.id ? model.pendingText : undefined;
-    const r = stand?.rect ?? block.rect;
+  } else if (text) {
+    const stand = model.pendingText?.id === text.id ? model.pendingText : undefined;
+    const r = stand?.rect ?? text.rect;
     const drehen = griffModus === 'drehen';
     rahmen = {
       links: (model.beschnittMm + r.x * model.trimBreiteMm) * pxPerMm,
       oben: (model.beschnittMm + r.y * model.trimHoeheMm) * pxPerMm,
       breite: r.w * model.trimBreiteMm * pxPerMm,
       hoehe: r.h * model.trimHoeheMm * pxPerMm,
-      rotateDeg: stand?.rotateDeg ?? block.rotateDeg ?? 0,
+      rotateDeg: stand?.rotateDeg ?? text.rotateDeg ?? 0,
       drehen,
-      titel: drehen ? HINWEIS.textDrehen : HINWEIS.textGroesse,
-      onGriff: (sx, sy, e) => model.textGriffZiehen(block, sx, sy, e),
-      onDreh: (e) => model.textDrehZiehen(block, e),
+      titel: drehen
+        ? HINWEIS.textDrehen
+        : text.art === 'platz'
+          ? HINWEIS.platzGroesse
+          : HINWEIS.textGroesse,
+      onGriff: (sx, sy, e) => model.textGriffZiehen(text, sx, sy, e),
+      onDreh: (e) => model.textDrehZiehen(text, e),
     };
   }
 

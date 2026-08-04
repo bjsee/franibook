@@ -129,6 +129,43 @@ export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
     return { ok: true, spread: spreadAntwort(project, index) };
   });
 
+  // --------------------------------------------------------- Vorlagentexte
+
+  /**
+   * Ändert Wortlaut, Platz oder Winkel eines Vorlagentexts.
+   *
+   * Angesprochen wird er über die Kennung seines Textplatzes und nicht über eine
+   * eigene: Das ist die Kennung, unter der er auch im RSM steht (`t-year`), und
+   * damit die, die die Oberfläche aus der angeklickten Box schon hat.
+   *
+   * `rect: null` bzw. `rotateDeg: null` stellt den Stand der Vorlage wieder her.
+   */
+  app.patch<{
+    Params: { index: string; slotId: string };
+    Body?: {
+      content?: string;
+      rect?: { x: number; y: number; w: number; h: number } | null;
+      rotateDeg?: number | null;
+    };
+  }>('/api/spreads/:index/textslots/:slotId', async (req, reply) => {
+    const index = Number(req.params.index);
+    const rect = req.body?.rect;
+    if (rect) {
+      const zahlen = [rect.x, rect.y, rect.w, rect.h];
+      if (!zahlen.every((v) => Number.isFinite(v))) {
+        return reply.code(400).send({ error: 'Position ist keine Zahl' });
+      }
+      if (rect.w <= 0 || rect.h <= 0) {
+        return reply.code(400).send({ error: 'Größe muss positiv sein' });
+      }
+    }
+    const result = project.updateTextElement(index, req.params.slotId, req.body ?? {});
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
   // ------------------------------------------------------------ Textblöcke
 
   /**

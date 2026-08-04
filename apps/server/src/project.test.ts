@@ -553,6 +553,70 @@ describe('Eigene Doppelseiten', () => {
     expect(p.handwork().texte).toBe(1);
   });
 
+  it('zählt einen bewegten Vorlagentext als Handarbeit', () => {
+    const p = projektMitZwei();
+    const platz = requireTemplate(p.spreads[0]!.templateId).textSlots?.[0];
+    // Ohne Textplatz in der Vorlage prüft der Test nichts – dann lieber sagen,
+    // dass die Voraussetzung fehlt, als grün durchzulaufen.
+    expect(platz).toBeDefined();
+
+    expect(p.handwork().textplaetze).toBe(0);
+    expect(p.updateTextElement(0, platz!.id, { rect: { x: 0.2, y: 0.2, w: 0.3, h: 0.1 } }).ok).toBe(
+      true,
+    );
+    expect(p.handwork().textplaetze).toBe(1);
+
+    // Zurück auf die Vorlage heißt: keine Handarbeit mehr, obwohl der Text bleibt.
+    expect(p.updateTextElement(0, platz!.id, { rect: null }).ok).toBe(true);
+    expect(p.handwork().textplaetze).toBe(0);
+  });
+
+  it('weist einen Textplatz ab, den die Vorlage nicht hat', () => {
+    const r = projektMitZwei().updateTextElement(0, 't-gibt-es-nicht', { content: 'x' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Textplatz');
+  });
+
+  /**
+   * Die Jahreszahl ist editierbar – das Jahr der Seite darf nicht an ihr hängen.
+   *
+   * Vorher las der Server es als `Number(text.content)`. „2020 – das erste Jahr"
+   * ergab `NaN`, und damit fand `setYearEvents` seinen Auftakt nicht mehr und die
+   * Kapitelnavigation sprang auf Seite 1.
+   */
+  it('findet den Jahresauftakt auch mit umbenannter Jahreszahl', () => {
+    const p = projektMitZwei();
+    p.spreads[0] = {
+      id: 'a0',
+      index: 0,
+      templateId: 'spread.chapter.year',
+      slots: [],
+      chapterYear: 2020,
+      texts: [{ id: 'a0-y', role: 'year', content: '2020', slotId: 't-year' }],
+    };
+
+    expect(p.updateTextElement(0, 't-year', { content: '2020 – das erste Jahr' }).ok).toBe(true);
+    expect(p.setYearEvents(2020, ['Einschulung'])).toBe(true);
+    expect(p.spreads[0]!.texts?.find((t) => t.slotId === 't-events')?.content).toBe('Einschulung');
+    // Der eigene Wortlaut bleibt dabei stehen.
+    expect(p.spreads[0]!.texts?.find((t) => t.slotId === 't-year')?.content).toBe(
+      '2020 – das erste Jahr',
+    );
+  });
+
+  it('findet den Auftakt eines Standes ohne chapterYear über die Jahreszahl', () => {
+    // Der Rückfall für Projekte, die vor dem Feld erzeugt wurden.
+    const p = projektMitZwei();
+    p.spreads[0] = {
+      id: 'a0',
+      index: 0,
+      templateId: 'spread.chapter.year',
+      slots: [],
+      texts: [{ id: 'a0-y', role: 'year', content: '2020', slotId: 't-year' }],
+    };
+    expect(p.setYearEvents(2020, ['Einschulung'])).toBe(true);
+  });
+
   it('bietet einzelne Seiten und ganze Doppelseiten zur Wahl', () => {
     const auswahl = projektMitZwei().insertChoices();
 

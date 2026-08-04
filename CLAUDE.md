@@ -289,7 +289,7 @@ umgebrochen. Messwerte und verworfene Fassungen: `docs/konzept.md`, Abschnitt
 „Rahmen um die Bilder".
 
 **Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
-`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Textblöcke): Klick wählt,
+`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Texte): Klick wählt,
 ein weiterer Klick schaltet von Größen- auf Drehgriffe, Umschalt hält das
 Seitenverhältnis bzw. rastet auf 15°. Ein frei aufgezogener Bildkasten verzerrt
 nicht, weil ein manueller Ausschnitt beim Rendern in die Form des Kastens gedreht
@@ -298,6 +298,22 @@ gespeicherte Ausschnitt selbst bleibt unangetastet. Am Textblock wächst dagegen
 den Ecken die Schriftgröße mit, an den Kanten nur der Kasten; die Vorschau des
 offenen Stands baut `withTextBlock` mit `textBlockBoxes`, also mit der Funktion
 des Renderers.
+
+**Auch die Texte aus der Vorlage sind beweglich** — Jahreszahl, Überschrift,
+Ereigniszeilen (`TextElement.rect`, `.rotateDeg`, `.content`). Block und
+Vorlagentext werden in der Oberfläche auf einen Begriff abgebildet
+(`spread/bewegtext.ts`), damit Bühne und Griffe nicht zwei fast gleiche Listen
+führen. Zwei Unterschiede bleiben und sind begründet: Ein Vorlagentext wählt
+**keine Schrift und keine Farbe** (das sind Aussagen über das Buch, nicht über
+eine Seite), und er hat **keine Punktgröße** — die Schriftgröße ist die
+Versalhöhe im Kasten, also zieht die Höhenkante sie mit. Passt der Wortlaut nicht
+in die Breite, wird die Schrift kleiner statt zu überlaufen, wie im Fuß des
+Polaroids. Ein Neuaufbau stellt ihn
+an den Platz der Vorlage zurück; `handwork().textplaetze` sagt vorher, wie viel
+das kostet, `locked` bewahrt es. Weil die Jahreszahl damit umbenennbar ist, steht
+das Jahr einer Seite in `Spread.chapterYear` und nicht mehr in ihrem Anzeigetext.
+Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Vorlagentexte
+von Hand setzen".
 
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.
