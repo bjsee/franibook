@@ -23,7 +23,6 @@ import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { miniaturSrc } from './useNachbarn.js';
 import { useSpreadTiles } from './useSpreadTiles.js';
-import { usePlatz } from './usePlatz.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import type { SpreadAussen } from './types.js';
 
@@ -47,7 +46,6 @@ interface Props {
 }
 
 export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
-  const { ref, breite } = usePlatz(spread.widthMm / spread.heightMm);
   const [panel, setPanel] = useState<Panel>(null);
 
   const bilder = spread.boxes.filter((b) => b.kind === 'image').length;
@@ -85,13 +83,12 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
           </label>
         </div>
 
-        <div ref={ref} style={S.buehnenPlatz}>
+        <div ref={model.platzRef} style={S.buehnenPlatz}>
           <SpreadStage
             model={model}
             imageSrc={imageSrc}
             guides={aussen.guides}
             blocks={spread.blocks ?? []}
-            breite={breite}
           />
         </div>
 

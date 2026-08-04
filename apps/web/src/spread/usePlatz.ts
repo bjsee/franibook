@@ -18,17 +18,32 @@
  * den Fotopool aus dem Bild schob. `ResizeObserver` liefert die Maße des
  * Inhaltskastens ohnehin frei Haus.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 /** Kleinste Breite, unter der die Bühne nicht mehr zu gebrauchen ist. */
 const MINDESTBREITE = 320;
 
 export function usePlatz(seitenverhaeltnis: number) {
-  const ref = useRef<HTMLDivElement>(null);
   const [platz, setPlatz] = useState({ w: 0, h: 0 });
 
-  useEffect(() => {
-    const el = ref.current;
+  /**
+   * Rückruf-Ref statt `useRef` und `useEffect`, weil der gemessene Kasten
+   * wechselt.
+   *
+   * Der Haken hängt oberhalb der drei Rahmen (Inspektor, Werkbank, Lesetisch)
+   * und überlebt einen Variantenwechsel; der Kasten, den er messen soll, nicht
+   * — jeder Rahmen bringt seinen eigenen mit. Ein `useEffect` mit `[]` beobachtet
+   * den Kasten des *ersten* Rahmens weiter, und wenn der ausgehängt wird, meldet
+   * der `ResizeObserver` dafür 0 × 0. Das war die Ursache dafür, dass die Griffe
+   * nach einem Wechsel auf Werkbank oder Lesetisch als ein Punkt in der Ecke des
+   * Blattes lagen: `pxPerMm` wurde null, und damit jede Rechnung, die vom Zeiger
+   * in Millimeter der Seite umrechnet.
+   *
+   * Der Rückruf wird von React bei jedem Wechsel des Kastens erneut gerufen; die
+   * zurückgegebene Aufräumfunktion (React 19) löst den alten Beobachter, bevor
+   * der neue kommt. Damit ist das Beobachtete immer der Kasten, der gerade da ist.
+   */
+  const ref = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
 
     /** Ohne Beobachter-Eintrag: aus dem Rahmenkasten die Polsterung herausrechnen. */

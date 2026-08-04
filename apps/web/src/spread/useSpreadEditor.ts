@@ -54,6 +54,7 @@ import {
 } from '../api.js';
 import { fotoLoeschen, loeschMeldung } from '../deletePhoto.js';
 import type { TextBlockData } from '../TextBlocks.js';
+import { usePlatz } from './usePlatz.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
 const SPEICHER_VERZOEGERUNG_MS = 250;
@@ -105,8 +106,19 @@ export function useSpreadEditor({
   onSelect,
   onChanged,
 }: SpreadEditorArgs) {
+  /**
+   * Wie breit das Blatt gezeichnet wird — **eine** Zahl für alle drei Rahmen.
+   *
+   * Sie steht hier und nicht im Rahmen, weil zwei Dinge von ihr abhängen, die
+   * übereinanderliegen müssen: die Breite, mit der die Vorschau das Papier malt,
+   * und `pxPerMm`, mit dem Griffe, Textkästen und jede Zeigerrechnung darüber
+   * liegen. Vorher maß jeder Rahmen die eine Zahl und dieser Haken die andere;
+   * dass beide dasselbe ergaben, war eine Absprache und keine Tatsache. Der Rahmen
+   * sagt jetzt nur noch, *wo* die Bühne steht (`platzRef`) — nie, wie groß sie ist.
+   */
+  const { ref: platzRef, breite: stageBreite } = usePlatz(spread.widthMm / spread.heightMm);
+  /** Der Kasten des Blattes selbst, für die Zeigerlage in `zeigerMm`. */
   const stageRef = useRef<HTMLDivElement>(null);
-  const [stageWidth, setStageWidth] = useState(1200);
   const [pendingCrop, setPendingCrop] = useState<Crop | null>(null);
   /** Stellung des Neigungsreglers, solange sie noch nicht beim Server ist. */
   const [pendingTilt, setPendingTilt] = useState<number | null>(null);
@@ -165,16 +177,6 @@ export function useSpreadEditor({
    * Werte, aber am anderen Ende des Fensters – wer zieht, schaut auf seine Hand.
    */
   const [griffAnzeige, setGriffAnzeige] = useState<string | null>(null);
-
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const measure = () => setStageWidth(el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Ausschnitt und Neigung gehören zu genau einem Slot einer Doppelseite.
   // Wechselt die Auswahl oder die Seite, ist ein noch nicht gespeicherter Rest
@@ -286,7 +288,7 @@ export function useSpreadEditor({
     trimHoeheMm,
   ]);
 
-  const pxPerMm = stageWidth / spread.widthMm;
+  const pxPerMm = stageBreite / spread.widthMm;
   const bildBox = (slotId: string | null) =>
     slotId === null ? undefined : imageBoxes(angezeigt).find((b) => b.slotId === slotId);
   const slotRect = (slotId: string): Rect | undefined =>
@@ -1281,8 +1283,9 @@ export function useSpreadEditor({
     index,
 
     // Bühne
+    platzRef,
     stageRef,
-    stageWidth,
+    stageBreite,
     pxPerMm,
     angezeigt,
     beschnittMm,

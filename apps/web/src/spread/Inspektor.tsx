@@ -20,7 +20,6 @@ import { Fotopool, poolZahl } from './Fotopool.js';
 import { Nachbarn } from './Nachbarn.js';
 import { SeitenPanel } from './SeitenPanel.js';
 import { SpreadStage } from './SpreadStage.js';
-import { usePlatz } from './usePlatz.js';
 import type { SpreadAussen } from './types.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
 
@@ -32,8 +31,6 @@ interface Props {
 }
 
 export function Inspektor({ model, aussen, spread, imageSrc }: Props) {
-  const { ref, breite } = usePlatz(spread.widthMm / spread.heightMm);
-
   return (
     <div style={S.wrap}>
       <div style={S.mitte}>
@@ -81,13 +78,12 @@ export function Inspektor({ model, aussen, spread, imageSrc }: Props) {
           </button>
         </div>
 
-        <div ref={ref} style={S.buehnenPlatz}>
+        <div ref={model.platzRef} style={S.buehnenPlatz}>
           <SpreadStage
             model={model}
             imageSrc={imageSrc}
             guides={aussen.guides}
             blocks={spread.blocks ?? []}
-            breite={breite}
           />
         </div>
 
