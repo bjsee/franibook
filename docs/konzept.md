@@ -517,6 +517,13 @@ Liste ist die Reihenfolge der Verteilung** — sortiert wird in der Oberfläche
 (Vorgabe Dateiname, umsortierbar per Ziehen), nicht im Server; ein
 Server-Sortierbegriff könnte der Ansicht widersprechen.
 
+Dieselbe Route setzt auch den Ort (siehe „Den Ort von Hand setzen"), aber **nie
+beides in einer Anfrage**: Das wäre ein Undo-Schritt, der zwei Dinge zurücknimmt,
+und die Meldung könnte nicht sagen, welches gewirkt hat. Daraus folgt, dass
+`UndoEintrag.label` eine Funktion sein darf — „Datum korrigiert" wäre am
+Undo-Knopf sonst die Hälfte der Zeit falsch, und ein Label, das lügt, ist
+schlimmer als kein Knopf.
+
 ## Layout-Engine
 
 > **Korrektur (2. August 2026): Kalender statt Ereignisse, Jahr statt Ereignis**
@@ -2397,6 +2404,38 @@ Die Benennungsregel folgt der Art, wie man über Orte spricht:
 | sonstiges Ausland    | Land     | Dänemark, Niederlande |
 
 Zwei Feinheiten, die erst der Test an echten Koordinaten zeigte: Ohne Einzugsradius gewinnt in Paris der nächstgelegene Stadtteil – gemessen kamen „Paris 16 Passy" und für London „Shadwell" heraus. Der Radius wächst deshalb mit der Wurzel der Einwohnerzahl. Und GeoNames führt Städte unter ihrem englischen Namen; für Länder übersetzt `Intl`, für Städte braucht es eine Liste.
+
+#### Den Ort von Hand setzen
+
+Nur etwa jedes vierte Foto trägt GPS, und was aufgelöst wird, passt im Einzelfall
+nicht („Dänemark" für ein Ferienhaus). `PhotoOverride.placeOverride` setzt
+deshalb einen Ort, aufgelöst in `effectivePhoto` (`core/model/effective-photo.ts`).
+
+Gesetzt wird der **Ortsname und nicht die Koordinate**: Niemand kennt seine
+Koordinaten, und nach dem Import liest nichts mehr `gps` — Koordinaten eintippen
+wäre ein Umweg durch die Ortsdatenbank, um am Ende denselben String zu erzeugen.
+
+Entscheidend ist die **Kennung**. Sie ist `<art>:<name>`, und daran hängt, welche
+Fotos zu _einem_ Gruppenvorschlag zusammenfallen. Wer „Bremerhaven" aus der
+Vervollständigung wählt, bekommt deshalb dessen vorhandene Kennung
+(`city:Bremerhaven`) mitgeschickt und landet mit den GPS-aufgelösten Fotos in
+derselben Gruppe; frei getippt entsteht `manual:Bremerhaven`, richtig für einen
+Ort, den es im Bestand noch nicht gibt. Die Liste liefert `GET /api/photos/places`,
+häufigste zuerst — und sie kommt vom Server, damit diese Regel _eine_ Stelle hat.
+Verworfen wurde eine Suche in den 58.185 GeoNames-Orten: Für Orte ohne Eintrag
+(das Ferienhaus, Omas Garten) bräuchte es trotzdem den freien Text, also beide
+Wege statt einem.
+
+Ein gesetzter Ort wird in `suggestGroups` zum **Anker für `propagatePlaces`** und
+zieht Nachbarn ohne GPS mit — gewollt: Wer den Ort einer Aufnahme kennt, kennt
+meist den der Bilder daneben. Die Gliederung des Buchs ändert er nicht (das tut
+der Kalender), also gibt es hier kein `structurePending`; was sich ändert, sind
+die Vorschläge, und die sind Vorschläge, bis jemand sie bestätigt.
+
+Am Bild selbst (`spread/Bilddaten.tsx`) gibt es **keine** Vervollständigung: Dort
+zeigt keine Liste, welche Orte es gibt, und einen getippten Namen stillschweigend
+auf eine fremde Kennung zu legen, weil er zufällig gleich lautet, wäre eine
+Vermutung an der falschen Stelle. Für den Stapel ist der Reiter „Fotodaten" da.
 
 ### Fotogruppen
 

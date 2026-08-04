@@ -10,7 +10,7 @@
  */
 import { FRAMES, photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
-import { DatumGriff } from './DatumGriff.js';
+import { Bilddaten } from './Bilddaten.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 
@@ -56,7 +56,7 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
           {info?.place?.label ?? 'ohne Ortsangabe'}
           {info?.camera && ` · ${info.camera}`}
         </p>
-        <DatumGriff model={model} />
+        <Bilddaten model={model} />
 
         {/*
           Der Balken misst gegen die Zielauflösung, die Marke steht an der

@@ -12,6 +12,7 @@ import {
   type PhotoId,
   type PhotoOverride,
   type Spread,
+  effectivePhoto,
   fnv1a,
   mergeSuggestions,
   propagatePlaces,
@@ -48,9 +49,14 @@ export function suggestGroups(
   if (opts.reset) z.groups = [];
 
   const kandidaten = [...z.photos.values()]
-    .map((photo) => {
-      const e = resolveEffectiveDate(photo, z.overrides[photo.id]);
+    .map((roh) => {
+      const e = resolveEffectiveDate(roh, z.overrides[roh.id]);
       if (!e.value) return undefined;
+      // Über `effectivePhoto`, damit ein von Hand gesetzter Ort hier gilt. Er
+      // wird dabei zum Anker für `propagatePlaces` unten und zieht Nachbarn ohne
+      // GPS mit – gewollt: Wer den Ort einer Aufnahme kennt, kennt meist den der
+      // Bilder daneben.
+      const photo = effectivePhoto(roh, z.overrides[roh.id]);
       return {
         photoId: photo.id,
         date: e.value,

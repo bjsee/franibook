@@ -506,6 +506,8 @@ export interface FotoInfo {
   place?: { key: string; label: string };
   camera?: string;
   issues: { code: string; detail?: string }[];
+  /** Ob `place` von Hand gesetzt ist statt über GPS aufgelöst. */
+  placeManual?: boolean;
 }
 
 /**
@@ -547,6 +549,25 @@ export interface Korrekturergebnis {
  */
 export const datumKorrigieren = (ids: string[], date: Datumskorrektur) =>
   sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, date });
+
+/** Ein Ort, wie er im Bestand vorkommt – Grundlage der Vervollständigung. */
+export interface Ort {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export const ortsListeLaden = () => hole<{ places: Ort[] }>('/api/photos/places');
+
+/**
+ * Setzt den Ort mehrerer Fotos; `null` gibt ihn an die Automatik zurück.
+ *
+ * Mit `key` aus der Vorschlagsliste fällt das Foto mit den über GPS aufgelösten
+ * desselben Ortes in *einen* Gruppenvorschlag. Ohne Kennung entsteht eine eigene
+ * (`manual:<Name>`) – richtig für einen Ort, den es im Bestand noch nicht gibt.
+ */
+export const ortSetzen = (ids: string[], place: { label: string; key?: string } | null) =>
+  sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, place });
 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {

@@ -46,6 +46,7 @@ import {
   fotosDerSeiteLaden,
   fotoVerschieben,
   neigungSetzen,
+  ortSetzen as apiOrtSetzen,
   rahmenSetzen,
   unterschriftSetzen,
   type PoolFoto as PoolPhoto,
@@ -1317,6 +1318,35 @@ export function useSpreadEditor({
     }
   }
 
+  /**
+   * Setzt den Ort des gewählten Bildes; `null` gibt ihn an die Automatik zurück.
+   *
+   * Ohne `onNeuRendern`: Der Ort steht in keiner Box des Rendered Spread Model –
+   * er speist die Gruppenvorschläge, und was das Buch beschriftet, ist eine
+   * bestätigte Gruppe. Die Bildinfo über dem Foto (`i`) liest ihn dagegen aus
+   * dieser Spalte, also wird sie ersetzt.
+   *
+   * Ohne Kennung, also immer `manual:<Name>`: Die Vervollständigung aus dem
+   * Bestand steht im Reiter „Fotodaten", und nur dort kann man einen vorhandenen
+   * Ort *wählen*. Hier getippt ist es ein neuer Name – ihn stillschweigend auf
+   * eine fremde Kennung zu legen, weil er zufällig gleich lautet, wäre eine
+   * Vermutung an einer Stelle, die keine Liste zeigt.
+   */
+  async function ortSetzen(label: string | null): Promise<void> {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return;
+    setNote(null);
+    try {
+      const e = await apiOrtSetzen([photoId], label === null ? null : { label });
+      const neu = e.photos.find((p) => p.id === photoId);
+      if (neu) setInfos((bestand) => new Map(bestand).set(photoId, neu));
+      if (e.uebersprungen[0]) setNote(e.uebersprungen[0].grund);
+      onChanged();
+    } catch (fehler) {
+      setNote(fehlertext(fehler));
+    }
+  }
+
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
@@ -1413,6 +1443,7 @@ export function useSpreadEditor({
     infoVon,
     dateiname,
     datumSetzen,
+    ortSetzen,
     werkzeug,
     setWerkzeug,
     werkzeugHinweis,

@@ -14,6 +14,7 @@ export * from './model/photo.js';
 export * from './model/crop.js';
 export * from './model/date.js';
 export * from './model/date-correction.js';
+export * from './model/effective-photo.js';
 export * from './model/fingerprint.js';
 export * from './model/template.js';
 export * from './model/spread.js';

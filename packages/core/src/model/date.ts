@@ -54,6 +54,17 @@ export interface PhotoOverride {
    * geschätztes Datum sortiert genauso, sieht in der Oberfläche aber anders aus.
    */
   dateEstimated?: boolean;
+  /**
+   * Ort statt des beim Import aufgelösten.
+   *
+   * Der **Ort** und nicht die Koordinaten: Niemand kennt seine Koordinaten, und
+   * die Engine liest ohnehin nur `place` — `gps` wird nach dem Import von nichts
+   * mehr gebraucht. Koordinaten eintippen wäre ein Umweg durch die Ortsdatenbank,
+   * um am Ende denselben String zu erzeugen.
+   *
+   * Aufgelöst wird das in `effectivePhoto`; die `key`-Vergabe steht dort.
+   */
+  placeOverride?: { key: string; label: string };
   /** Sortierung innerhalb derselben Sekunde, ohne das Datum zu verändern. */
   orderNudge?: number;
   excluded?: boolean;

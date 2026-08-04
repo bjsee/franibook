@@ -448,9 +448,8 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
 describe('Rundlauf über alle ändernden Routen', () => {
   for (const [kennung, fall] of Object.entries(FAELLE)) {
     const eintrag = UNDO_ROUTEN[kennung];
-    const label = eintrag ? eintrag.label : kennung;
 
-    it(`nimmt „${label}" vollständig zurück`, async () => {
+    it(`nimmt „${kennung}" vollständig zurück`, async () => {
       const p = await probe();
       const anfrage = await fall(p);
 
@@ -463,7 +462,11 @@ describe('Rundlauf über alle ändernden Routen', () => {
 
       expect(antwort.statusCode, antwort.body.slice(0, 300)).toBeLessThan(400);
       expect(await abdruck(p), 'die Aktion hat nichts geändert').not.toBe(vorher);
-      expect(p.project.verlauf.auskunft().zurueck).toBe(eintrag?.label);
+      // Das Label darf vom Körper der Anfrage abhängen (`PATCH /api/photos`
+      // setzt Datum oder Ort), also wird es hier genauso aufgelöst wie im Haken.
+      const erwartet =
+        typeof eintrag?.label === 'function' ? eintrag.label({}, anfrage.payload) : eintrag?.label;
+      expect(p.project.verlauf.auskunft().zurueck).toBe(erwartet);
 
       await p.project.zurueck();
 

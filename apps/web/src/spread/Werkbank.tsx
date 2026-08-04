@@ -18,7 +18,7 @@ import { B, T, dpiFarbe } from '../theme.js';
 import { BackgroundPicker } from '../BackgroundPicker.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
-import { DatumGriff } from './DatumGriff.js';
+import { Bilddaten } from './Bilddaten.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
@@ -307,7 +307,7 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         {info?.place?.label ?? 'ohne Ortsangabe'}
         {info?.camera && ` · ${info.camera}`}
       </p>
-      <DatumGriff model={model} />
+      <Bilddaten model={model} />
 
       <div style={S.dpiZeile}>
         <span style={{ ...B.zahl, fontSize: 15, color: farbe }}>{dpi} dpi</span>
