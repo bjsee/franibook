@@ -220,6 +220,11 @@ selbst: pdfkit setzt mit `baseline: 'alphabetic'`, die Vorschau als SVG-`<text>`
 
 ### Server
 
+**Der Server lauscht vor dem Import.** Bis er auskunftsfähig ist, beantwortet ein
+`onRequest`-Hook jede Anfrage mit `503` und dem Satz, was gerade läuft (`anlauf`
+in `main.ts`); die Oberfläche zeigt ihn und fragt weiter. Vorher lauschte er erst
+nach dem Import, und ein Kaltstart quittierte jede Anfrage mit `ECONNREFUSED`.
+
 `apps/server/src/project.ts` hält genau ein Projekt im Speicher (Fotos, Overrides,
 Gruppen, Spreads) und schreibt es atomar als JSON (`rename`) nach `FRANIBOOK_PROJECT`.
 Keine Datenbank. Der Server bindet nur an `127.0.0.1` und hat keine Authentifizierung —

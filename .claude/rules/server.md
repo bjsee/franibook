@@ -67,10 +67,33 @@ an einer Stelle und nicht in jeder Funktion.
 - Fachlicher Konflikt: `reply.code(409).send({ ok: false, error: '…' })`
 - Fehlender oder unbrauchbarer Parameter: `400` mit `{ error: '…' }`
 - Unbekannte Kennung: `404` mit `{ error: '…' }`
+- Noch im Anlauf: `503` mit `{ error: '…' }` — das macht der Hook in `main.ts`
+  für **jede** Route, kein Endpunkt kümmert sich darum.
 
 Die Fehlertexte sind deutsche Sätze für die Oberfläche, keine Codes. Ein
 wirkungsloser Versuch meldet, **warum** er wirkungslos ist — das ist im Repo
 mehrfach nachgezogen worden und gilt als Konvention.
+
+## Der Anlauf
+
+**Der Server lauscht, bevor er auskunftsfähig ist.** `app.listen` steht vor dem
+Import; bis der durch ist, beantwortet ein `onRequest`-Hook jede Anfrage mit
+`503` und einem Satz darüber, was gerade läuft (`anlauf` in `main.ts`). Vorher
+lauschte er erst danach, und ein Kaltstart über den vollen Bestand quittierte
+jede Anfrage der Oberfläche mit `ECONNREFUSED` — das sieht nach kaputtem Server
+aus, obwohl er nur arbeitet.
+
+Wer eine neue Startphase einführt, setzt `anlauf` auf ihren Satz; wer den Import
+umbaut, achtet darauf, dass am Ende `null` steht. Die Oberfläche zeigt den Satz
+und fragt weiter (`ANLAUF_TAKT_MS` in `App.tsx`), statt eine Fehlerseite zu
+zeigen — ein `503` ist dort ausdrücklich kein Fehler.
+
+Auch `/api/health` fällt darunter, und zwar mit Absicht: Der Parity-Test wartet
+darauf und soll auf echte Auskunftsfähigkeit warten, nicht auf einen offenen Port.
+
+Verworfen wurde, einfach früher zu lauschen und die leeren Antworten
+auszuliefern: Die Oberfläche zeigte dann stumm ein Buch mit null Fotos, und das
+sieht aus wie Datenverlust.
 
 ## Persistenz
 

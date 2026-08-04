@@ -17,6 +17,7 @@ import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
   buchErzeugen,
   buchseiteLoeschen,
+  ApiFehler,
   doppelseiteFesthalten,
   doppelseiteLaden,
   doppelseiteLoeschen,
@@ -42,6 +43,16 @@ import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
 import type { SpreadAussen } from './spread/types.js';
 import { VARIANTEN, varianteLesen, varianteMerken, type Variante } from './spread/varianten.js';
+
+/**
+ * Abstand zwischen zwei Anfragen, solange der Server anläuft.
+ *
+ * Eine Sekunde: Der Import dauert bei vollem Bestand Minuten, häufigeres Fragen
+ * beschleunigt ihn nicht und belegt nur einen Thread, den er selbst braucht.
+ * Deutlich länger wäre ebenso falsch – der Warmstart ist in Sekunden fertig, und
+ * dann soll die Oberfläche auch in Sekunden da sein.
+ */
+const ANLAUF_TAKT_MS = 1000;
 
 type View = 'overview' | 'spread' | 'groups' | 'years' | 'sources' | 'edit' | 'cover';
 
@@ -89,6 +100,8 @@ export function App() {
   });
   const [variante, setVariante] = useState<Variante>(varianteLesen);
   const [error, setError] = useState<string | null>(null);
+  /** Was der Server gerade tut, solange er noch nicht antwortet. `null` = läuft. */
+  const [anlauf, setAnlauf] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   /**
@@ -115,10 +128,37 @@ export function App() {
 
   const hatZeitstrahl = spread?.timelineOverride !== false;
 
+  /**
+   * Projektdaten holen – und warten, solange der Server noch anläuft.
+   *
+   * Ein Kaltstart liest den ganzen Bestand ein, bevor er auskunftsfähig ist,
+   * und antwortet in dieser Zeit mit `503` und einem Satz darüber, was er
+   * gerade tut (siehe `anlauf` in `apps/server/src/main.ts`). Das ist kein
+   * Fehler, sondern eine Ansage: Sie wird angezeigt, und die Oberfläche fragt
+   * weiter, statt eine Fehlerseite zu zeigen, die zum Neuladen auffordert.
+   */
   const loadInfo = useCallback(() => {
-    projektLaden()
-      .then(setInfo)
-      .catch((e: unknown) => setError(fehlertext(e)));
+    const versuch = () => {
+      projektLaden()
+        .then((geladen) => {
+          setInfo(geladen);
+          setAnlauf((lief) => {
+            // Kam die Oberfläche über den Anlauf hierher, ist die Doppelseite
+            // an einem 503 gescheitert und muss nachgeholt werden.
+            if (lief !== null) setRenderVersion((v) => v + 1);
+            return null;
+          });
+        })
+        .catch((e: unknown) => {
+          if (e instanceof ApiFehler && e.status === 503) {
+            setAnlauf(e.message);
+            window.setTimeout(versuch, ANLAUF_TAKT_MS);
+            return;
+          }
+          setError(fehlertext(e));
+        });
+    };
+    versuch();
   }, []);
 
   useEffect(loadInfo, [loadInfo]);
@@ -128,7 +168,13 @@ export function App() {
     setSpread(null);
     doppelseiteLaden(index)
       .then(setSpread)
-      .catch((e: unknown) => setError(fehlertext(e)));
+      .catch((e: unknown) => {
+        // Während des Anlaufs still bleiben: `loadInfo` wartet bereits und
+        // holt die Doppelseite nach, sobald der Server steht. Zwei Stellen, die
+        // dasselbe pollen, wären doppelte Last und ein doppelter Satz.
+        if (e instanceof ApiFehler && e.status === 503) return;
+        setError(fehlertext(e));
+      });
   }, [index, view, bare, renderVersion]);
 
   // Beim Blättern gilt die Auswahl nicht weiter: Slotkennungen wiederholen
@@ -355,6 +401,21 @@ export function App() {
   function waehleVariante(v: Variante) {
     setVariante(v);
     varianteMerken(v);
+  }
+
+  // Vor der Fehlerseite: Ein anlaufender Server ist kein Fehler. Die Meldung
+  // kommt von ihm selbst und wechselt mit seiner Phase – laden, einlesen,
+  // erzeugen –, damit ein Kaltstart über 830 Fotos nicht wie ein Hänger aussieht.
+  if (anlauf) {
+    return (
+      <main style={S.fehlerSeite}>
+        <h1>Einen Moment</h1>
+        <p style={{ ...B.leise, marginTop: 12 }}>{anlauf}</p>
+        <p style={{ ...B.leiser, marginTop: 12 }}>
+          Die Oberfläche meldet sich von selbst, sobald der Server so weit ist.
+        </p>
+      </main>
+    );
   }
 
   if (error) {
