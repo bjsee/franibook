@@ -8,7 +8,7 @@
  * *soll es weg?* — und die Auflösung bekommt dabei den Platz, den sie braucht,
  * weil sie in diesem Bestand die häufigste Ursache für eine Änderung ist.
  */
-import { photoPixelsOf } from '@franibook/core';
+import { FRAMES, photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
@@ -24,6 +24,9 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
     istFreiGesetzt,
     aktuelleNeigung,
     neigungGesperrt,
+    aktuellerRahmen,
+    rahmenEigen,
+    rahmenGesperrt,
   } = model;
 
   if (!box) return null;
@@ -168,6 +171,82 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
                 ins Raster
               </button>
             </div>
+          </>
+        )}
+      </div>
+
+      {/*
+        Der Rahmen steht zwischen Lage und Neigung, weil er zu beiden gehört: Er
+        verkleinert das Bild in seinem Kasten wie die Position und dreht mit ihm
+        wie die Neigung. Und er gehört sichtbar hierher und nicht ins Buchpanel
+        allein — die Vorgabe gilt fürs ganze Buch, aber die Ausnahme trifft man
+        an dem einen Bild, das sie braucht.
+      */}
+      <div style={B.abschnitt}>
+        <div style={S.kopfzeile}>
+          <span style={B.marke}>Rahmen</span>
+          {rahmenEigen && !rahmenGesperrt && (
+            <button
+              onClick={() => void model.rahmenWaehlen(null)}
+              style={B.knopfKlein}
+              title="Wieder dem Rahmen des Buches folgen"
+            >
+              wie das Buch
+            </button>
+          )}
+        </div>
+        {rahmenGesperrt ? (
+          <p style={B.leiser}>
+            Randabfallend und deshalb ohne Rahmen — ein Karton über der Beschnittkante wird
+            abgeschnitten.
+          </p>
+        ) : (
+          <>
+            <div style={S.rahmenGitter}>
+              {FRAMES.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => void model.rahmenWaehlen(f.id)}
+                  style={aktuellerRahmen === f.id ? S.rahmenAn : S.rahmenAus}
+                  title={f.hinweis}
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+            <p style={B.leiser}>
+              {FRAMES.find((f) => f.id === aktuellerRahmen)?.hinweis}
+              {!rahmenEigen && aktuellerRahmen !== 'keiner' && ' Kommt aus der Buchvorgabe.'}
+            </p>
+
+            {/*
+              Das Feld steht auch dann da, wenn der Rahmen keinen Fuß hat — nur
+              abgeblendet und begründet, wie der Neigungsregler am Papierrand.
+              Ein Feld, das beim Rahmenwechsel verschwindet, ließe den
+              gespeicherten Satz wie gelöscht aussehen.
+            */}
+            <label style={S.unterschriftZeile}>
+              <span style={B.marke}>Unterschrift</span>
+              <input
+                type="text"
+                value={model.unterschrift}
+                onChange={(e) => model.setPendingCaption(e.target.value)}
+                placeholder={model.unterschriftSichtbar ? 'Sylt, Juli 2015' : '—'}
+                disabled={!model.unterschriftSichtbar}
+                style={{
+                  ...B.feld,
+                  ...(model.unterschriftSichtbar ? {} : { color: T.fg4 }),
+                }}
+                title="Steht in Handschrift im Fuß des Sofortbilds"
+              />
+            </label>
+            {!model.unterschriftSichtbar && (
+              <p style={B.leiser}>
+                {model.unterschrift
+                  ? 'Gespeichert, aber unsichtbar: Nur das Polaroid hat einen Fuß, in dem sie stehen kann.'
+                  : 'Nur das Polaroid hat einen Fuß, in dem eine Unterschrift stehen kann.'}
+              </p>
+            )}
           </>
         )}
       </div>
@@ -330,6 +409,39 @@ const S = {
     gap: 10,
   },
   aus: { color: T.fg4, cursor: 'default' },
+  // Fünf Rahmen in einem Gitter statt in einer Reihe: Als Segmentleiste wären
+  // die Beschriftungen auf vier Zeichen zusammengeschnitten, und „Passepartout"
+  // ist nicht abkürzbar, ohne unverständlich zu werden.
+  rahmenGitter: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 6,
+  },
+  // Türkis für die getroffene Wahl – dieselbe Farbregel wie überall in der
+  // Oberfläche. Der abgesetzte Rahmen der ausgewählten Kachel ersetzt keine
+  // Vorschau des Rahmens: Wie er aussieht, zeigt die Doppelseite selbst.
+  rahmenAn: {
+    font: 'inherit',
+    fontSize: 12,
+    padding: '7px 4px',
+    border: `1px solid ${T.cyan}`,
+    borderRadius: T.rMd,
+    background: T.cyanZart,
+    color: T.cyanTief,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  unterschriftZeile: { display: 'flex', flexDirection: 'column' as const, gap: 4, marginTop: 8 },
+  rahmenAus: {
+    font: 'inherit',
+    fontSize: 12,
+    padding: '7px 4px',
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rMd,
+    background: T.bg1,
+    color: T.fg2,
+    cursor: 'pointer',
+  },
   max: {
     margin: '8px 0 0',
     padding: '7px 9px',

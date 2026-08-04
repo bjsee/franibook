@@ -139,7 +139,8 @@ const CAP_PER_EM_BY_FAMILY: Record<FontFamilyId, number> = {
   display: 700 / 1000,
 };
 
-export type TextStyleName = 'yearLarge' | 'groupTitle' | 'body' | 'timelineYear' | 'timelineLabel';
+export type TextStyleName =
+  'yearLarge' | 'groupTitle' | 'body' | 'timelineYear' | 'timelineLabel' | 'caption';
 
 export interface TextStyle {
   weight: FontWeight;
@@ -181,6 +182,17 @@ export const TEXT_STYLES: Record<TextStyleName, TextStyle> = {
   // begleitet die Fotos, er konkurriert nicht mit ihnen.
   timelineYear: { weight: 'semibold', capHeightRatio: 0.462, color: '#3f3f46' },
   timelineLabel: { weight: 'regular', capHeightRatio: 0.462, color: '#3f3f46' },
+  // Bildunterschrift im Fuß eines Polaroids. Kleinerer Versalanteil als überall
+  // sonst: Der Fuß ist rund 12 mm hoch, und eine Zeile mit 0,462 füllte ihn bis
+  // an beide Kanten – auf einem Sofortbild steht die Notiz aber in der Mitte
+  // eines sichtbar leeren Randes, nicht darin eingeklemmt.
+  //
+  // Dunkelgrau statt Schwarz, wie am Zeitstrahl: Die Unterschrift begleitet das
+  // Bild. Die Farbe ist hier zusätzlich **fest** und wird nicht an den
+  // Seitenhintergrund angepasst – sie steht auf dem hellen Karton, nicht auf der
+  // Seite. Auf einer Doppelseite in Anthrazit stünde sonst weiße Schrift auf
+  // weißem Karton.
+  caption: { weight: 'regular', capHeightRatio: 0.3, color: '#52525b' },
 };
 
 /**

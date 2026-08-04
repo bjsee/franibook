@@ -24,6 +24,8 @@ import {
   backgroundFit,
   textColorOn,
 } from './background.js';
+import type { FrameId } from './frame.js';
+import { frameBoxes, frameInset } from './frame.js';
 import type {
   Guide,
   ImageBox,
@@ -104,6 +106,15 @@ export interface RenderContext {
   background?: string;
   timeline?: TimelineContext;
   tilt?: TiltContext;
+  /**
+   * Rahmen für alle Bilder, die keinen eigenen tragen.
+   *
+   * Wie die Neigung eine reine Rendereinstellung: Der Rahmen verkleinert das
+   * Bild in seinem Kasten, verschiebt aber kein Foto und ändert keine Vorlage.
+   * Ein Umstellen erfordert deshalb kein Neugenerieren, und der Schalter lebt
+   * beim Aufrufer statt in der Engine.
+   */
+  frame?: FrameId;
 }
 
 /**
@@ -179,18 +190,89 @@ function buildGuides(profile: PrintProfile): Guide[] {
   ];
 }
 
+/**
+ * Rahmen dieses Bildes: von Hand gesetzt, sonst die Buchvorgabe.
+ *
+ * Am Papierrand entfällt er – dieselbe Regel und dieselbe Begründung wie bei
+ * der Neigung: Ein Karton über der Beschnittkante wird abgeschnitten, und was
+ * im Druck bleibt, ist ein weißer Streifen an der Papierkante. Auch eine von
+ * Hand getroffene Wahl gilt dort nicht; sie wäre kein Gestaltungsmittel,
+ * sondern ein Fehler.
+ */
+function frameOf(assignment: SlotAssignment, aussen: Rect, ctx: RenderContext): FrameId {
+  const flaeche = {
+    widthMm: spreadWidthMm(ctx.profile),
+    heightMm: spreadHeightMm(ctx.profile),
+  };
+  if (randabfallend(aussen, flaeche)) return 'keiner';
+  return assignment.frame ?? ctx.frame ?? 'keiner';
+}
+
+/**
+ * Alle Boxen eines belegten Slots: Rahmen dahinter, Bild, Rahmen davor.
+ *
+ * Die Reihenfolge ist die Zeichenreihenfolge – beide Renderer arbeiten die
+ * Liste von vorn nach hinten ab. Deshalb steht sie hier und nicht in einer
+ * `z`-Angabe an der Box: Eine zweite Ordnung neben der Liste wäre eine zweite
+ * Wahrheit.
+ */
+function slotBoxes(
+  slot: TemplateSlot,
+  assignment: SlotAssignment,
+  photo: Photo,
+  ctx: RenderContext,
+  gerechnet: boolean,
+): RenderBox[] {
+  // Von Hand gesetzte Position schlägt den Platz der Vorlage.
+  const aussen = toMm(assignment.rect ?? slot, ctx.profile);
+  const frame = frameOf(assignment, aussen, ctx);
+  // Der Rahmen nimmt sich seinen Rand vom Außenmaß; das Bild schrumpft. Alles
+  // Weitere – Ausschnitt, Auflösung, Warnungen – rechnet mit dem kleineren
+  // Kasten weiter, sonst versprächen die DPI-Zahlen mehr, als gedruckt wird.
+  const innen = frameInset(aussen, frame);
+  // Der Winkel hängt am Außenmaß und damit nicht am Rahmen: Ein Bild soll
+  // gleich schief liegen, ob man ihm einen Karton gibt oder nicht.
+  const drehung = tiltOf(assignment, aussen, photo.id, ctx);
+
+  const rahmen = frameBoxes({
+    aussen,
+    frame,
+    slotId: slot.id,
+    ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
+    ...(assignment.caption ? { caption: assignment.caption } : {}),
+  });
+
+  const bild = buildImageBox(slot, assignment, photo, ctx, gerechnet, {
+    aussen,
+    innen,
+    drehung,
+    frame,
+  });
+
+  return [...rahmen.hinter, bild, ...rahmen.davor];
+}
+
+/** Die Geometrie, die `slotBoxes` schon ausgerechnet hat. */
+interface SlotGeometrie {
+  /** Der ganze Platz einschließlich Rahmen. */
+  aussen: Rect;
+  /** Der Kasten, in dem das Bild selbst steht. */
+  innen: Rect;
+  drehung: number;
+  /** Der Rahmen, der tatsächlich wirkt – am Papierrand also `keiner`. */
+  frame: FrameId;
+}
+
 function buildImageBox(
   slot: TemplateSlot,
   assignment: SlotAssignment,
   photo: Photo,
   ctx: RenderContext,
   gerechnet: boolean,
+  geo: SlotGeometrie,
 ): ImageBox {
   const { profile } = ctx;
-  // Von Hand gesetzte Position schlägt den Platz der Vorlage. Alles Weitere –
-  // Ausschnitt, Auflösung, Neigung, Warnungen – rechnet danach mit demselben
-  // Rechteck weiter; sonst stünde das Bild woanders, als die Zahlen sagen.
-  const rect = toMm(assignment.rect ?? slot, profile);
+  const { aussen, innen: rect, drehung } = geo;
   const slotAr = rect.wMm / rect.hMm;
 
   // Ein `auto-cover`-Ausschnitt wird für die aktuellen Slotmaße neu gerechnet.
@@ -221,7 +303,14 @@ function buildImageBox(
   // zieht, soll dieselbe Warnung bekommen wie eine Vorlage, die es täte.
   if (crossesGutter(assignment.rect ?? slot)) warnings.push({ code: 'crosses-gutter' });
 
-  const drehung = tiltOf(assignment, rect, photo.id, ctx);
+  // Der Drehpunkt nur dann ausdrücklich, wenn der Rahmen ihn verschiebt: Beim
+  // Polaroid liegt die Mitte des Kartons unter der des Bildes, und beide müssen
+  // um denselben Punkt fahren. Bei gleichmäßigem Rand – und ohne Rahmen – ist
+  // es die Mitte der Box, also die Vorgabe des Modells.
+  const mitte = { xMm: aussen.xMm + aussen.wMm / 2, yMm: aussen.yMm + aussen.hMm / 2 };
+  const eigeneMitte = { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
+  const versetzt =
+    Math.abs(mitte.xMm - eigeneMitte.xMm) > 1e-6 || Math.abs(mitte.yMm - eigeneMitte.yMm) > 1e-6;
 
   return {
     kind: 'image',
@@ -231,10 +320,16 @@ function buildImageBox(
     crop,
     effectiveDpi: dpi,
     ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
+    ...(drehung !== 0 && versetzt ? { rotateAboutMm: mitte } : {}),
     // Auf justierten Doppelseiten trägt jeder Slot ein Rechteck, aber keines
     // davon ist Handarbeit – der Neuaufbau rechnet sie wieder aus. Der Editor
     // hätte sonst nichts zurückzunehmen und würde es doch anbieten.
     ...(assignment.rect && !gerechnet ? { manualRect: true as const } : {}),
+    // Nur der wirkende Rahmen, und nur wenn es einen gibt: Ein `'keiner'` im
+    // Modell wäre dasselbe wie sein Fehlen und damit eine zweite Schreibweise.
+    ...(geo.frame !== 'keiner' ? { frame: geo.frame } : {}),
+    ...(assignment.frame !== undefined ? { manualFrame: true as const } : {}),
+    ...(assignment.caption ? { caption: assignment.caption } : {}),
     warnings,
   };
 }
@@ -306,7 +401,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       continue;
     }
 
-    boxes.push(buildImageBox(slot, assignment, photo, ctx, isJustified(spread.templateId)));
+    boxes.push(...slotBoxes(slot, assignment, photo, ctx, isJustified(spread.templateId)));
   }
 
   const byTextSlotId = new Map((spread.texts ?? []).map((t) => [t.slotId, t]));

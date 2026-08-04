@@ -20,10 +20,11 @@
  * Schreibvorgang auf das ganze Projekt-JSON.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Crop, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
+import type { Crop, FrameId, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
 import {
   coverCrop,
   fitCropToAspect,
+  frameHatFuss,
   imageBoxes,
   MAX_TILT_DEG,
   normalizeRotation,
@@ -45,6 +46,8 @@ import {
   fotosDerSeiteLaden,
   fotoVerschieben,
   neigungSetzen,
+  rahmenSetzen,
+  unterschriftSetzen,
   type PoolFoto as PoolPhoto,
   rechteckSetzen,
   textAendern,
@@ -353,6 +356,53 @@ export function useSpreadEditor({
   }, [pendingTilt, selectedSlotId, index, onSpread, onChanged]);
 
   /**
+   * Die Bildunterschrift, während sie getippt wird.
+   *
+   * Beim Tippen darf nicht jedes Zeichen das ganze Projekt-JSON schreiben –
+   * dieselbe Verzögerung und derselbe Grund wie beim Ausschnitt. Anders als dort
+   * kommt der Zwischenstand aber nicht in die Vorschau: Der Text stünde
+   * buchstabenweise im Fuß und die Schriftgröße spränge bei jedem Zeichen, weil
+   * sie sich aus der Satzbreite ergibt. Das Feld führt seinen eigenen Stand, die
+   * Doppelseite bekommt den fertigen Satz.
+   */
+  const [pendingCaption, setPendingCaption] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pendingCaption === null || !selectedSlotId) return;
+
+    const gesendet = pendingCaption;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const data = await unterschriftSetzen(index, selectedSlotId, gesendet);
+          if (data.spread) {
+            onSpread(data.spread);
+            onChanged();
+          }
+        } catch (e) {
+          setNote(`Unterschrift nicht gespeichert: ${fehlertext(e)}`);
+        }
+      })();
+    }, SPEICHER_VERZOEGERUNG_MS);
+
+    return () => clearTimeout(timer);
+  }, [pendingCaption, selectedSlotId, index, onSpread, onChanged]);
+
+  /**
+   * Der getippte Stand bleibt stehen, bis ein anderes Bild gewählt wird.
+   *
+   * Anders als beim Neigungsregler, der sich nach dem Speichern an den Server
+   * zurückgibt: In ein Textfeld wird währenddessen weiter getippt, und ein
+   * kontrolliertes Feld, das mitten im Satz auf den gespeicherten Stand
+   * zurückspringt, verliert die Zeichen seit dem Absenden. Solange es bearbeitet
+   * wird, ist das Feld selbst die Quelle; erst der Wechsel des Bildes gibt es
+   * wieder ab.
+   */
+  useEffect(() => {
+    setPendingCaption(null);
+  }, [selectedSlotId]);
+
+  /**
    * Neigung zurück an die Automatik.
    *
    * Wie beim Ausschnitt kommt der neue Winkel vom Server: Ihn hier aus Slot,
@@ -370,6 +420,27 @@ export function useSpreadEditor({
       }
     } catch (e) {
       setNote(`Neigung nicht zurückgesetzt: ${fehlertext(e)}`);
+    }
+  }
+
+  /**
+   * Rahmen dieses Bildes wählen – oder zurück an die Buchvorgabe.
+   *
+   * `null` heißt „wie das Buch". Ohne Zwischenstand und ohne Verzögerung: Anders
+   * als Ausschnitt und Neigung ist das ein Klick und kein Ziehen, und die
+   * Antwort bringt die fertig gerenderte Doppelseite mit – der Rahmen kostet
+   * Bildfläche, also ändert sich mit ihm auch die angezeigte Auflösung.
+   */
+  async function rahmenWaehlen(frame: FrameId | null) {
+    if (!selectedSlotId) return;
+    try {
+      const data = await rahmenSetzen(index, selectedSlotId, frame);
+      if (data.spread) {
+        onSpread(data.spread);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Rahmen nicht gesetzt: ${fehlertext(e)}`);
     }
   }
 
@@ -978,6 +1049,13 @@ export function useSpreadEditor({
     if (!selectedSlotId) return;
 
     const onKey = (e: KeyboardEvent) => {
+      // Nicht, während jemand tippt: `0`, `+`, `-` und die Pfeiltasten sind
+      // ganz normale Zeichen in einem Eingabefeld. Ohne diese Prüfung wurde aus
+      // einer eingetippten Bildunterschrift „Mai 2008" ein „Mai 28" – die
+      // Nullen setzten den Ausschnitt zurück, statt im Feld zu landen. Derselbe
+      // Guard wie beim Kürzel für die Aufnahmedaten weiter oben.
+      if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+
       const box = bildBox(selectedSlotId);
       if (!box) return;
       const crop = pendingCrop ?? box.crop;
@@ -1148,6 +1226,27 @@ export function useSpreadEditor({
    */
   const neigungGesperrt = gewaehlteBox ? randabfallend(gewaehlteBox, angezeigt) : false;
 
+  /**
+   * Der Rahmen, der gerade wirkt – auch der aus der Buchvorgabe.
+   *
+   * Kommt aus dem RSM und wird nicht aus den Einstellungen nachgeschlagen: Am
+   * Papierrand entfällt der Rahmen, und nur die Engine weiß, ob dieser Kasten
+   * dort liegt.
+   */
+  const aktuellerRahmen: FrameId = gewaehlteBox?.frame ?? 'keiner';
+  /** Ob dieses Bild einen eigenen Rahmen trägt statt dem des Buches zu folgen. */
+  const rahmenEigen = gewaehlteBox?.manualFrame === true;
+  /**
+   * Die Bildunterschrift: der getippte Stand, sonst der gespeicherte.
+   *
+   * Der gespeicherte kommt aus der Bildbox und nicht aus der gerenderten
+   * Textzeile – die gibt es nur, solange ein Rahmen mit Fuß gewählt ist, den
+   * Text aber soll das Feld auch dann zeigen.
+   */
+  const unterschrift = pendingCaption ?? gewaehlteBox?.caption ?? '';
+  /** Ob der gewählte Rahmen die Unterschrift überhaupt zeigt. */
+  const unterschriftSichtbar = frameHatFuss(aktuellerRahmen);
+
   /** Woher der Ausschnitt bzw. die Position gerade kommt, in einem Wort. */
   const werkzeugHinweis =
     werkzeug === 'position'
@@ -1216,6 +1315,15 @@ export function useSpreadEditor({
     griffZiehen,
     drehZiehen,
     griffAnzeige,
+
+    // Rahmen
+    aktuellerRahmen,
+    rahmenEigen,
+    rahmenGesperrt: neigungGesperrt,
+    rahmenWaehlen,
+    unterschrift,
+    unterschriftSichtbar,
+    setPendingCaption,
 
     // Neigung
     aktuelleNeigung,

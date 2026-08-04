@@ -17,6 +17,7 @@
  */
 import type { Crop } from '../model/crop.js';
 import type { PhotoId } from '../model/photo.js';
+import type { FrameId } from './frame.js';
 import type { FontFamilyId, FontWeight } from './typography.js';
 
 export interface Rect {
@@ -47,6 +48,16 @@ export interface ImageBox extends Rect {
    */
   rotateDeg?: number;
   /**
+   * Drehpunkt, falls nicht die Mitte dieser Box.
+   *
+   * Gebraucht, sobald das Bild in einem Rahmen steht: Der Polaroidkarton hat
+   * unten einen breiteren Rand, seine Mitte ist also nicht die des Bildes.
+   * Drehte jede Box um ihre eigene, rutschte das Bild im Karton, je stärker es
+   * geneigt ist. Alle Boxen eines Rahmens tragen deshalb denselben Punkt – die
+   * Mitte des Außenkastens. Dieselbe Festlegung wie bei mehrzeiligem Text.
+   */
+  rotateAboutMm?: { xMm: number; yMm: number };
+  /**
    * Ob Position und Größe von Hand gesetzt sind statt aus der Vorlage zu
    * kommen.
    *
@@ -54,6 +65,32 @@ export interface ImageBox extends Rect {
    * ob „Ins Raster" etwas zurückzunehmen hat; die Renderer sehen es nie an.
    */
   manualRect?: true;
+  /**
+   * Der Rahmen, in dem dieses Bild steht. Ohne Angabe: keiner.
+   *
+   * Wie `manualRect` keine Geometrie, sondern Herkunft: Die Boxen des Rahmens
+   * stehen längst als eigene Einträge in der Liste, und kein Renderer sieht
+   * dieses Feld an. Der Editor braucht es, weil dem RSM sonst nicht anzusehen
+   * wäre, welcher der vier Rahmen gerade wirkt – die Kartonfläche allein sagt
+   * es nicht.
+   */
+  frame?: FrameId;
+  /**
+   * Ob der Rahmen an diesem Bild gesetzt ist statt aus der Buchvorgabe zu
+   * kommen. Dieselbe Unterscheidung wie `undefined` gegen `0` bei der Neigung.
+   */
+  manualFrame?: true;
+  /**
+   * Die gespeicherte Bildunterschrift – auch wenn sie gerade nicht zu sehen ist.
+   *
+   * Gezeichnet wird sie als eigene `TextBox` im Fuß des Rahmens; dass der Text
+   * hier ein zweites Mal steht, ist bewusst und keine zweite Wahrheit: Die
+   * TextBox gibt es nur, solange ein Rahmen mit Fuß gewählt ist, das Feld hier
+   * dagegen immer. Sonst stünde im Editor ein leeres Eingabefeld, obwohl ein
+   * Satz gespeichert ist – und wer den Rahmen wechselt, hielte seine Notiz für
+   * gelöscht. Wie `frame` und `manualRect` sehen die Renderer es nie an.
+   */
+  caption?: string;
   warnings: RenderWarning[];
 }
 
@@ -104,7 +141,38 @@ export interface TextBox extends Rect {
 
 export interface RectBox extends Rect {
   kind: 'rect';
+  /** Füllfarbe. `'none'` lässt die Fläche frei – nur die Kontur wird gezeichnet. */
   fill: string;
+  /**
+   * Konturfarbe. Ohne Angabe wird keine gezeichnet.
+   *
+   * Der Strich liegt **mittig auf der Kante**, je zur Hälfte innen und außen –
+   * so zeichnet pdfkit einen Pfad, und die Vorschau muss sich danach richten.
+   * Das ist keine Beliebigkeit, sondern die einzige Festlegung, die beide
+   * Adapter ohne Umrechnung treffen können: CSS-`border` läge innen,
+   * `outline` außen, und schon wäre die Bildkontur im PDF um eine halbe
+   * Strichstärke enger als in der Vorschau.
+   */
+  stroke?: string;
+  /** Strichstärke in Millimetern. Ohne Kontur bedeutungslos. */
+  strokeWidthMm?: number;
+  /**
+   * Deckkraft von 0 bis 1. Ohne Angabe deckend.
+   *
+   * Eingeführt für den Versatzschatten des Polaroids und den Klebestreifen:
+   * Beide liegen über Fotos, und eine deckende Fläche wäre dort ein Fleck. Als
+   * eigenes Feld und nicht als `rgba()` in `fill`, weil pdfkit Farben nur als
+   * Hex oder Kanalarray nimmt und die Deckkraft getrennt im Grafikzustand führt
+   * (`fillOpacity`). Ein Adapter müsste den Farbstring sonst zerlegen.
+   */
+  opacity?: number;
+  /** Drehung in Grad im Uhrzeigersinn. Ohne Angabe waagerecht. */
+  rotateDeg?: number;
+  /**
+   * Drehpunkt, falls nicht die Mitte dieser Box. Siehe `ImageBox.rotateAboutMm`:
+   * Karton, Schatten und Bild eines Rahmens fahren um denselben Punkt.
+   */
+  rotateAboutMm?: { xMm: number; yMm: number };
   /**
    * Eckenradius in Millimetern. Ohne Angabe scharfe Ecken.
    *
@@ -140,6 +208,8 @@ export interface PolygonBox {
   kind: 'polygon';
   pointsMm: readonly { xMm: number; yMm: number }[];
   fill: string;
+  /** Deckkraft von 0 bis 1. Ohne Angabe deckend – siehe `RectBox.opacity`. */
+  opacity?: number;
 }
 
 export type RenderBox = ImageBox | TextBox | RectBox | EmptyBox | PolygonBox;

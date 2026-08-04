@@ -5,6 +5,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import {
+  isFrameId,
   MAX_TILT_DEG,
   TIMELINE_ACCENTS,
   TIMELINE_FOOT_VARIANTS,
@@ -62,6 +63,7 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
       timelineAccent?: string;
       background?: string;
       tilt?: number;
+      frame?: string;
     };
   }>('/api/settings', async (req) => {
     if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
@@ -91,6 +93,10 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     if (req.body.tilt !== undefined && Number.isFinite(req.body.tilt)) {
       project.settings.tilt = Math.min(MAX_TILT_DEG, Math.max(0, req.body.tilt));
     }
+    // Der Rahmen ebenso: Er verkleinert das Bild in seinem Kasten, verschiebt
+    // aber kein Foto. Gegen die geschlossene Liste aus dem Kern geprüft, ein
+    // unbekannter Wert wird wie bei den Zeitstrahlfassungen übergangen.
+    if (isFrameId(req.body.frame)) project.settings.frame = req.body.frame;
     await project.save();
     return { settings: project.settings };
   });

@@ -232,16 +232,56 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
           // `roundedRect` klemmt einen zu großen Radius nicht; die halbe kurze
           // Kante ist die Grenze, ab der die Form wieder aufbricht.
           const r = Math.min(mmToPt(box.rxMm ?? 0), Math.min(w, h) / 2);
-          if (r > 0) doc.roundedRect(x, y, w, h, r).fill(box.fill);
-          else doc.rect(x, y, w, h).fill(box.fill);
+
+          // Deckkraft und Drehung sind bei pdfkit Grafikzustand, keine
+          // Eigenschaften des Aufrufs: Ohne `save`/`restore` läge die nächste
+          // Box mit derselben Transparenz und im selben Winkel da. Dieselbe
+          // Falle wie bei `characterSpacing` weiter oben.
+          doc.save();
+          try {
+            const drehung = box.rotateDeg ?? 0;
+            if (drehung !== 0) {
+              const dreh = box.rotateAboutMm ?? {
+                xMm: box.xMm + box.wMm / 2,
+                yMm: box.yMm + box.hMm / 2,
+              };
+              doc.rotate(drehung, {
+                origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
+              });
+            }
+            if (box.opacity !== undefined) doc.fillOpacity(box.opacity).strokeOpacity(box.opacity);
+
+            if (r > 0) doc.roundedRect(x, y, w, h, r);
+            else doc.rect(x, y, w, h);
+
+            // Der Strich liegt bei pdfkit mittig auf dem Pfad – genau die
+            // Festlegung, die das Modell trifft und die die Vorschau mit
+            // `outline-offset` nachbaut.
+            const gefuellt = box.fill !== 'none';
+            if (box.stroke) {
+              doc.lineWidth(mmToPt(box.strokeWidthMm ?? 0)).strokeColor(box.stroke);
+              if (gefuellt) doc.fillAndStroke(box.fill, box.stroke);
+              else doc.stroke();
+            } else if (gefuellt) {
+              doc.fill(box.fill);
+            }
+          } finally {
+            doc.restore();
+          }
         } else if (box.kind === 'polygon') {
           const [first, ...rest] = box.pointsMm;
           if (first) {
-            doc.moveTo(mmToPt(first.xMm + slice.offsetXMm), mmToPt(first.yMm));
-            for (const point of rest) {
-              doc.lineTo(mmToPt(point.xMm + slice.offsetXMm), mmToPt(point.yMm));
+            doc.save();
+            try {
+              if (box.opacity !== undefined) doc.fillOpacity(box.opacity);
+              doc.moveTo(mmToPt(first.xMm + slice.offsetXMm), mmToPt(first.yMm));
+              for (const point of rest) {
+                doc.lineTo(mmToPt(point.xMm + slice.offsetXMm), mmToPt(point.yMm));
+              }
+              doc.closePath().fill(box.fill);
+            } finally {
+              doc.restore();
             }
-            doc.closePath().fill(box.fill);
           }
         }
         // 'empty' erscheint bewusst nicht im PDF – ein leerer Slot ist im
@@ -310,8 +350,15 @@ async function drawImage(
 
     doc.save();
     try {
+      // Der Drehpunkt kommt aus dem Modell, wenn er dort steht: Bei einem Bild
+      // im Rahmen ist es die Mitte des Kartons und nicht die des Bildes –
+      // sonst rutschte das Foto im Polaroid, je stärker es geneigt ist.
+      const dreh = box.rotateAboutMm ?? {
+        xMm: box.xMm + box.wMm / 2,
+        yMm: box.yMm + box.hMm / 2,
+      };
       doc.rotate(drehung, {
-        origin: [mmToPt(xMm + box.wMm / 2), mmToPt(box.yMm + box.hMm / 2)],
+        origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
       });
       doc.image(prepared.buffer, mmToPt(xMm), mmToPt(box.yMm), {
         width: mmToPt(box.wMm),

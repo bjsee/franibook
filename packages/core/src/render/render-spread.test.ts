@@ -564,3 +564,112 @@ describe('Neigung der Bilder', () => {
     );
   });
 });
+
+describe('Rahmen um die Bilder', () => {
+  const gerahmt = { ...ctx, frame: 'polaroid' as const };
+  const alle = ['p1', 'p2', 'p3', 'p4'];
+
+  it('lässt die Bilder ohne Vorgabe rahmenlos', () => {
+    const rsm = renderSpread(spreadWith(alle), ctx);
+    expect(rsm.boxes.some((b) => b.kind === 'rect')).toBe(false);
+    expect(imageBoxes(rsm).every((b) => b.frame === undefined)).toBe(true);
+  });
+
+  it('gibt jedem Bild den Rahmen des Buches', () => {
+    const rsm = renderSpread(spreadWith(alle), gerahmt);
+    expect(imageBoxes(rsm).map((b) => b.frame)).toEqual(Array(4).fill('polaroid'));
+    // Karton und Schatten je Bild.
+    expect(rsm.boxes.filter((b) => b.kind === 'rect')).toHaveLength(8);
+  });
+
+  /**
+   * Der Grund, warum der Rahmen vor der Ausschnittsrechnung stehen muss.
+   *
+   * Und zwar in beide Richtungen: Der Polaroidkarton nimmt unten mehr weg als
+   * an den Seiten, der Kasten wird dadurch breiter im Verhältnis, und
+   * `coverCrop` beschneidet ein Querformat weniger stark. Die Auflösung steigt
+   * hier also, obwohl das Bild kleiner wird. Genau deshalb darf die Zahl nicht
+   * aus dem Platz der Vorlage kommen – sie gilt für den Kasten, in dem das Bild
+   * wirklich steht.
+   */
+  it('rechnet die Auflösung auf den Kasten, in dem das Bild wirklich steht', () => {
+    const ohne = imageBoxes(renderSpread(spreadWith(alle), ctx))[0]!;
+    const mit = imageBoxes(renderSpread(spreadWith(alle), gerahmt))[0]!;
+    expect(mit.wMm).toBeLessThan(ohne.wMm);
+    expect(mit.hMm).toBeLessThan(ohne.hMm);
+
+    // p1 ist 2048 px breit; sichtbar ist davon der Ausschnitt, auf ganze Pixel
+    // gerundet – die Engine rechnet mit den Pixeln, die sie wirklich extrahiert.
+    const sichtbarPx = Math.round(2048 * mit.crop.w);
+    expect(mit.effectiveDpi).toBeCloseTo(sichtbarPx / (mit.wMm / 25.4), 6);
+    // Auf das Außenmaß gerechnet käme eine andere Zahl heraus – die falsche.
+    expect(mit.effectiveDpi).not.toBeCloseTo(sichtbarPx / (ohne.wMm / 25.4), 3);
+  });
+
+  it('rechnet den Ausschnitt auf das Seitenverhältnis des kleineren Kastens', () => {
+    const mit = imageBoxes(renderSpread(spreadWith(alle), gerahmt))[0]!;
+    const px = { w: 2048 * mit.crop.w, h: 1536 * mit.crop.h };
+    expect(px.w / px.h).toBeCloseTo(mit.wMm / mit.hMm, 5);
+  });
+
+  it('lässt den Rahmen eines einzelnen Bildes vorgehen', () => {
+    const spread = spreadWith(alle);
+    spread.slots[0]!.frame = 'kontur';
+    const boxen = imageBoxes(renderSpread(spread, gerahmt));
+    expect(boxen[0]).toMatchObject({ frame: 'kontur', manualFrame: true });
+    expect(boxen[1]).toMatchObject({ frame: 'polaroid' });
+    expect(boxen[1]).not.toHaveProperty('manualFrame');
+  });
+
+  /** Wie die gesetzte 0 bei der Neigung: „ausdrücklich ohne" ist eine Aussage. */
+  it('nimmt ein Bild mit frame keiner aus der Buchvorgabe heraus', () => {
+    const spread = spreadWith(alle);
+    spread.slots[0]!.frame = 'keiner';
+    const boxen = imageBoxes(renderSpread(spread, gerahmt));
+    expect(boxen[0]?.frame).toBeUndefined();
+    expect(boxen[0]?.manualFrame).toBe(true);
+    expect(boxen[1]?.frame).toBe('polaroid');
+  });
+
+  it('lässt randabfallende Bilder ungerahmt, auch von Hand gesetzte', () => {
+    const voll = requireTemplate('spread.group.opener-full');
+    const spread: Spread = {
+      id: 's1',
+      index: 0,
+      templateId: voll.id,
+      slots: voll.slots.map((slot) => ({
+        slotId: slot.id,
+        photoId: 'p1',
+        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+        frame: 'polaroid' as const,
+      })),
+    };
+    const rsm = renderSpread(spread, { ...gerahmt, template: voll });
+    expect(rsm.boxes.some((b) => b.kind === 'rect')).toBe(false);
+    expect(imageBoxes(rsm)[0]?.frame).toBeUndefined();
+  });
+
+  it('dreht Bild und Karton um denselben Punkt', () => {
+    const geneigtGerahmt = { ...gerahmt, tilt: { maxDeg: DEFAULT_TILT_DEG, seed: 1 } };
+    const rsm = renderSpread(spreadWith(alle), geneigtGerahmt);
+    const bild = imageBoxes(rsm)[0]!;
+    const karton = rsm.boxes.filter((b) => b.kind === 'rect')[1]!;
+    // Beim Polaroid liegt die Mitte des Kartons unter der des Bildes – deshalb
+    // trägt das Bild den Punkt ausdrücklich.
+    expect(bild.rotateAboutMm).toEqual(karton.rotateAboutMm);
+    expect(bild.rotateDeg).toBe(karton.rotateDeg);
+  });
+
+  it('gibt dem Bild denselben Winkel, ob es einen Rahmen trägt oder nicht', () => {
+    const seed = { tilt: { maxDeg: DEFAULT_TILT_DEG, seed: 1 } };
+    const ohne = imageBoxes(renderSpread(spreadWith(alle), { ...ctx, ...seed }));
+    const mit = imageBoxes(renderSpread(spreadWith(alle), { ...gerahmt, ...seed }));
+    expect(mit.map((b) => b.rotateDeg)).toEqual(ohne.map((b) => b.rotateDeg));
+  });
+
+  it('lässt das Hintergrundbild ungerahmt', () => {
+    const spread = { ...spreadWith(alle), backgroundPhotoId: 'p1' };
+    const rsm = renderSpread(spread, gerahmt);
+    expect(rsm.boxes[0]).toMatchObject({ kind: 'image', slotId: 'background' });
+  });
+});

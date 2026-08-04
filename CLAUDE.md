@@ -258,6 +258,31 @@ darf bis `MAX_MANUAL_ROTATION_DEG` (180°) gedreht werden, weil ein Winkel am
 Drehgriff eine Aussage ist und keine Beiläufigkeit. Gespeichert wird er über
 `normalizeRotation` als Wert zwischen -180 und 180.
 
+**Rahmen** (`core/render/frame.ts`) hinterlegt ein Bild als Polaroid, Passepartout,
+Kontur oder mit Klebestreifen. Im RSM ist das kein neuer Begriff, sondern **mehr
+Boxen um dieselbe Bildbox** – Karton als `RectBox` dahinter, Streifen als
+`PolygonBox` davor –, damit die Rechnung im Kern bleibt und kein Renderer eine
+Form selbst zeichnet. Wie die Neigung wirkt der Rahmen allein beim Rendern:
+`settings.frame` als Buchvorgabe, `SlotAssignment.frame` schlägt sie
+(`undefined` = wie das Buch, `'keiner'` = ausdrücklich ohne). Kein Neuaufbau
+nötig.
+
+Das Außenmaß bleibt der Platz aus der Vorlage, **das Bild schrumpft nach innen** –
+Ausschnitt, Auflösung und Warnungen rechnen danach mit dem kleineren Kasten.
+Randabfallende Bilder bekommen keinen Rahmen (dieselbe `randabfallend`-Prüfung
+wie bei der Neigung). Kein weicher Schatten: pdfkit kann keine Weichzeichnung,
+also ein harter Versatzschatten mit Deckkraft. Alle Boxen eines Rahmens tragen
+denselben `rotateAboutMm` – beim Polaroid ist die Kartonmitte nicht die
+Bildmitte.
+
+**Die Bildunterschrift steht im Fuß des Polaroids** (`SlotAssignment.caption`),
+in Handschrift und mittig. Sie ist am Slot und kein freier `TextBlock`, weil sie
+zum Bild gehört und mit ihm wandert – ein Block bliebe liegen. Nur das Polaroid
+hat einen Fuß; bei anderen Rahmen bleibt der Text gespeichert und unsichtbar.
+Passt der Satz nicht in die Breite, wird die Schrift kleiner statt der Text
+umgebrochen. Messwerte und verworfene Fassungen: `docs/konzept.md`, Abschnitt
+„Rahmen um die Bilder".
+
 **Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
 `apps/web/src/spread/Griffe.tsx` — für Bilder **und** Textblöcke): Klick wählt,
 ein weiterer Klick schaltet von Größen- auf Drehgriffe, Umschalt hält das

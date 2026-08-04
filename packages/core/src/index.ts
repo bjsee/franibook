@@ -38,6 +38,7 @@ export * from './render/background.js';
 export * from './render/timeline.js';
 export * from './render/side-timeline.js';
 export * from './render/tilt.js';
+export * from './render/frame.js';
 export * from './render/typography.js';
 export * from './render/inspect.js';
 
