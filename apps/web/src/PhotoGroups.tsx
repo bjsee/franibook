@@ -45,9 +45,17 @@ interface Props {
   focusGroupId?: string | null;
   /** Springt zu einer Doppelseite des Buches. */
   onOpenSpread?: (index: number) => void;
+  /**
+   * Zählt hoch, wenn ein Zurücknehmen den Stand ausgetauscht hat.
+   *
+   * Steht in der Ladeabhängigkeit, damit die Ansicht neu lädt, ohne neu
+   * einzuhängen: Ein `key` an der Ansicht wäre eine Zeile weniger, würfe aber
+   * bei jedem Cmd+Z Auswahl, Filter und Scrollstand weg.
+   */
+  standVersion?: number;
 }
 
-export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
+export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread, standVersion }: Props) {
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -69,7 +77,7 @@ export function PhotoGroups({ onChanged, focusGroupId, onOpenSpread }: Props) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, standVersion]);
 
   // Ein Sprung aus der Doppelseiten-Ansicht wählt die Gruppe aus, auch wenn
   // diese Ansicht schon offen war.

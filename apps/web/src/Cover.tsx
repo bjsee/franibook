@@ -39,7 +39,14 @@ const SCHALTER = [
   { key: 'diagnostics', label: 'Diagnose' },
 ] as const;
 
-export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
+export function Cover({
+  imageSrc,
+  standVersion,
+}: {
+  imageSrc: (photoId: string) => string;
+  /** Zählt hoch, wenn ein Zurücknehmen den Stand ausgetauscht hat. */
+  standVersion?: number;
+}) {
   const [data, setData] = useState<CoverAntwort | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -55,7 +62,7 @@ export function Cover({ imageSrc }: { imageSrc: (photoId: string) => string }) {
       .catch((e: unknown) => setError(fehlertext(e)));
   }, []);
 
-  useEffect(load, [load]);
+  useEffect(load, [load, standVersion]);
 
   useEffect(() => {
     const el = stageRef.current;

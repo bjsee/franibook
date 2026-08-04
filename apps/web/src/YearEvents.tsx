@@ -22,6 +22,8 @@ interface YearEventsProps {
   chapters: readonly Kapitel[];
   /** Springt zur Auftaktseite eines Jahres. */
   onOpen: (spreadIndex: number) => void;
+  /** Zählt hoch, wenn ein Zurücknehmen den Stand ausgetauscht hat. */
+  standVersion?: number;
 }
 
 /** So viele Zeilen nimmt der Textplatz auf – siehe `lines` in library.json. */
@@ -36,7 +38,7 @@ const MAX_ZEILEN = 5;
  */
 const ZEICHEN_WARNUNG = 60;
 
-export function YearEvents({ chapters, onOpen }: YearEventsProps) {
+export function YearEvents({ chapters, onOpen, standVersion }: YearEventsProps) {
   const [events, setEvents] = useState<Record<string, string[]>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [geladen, setGeladen] = useState(false);
@@ -57,7 +59,7 @@ export function YearEvents({ chapters, onOpen }: YearEventsProps) {
       .catch((e: unknown) => setStatus(fehlertext(e)));
   }, []);
 
-  useEffect(laden, [laden]);
+  useEffect(laden, [laden, standVersion]);
 
   async function speichern(year: number, text: string) {
     const key = String(year);

@@ -53,6 +53,7 @@ import {
   textAendern,
   vorlagentextAendern,
 } from '../api.js';
+import { planeSofort } from '../ausstehend.js';
 import { fotoLoeschen, loeschMeldung } from '../deletePhoto.js';
 import type { Bewegtext } from './bewegtext.js';
 import { bewegtexte, mitOffenemStand } from './bewegtext.js';
@@ -318,24 +319,32 @@ export function useSpreadEditor({
     if (!pendingCrop || !selectedSlotId) return;
 
     const gesendet = pendingCrop;
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const data = await ausschnittSetzen(index, selectedSlotId, gesendet);
-          // Hat der Benutzer inzwischen weitergezogen, gilt sein Stand – die
-          // Antwort ist dann bereits veraltet.
-          if (data.spread && zuletzt.current === gesendet) {
-            onSpread(data.spread);
-            setPendingCrop(null);
-            onChanged();
-          }
-        } catch (e) {
-          setNote(`Ausschnitt nicht gespeichert: ${fehlertext(e)}`);
+    const senden = async () => {
+      try {
+        const data = await ausschnittSetzen(index, selectedSlotId, gesendet);
+        // Hat der Benutzer inzwischen weitergezogen, gilt sein Stand – die
+        // Antwort ist dann bereits veraltet.
+        if (data.spread && zuletzt.current === gesendet) {
+          onSpread(data.spread);
+          setPendingCrop(null);
+          onChanged();
         }
-      })();
-    }, SPEICHER_VERZOEGERUNG_MS);
+      } catch (e) {
+        setNote(`Ausschnitt nicht gespeichert: ${fehlertext(e)}`);
+      }
+    };
+    const timer = setTimeout(() => void senden(), SPEICHER_VERZOEGERUNG_MS);
+    // Cmd+Z zieht den Schreibvorgang vor: Sonst nähme der Server den Stand von
+    // vor der Bewegung zurück, und dieser PATCH stellte sie danach wieder her.
+    const abmelden = planeSofort(async () => {
+      clearTimeout(timer);
+      await senden();
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      abmelden();
+    };
   }, [pendingCrop, selectedSlotId, index, onSpread, onChanged]);
 
   // Dieselbe Verzögerung wie beim Ausschnitt und aus demselben Grund: Jede
@@ -348,22 +357,28 @@ export function useSpreadEditor({
     if (pendingTilt === null || !selectedSlotId) return;
 
     const gesendet = pendingTilt;
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const data = await neigungSetzen(index, selectedSlotId, gesendet);
-          if (data.spread && zuletztTilt.current === gesendet) {
-            onSpread(data.spread);
-            setPendingTilt(null);
-            onChanged();
-          }
-        } catch (e) {
-          setNote(`Neigung nicht gespeichert: ${fehlertext(e)}`);
+    const senden = async () => {
+      try {
+        const data = await neigungSetzen(index, selectedSlotId, gesendet);
+        if (data.spread && zuletztTilt.current === gesendet) {
+          onSpread(data.spread);
+          setPendingTilt(null);
+          onChanged();
         }
-      })();
-    }, SPEICHER_VERZOEGERUNG_MS);
+      } catch (e) {
+        setNote(`Neigung nicht gespeichert: ${fehlertext(e)}`);
+      }
+    };
+    const timer = setTimeout(() => void senden(), SPEICHER_VERZOEGERUNG_MS);
+    const abmelden = planeSofort(async () => {
+      clearTimeout(timer);
+      await senden();
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      abmelden();
+    };
   }, [pendingTilt, selectedSlotId, index, onSpread, onChanged]);
 
   /**
@@ -382,21 +397,27 @@ export function useSpreadEditor({
     if (pendingCaption === null || !selectedSlotId) return;
 
     const gesendet = pendingCaption;
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const data = await unterschriftSetzen(index, selectedSlotId, gesendet);
-          if (data.spread) {
-            onSpread(data.spread);
-            onChanged();
-          }
-        } catch (e) {
-          setNote(`Unterschrift nicht gespeichert: ${fehlertext(e)}`);
+    const senden = async () => {
+      try {
+        const data = await unterschriftSetzen(index, selectedSlotId, gesendet);
+        if (data.spread) {
+          onSpread(data.spread);
+          onChanged();
         }
-      })();
-    }, SPEICHER_VERZOEGERUNG_MS);
+      } catch (e) {
+        setNote(`Unterschrift nicht gespeichert: ${fehlertext(e)}`);
+      }
+    };
+    const timer = setTimeout(() => void senden(), SPEICHER_VERZOEGERUNG_MS);
+    const abmelden = planeSofort(async () => {
+      clearTimeout(timer);
+      await senden();
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      abmelden();
+    };
   }, [pendingCaption, selectedSlotId, index, onSpread, onChanged]);
 
   /**
