@@ -28,8 +28,12 @@ import {
   type ProjectInfo,
   projektLaden,
   type SpreadResponse,
+  type UndoErgebnis,
+  wiederholen,
   zeitstrahlSetzen,
+  zurueckNehmen,
 } from './api.js';
+import { ausstehendSenden } from './ausstehend.js';
 import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
@@ -87,6 +91,16 @@ export function App() {
   // erzeugt wurde. Die Übersicht hält geladene Doppelseiten selbst vor und
   // wird darüber verworfen.
   const [renderVersion, setRenderVersion] = useState(0);
+  /**
+   * Zählt hoch, wenn ein Zurücknehmen den Stand ausgetauscht hat.
+   *
+   * Ein Undo kann alles betreffen – Gruppen, Bildquellen, Umschlag –, und die
+   * Ansichten laden ihre Daten selbst beim Einhängen. Der Zähler geht als Prop
+   * in ihre Ladeabhängigkeit: Sie laden neu, ohne neu einzuhängen, und Auswahl,
+   * Scrollstand und aufgeklappte Gruppen bleiben. Als `key` wäre es eine Zeile
+   * weniger, aber jedes Cmd+Z würfe die Fotoliste an den Anfang zurück.
+   */
+  const [standVersion, setStandVersion] = useState(0);
   const [index, setIndex] = useState(() => {
     const p = new URLSearchParams(location.search).get('spread');
     return p ? Number(p) : 0;
@@ -181,10 +195,74 @@ export function App() {
   // sich zwar von Doppelseite zu Doppelseite, gemeint war aber dieses Bild.
   useEffect(() => setSelectedSlotId(null), [index]);
 
+  /** Die Doppelseite verwerfen und neu holen. */
+  const neuRendern = useCallback(() => {
+    setSpread(null);
+    setRenderVersion((v) => v + 1);
+  }, []);
+
+  // ------------------------------------------------------------ Zurücknehmen
+
+  /**
+   * Was nach einem Zurücknehmen oder Wiederholen zu tun ist.
+   *
+   * Grob und einmal für alles: Der Server sagt nicht, welcher Bereich sich
+   * geändert hat, und bei einem lokalen Server ist die eingesparte Anfrage
+   * nichts wert. Eine falsche Bereichsangabe wäre dagegen ein veralteter Stand,
+   * den niemand sieht.
+   */
+  const nachSchritt = useCallback(
+    (d: UndoErgebnis, wort: string) => {
+      loadInfo();
+      neuRendern();
+      setStandVersion((v) => v + 1);
+      // Zur betroffenen Stelle: Sonst nimmt man etwas zurück, das man nicht
+      // sieht – und der zweite Anschlag geschieht im Blindflug.
+      if (d.spreadIndex !== undefined) {
+        setIndex(d.spreadIndex);
+        setView('spread');
+      }
+      setNote(
+        `${wort}: ${d.label}` +
+          (d.spreadIndex !== undefined ? ` (Doppelseite ${d.spreadIndex + 1})` : ''),
+      );
+    },
+    [loadInfo, neuRendern],
+  );
+
+  const zurueck = useCallback(async () => {
+    // Erst alles Ausstehende zum Server: Ausschnitt, Neigung und Unterschrift
+    // gehen verzögert raus, und ein PATCH, der nach dem Undo eintrifft, stellt
+    // genau das wieder her, was man zurückgenommen hat.
+    await ausstehendSenden();
+    try {
+      nachSchritt(await zurueckNehmen(), 'Zurückgenommen');
+    } catch (e) {
+      setNote(fehlertext(e));
+    }
+  }, [nachSchritt]);
+
+  const vor = useCallback(async () => {
+    await ausstehendSenden();
+    try {
+      nachSchritt(await wiederholen(), 'Wiederholt');
+    } catch (e) {
+      setNote(fehlertext(e));
+    }
+  }, [nachSchritt]);
+
   useEffect(() => {
     if (bare) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) {
+        // In einem Textfeld gehört Cmd+Z dem Browser: Dort nimmt man Getipptes
+        // zurück, nicht den letzten Griff am Buch.
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        // Sonst nimmt Safari die Seitennavigation und Chrome nichts.
+        e.preventDefault();
+        void (e.shiftKey ? vor() : zurueck());
         return;
       }
       if (view === 'spread') {
@@ -207,13 +285,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [bare, info?.spreadCount, view, selectedSlotId]);
-
-  /** Die Doppelseite verwerfen und neu holen. */
-  const neuRendern = useCallback(() => {
-    setSpread(null);
-    setRenderVersion((v) => v + 1);
-  }, []);
+  }, [bare, info?.spreadCount, view, selectedSlotId, zurueck, vor]);
 
   /**
    * Ändert eine Darstellungseinstellung.
@@ -514,6 +586,36 @@ export function App() {
         <span style={B.dehner} />
 
         {/*
+          Zwei Knöpfe mit der Bezeichnung des Schritts im Hinweis: Ein Pfeil ohne
+          Wortlaut sagt nicht, was er zurücknimmt, und bei achtzig Doppelseiten
+          ist das der Unterschied zwischen Zutrauen und Ausprobieren.
+        */}
+        <span style={B.segRahmen}>
+          <button
+            onClick={() => void zurueck()}
+            disabled={!info?.undo.zurueck}
+            style={{ ...S.verlaufKnopf, color: info?.undo.zurueck ? T.fg2 : T.fg4 }}
+            title={
+              info?.undo.zurueck
+                ? `Zurücknehmen: ${info.undo.zurueck} (⌘Z)`
+                : 'Nichts zurückzunehmen'
+            }
+            aria-label="Zurücknehmen"
+          >
+            ↶
+          </button>
+          <button
+            onClick={() => void vor()}
+            disabled={!info?.undo.vor}
+            style={{ ...S.verlaufKnopf, color: info?.undo.vor ? T.fg2 : T.fg4 }}
+            title={info?.undo.vor ? `Wiederholen: ${info.undo.vor} (⇧⌘Z)` : 'Nichts zu wiederholen'}
+            aria-label="Wiederholen"
+          >
+            ↷
+          </button>
+        </span>
+
+        {/*
           Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im PDF
           fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
         */}
@@ -621,6 +723,7 @@ export function App() {
       ) : view === 'groups' ? (
         <PhotoGroups
           focusGroupId={gruppenFokus}
+          standVersion={standVersion}
           onOpenSpread={(i) => {
             setIndex(i);
             setView('spread');
@@ -637,6 +740,7 @@ export function App() {
       ) : view === 'years' && info ? (
         <YearEvents
           chapters={info.chapters}
+          standVersion={standVersion}
           onOpen={(i) => {
             setIndex(i);
             setView('spread');
@@ -646,6 +750,7 @@ export function App() {
         />
       ) : view === 'sources' ? (
         <PhotoSources
+          standVersion={standVersion}
           onChanged={() => {
             loadInfo();
             // Fotos können hinzugekommen oder weggefallen sein – die gerenderte
@@ -662,7 +767,7 @@ export function App() {
           }}
         />
       ) : view === 'cover' ? (
-        <Cover imageSrc={imageSrc} />
+        <Cover imageSrc={imageSrc} standVersion={standVersion} />
       ) : (
         <div style={S.laedt}>
           <span style={B.leise}>Lade Projekt …</span>
@@ -755,6 +860,17 @@ const S = {
     padding: 0,
   },
   punkt: { width: 7, height: 7, borderRadius: '50%', background: T.warn },
+  /** Wie ein Segmentknopf, nur schmaler – das Zeichen trägt keine Wortlänge. */
+  verlaufKnopf: {
+    font: 'inherit',
+    fontSize: 15,
+    lineHeight: 1,
+    padding: '5px 11px',
+    border: 'none',
+    borderRadius: T.rMd,
+    background: 'none',
+    cursor: 'pointer',
+  },
 
   inhaltReihe: { flex: 1, display: 'flex', minHeight: 0 },
   scrollFlaeche: { flex: 1, minWidth: 0, overflowY: 'auto' as const, padding: '20px 24px 32px' },

@@ -30,6 +30,7 @@ import type {
   TimelineFootVariant,
   TimelineSideVariant,
 } from '@franibook/core';
+import { imFlug } from './ausstehend.js';
 import type { Report } from './Kennzahlen.js';
 import type { TextBlockData } from './TextBlocks.js';
 import type { SpreadGroup } from './spread/types.js';
@@ -64,7 +65,14 @@ export function fehlertext(e: unknown): string {
  * seinen Misserfolg meldet, ist kein Erfolg — und der Aufrufer soll nicht
  * zwischen zwei Fehlerformen wählen müssen.
  */
-async function ruf<T>(pfad: string, init?: RequestInit): Promise<T> {
+function ruf<T>(pfad: string, init?: RequestInit): Promise<T> {
+  // Jede Anfrage wird festgehalten, bis sie durch ist: Cmd+Z leert vorher, was
+  // noch unterwegs ist, sonst überschreibt eine spät eintreffende Antwort den
+  // zurückgenommenen Stand (`ausstehend.ts`).
+  return imFlug(antwort<T>(pfad, init));
+}
+
+async function antwort<T>(pfad: string, init?: RequestInit): Promise<T> {
   const res = await fetch(pfad, init);
   const roh = await res.text();
   const daten: unknown = roh ? JSON.parse(roh) : {};
@@ -155,6 +163,34 @@ export interface ProjectInfo {
   /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
   groupsPending: boolean;
   undatedCount: number;
+  /** Was Cmd+Z und Cmd+Umschalt+Z gerade bedeuten. */
+  undo: UndoAuskunft;
+}
+
+/** Woran der Verlauf gerade steht. */
+export interface UndoAuskunft {
+  /** Bezeichnung des Schritts, den Cmd+Z zurücknähme; `null` = nichts da. */
+  zurueck: string | null;
+  vor: string | null;
+  tiefe: { zurueck: number; vor: number };
+}
+
+/** Was ein Zurücknehmen oder Wiederholen bewirkt hat. */
+export interface UndoErgebnis {
+  ok: true;
+  label: string;
+  /** Betroffene Doppelseite, wenn der Schritt eine hatte. */
+  spreadIndex?: number;
+  undo: UndoAuskunft;
+}
+
+/** Ein abgelegter Notanker. */
+export interface Notanker {
+  name: string;
+  /** Wovor er gefallen ist, als deutscher Satz. */
+  aktion: string;
+  zeit: string;
+  bytes: number;
 }
 
 /** Was ein Import bewirkt hat. */
@@ -178,6 +214,29 @@ export const neuEinlesen = (body?: { limit?: number; sourceId?: string }) =>
 
 export const buchErzeugen = (patch: Record<string, unknown>) =>
   sende<{ report: Report }>('POST', '/api/generate', patch);
+
+// ─── Zurücknehmen ───────────────────────────────────────────────────────────
+
+/**
+ * Nimmt den letzten Griff zurück.
+ *
+ * Vorher `ausstehendSenden()` rufen – sonst nimmt der Server einen Stand
+ * zurück, der die verzögert gesendete Bewegung noch nicht enthält, und die
+ * trifft danach ein. Der Aufrufer in `App.tsx` tut das.
+ */
+export const zurueckNehmen = () => sende<UndoErgebnis>('POST', '/api/undo');
+
+export const wiederholen = () => sende<UndoErgebnis>('POST', '/api/redo');
+
+/** Die Notanker, neuester zuerst. */
+export const ankerListe = () => hole<{ anker: Notanker[] }>('/api/history');
+
+/** Holt einen Notanker zurück. Verwirft alles seit ihm – aber rücknehmbar. */
+export const ankerZurueckholen = (name: string) =>
+  sende<{ ok: true; photoCount: number; spreadCount: number }>(
+    'POST',
+    `/api/history/${encodeURIComponent(name)}`,
+  );
 
 // ─── Doppelseiten ───────────────────────────────────────────────────────────
 

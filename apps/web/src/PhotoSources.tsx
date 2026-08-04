@@ -30,9 +30,11 @@ import { B, T } from './theme.js';
 interface PhotoSourcesProps {
   /** Nach jeder Änderung am Bestand: Projektinfo und Vorschau neu laden. */
   onChanged: () => void;
+  /** Zählt hoch, wenn ein Zurücknehmen den Stand ausgetauscht hat. */
+  standVersion?: number;
 }
 
-export function PhotoSources({ onChanged }: PhotoSourcesProps) {
+export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [pfad, setPfad] = useState('');
   const [name, setName] = useState('');
@@ -46,7 +48,7 @@ export function PhotoSources({ onChanged }: PhotoSourcesProps) {
       .catch((e: unknown) => setFehler(fehlertext(e)));
   }, []);
 
-  useEffect(laden, [laden]);
+  useEffect(laden, [laden, standVersion]);
 
   /** Was ein Import bewirkt hat, in einem Satz. */
   function meldung(d: ImportDiff): string {
