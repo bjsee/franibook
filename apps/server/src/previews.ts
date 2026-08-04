@@ -37,13 +37,21 @@ export class PreviewCache {
   /**
    * Zweistufig gefächert, damit kein Verzeichnis mit hunderten Einträgen
    * entsteht.
+   *
+   * Eine Ausrichtungskorrektur geht in den Namen ein (`<hash>-q1.webp`). Damit
+   * bleibt die Zusage der Bild-Endpunkte wörtlich wahr — „ändert sich das Bild,
+   * ändert sich die URL" —, und `immutable` gilt weiter. Die alte Datei bleibt
+   * liegen (~40 KB, belanglos) und wird beim Zurücknehmen der Korrektur sofort
+   * wiedergefunden, ohne neu zu rendern.
    */
-  private pathFor(photoId: string, size: PreviewSize): string {
-    return join(this.cacheDir, size, photoId.slice(0, 2), `${photoId}.webp`);
+  private pathFor(photoId: string, size: PreviewSize, turns = 0): string {
+    const name = turns ? `${photoId}-q${turns}.webp` : `${photoId}.webp`;
+    return join(this.cacheDir, size, photoId.slice(0, 2), name);
   }
 
   async get(photo: PhotoRef, size: PreviewSize): Promise<string> {
-    const target = this.pathFor(photo.id, size);
+    const turns = photo.quarterTurns ?? 0;
+    const target = this.pathFor(photo.id, size, turns);
     try {
       await access(target);
       return target;
@@ -57,6 +65,14 @@ export class PreviewCache {
         // Wendet die EXIF-Orientierung an, damit die Vorschau dieselbe
         // Ausrichtung zeigt wie das Modell sie annimmt.
         .rotate()
+        // Und darauf die Korrektur von Hand. Beide Aufrufe in einer Kette und
+        // ohne Zwischenpuffer, weil sharp EXIF-Orientierung und expliziten
+        // Winkel *zusammen* anwendet — gemessen an einem Bild mit Orientierung 6:
+        // `.rotate()` allein ergibt 50 × 100, `.rotate().rotate(90)` ergibt
+        // 100 × 50, genau wie zwei getrennte Durchgänge. Bei mehreren
+        // `resize`-artigen Operationen gilt das nicht (siehe den Zweischritt in
+        // `render-pdf/prepare-image.ts`), bei Drehungen schon.
+        .rotate(90 * turns)
         .resize({
           width: LONG_EDGE[size],
           height: LONG_EDGE[size],

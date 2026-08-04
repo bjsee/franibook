@@ -77,12 +77,22 @@ const REITER: { id: View; label: string }[] = [
  * um – sonst würde er WebP-Kompression gegen JPEG-Kompression messen statt
  * Geometrie gegen Geometrie.
  */
-function useImageSrc() {
+function useImageSrc(bildVersion: number) {
   const useOriginal = new URLSearchParams(location.search).has('original');
   return useCallback(
-    (photoId: string) =>
-      useOriginal ? `/api/photos/${photoId}/original` : `/api/photos/${photoId}/preview`,
-    [useOriginal],
+    (photoId: string) => {
+      if (useOriginal) return `/api/photos/${photoId}/original`;
+      // Die Fassung hängt an *jeder* Vorschau-Adresse, nicht nur an der des
+      // gedrehten Bildes: Die Oberfläche weiß an dieser Stelle nur die Kennung,
+      // nicht die Korrektur — und eine Ausrichtungskorrektur muss sichtbar
+      // werden, obwohl Vorschauen `immutable` ausgeliefert werden. Der Server
+      // ignoriert den Parameter; er ist allein dazu da, dass die Adresse eine
+      // andere ist. Der Preis ist ein einmaliges Nachladen der sichtbaren
+      // Kacheln, und dafür bleibt die Zusage für alle übrigen Bilder in Kraft.
+      const fassung = bildVersion > 0 ? `?v=${bildVersion}` : '';
+      return `/api/photos/${photoId}/preview${fassung}`;
+    },
+    [useOriginal, bildVersion],
   );
 }
 
@@ -103,6 +113,16 @@ export function App() {
    * weniger, aber jedes Cmd+Z würfe die Fotoliste an den Anfang zurück.
    */
   const [standVersion, setStandVersion] = useState(0);
+  /**
+   * Zählt hoch, wenn sich Bildpixel geändert haben — heute nur bei einer
+   * Ausrichtungskorrektur.
+   *
+   * Sie hängt als `?v=` an jeder Vorschau-Adresse. Ohne das bliebe das gedrehte
+   * Bild unsichtbar: Vorschauen gehen mit `Cache-Control: immutable` heraus, weil
+   * die Kennung eines Fotos sein Inhaltshash ist — und der ändert sich beim
+   * Kippen gerade nicht.
+   */
+  const [bildVersion, setBildVersion] = useState(0);
   const [index, setIndex] = useState(() => {
     const p = new URLSearchParams(location.search).get('spread');
     return p ? Number(p) : 0;
@@ -140,7 +160,7 @@ export function App() {
     bare ? {} : { trim: true, safety: true, gutter: true, diagnostics: true },
   );
 
-  const imageSrc = useImageSrc();
+  const imageSrc = useImageSrc(bildVersion);
 
   const hatZeitstrahl = spread?.timelineOverride !== false;
 
@@ -562,6 +582,7 @@ export function App() {
             loadInfo();
             neuRendern();
           },
+          onBildGeaendert: () => setBildVersion((v) => v + 1),
         }
       : null;
 
@@ -763,6 +784,8 @@ export function App() {
       ) : view === 'fotodaten' ? (
         <Fotodaten
           standVersion={standVersion}
+          bildVersion={bildVersion}
+          onBildGeaendert={() => setBildVersion((v) => v + 1)}
           onChanged={() => {
             loadInfo();
             // Ein korrigiertes Datum ändert das Buch nicht von selbst – aber die

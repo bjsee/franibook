@@ -25,6 +25,12 @@ export interface PreparedImage {
 export interface PrepareOptions {
   /** Orientierung wie in der Datei vorgefunden, 1..8. */
   orientation: number;
+  /**
+   * Vierteldrehungen aus einer Ausrichtungskorrektur, zusätzlich zur EXIF-
+   * Orientierung. Sie fällt in denselben ersten Durchgang wie diese: Der
+   * gespeicherte Ausschnitt bezieht sich auf das **gedrehte** Bild.
+   */
+  quarterTurns?: 1 | 2 | 3;
   crop: Crop;
   /** Zielmaße des Slots in Millimetern. */
   widthMm: number;
@@ -49,9 +55,20 @@ export async function prepareImage(
   opts: PrepareOptions,
 ): Promise<PreparedImage> {
   const { orientation, crop, widthMm, heightMm, profile } = opts;
+  const turns = opts.quarterTurns ?? 0;
 
-  const needsRotation = orientation > 1;
-  const input: string | Buffer = needsRotation ? await sharp(source).rotate().toBuffer() : source;
+  // Beide Drehungen in einer Kette: sharp wendet EXIF-Orientierung und
+  // expliziten Winkel zusammen an (gemessen an einem Bild mit Orientierung 6 —
+  // `.rotate()` allein kippt, `.rotate().rotate(90)` kippt zurück). Der
+  // Zwischenpuffer bleibt trotzdem nötig, aber wegen `extract`, nicht wegen der
+  // Drehungen.
+  const needsRotation = orientation > 1 || turns > 0;
+  const input: string | Buffer = needsRotation
+    ? await sharp(source)
+        .rotate()
+        .rotate(90 * turns)
+        .toBuffer()
+    : source;
 
   const meta = await sharp(input).metadata();
   const srcWidth = meta.width ?? 0;

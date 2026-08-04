@@ -15,7 +15,9 @@ import {
   type Photo,
   type PhotoGroup,
   type PhotoId,
+  type PhotoOverride,
   type Spread,
+  effectivePhoto,
   ungroupPhotos,
 } from '@franibook/core';
 import type { DecodeCache } from '../decode.js';
@@ -39,6 +41,7 @@ export interface ImportDiff extends QuellenBericht {
 /** Was diese Funktionen vom Projekt brauchen. */
 export interface Bestandstand {
   photos: Map<PhotoId, Photo>;
+  overrides: Record<PhotoId, PhotoOverride>;
   groups: PhotoGroup[];
   spreads: Spread[];
   cover: CoverDesign;
@@ -294,7 +297,13 @@ export async function reimport(
  * ruckelt genau die Ansicht, in der man sie einsetzen will.
  */
 export function warmPreviews(z: Bestandstand, ids: readonly PhotoId[]): void {
-  const photos = ids.map((id) => z.photos.get(id)).filter((p): p is Photo => p !== undefined);
+  // Aufgelöst, weil die Vorschau einer korrigierten Ausrichtung eine eigene
+  // Datei ist (`previews.pathFor`). Ohne das würde hier die ungedrehte Fassung
+  // gewärmt und die richtige später einzeln erzeugt — genau beim Scrollen.
+  const photos = ids
+    .map((id) => z.photos.get(id))
+    .filter((p): p is Photo => p !== undefined)
+    .map((p) => effectivePhoto(p, z.overrides[p.id]));
   if (photos.length === 0) return;
   void z.previews.warm(photos, 'preview', 6);
 }

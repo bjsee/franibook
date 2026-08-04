@@ -20,7 +20,8 @@
  * Slot zu leeren – es kann nicht verlorengehen.
  */
 import { FULL_CROP } from '../model/crop.js';
-import type { PhotoWeight } from '../model/date.js';
+import type { PhotoOverride, PhotoWeight } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -46,6 +47,12 @@ export type MoveTarget =
 /** Was das Neuanordnen braucht. Nur für Züge auf eine ganze Doppelseite. */
 export interface ReflowContext {
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
   weightOf?: (photoId: PhotoId) => PhotoWeight;
 }
@@ -234,10 +241,12 @@ function moveToSpread(
   const fotosVon = (spread: Spread): PhotoId[] =>
     spread.slots.map((s) => s.photoId).filter((id): id is PhotoId => id !== null);
 
+  // Einmal für den Zug aufgelöst, nicht je Doppelseite: `anordnen` läuft für
+  // Quelle und Ziel.
+  const bestand = effectivePhotos(reflow.photos, reflow.overrides);
+
   const anordnen = (spread: Spread, ids: readonly PhotoId[]): Spread | string => {
-    const photos = ids
-      .map((id) => reflow.photos.get(id))
-      .filter((p): p is Photo => p !== undefined);
+    const photos = ids.map((id) => bestand.get(id)).filter((p): p is Photo => p !== undefined);
 
     const ergebnis = layoutSpread({
       photos,

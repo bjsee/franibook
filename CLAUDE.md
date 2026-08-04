@@ -236,9 +236,25 @@ Die Gliederung ändert er nicht, also kein `structurePending`. Dieselbe Route
 `PATCH /api/photos` nimmt Datum **oder** Ort, nie beides — deshalb darf
 `UndoEintrag.label` eine Funktion sein.
 
+**Auch die Ausrichtung lässt sich kippen** (`orientationTurns`, 1–3
+Vierteldrehungen, sie addieren sich). Bei 90° und 270° tauscht `effectivePhoto`
+Breite und Höhe — sonst wählt `orientationClash` für einen Scan die falsche
+Vorlage. **Nicht** als geänderte `orientation`: Die Bildaufbereitung liest daraus
+nur _ob_, und `.rotate()` nimmt die Orientierung aus der Datei. Sie steht deshalb
+als `Photo.quarterTurns`, das nur `effectivePhoto` setzt; Vorschau und PDF drehen
+zusätzlich (eine sharp-Kette genügt, gemessen). Der Vorschau-Cache trägt die
+Fassung im Namen, und die Oberfläche hängt eine **Bildversion** als `?v=` an jede
+Vorschau-Adresse — ohne das bliebe das gedrehte Bild hinter `immutable` unsichtbar.
+
 **`effectivePhoto` löst die Korrekturen am Foto auf, das Datum aber nicht:**
 `resolveEffectiveDate` liefert Quelle, Konfidenz und Befunde, und das lässt sich
 nicht in ein `Photo` pressen. `takenAt` bleibt also „EXIF DateTimeOriginal".
+
+**Aufgelöst wird an den Eintrittsstellen des Kerns**, nicht an den zwanzig Stellen
+im Inneren, die `width`/`height` lesen: Jede öffentliche Funktion mit
+`photos: ReadonlyMap` nimmt auch `overrides` und ruft `effectivePhotos` beim
+Eintritt. `tests/architektur/architektur.test.ts` erzwingt das — eine neue solche
+Funktion ohne `overrides` lässt ihn fallen.
 
 ### Text und Schrift
 

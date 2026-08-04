@@ -11,6 +11,8 @@
 import { effectiveDpi } from '../geometry/units.js';
 import { FULL_CROP, coverCrop, cropToPixels } from '../model/crop.js';
 import type { Crop } from '../model/crop.js';
+import type { PhotoOverride } from '../model/date.js';
+import { effectivePhoto } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -65,6 +67,12 @@ export interface CoverRenderContext {
    */
   pageCount: number;
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
 }
 
 /** Schriftgrad aus der Zeilenhöhe – dieselbe Näherung wie im Innenteil. */
@@ -95,7 +103,10 @@ function imageBox(
   gespeichert: Crop | undefined,
   ctx: CoverRenderContext,
 ): ImageBox {
-  const photo = ctx.photos.get(photoId);
+  // Punktuell aufgelöst und nicht über `effectivePhotos`: Der Umschlag liest
+  // genau ein Foto, eine Kopie der ganzen Map wäre Arbeit für nichts.
+  const roh = ctx.photos.get(photoId);
+  const photo = roh && effectivePhoto(roh, ctx.overrides?.[photoId]);
   if (!photo) {
     // Wie im Innenteil: Ein fehlendes Bild darf das Rendern nicht verhindern,
     // sonst hat der Benutzer keine Ansicht, in der er den Fehler sieht.

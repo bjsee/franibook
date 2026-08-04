@@ -7,7 +7,8 @@
  */
 import { effectiveDpi, ptToMm } from '../geometry/units.js';
 import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
-import type { EffectiveDate } from '../model/date.js';
+import type { EffectiveDate, PhotoOverride } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { SlotAssignment, Spread, TextBlock, TextElement } from '../model/spread.js';
@@ -102,6 +103,13 @@ export interface RenderContext {
   profile: PrintProfile;
   template: Template;
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
+
   /** Hintergrund der Doppelseite. Weiß, solange nichts anderes gesetzt ist. */
   background?: string;
   timeline?: TimelineContext;
@@ -356,6 +364,9 @@ function buildImageBox(
  */
 export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread {
   const { profile, template } = ctx;
+  // Beim Eintritt aufgelöst: Alles darunter rechnet mit den geltenden Maßen,
+  // ohne die Korrektur zu kennen.
+  const photos = effectivePhotos(ctx.photos, ctx.overrides);
   const boxes: RenderBox[] = [];
 
   const background = spread.background ?? ctx.background ?? DEFAULT_BACKGROUND;
@@ -364,7 +375,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   // Beschnittfläche – kein neuer Kasten und kein Sonderweg in den Renderern.
   // Es kommt zuerst, damit alles andere darüber liegt.
   const backgroundPhoto = spread.backgroundPhotoId
-    ? ctx.photos.get(spread.backgroundPhotoId)
+    ? photos.get(spread.backgroundPhotoId)
     : undefined;
   if (backgroundPhoto) {
     const flaeche = {
@@ -398,7 +409,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       continue;
     }
 
-    const photo = ctx.photos.get(assignment.photoId);
+    const photo = photos.get(assignment.photoId);
     if (!photo) {
       // Die Buchstruktur bleibt intakt, der Slot wird markiert. Ein fehlendes
       // Bild darf nicht das Rendern der ganzen Doppelseite verhindern.
@@ -609,6 +620,8 @@ function buildTimeline(
 ): RenderBox[] {
   const { profile, template } = ctx;
 
+  // Hier genügt die rohe Map: Gefragt ist nur, ob das Foto überhaupt existiert,
+  // und daran ändert keine Korrektur etwas.
   const photoIds = spread.slots
     .map((s) => s.photoId)
     .filter((id): id is PhotoId => id !== null && ctx.photos.has(id));

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { effectivePhoto, manualPlaceKey } from './effective-photo.js';
+import {
+  effectivePhoto,
+  effectivePhotos,
+  manualPlaceKey,
+  quarterTurnsOf,
+} from './effective-photo.js';
 import type { Photo } from './photo.js';
+import { orientationOf } from './photo.js';
 
 function photo(partial: Partial<Photo> = {}): Photo {
   return {
@@ -54,6 +60,72 @@ describe('effectivePhoto', () => {
       placeOverride: { key: 'manual:Kreta', label: 'Kreta' },
     });
     expect(e.takenAt).toBe('2015-06-12T14:00:00');
+  });
+});
+
+describe('Ausrichtung kippen', () => {
+  it('tauscht Breite und Höhe bei 90° und 270°', () => {
+    for (const turns of [1, 3] as const) {
+      const e = effectivePhoto(photo({ width: 4000, height: 3000 }), {
+        orientationTurns: turns,
+      });
+      expect([e.width, e.height], `${turns} Vierteldrehungen`).toEqual([3000, 4000]);
+    }
+  });
+
+  it('lässt die Maße bei 180° wie sie sind', () => {
+    const e = effectivePhoto(photo({ width: 4000, height: 3000 }), { orientationTurns: 2 });
+    expect([e.width, e.height]).toEqual([4000, 3000]);
+  });
+
+  it('trägt die Drehung für die Renderer weiter', () => {
+    // Vorschau und PDF-Export drehen die Pixel danach; das Layout rechnet schon
+    // mit den getauschten Maßen.
+    expect(quarterTurnsOf(effectivePhoto(photo(), { orientationTurns: 3 }))).toBe(3);
+    expect(quarterTurnsOf(photo())).toBe(0);
+  });
+
+  it('lässt die EXIF-Orientierung unangetastet', () => {
+    // Sie beschreibt die Datei. Die Korrektur kommt obendrauf – als geänderte
+    // `orientation` wäre sie wirkungslos, weil die Aufbereitung daraus nur *ob*
+    // liest und die Orientierung dann aus der Datei nimmt.
+    const e = effectivePhoto(photo({ orientation: 6 }), { orientationTurns: 1 });
+    expect(e.orientation).toBe(6);
+  });
+
+  it('kippt das Seitenverhältnis, das die Vorlagenwahl sieht', () => {
+    // Der Zweck der ganzen Übung: Ein hochkant gescanntes Bild, das als Querformat
+    // im Modell steht, bekommt sonst einen querformatigen Platz.
+    const quer = photo({ width: 4000, height: 3000 });
+    expect(orientationOf(quer)).toBe('landscape');
+    expect(orientationOf(effectivePhoto(quer, { orientationTurns: 1 }))).toBe('portrait');
+  });
+});
+
+describe('effectivePhotos über den Bestand', () => {
+  const BESTAND = new Map([
+    ['a', photo({ id: 'a', width: 4000, height: 3000 })],
+    ['b', photo({ id: 'b' })],
+  ]);
+
+  it('gibt dieselbe Map zurück, wenn keine Korrektur greift', () => {
+    expect(effectivePhotos(BESTAND)).toBe(BESTAND);
+    expect(effectivePhotos(BESTAND, {})).toBe(BESTAND);
+    // Eine Datumskorrektur betrifft das Foto nicht – auch dann keine Kopie.
+    expect(effectivePhotos(BESTAND, { a: { dateOverride: '2015-06-12T14:00:00' } })).toBe(BESTAND);
+  });
+
+  it('löst nur die betroffenen Fotos auf und lässt die anderen dieselben', () => {
+    const auf = effectivePhotos(BESTAND, { a: { orientationTurns: 1 } });
+    expect(auf).not.toBe(BESTAND);
+    expect([auf.get('a')!.width, auf.get('a')!.height]).toEqual([3000, 4000]);
+    // Unverändertes bleibt dasselbe Objekt – die Kopie ist flach.
+    expect(auf.get('b')).toBe(BESTAND.get('b'));
+  });
+
+  it('lässt den übergebenen Bestand unangetastet', () => {
+    effectivePhotos(BESTAND, { a: { orientationTurns: 1 } });
+    expect(BESTAND.get('a')!.width).toBe(4000);
   });
 });
 

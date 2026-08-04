@@ -9,7 +9,8 @@
  * einer Stelle nicht das ganze Buch umwirft.
  */
 import { coverCrop } from '../model/crop.js';
-import type { PhotoWeight } from '../model/date.js';
+import type { PhotoOverride, PhotoWeight } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { Template } from '../model/template.js';
@@ -33,6 +34,12 @@ import { bookStats } from './stats.js';
 export interface GenerateOptions {
   structure: Structure;
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
   /** Angestrebte Seitenzahl des Innenteils. */
   targetPages: number;
@@ -570,7 +577,8 @@ export function mehrheitsGruppe(
  * Erzeugt das komplette Buch.
  */
 export function generateBook(opts: GenerateOptions): GenerateResult {
-  const { structure, photos, profile, targetPages } = opts;
+  const { structure, profile, targetPages } = opts;
+  const photos = effectivePhotos(opts.photos, opts.overrides);
   const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
   const useOpeners = opts.chapterOpeners ?? true;
   // Aus, solange nichts anderes gesagt wird: Ein bestehendes Buch soll nach

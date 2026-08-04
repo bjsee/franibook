@@ -219,3 +219,49 @@ describe('Die Oberfläche baut kein Buch', () => {
     ).toEqual([]);
   });
 });
+
+describe('Benutzerkorrekturen werden aufgelöst, nicht übergangen', () => {
+  /**
+   * `Photo` ist das rohe Importergebnis, `PhotoOverride` die Korrektur darauf.
+   * Wer mit Fotos rechnet, muss beides sehen — sonst wirkt eine korrigierte
+   * Ausrichtung nirgends, und zwar **stillschweigend**: Das Buch sieht richtig
+   * aus, nur die Vorlagenwahl arbeitet gegen das Bild.
+   *
+   * Aufgelöst wird an den Eintrittsstellen des Kerns (`effectivePhotos`), nicht
+   * an den zwanzig Stellen im Inneren, die `width`/`height` lesen. Dieser Test
+   * hält das fest: Jede öffentliche Optionsschnittstelle, die einen Bestand als
+   * Map annimmt, nimmt auch die Korrekturen an.
+   */
+  it('gibt jeder Kernfunktion mit Fotobestand auch die Korrekturen', () => {
+    const ohne = KERN.filter((q) => !q.pfad.endsWith('.test.ts')).flatMap((q) => {
+      // Blöcke, die einen Bestand als Map deklarieren: `photos: ReadonlyMap<…>`
+      const zeilen = q.text.split('\n');
+      return zeilen.flatMap((zeile, i) => {
+        if (!/^\s*photos: ReadonlyMap</.test(zeile)) return [];
+        // Die Korrektur darf davor oder dahinter stehen; geprüft wird der
+        // umgebende Block, nicht die Nachbarzeile.
+        const block = zeilen.slice(Math.max(0, i - 25), i + 25).join('\n');
+        return /overrides\?: Record<PhotoId, PhotoOverride>/.test(block)
+          ? []
+          : [`${q.pfad}:${i + 1}`];
+      });
+    });
+
+    expect(ohne).toEqual([]);
+  });
+
+  it('löst die Ausrichtung nur an einer Stelle auf', () => {
+    // Der Tausch von Breite und Höhe gehört in `effectivePhoto` und sonst
+    // nirgends: Eine zweite Fassung wäre eine Gelegenheit, die beiden
+    // auseinanderlaufen zu lassen.
+    const woanders = KERN.filter(
+      (q) =>
+        !q.pfad.endsWith('.test.ts') &&
+        // Dort wohnt die Auflösung …
+        !q.pfad.endsWith('model/effective-photo.ts') &&
+        // … und dort das Feld, zu dem sie gehört.
+        !q.pfad.endsWith('model/date.ts'),
+    );
+    expect(fundstellen(woanders, /orientationTurns/)).toEqual([]);
+  });
+});

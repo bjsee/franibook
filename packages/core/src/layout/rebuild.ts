@@ -7,7 +7,8 @@
  * Slotzuordnung und Ausschnitte.
  */
 import { coverCrop } from '../model/crop.js';
-import type { PhotoWeight } from '../model/date.js';
+import type { PhotoOverride, PhotoWeight } from '../model/date.js';
+import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { SlotAssignment, Spread } from '../model/spread.js';
 import type { Template } from '../model/template.js';
@@ -316,6 +317,12 @@ export interface RebuildInput {
 export interface RebuildOptions {
   spreads: readonly RebuildInput[];
   photos: ReadonlyMap<PhotoId, Photo>;
+  /**
+   * Benutzerkorrekturen. Werden beim Eintritt über `effectivePhotos` aufgelöst –
+   * ohne sie rechnet die Engine mit dem rohen Importergebnis, und eine
+   * korrigierte Ausrichtung bliebe wirkungslos.
+   */
+  overrides?: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
   weightOf?: (photoId: PhotoId) => PhotoWeight;
 }
@@ -335,7 +342,8 @@ export interface RebuildResult {
  * soll erfahren, warum es nicht geht.
  */
 export function rebuildSpreads(opts: RebuildOptions): RebuildResult {
-  const { photos, profile } = opts;
+  const { profile } = opts;
+  const photos = effectivePhotos(opts.photos, opts.overrides);
   const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
 
   const spreads: Spread[] = [];

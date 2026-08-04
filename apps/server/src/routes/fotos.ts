@@ -48,6 +48,16 @@ function istOrtsbefehl(v: unknown): v is Ortsbefehl {
   return typeof label === 'string' && (key === undefined || typeof key === 'string');
 }
 
+/**
+ * Vierteldrehungen im Uhrzeigersinn, `null` heißt „zurück zur Datei".
+ *
+ * Sie addieren sich auf das schon Gesetzte (`project/fotodaten.ts`) – am Knopf
+ * dreht man, bis es stimmt, statt mitzuzählen.
+ */
+function istKippbefehl(v: unknown): v is 1 | 2 | 3 | null {
+  return v === null || v === 1 || v === 2 || v === 3;
+}
+
 export function fotoRouten(
   app: FastifyInstance,
   { project, sources, previews, decodes }: Kontext,
@@ -62,7 +72,7 @@ export function fotoRouten(
   app.get('/api/photos/places', async () => ({ places: project.orte() }));
 
   /**
-   * Korrigiert Datum oder Ort mehrerer Fotos.
+   * Korrigiert Datum, Ort oder Ausrichtung mehrerer Fotos.
    *
    * Mengenwertig, auch für ein einzelnes Bild: Datumsfehler kommen in Serien –
    * ein Kamera-Reset trifft dutzende Aufnahmen –, und eine Route je Foto wäre
@@ -71,15 +81,15 @@ export function fotoRouten(
    * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung.** Sortiert
    * wird in der Oberfläche, nicht hier (`project/fotodaten.ts`).
    *
-   * Genau eines von `date` und `place` je Anfrage: Beides zusammen wäre ein
-   * Schritt, der zwei Dinge zurücknimmt, und die Meldung könnte nicht sagen,
-   * welches davon gewirkt hat.
+   * Genau **eines** von `date`, `place` und `orientation` je Anfrage: Zwei
+   * zusammen wären ein Schritt, der zwei Dinge zurücknimmt, und die Meldung
+   * könnte nicht sagen, welches davon gewirkt hat.
    *
    * Das Buch bleibt unangetastet. Ob ein Neuaufbau jetzt etwas ändern würde,
    * steht als `structurePending` in der Antwort – so muss die Oberfläche nach
    * einer Korrektur nicht das ganze Projekt nachladen, um es zu erfahren.
    */
-  app.patch<{ Body: { ids?: unknown; date?: unknown; place?: unknown } }>(
+  app.patch<{ Body: { ids?: unknown; date?: unknown; place?: unknown; orientation?: unknown } }>(
     '/api/photos',
     async (req, reply) => {
       const ids = leseIds(req.body?.ids);
@@ -87,12 +97,19 @@ export function fotoRouten(
 
       const datum = req.body?.date;
       const ort = req.body?.place;
-      if (datum !== undefined && ort !== undefined) {
-        return reply.code(400).send({ error: 'Datum und Ort bitte getrennt setzen' });
+      const kippen = req.body?.orientation;
+      const genannt = [datum, ort, kippen].filter((f) => f !== undefined).length;
+      if (genannt > 1) {
+        return reply.code(400).send({ error: 'Datum, Ort und Ausrichtung bitte getrennt setzen' });
       }
 
       let ergebnis: Awaited<ReturnType<typeof project.korrigiereDaten>>;
-      if (ort !== undefined) {
+      if (kippen !== undefined) {
+        if (!istKippbefehl(kippen)) {
+          return reply.code(400).send({ error: 'Kippen geht um 1, 2 oder 3 Vierteldrehungen' });
+        }
+        ergebnis = project.kippeAusrichtung(ids, kippen);
+      } else if (ort !== undefined) {
         if (!istOrtsbefehl(ort)) return reply.code(400).send({ error: 'Kein brauchbarer Ort' });
         ergebnis = project.setzeOrte(ids, ort);
       } else if (istDatumsbefehl(datum)) {
