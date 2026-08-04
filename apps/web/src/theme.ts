@@ -154,9 +154,16 @@ export const B = {
     padding: 3,
     borderRadius: 6,
   },
+  /*
+   * `textDecoration` und `display` stehen mit dabei, weil die Reiter der
+   * Kopfzeile Links sind (⌘-Klick in einen neuen Tab, Adresse kopieren) und ein
+   * `<a>` sonst unterstrichen und ohne senkrechte Polsterung erscheint. Für die
+   * übrigen Segmentschalter, die Knöpfe sind, ändert es nichts.
+   */
   segAn: {
     font: 'inherit',
     fontSize: 13,
+    display: 'inline-block',
     padding: '6px 13px',
     border: 'none',
     borderRadius: T.rMd,
@@ -165,17 +172,20 @@ export const B = {
     fontWeight: 600,
     boxShadow: T.schattenSeg,
     cursor: 'pointer',
+    textDecoration: 'none',
     whiteSpace: 'nowrap' as const,
   },
   segAus: {
     font: 'inherit',
     fontSize: 13,
+    display: 'inline-block',
     padding: '6px 13px',
     border: 'none',
     borderRadius: T.rMd,
     background: 'none',
     color: T.fg2,
     cursor: 'pointer',
+    textDecoration: 'none',
     whiteSpace: 'nowrap' as const,
   },
 
@@ -419,7 +429,9 @@ export const B = {
   /** Die Bühne: Papier, das über der Fläche liegt. */
   buehne: { boxShadow: T.schattenBuehne, lineHeight: 0 },
   /** Eine Miniatur einer Doppelseite. */
+  /* `display: block`, weil die Kachel in der Übersicht ein Link ist – siehe `segAn`. */
   kachel: {
+    display: 'block',
     padding: 0,
     border: `1px solid ${T.line}`,
     background: T.bg1,

@@ -2243,6 +2243,84 @@ Reiter; die alte Adresse wählt ihn nur noch aus. Der Grund für den Sonderweg �
 die Hauptansicht nicht anfassen zu müssen — ist mit dem Umbau der Kopfzeile
 weggefallen.
 
+### Adressen
+
+Welche Ansicht offen ist und welche Doppelseite auf dem Tisch liegt, stand
+zunächst in `useState`. Das kostete drei Dinge, die man an einem Werkzeug dieser
+Art täglich braucht: die Zurück-Taste des Browsers, einen zweiten Tab zum
+Vergleichen, und einen Link auf eine Stelle im Buch. Seitdem steht es im Pfad,
+und `App.tsx` liest es aus `useRoute` (`apps/web/src/router.tsx`).
+
+| Adresse           | Ansicht                        |
+| ----------------- | ------------------------------ |
+| `/`               | Übersicht                      |
+| `/doppelseite/12` | Doppelseite 12 (zählt ab 1)    |
+| `/gruppen`        | Gruppen, Filter „Alle Fotos"   |
+| `/gruppen/<id>`   | Gruppen, eine Gruppe gefiltert |
+| `/jahre`          | Jahre                          |
+| `/fotodaten`      | Fotodaten                      |
+| `/bildquellen`    | Bildquellen                    |
+| `/aufteilung`     | Aufteilung                     |
+| `/umschlag`       | Umschlag                       |
+
+Die tragende Unterscheidung ist nicht die Schreibweise, sondern **Pfad gegen
+Query: Im Pfad steht, _was_ man ansieht — das ist die Station im Verlauf. In der
+Query bleibt, _wie_ es dargestellt wird.** Also gehören `?ui=a|b|c` (Rahmen),
+`?bare`, `?original` und `?width` (Parity-Test) weiterhin in die Query,
+überdauern jede Navigation und erzeugen keinen Verlaufseintrag. Ein
+Variantenwechsel bleibt damit genau das, was er vorher war: eine Einstellung.
+
+Die Pfade sind deutsch, weil eine Adresse sichtbarer Text ist wie die
+Reiterbeschriftung. Die Doppelseite zählt ab 1, weil „Doppelseite 12" überall
+sonst in der Oberfläche 1-basiert steht — der Index im Code bleibt bei 0, und
+`pfadVon`/`routeVon` sind die eine Stelle, an der umgerechnet wird. `?spread=n`
+(0-basiert) und `?cover` gelten weiter und werden beim Start durch ihre
+Normalform ersetzt; der Parity-Test ruft die Vorschau so auf, und `?bare` bleibt
+dabei unverändert stehen (nicht `?bare=`, was `URLSearchParams.toString()`
+daraus machen würde).
+
+**Ein eigener Haken statt einer Router-Bibliothek.** Es sind acht flache Routen
+ohne verschachtelte Layouts, ohne Datenlader, ohne Formulare, und die Oberfläche
+kommt sonst ganz mit `useState` aus. `router.tsx` sind rund 240 Zeilen
+einschließlich Kommentaren; react-router wäre ein zweites Konzept von Zustand
+neben dem vorhandenen, für nichts, was hier gebraucht wird.
+
+Zwei Fallen mussten dafür ausdrücklich geschlossen werden, und beide sind der
+Grund, warum diese Sache nicht in zehn Zeilen erledigt ist:
+
+**Eine Folge gleichartiger Sprünge ist eine Station.** Wer mit den Pfeiltasten
+durch achtzig Doppelseiten geht, hätte sonst achtzig Verlaufseinträge, und die
+Zurück-Taste wäre keine Rückkehr mehr, sondern eine Kurbel. Blättern navigiert
+deshalb mit `verschmelzen: 'blaettern'`: Zwei Sprünge innerhalb von 1,5 s werden
+ein Eintrag — dieselbe Regel und dieselbe Frist wie beim Zurücknehmen am Server
+(`routes/undo.ts`). Der Klick auf eine Kachel in der Übersicht bekommt dagegen
+seinen eigenen Eintrag, denn er ist ein Sprung und keine Folge. Verworfen: alles
+Blättern ersetzend zu schreiben — dann führt Zurück von Seite 34 in die
+Übersicht, und die Reihe, die man gerade durchgesehen hat, ist weg.
+
+**Was in der Adresse steht, muss dort auch ankommen.** Die Gruppenliste hält
+ihren Filter selbst und setzt ihn an fünf Stellen — vier davon als Folge einer
+Aktion (nach dem Auflösen einer Gruppe steht sie wieder auf „alle"). Stünde nur
+der Sprung von der Doppelseite in der Adresse, behauptete sie nach dem ersten
+Filterklick etwas Falsches. Sie meldet den Wechsel deshalb zurück, und zwar aus
+einem Effekt heraus und nicht an den fünf Stellen: Eine davon zu vergessen wäre
+genau die Abweichung, die man nicht sieht. Gemeldet wird ersetzend, denn ein
+Filterklick verfeinert dieselbe Ansicht. Damit das nicht kreist — Meldung ändert
+Route, Route rendert, Rendern meldet — tut `navigieren` bei unveränderter Adresse
+gar nichts, auch kein `setRoute`.
+
+Ein Ziel, das man auch in einem neuen Tab öffnen können soll, ist ein `<a href>`
+und kein `<button>`: die Reiter der Kopfzeile und die Kacheln der Übersicht.
+⌘-Klick, Mittelklick und „Adresse kopieren" gibt es nur mit einem `href`; der
+einfache Klick wird abgefangen, damit der Browser die Anwendung nicht neu lädt.
+Der Reiter „Doppelseite" trägt dabei die zuletzt gezeigte Seite in seinem
+`href` — wer von Seite 34 zu den Gruppen und zurück wechselt, will nicht an den
+Anfang des Buches.
+
+Der Fenstertitel nennt die Stelle („Franibook — Doppelseite 12"). Das ist keine
+Zierde: Erst damit ist die Verlaufsliste des Browsers benutzbar, in der sonst
+achtzig gleichnamige Einträge stünden.
+
 ## Backend-Schnittstelle
 
 REST mit JSON, bewusst schlank. Die interessante Eigenschaft: Layoutoperationen sind **nicht** am Server, sie laufen im Browser über `packages/core`. Der Server persistiert nur.

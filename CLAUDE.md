@@ -381,6 +381,21 @@ das Jahr einer Seite in `Spread.chapterYear` und nicht mehr in ihrem Anzeigetext
 Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Vorlagentexte
 von Hand setzen".
 
+**Die Adresse ist der Zustand der Navigation** (`apps/web/src/router.tsx`, ein
+eigener Haken statt einer Router-Bibliothek: acht flache Routen, und die
+Oberfläche kommt sonst mit `useState` aus). **Im Pfad steht, _was_ man ansieht
+— das ist die Station im Verlauf; in der Query bleibt, _wie_ es dargestellt
+wird**: `?ui=a|b|c`, `?bare`, `?original`, `?width` überdauern jede Navigation.
+Pfade sind deutsch wie die Reiterbeschriftungen (`/doppelseite/12`,
+`/gruppen/<id>`, `/umschlag`) und zählen die Doppelseite ab 1; der Index im Code
+bleibt bei 0. Die alten Adressen `?spread=n` und `?cover` gelten weiter und
+werden beim Start in ihre Normalform ersetzt — der Parity-Test ruft die
+Doppelseite so auf. Blättern **verschmilzt** zu einer Station (1,5 s, wie beim
+Zurücknehmen am Server), sonst wäre die Zurück-Taste nach achtzig
+Pfeiltastenanschlägen eine Kurbel. `history.pushState` steht nur dort, geprüft
+in `tests/architektur/architektur.test.ts`. Begründung und verworfene Fassungen:
+`docs/konzept.md`, Abschnitt „Adressen".
+
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.
 

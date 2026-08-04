@@ -209,6 +209,17 @@ describe('Die Oberfläche baut kein Buch', () => {
     expect(fundstellen(ausserhalb, /\bfetch\(/)).toEqual([]);
   });
 
+  it('navigiert nur über router.tsx', () => {
+    // Welche Ansicht offen ist, steht in der Adresse. Wer den Verlauf woanders
+    // anfasst, umgeht `useRoute` – und dann stimmt die Adresse nicht mehr mit
+    // dem, was zu sehen ist. Ausnahme ist der Variantenumschalter: `?ui=` ist
+    // eine Einstellung und keine Station, er schreibt nur `replaceState`.
+    const ausserhalb = WEB.filter(
+      (q) => q.pfad !== 'apps/web/src/router.tsx' && q.pfad !== 'apps/web/src/spread/varianten.ts',
+    );
+    expect(fundstellen(ausserhalb, /history\.(push|replace)State/)).toEqual([]);
+  });
+
   it('zeichnet Doppelseiten über render-dom', () => {
     // Eigenes Markup für Bildkästen wäre ein dritter Renderer neben Vorschau
     // und PDF — und damit außerhalb dessen, was der Parity-Test absichert.
