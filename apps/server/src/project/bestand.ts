@@ -168,12 +168,18 @@ export function vergessen(
  * derselben Quelle und lässt sich im Finder zurücklegen. Ein späterer Reimport
  * holt sie erst wieder ins Projekt, wenn sie dort auch wirklich liegt –
  * versteckte Ordner liest der Scan nicht.
+ *
+ * Beide Pfade stehen in der Rückgabe, damit der Verlauf den Zug umkehren kann.
+ * `von` wird **vor** dem Verschieben aufgelöst: Danach kennt kein `Photo` mehr
+ * seine Quelle, weil es das Foto nicht mehr gibt.
  */
 export async function deletePhoto(
   z: Bestandstand,
   id: PhotoId,
 ): Promise<{
   fileName: string;
+  /** Wo die Datei lag. */
+  von: string;
   papierkorb: string;
   imBuch: number;
   spreads: number[];
@@ -181,9 +187,10 @@ export async function deletePhoto(
   const photo = z.photos.get(id);
   if (!photo) return null;
 
+  const von = z.sources.pfad(photo);
   const papierkorb = await z.sources.inDenPapierkorb(photo);
   const { imBuch, spreads } = vergessen(z, [id]);
-  return { fileName: photo.fileName, papierkorb, imBuch, spreads };
+  return { fileName: photo.fileName, von, papierkorb, imBuch, spreads };
 }
 
 /**
