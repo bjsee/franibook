@@ -65,6 +65,52 @@ export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
   });
 
   /**
+   * Gibt einem Bild einen Rahmen oder nimmt ihm den eigenen wieder ab.
+   *
+   * `frame: null` heißt „wie das Buch", `'keiner'` heißt „ausdrücklich ohne" –
+   * dieselbe Unterscheidung wie bei der Neigung, und aus demselben Grund: Wer
+   * ein Bild aus der Buchvorgabe herausnimmt, will das auch dann noch, wenn die
+   * Vorgabe wechselt. Kein Neugenerieren; der Rahmen entsteht beim Rendern.
+   */
+  app.patch<{
+    Params: { index: string; slotId: string };
+    Body: { frame: string | null };
+  }>('/api/spreads/:index/slots/:slotId/frame', async (req, reply) => {
+    const index = Number(req.params.index);
+    const result = project.setSlotFrame(index, req.params.slotId, req.body?.frame ?? null);
+    if (!result.ok)
+      return reply.code(result.error === 'Unbekannter Rahmen' ? 400 : 404).send({
+        error: result.error,
+      });
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
+  /**
+   * Beschriftet ein Bild im Fuß seines Rahmens.
+   *
+   * Ein leerer Text löscht die Unterschrift. Der Endpunkt gilt unabhängig vom
+   * Rahmen: Sichtbar wird die Zeile nur beim Polaroid, gespeichert bleibt sie
+   * immer – sonst verlöre man seine Notiz beim Umschalten.
+   */
+  app.patch<{
+    Params: { index: string; slotId: string };
+    Body: { caption: string };
+  }>('/api/spreads/:index/slots/:slotId/caption', async (req, reply) => {
+    const index = Number(req.params.index);
+    const caption = req.body?.caption;
+    if (typeof caption !== 'string') {
+      return reply.code(400).send({ error: 'Unterschrift fehlt oder ist kein Text' });
+    }
+    const result = project.setSlotCaption(index, req.params.slotId, caption);
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
+  /**
    * Setzt Position und Größe eines Bildes von Hand.
    *
    * `rect: null` stellt den Platz der Vorlage wieder her. Die Werte sind normiert

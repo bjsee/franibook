@@ -14,6 +14,8 @@
  */
 import {
   accentOn,
+  FRAMES,
+  type FrameId,
   MAX_TILT_DEG,
   TIMELINE_ACCENTS,
   type TimelineFootVariant,
@@ -36,6 +38,7 @@ export interface BuchEinstellungen {
   background: string;
   chapterColors: boolean;
   tilt: number;
+  frame: FrameId;
   seed: number;
 }
 
@@ -79,6 +82,8 @@ const FASSUNGEN: {
 export interface Handarbeit {
   crops: number;
   neigungen: number;
+  rahmen: number;
+  unterschriften: number;
   hintergruende: number;
   zeitstrahl: number;
   positionen: number;
@@ -100,6 +105,7 @@ interface Props {
     timelineSideVariant?: TimelineSideVariant;
     timelineAccent?: string;
     tilt?: number;
+    frame?: FrameId;
   }) => void;
   onNeuEinlesen: () => void;
 }
@@ -116,6 +122,8 @@ export function BuchPanel({
   const verlust = [
     handwork.crops > 0 ? `${handwork.crops} Ausschnitte` : null,
     handwork.neigungen > 0 ? `${handwork.neigungen} von Hand gesetzte Neigungen` : null,
+    handwork.rahmen > 0 ? `${handwork.rahmen} eigene Rahmen` : null,
+    handwork.unterschriften > 0 ? `${handwork.unterschriften} Bildunterschriften` : null,
     handwork.hintergruende > 0 ? `${handwork.hintergruende} Hintergründe` : null,
     handwork.zeitstrahl > 0 ? `${handwork.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
     handwork.positionen > 0 ? `${handwork.positionen} frei gesetzte Bilder` : null,
@@ -370,6 +378,27 @@ export function BuchPanel({
             {settings.tilt === 0 ? 'aus' : `${settings.tilt.toFixed(1).replace('.', ',')}°`}
           </span>
         </label>
+
+        {/*
+          Der Rahmen gilt fürs ganze Buch und ist deshalb hier eine Wahl und im
+          Bildpanel eine Ausnahme. Ebenfalls reine Darstellung: Er verkleinert
+          das Bild in seinem Kasten, verschiebt aber kein Foto — und ändert
+          damit die Auflösung jedes gerahmten Bildes, was der Bericht
+          anschließend zeigt.
+        */}
+        <span style={{ ...B.marke, marginTop: 6 }}>Rahmen</span>
+        <div style={S.rahmenGitter}>
+          {FRAMES.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => onDarstellung({ frame: f.id })}
+              style={settings.frame === f.id ? B.pilleAn : B.pilleAus}
+              title={f.hinweis}
+            >
+              {f.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ ...B.abschnitt, borderBottom: 'none', gap: 10 }}>
@@ -402,6 +431,9 @@ export function BuchPanel({
 }
 
 const S = {
+  // Die fünf Rahmen umbrechen, statt sie in eine Zeile zu zwingen: Das Panel ist
+  // schmal, und „Passepartout" lässt sich nicht abkürzen.
+  rahmenGitter: { display: 'flex', flexWrap: 'wrap' as const, gap: 4 },
   spalte: {
     width: 336,
     flexShrink: 0,

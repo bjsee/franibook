@@ -11,6 +11,7 @@ import {
   type CoverDesign,
   type Crop,
   type DateContext,
+  type FrameId,
   type GenerateResult,
   type LayoutDocument,
   type LayoutIssue,
@@ -36,6 +37,7 @@ import {
   buildStructure,
   DEFAULT_BACKGROUND,
   FONT_FAMILIES,
+  DEFAULT_FRAME,
   DEFAULT_TILT_DEG,
   normalizeRotation,
   backgroundFit,
@@ -43,6 +45,7 @@ import {
   findBulkSeconds,
   FULL_CROP,
   generateBook,
+  isFrameId,
   isJustified,
   movePhoto,
   addToGroup,
@@ -144,6 +147,14 @@ export interface ProjectSettings {
    * Fotoverteilung nicht – ein Umstellen erfordert deshalb kein Neugenerieren.
    */
   tilt: number;
+  /**
+   * Rahmen aller Bilder, die keinen eigenen tragen.
+   *
+   * Wie die Neigung eine reine Rendereinstellung (`render/frame.ts`): Der
+   * Rahmen verkleinert das Bild in seinem Kasten, verschiebt aber kein Foto.
+   * Umstellen erfordert deshalb kein Neugenerieren.
+   */
+  frame: FrameId;
   seed: number;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
@@ -299,6 +310,10 @@ export class Project {
     // An: Ein Raster aus exakt waagerechten Kästen sieht gezeichnet aus, nicht
     // eingeklebt. Der Wert ist bewusst klein – siehe render/tilt.ts.
     tilt: DEFAULT_TILT_DEG,
+    // Ohne: Ein Rahmen ist eine Aussage über das ganze Buch, und die trifft man
+    // ausdrücklich. Ein geladenes Projekt ohne dieses Feld sieht damit aus wie
+    // vorher – siehe render/frame.ts.
+    frame: DEFAULT_FRAME,
     seed: 1,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
@@ -378,6 +393,10 @@ export class Project {
   handwork(): {
     crops: number;
     neigungen: number;
+    /** Bilder mit einem eigenen Rahmen, abweichend von der Buchvorgabe. */
+    rahmen: number;
+    /** Bildunterschriften im Fuß eines Rahmens. */
+    unterschriften: number;
     hintergruende: number;
     zeitstrahl: number;
     positionen: number;
@@ -388,6 +407,8 @@ export class Project {
   } {
     let crops = 0;
     let neigungen = 0;
+    let rahmen = 0;
+    let unterschriften = 0;
     let hintergruende = 0;
     let zeitstrahl = 0;
     let positionen = 0;
@@ -403,6 +424,10 @@ export class Project {
       // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
       // eine Entscheidung, die der Neuaufbau verwirft.
       neigungen += spread.slots.filter((sl) => sl.rotateDeg !== undefined).length;
+      // Wie bei der Neigung zählt auch das ausdrückliche „keiner": Ein Bild aus
+      // dem Rahmen des Buches herauszunehmen ist eine Entscheidung.
+      rahmen += spread.slots.filter((sl) => sl.frame !== undefined).length;
+      unterschriften += spread.slots.filter((sl) => sl.caption !== undefined).length;
       // Justierte Doppelseiten tragen in jedem Slot ein Rechteck, aber
       // gerechnet und nicht gesetzt: Der Neuaufbau stellt es wieder her.
       if (!isJustified(spread.templateId))
@@ -411,7 +436,17 @@ export class Project {
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
     }
-    return { crops, neigungen, hintergruende, zeitstrahl, positionen, texte, festgehalten };
+    return {
+      crops,
+      neigungen,
+      rahmen,
+      unterschriften,
+      hintergruende,
+      zeitstrahl,
+      positionen,
+      texte,
+      festgehalten,
+    };
   }
 
   // ------------------------------------------------------------- Struktur
@@ -857,6 +892,58 @@ export class Project {
   }
 
   /**
+   * Gibt einem Slot einen eigenen Rahmen – oder zurück an die Buchvorgabe.
+   *
+   * `frame === null` heißt: wieder die Vorgabe aus den Einstellungen. Eine
+   * gesetzte `'keiner'` ist etwas anderes – sie nimmt dieses Bild dauerhaft aus
+   * dem Rahmen des Buches, auch wenn die Vorgabe später wechselt.
+   */
+  setSlotFrame(
+    index: number,
+    slotId: string,
+    frame: string | null,
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const slot = spread.slots.find((s) => s.slotId === slotId);
+    if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
+
+    if (frame === null) {
+      delete slot.frame;
+      return { ok: true };
+    }
+    if (!isFrameId(frame)) return { ok: false, error: 'Unbekannter Rahmen' };
+
+    slot.frame = frame;
+    return { ok: true };
+  }
+
+  /**
+   * Beschriftet ein Bild im Fuß seines Rahmens.
+   *
+   * Ein leerer Text löscht die Unterschrift. Sichtbar wird sie nur beim
+   * Polaroid – der einzige Rahmen mit Fuß –, gespeichert bleibt sie in jedem
+   * Fall: Wer zwischen den Rahmen hin und her schaltet, soll seine Notiz
+   * wiederfinden.
+   */
+  setSlotCaption(index: number, slotId: string, caption: string): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const slot = spread.slots.find((s) => s.slotId === slotId);
+    if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
+
+    // Geklemmt statt abgewiesen: In den Fuß eines Sofortbilds passt eine kurze
+    // Zeile. Alles darüber schrumpfte die Schrift so weit, dass sie im Druck
+    // nicht mehr lesbar wäre (`unterschrift` in render/frame.ts).
+    const text = caption.trim().slice(0, 80);
+    if (text.length === 0) delete slot.caption;
+    else slot.caption = text;
+    return { ok: true };
+  }
+
+  /**
    * Setzt Position und Größe eines Bildes von Hand – oder zurück auf die Vorlage.
    *
    * `rect === null` heißt zurück ins Raster. Die Werte sind normiert wie ein
@@ -1100,6 +1187,9 @@ export class Project {
       ...(this.settings.tilt > 0
         ? { tilt: { maxDeg: this.settings.tilt, seed: this.settings.seed } }
         : {}),
+      // Nur ein gewählter Rahmen wird durchgereicht: Ohne die Angabe steht
+      // jedes Bild ohne, und das ist die Vorgabe.
+      ...(this.settings.frame !== 'keiner' ? { frame: this.settings.frame } : {}),
     });
   }
 

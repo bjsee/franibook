@@ -277,8 +277,16 @@ export function SpreadView({
               overflow: 'hidden',
               // Drehung um den Mittelpunkt – dieselbe Festlegung wie im PDF.
               // CSS dreht ohne `transform-origin` genau darum, und der Kasten
-              // nimmt das Bild samt Ausschnitt mit.
+              // nimmt das Bild samt Ausschnitt mit. Steht das Bild in einem
+              // Rahmen, kommt der Punkt aus dem Modell: Karton und Bild müssen
+              // um denselben fahren, und beim Polaroid ist das nicht die
+              // Bildmitte.
               ...(box.rotateDeg ? { transform: `rotate(${box.rotateDeg}deg)` } : {}),
+              ...(box.rotateDeg && box.rotateAboutMm
+                ? {
+                    transformOrigin: `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`,
+                  }
+                : {}),
               cursor: selectedSlotId === box.slotId ? 'grab' : onSlotClick ? 'pointer' : undefined,
               // Beim Ziehen des Ausschnitts darf der Browser nicht anfangen,
               // Text zu markieren – sonst reißt die Bewegung ab.
@@ -412,10 +420,32 @@ export function SpreadView({
             key={`rect-${i}`}
             style={{
               ...rect(box),
-              background: box.fill,
+              ...(box.fill !== 'none' ? { background: box.fill } : {}),
               // Der Radius kommt aus dem Modell und wird nur in die
               // Längeneinheit der Vorschau übersetzt.
               ...(box.rxMm ? { borderRadius: mm(box.rxMm) } : {}),
+              // Die Kontur liegt mittig auf der Kante – so legt es das Modell
+              // fest, weil pdfkit einen Pfad so zeichnet. `outline` liegt von
+              // sich aus außerhalb; der negative Offset von einer halben
+              // Strichstärke schiebt sie auf die Kante. Mit `border` ginge es
+              // nicht: Die zählte zur Box und machte sie größer.
+              ...(box.stroke
+                ? {
+                    outline: `${(box.strokeWidthMm ?? 0) * pxPerMm}px solid ${box.stroke}`,
+                    outlineOffset: mm(-(box.strokeWidthMm ?? 0) / 2),
+                  }
+                : {}),
+              ...(box.opacity !== undefined ? { opacity: box.opacity } : {}),
+              ...(box.rotateDeg ? { transform: `rotate(${box.rotateDeg}deg)` } : {}),
+              ...(box.rotateDeg && box.rotateAboutMm
+                ? {
+                    transformOrigin: `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`,
+                  }
+                : {}),
+              // Ein Rahmen liegt über oder unter dem Bild, gefangen werden
+              // Klicks aber vom Slot: Sonst zielte man beim Auswählen auf den
+              // Karton und träfe nichts.
+              pointerEvents: 'none',
             }}
           />
         );
@@ -443,6 +473,11 @@ export function SpreadView({
             <polygon
               points={box.pointsMm.map((p) => `${p.xMm},${p.yMm}`).join(' ')}
               fill={box.fill}
+              // `fill-opacity` und nicht `opacity`: Das SVG spannt die ganze
+              // Doppelseite auf, eine Deckkraft am Element beträfe später
+              // vielleicht mehr als diese Fläche. pdfkit setzt entsprechend
+              // `fillOpacity`.
+              {...(box.opacity !== undefined ? { fillOpacity: box.opacity } : {})}
             />
           </svg>
         );

@@ -89,6 +89,25 @@ const MAX_DIFF_RATIO = Number(process.env['PARITY_MAX_DIFF'] ?? 0.005);
  */
 const MAX_DIFF_TIMELINE = Number(process.env['PARITY_MAX_DIFF_TIMELINE'] ?? 0.005);
 
+/**
+ * Schwelle für den Fall mit Rahmen.
+ *
+ * Eigener Wert aus demselben Grund wie beim Zeitstrahl: Ein Rahmen bringt
+ * Formen mit, die es sonst nirgends im Buch gibt – eine 0,25 mm dünne Kontur
+ * und zwei halbdurchsichtige Polygone unter 45°. Bei gut vier Pixeln je
+ * Millimeter ist die Kontur ein Strich von einem Pixel Breite, den Browser und
+ * pdfkit unterschiedlich auf das Raster legen, und eine schräge Kante glättet
+ * jeder für sich.
+ *
+ * Gemessen 0,179 % über alle vier Rahmen samt Bildunterschrift – ohne sie
+ * 0,167 %, also im Bereich des Hauptfalls (0,155 %) und unter jedem Zeitstrahl. Die dünnen Formen kosten
+ * demnach kaum etwas; die Schwelle bleibt deshalb bei denselben 0,5 %, gegen
+ * die auch die übrigen Fälle prüfen. Sie anzuheben, weil ein Rahmen knapp
+ * darüber liegt, hieße die Empfindlichkeit aufzugeben, die den Test wertvoll
+ * macht – dann ist der Rahmen falsch gezeichnet und nicht die Schwelle zu eng.
+ */
+const MAX_DIFF_FRAMES = Number(process.env['PARITY_MAX_DIFF_FRAMES'] ?? 0.005);
+
 async function toPng(buffer: Buffer, width: number, height: number): Promise<PNG> {
   const normalized = await sharp(buffer)
     // Beide Bilder exakt gleich groß machen. Browser und pdftoppm runden die
@@ -158,7 +177,17 @@ async function messeParitaet(
     return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
   });
   // Sobald ein Spread Text trägt, entscheidet die Schrift über Geometrie.
-  await page.evaluate(() => document.fonts.ready);
+  // `fonts.ready` allein genügt dafür nicht: Ein `@font-face` wird erst geladen,
+  // wenn etwas es braucht, und der Screenshot träfe sonst die Ersatzschrift
+  // gegen die eingebettete. Deshalb erst anfordern, dann warten.
+  await page.evaluate(async () => {
+    await Promise.all(
+      ['Franibook Sans', 'Crimson Text', 'Kalam', 'Abril Fatface'].map((f) =>
+        document.fonts.load(`26pt "${f}"`),
+      ),
+    );
+    await document.fonts.ready;
+  });
 
   const shot = await stage.screenshot({ type: 'png' });
   await writeFile(join(ARTIFACTS, `preview-${name}.png`), shot);
@@ -582,6 +611,83 @@ test.describe('Vorschau und PDF stimmen überein', () => {
    * Systemschrift zurück – ein Tippfehler im Familiennamen genügt –, sähe man
    * es sonst erst im gedruckten Buch.
    */
+  /**
+   * Rahmen sind die schärfste Probe auf die neuen Boxeigenschaften.
+   *
+   * Vier Formen auf einmal, weil jede eine andere Stelle der Adapter trifft:
+   * Der **Polaroidkarton** dreht als Rechteck um einen Punkt, der nicht seine
+   * Mitte ist – Vorschau über `transform-origin`, PDF über `doc.rotate(origin)`.
+   * Sein **Schatten** prüft die Deckkraft, die im Browser `opacity` heißt und
+   * bei pdfkit `fillOpacity`. Die **Kontur** prüft die eine Festlegung, die sich
+   * am leichtesten verfehlen lässt: Der Strich liegt mittig auf der Kante, und
+   * CSS kennt dafür keinen fertigen Modus – `border` läge innen, `outline`
+   * außen. Der **Klebestreifen** prüft ein halbdurchsichtiges Polygon.
+   *
+   * Alle vier stehen zusätzlich geneigt, weil die Bildneigung voreingestellt
+   * ist: Karton und Bild müssen dabei um denselben Punkt fahren, sonst rutscht
+   * das Foto sichtbar aus seinem Rahmen.
+   */
+  test('Rahmen decken sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    const rahmen = ['polaroid', 'passepartout', 'kontur', 'klebestreifen'] as const;
+    const slots = ['a', 'b', 'c', 'd'];
+    for (const [i, frame] of rahmen.entries()) {
+      const res = await request.patch(
+        `http://127.0.0.1:5174/api/spreads/0/slots/${slots[i]}/frame`,
+        { data: { frame } },
+      );
+      expect(res.ok()).toBe(true);
+    }
+
+    // Dazu eine Bildunterschrift im Fuß des Polaroids: Sie ist die einzige
+    // Stelle, an der die Handschrift im Innenteil vorkommt, und ihre Größe
+    // ergibt sich aus der Satzbreite – ein Adapter, der anders misst, setzt sie
+    // sichtbar anders.
+    const beschriftet = await request.patch(`http://127.0.0.1:5174/api/spreads/0/slots/a/caption`, {
+      data: { caption: 'Kreta, Juli 2015' },
+    });
+    expect(beschriftet.ok()).toBe(true);
+
+    // Die Rahmen müssen im Modell auch angekommen sein: Ohne diese Prüfung wäre
+    // der Test grün, weil er zwei rahmenlose Seiten vergleicht.
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const unterschriften = rsm.boxes.filter(
+      (b: { kind: string; slotId?: string }) =>
+        b.kind === 'text' && b.slotId?.startsWith('caption'),
+    );
+    expect(unterschriften).toHaveLength(1);
+    expect(unterschriften[0].family).toBe('hand');
+    const gesetzt = rsm.boxes
+      .filter((b: { kind: string; frame?: string }) => b.kind === 'image' && b.frame)
+      .map((b: { frame: string }) => b.frame);
+    expect(gesetzt.sort()).toEqual([...rahmen].sort());
+    // Karton und Schatten je Kartonrahmen, dazu die Kontur.
+    expect(rsm.boxes.filter((b: { kind: string }) => b.kind === 'rect')).toHaveLength(5);
+    expect(rsm.boxes.filter((b: { kind: string }) => b.kind === 'polygon')).toHaveLength(2);
+
+    const ratio = await messeParitaet(page, request, 'frames');
+    console.log(`Parity (Rahmen): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit Rahmen um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_FRAMES);
+
+    // Wieder abnehmen: Die folgenden Fälle messen gegen ihre eigenen Schwellen,
+    // und ein stehengebliebener Karton wäre dort eine fremde Ursache.
+    for (const slotId of slots) {
+      await request.patch(`http://127.0.0.1:5174/api/spreads/0/slots/${slotId}/frame`, {
+        data: { frame: null },
+      });
+    }
+    await request.patch(`http://127.0.0.1:5174/api/spreads/0/slots/a/caption`, {
+      data: { caption: '' },
+    });
+  });
+
   test('Textblöcke in den Zusatzschriften decken sich', async ({ page, request }) => {
     await eineDoppelseite(request);
     await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });

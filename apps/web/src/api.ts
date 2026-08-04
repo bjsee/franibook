@@ -19,6 +19,7 @@
 import type {
   CoverDesign,
   Crop,
+  FrameId,
   LayoutDocument,
   MoveSource,
   MoveTarget,
@@ -109,6 +110,8 @@ export interface Einstellungen {
   chapterColors: boolean;
   /** Stärkste Neigung der Bilder in Grad; 0 stellt alles gerade. */
   tilt: number;
+  /** Rahmen aller Bilder ohne eigenen; `keiner` ist die Vorgabe. */
+  frame: FrameId;
   seed: number;
   birthDate?: string;
 }
@@ -117,6 +120,8 @@ export interface Einstellungen {
 export interface Handarbeit {
   crops: number;
   neigungen: number;
+  rahmen: number;
+  unterschriften: number;
   hintergruende: number;
   zeitstrahl: number;
   positionen: number;
@@ -340,6 +345,14 @@ export const neigungSetzen = (index: number, slotId: string, deg: number | null)
 
 export const rechteckSetzen = (index: number, slotId: string, rect: NormRect | null) =>
   sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/rect`, { rect });
+
+/** `frame: null` heißt „wie das Buch", `'keiner'` heißt „ausdrücklich ohne". */
+export const rahmenSetzen = (index: number, slotId: string, frame: FrameId | null) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/frame`, { frame });
+
+/** Bildunterschrift im Fuß des Rahmens. Ein leerer Text löscht sie. */
+export const unterschriftSetzen = (index: number, slotId: string, caption: string) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/caption`, { caption });
 
 /** Was ein Zug im Buch bewegt hat: die betroffenen Doppelseiten, fertig gerendert. */
 export interface Zugergebnis {

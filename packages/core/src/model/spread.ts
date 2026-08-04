@@ -3,6 +3,7 @@
  */
 import type { Crop } from './crop.js';
 import type { PhotoId } from './photo.js';
+import type { FrameId } from '../render/frame.js';
 import type { FontFamilyId } from '../render/typography.js';
 import type { TemplateId } from './template.js';
 
@@ -38,6 +39,31 @@ export interface SlotAssignment {
    * und derselben Neigung, nur an einer anderen Stelle.
    */
   rect?: { x: number; y: number; w: number; h: number };
+  /**
+   * Rahmen um dieses eine Bild.
+   *
+   * Ohne Angabe gilt die Buchvorgabe – dieselbe Unterscheidung wie bei
+   * `rotateDeg`: `undefined` heißt „wie das Buch", `'keiner'` heißt
+   * „ausdrücklich ohne" und überlebt damit auch das Umstellen der Vorgabe.
+   *
+   * Der Rahmen kostet Bildfläche, ändert aber nichts an der Fotoverteilung –
+   * er wirkt allein beim Rendern (`render/frame.ts`). Ein bestehendes Buch
+   * bekommt ihn deshalb ohne Neuaufbau.
+   */
+  frame?: FrameId;
+  /**
+   * Bildunterschrift im Fuß des Rahmens.
+   *
+   * Nur das Polaroid hat einen Fuß; bei jedem anderen Rahmen bleibt der Text
+   * stehen, ohne zu erscheinen. Das ist Absicht – wer zwischen den Rahmen hin
+   * und her schaltet, soll seine Notiz wiederfinden.
+   *
+   * Am Slot und nicht als freier `TextBlock`, obwohl der dasselbe darstellen
+   * könnte: Ein Block steht, wo man ihn hingesetzt hat, und bliebe liegen, wenn
+   * das Bild umzieht oder wächst. Die Unterschrift gehört zum Bild und wandert
+   * mit ihm.
+   */
+  caption?: string;
 }
 
 export interface TextElement {
