@@ -36,6 +36,12 @@ just stand               # Fotos, Doppelseiten und Gruppen des gespeicherten Pro
 `just probe` und `just neu` schreiben bewusst nach `.franibook-project-probe`: Ein
 Lauf mit Limit würde sonst den echten Stand samt bestätigten Gruppen ersetzen.
 
+**`pnpm install` aktiviert einen Pre-commit-Hook** (`.githooks/pre-commit`, über
+`core.hooksPath`, keine Abhängigkeit wie Husky nötig — das leistet Git seit 2.9
+selbst). Er lintet und formatiert nur staged `.ts`/`.tsx`/`.js`/`.jsx`-Dateien,
+fixt automatisch Behebbares und stagt es neu; bei verbleibenden Fehlern bricht
+der Commit ab.
+
 Einzelne Testdatei bzw. einzelner Test:
 
 ```sh
