@@ -65,10 +65,21 @@ export function occasionOfDay(date: NaiveDateTime, ctx: DetectionContext = {}): 
     const gMonat = Number(ctx.birthDate.slice(5, 7));
     const gTag = Number(ctx.birthDate.slice(8, 10));
     const gJahr = Number(ctx.birthDate.slice(0, 4));
-    if (monat === gMonat && Math.abs(tag - gTag) <= 3) {
-      const alter = jahr - gJahr;
-      if (alter === 0) return 'Geburt';
-      if (alter > 0 && alter <= 120) return `${alter}. Geburtstag`;
+
+    // Tagesdifferenz in Millisekunden statt getrenntem Monat/Tag-Vergleich:
+    // Ein Geburtstag am Monatsende (30./31.) oder -anfang (1.-3.) läge sonst
+    // außerhalb des Fensters, obwohl er nur wenige Kalendertage entfernt ist.
+    // Drei Bezugsjahre für die Feier probieren, weil derselbe Vergleich auch
+    // den Jahreswechsel abdeckt (Feier am 30.12., Foto vom 2.1. des
+    // Folgejahres liegt in einem anderen Kalenderjahr als das Foto).
+    for (const feierjahr of [jahr, jahr - 1, jahr + 1]) {
+      const alter = feierjahr - gJahr;
+      if (alter < 0 || alter > 120) continue;
+      const diffTage =
+        (Date.UTC(jahr, monat - 1, tag) - Date.UTC(feierjahr, gMonat - 1, gTag)) / 86_400_000;
+      if (Math.abs(diffTage) <= 3) {
+        return alter === 0 ? 'Geburt' : `${alter}. Geburtstag`;
+      }
     }
   }
 
@@ -77,7 +88,9 @@ export function occasionOfDay(date: NaiveDateTime, ctx: DetectionContext = {}): 
   if (monat === 1 && tag === 1) return `Neujahr ${jahr}`;
 
   const ostern = easterSunday(jahr);
-  if (monat === ostern.month && tag >= ostern.day - 2 && tag <= ostern.day + 1) {
+  const diffOstern =
+    (Date.UTC(jahr, monat - 1, tag) - Date.UTC(jahr, ostern.month - 1, ostern.day)) / 86_400_000;
+  if (diffOstern >= -2 && diffOstern <= 1) {
     return `Ostern ${jahr}`;
   }
 

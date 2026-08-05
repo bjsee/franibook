@@ -285,7 +285,9 @@ export function supportedSlotCounts(): number[] {
   const counts = new Set<number>();
   for (const t of ALL) {
     const meta = templateMeta(t.id);
-    if (!meta.chapterOnly && !meta.highResOnly && t.slots.length > 0) counts.add(t.slots.length);
+    if (!meta.chapterOnly && !meta.highResOnly && !isHandPicked(t) && t.slots.length > 0) {
+      counts.add(t.slots.length);
+    }
   }
   return [...counts].sort((a, b) => a - b);
 }

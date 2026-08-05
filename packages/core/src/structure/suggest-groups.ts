@@ -434,7 +434,7 @@ export function suggestDayGroups(
   const ids = new Set<string>();
   const groups: PhotoGroup[] = [];
 
-  for (const [tag, fotos] of [...jeTag.entries()].sort()) {
+  for (const [tag, fotos] of [...jeTag.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     if (fotos.length < minPhotos) continue;
 
     const sortiert = [...fotos].sort((a, b) => a.date.localeCompare(b.date));
