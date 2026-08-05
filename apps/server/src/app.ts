@@ -20,7 +20,7 @@ import { quellenRouten } from './routes/quellen.js';
 import { slotRouten } from './routes/slots.js';
 import { spreadRouten } from './routes/spreads.js';
 import { umschlagRouten } from './routes/umschlag.js';
-import { undoRouten, verlaufHaken } from './routes/undo.js';
+import { undoRouten, ursprungHaken, verlaufHaken } from './routes/undo.js';
 
 /** Eine angemeldete Route, wie die Vollständigkeitsprüfung sie sieht. */
 export interface RoutenEintrag {
@@ -74,6 +74,9 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
 
   // Vor den Routen: Fastify bindet die Haken einer Instanz beim Anmelden einer
   // Route an sie. Später hinzugefügt griffe der Verlauf für keine einzige.
+  // Der Ursprungsschutz vor dem Verlauf, damit eine abgelehnte Anfrage keinen
+  // Undo-Schritt anlegt.
+  ursprungHaken(app);
   verlaufHaken(app, kontext);
 
   projektRouten(app, kontext);

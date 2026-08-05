@@ -97,6 +97,26 @@ describe('Sources', () => {
     expect(() => quellen.pfad({ id: '1', relPath: 'x.jpg', sourceId: 'fehlt' })).toThrow('fehlt');
   });
 
+  it('weist einen manipulierten relPath ab, der die Quelle verlässt', async () => {
+    // Die Formprüfung beim Laden von project.json validiert relPath nicht –
+    // diese Prüfung hier ist die letzte Instanz vor dem Dateisystem.
+    const quellen = new Sources();
+    const { source } = await quellen.add(dir);
+
+    expect(() =>
+      quellen.pfad({
+        id: '1',
+        relPath: '../../../../../../etc/passwd',
+        sourceId: source.id,
+      }),
+    ).toThrow('verlässt die Quelle');
+
+    // Ein absoluter Pfad ist derselbe Angriff in anderer Form.
+    expect(() => quellen.pfad({ id: '2', relPath: '/etc/passwd', sourceId: source.id })).toThrow(
+      'verlässt die Quelle',
+    );
+  });
+
   it('erkennt einen verschwundenen Ordner als nicht erreichbar', async () => {
     const quellen = new Sources();
     const { source } = await quellen.add(dir);

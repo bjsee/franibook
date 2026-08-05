@@ -265,8 +265,14 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
 
 const AENDERND = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
 
-/** Der Eintrag zu einer Anfrage, oder `undefined` bei nicht eingetragener Route. */
-function eintragFuer(req: FastifyRequest): UndoEintrag | null | undefined {
+/**
+ * Der Eintrag zu einer Anfrage, oder `undefined` bei nicht eingetragener Route.
+ *
+ * Exportiert, weil derselbe Test – „ist das eine mutierende Route?" – auch dem
+ * Origin-Schutz genügt (`ursprungHaken`): `UNDO_ROUTEN` listet lückenlos jede
+ * angemeldete `POST`/`PATCH`/`PUT`/`DELETE`-Route, geprüft von `undo.test.ts`.
+ */
+export function eintragFuer(req: FastifyRequest): UndoEintrag | null | undefined {
   if (!AENDERND.has(req.method)) return undefined;
   const url = req.routeOptions.url;
   if (url === undefined) return undefined;
@@ -290,6 +296,57 @@ function misserfolg(reply: FastifyReply, payload: unknown): boolean {
   // `JSON.parse`: Eine Doppelseitenantwort ist ~100 KB, und die zweimal zu
   // deuten kostet mehr als der Griff selbst.
   return typeof payload === 'string' && payload.includes('"ok":false');
+}
+
+/** Herkunft, die eine mutierende Anfrage vom selben Rechner ausweist. */
+const ERLAUBTE_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+/**
+ * Ob ein `Origin`-Header von woanders als diesem Rechner stammt.
+ *
+ * Jeder Port ist erlaubt – Vite-Dev-Server und eine spätere Vorschau laufen auf
+ * unterschiedlichen –, nur der Rechner muss stimmen. Ein `Origin`, der sich
+ * nicht als URL lesen lässt, gilt sicherheitshalber als fremd.
+ */
+function fremderUrsprung(origin: string): boolean {
+  try {
+    return !ERLAUBTE_HOSTS.has(new URL(origin).hostname);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Weist mutierende Anfragen mit fremdem `Origin`-Header ab.
+ *
+ * Der Server läuft ohne Authentifizierung nur auf `127.0.0.1` – seine einzige
+ * Zusage ist, dass niemand von außen mitspielt. Eine „simple request" (ein
+ * body-loses `POST` etwa) durchläuft aber keinen CORS-Preflight, jede im
+ * selben Browser offene Seite könnte also `POST /api/generate` oder
+ * `POST /api/import` auslösen, ohne dass CORS greift – CORS schützt nur davor,
+ * die *Antwort* zu lesen, nicht davor, die Anfrage *auszulösen*. Der
+ * `Origin`-Header ist dagegen fälschungssicher: Kein Skript kann ihn setzen.
+ *
+ * Geprüft wird dieselbe Menge Routen wie beim Verlauf – `UNDO_ROUTEN` listet
+ * lückenlos jede mutierende Route, ob mit Eintrag oder mit `null`. Fehlt der
+ * Header (curl, Playwright, mancher Same-Origin-Fall), lässt der Haken die
+ * Anfrage durch: Ein fehlender Header ist kein Angriffsmerkmal, ein fremder
+ * schon.
+ *
+ * Muss **vor** den Routenmodulen angemeldet werden, aus demselben Grund wie
+ * `verlaufHaken` – und vor ihm, damit eine abgelehnte Anfrage keinen
+ * Undo-Schritt anlegt.
+ */
+export function ursprungHaken(app: FastifyInstance): void {
+  app.addHook('preHandler', async (req, reply) => {
+    if (eintragFuer(req) === undefined) return;
+
+    const origin = req.headers['origin'];
+    if (!origin || Array.isArray(origin)) return;
+    if (!fremderUrsprung(origin)) return;
+
+    return reply.code(403).send({ error: 'Anfrage von fremder Herkunft abgelehnt' });
+  });
 }
 
 /**

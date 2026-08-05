@@ -176,12 +176,28 @@ export class Sources implements PathResolver {
     return quelle;
   }
 
+  /**
+   * @throws wenn die Quelle unbekannt ist oder `relPath` aus ihr herausführt.
+   *
+   * Die zweite Prüfung ist keine Vorsichtsmaßnahme gegen ehrliche Daten: Die
+   * Formprüfung beim Laden eines `project.json` (`istBrauchbareStruktur`)
+   * validiert `relPath` nicht, und diese Funktion ist die einzige Stelle, an
+   * der aus einem Foto ein Dateipfad wird – ein manipulierter oder durch einen
+   * Sync-Konflikt verstümmelter Eintrag wie `"../../../.ssh/id_rsa"` darf
+   * nicht unverändert bis zum Dateisystem durchlaufen. Dieselbe `enthaelt()`
+   * wie bei sich überschneidenden Quellen, nur diesmal gegen das aufgelöste
+   * Ergebnis statt gegen einen zweiten Wurzelordner.
+   */
   pfad(photo: PhotoRef): string {
     const quelle = photo.sourceId ? this.get(photo.sourceId) : this.primary();
     if (!quelle) {
       throw new Error(`Quelle ${photo.sourceId ?? '(keine)'} unbekannt: ${photo.relPath}`);
     }
-    return join(quelle.root, photo.relPath);
+    const ergebnis = resolve(quelle.root, photo.relPath);
+    if (!enthaelt(quelle.root, ergebnis)) {
+      throw new Error(`relPath verlässt die Quelle „${quelle.label}": ${photo.relPath}`);
+    }
+    return ergebnis;
   }
 
   /**
