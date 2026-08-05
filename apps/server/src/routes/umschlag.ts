@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { CoverDesign } from '@franibook/core';
 import { renderCoverPdf } from '@franibook/render-pdf';
-import { coverAntwort, EXPORT_DATEINAME, type Kontext } from './kontext.js';
+import { coverAntwort, EXPORT_DATEINAME, istDateiFehler, type Kontext } from './kontext.js';
 
 export function umschlagRouten(app: FastifyInstance, { project, sources, outDir }: Kontext): void {
   app.get('/api/cover', async () => coverAntwort(project));
@@ -31,17 +31,26 @@ export function umschlagRouten(app: FastifyInstance, { project, sources, outDir 
     await mkdir(outDir, { recursive: true });
     const outputPath = join(outDir, fileName);
 
-    const result = await renderCoverPdf({
-      cover: project.renderCover(),
-      profile: project.profile,
-      outputPath,
-      resolvePhoto: (photoId) => {
-        const photo = project.photo(photoId);
-        if (!photo) return undefined;
-        return { path: sources.pfad(photo), orientation: photo.orientation };
-      },
-    });
+    try {
+      const result = await renderCoverPdf({
+        cover: project.renderCover(),
+        profile: project.profile,
+        outputPath,
+        resolvePhoto: (photoId) => {
+          const photo = project.photo(photoId);
+          if (!photo) return undefined;
+          return { path: sources.pfad(photo), orientation: photo.orientation };
+        },
+      });
 
-    return { outputPath, ...result };
+      return { outputPath, ...result };
+    } catch (err) {
+      if (istDateiFehler(err)) {
+        return reply.code(503).send({
+          error: 'Eine Bilddatei ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+        });
+      }
+      throw err;
+    }
   });
 }

@@ -941,7 +941,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       photosPerSpread: stats.photosPerSpread,
       feasibility: checkFeasibility(
         platzierbar,
-        Math.max(2, zielSeiten - kept.length * 2),
+        Math.max(2, zielSeiten - (auftaktSpreads + kept.length) * 2),
         slotCounts,
         structure.chapters.length,
         useOpeners,

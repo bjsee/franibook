@@ -16,6 +16,8 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import PDFDocument from 'pdfkit';
 import {
+  resolveWeight,
+  textBaselineOffsetMm,
   type ImageBox,
   type PhotoId,
   type PrintProfile,
@@ -23,6 +25,7 @@ import {
   coverWarningText,
   mmToPt,
 } from '@franibook/core';
+import { fontKey, registerFonts } from './fonts.js';
 import { prepareImage } from './prepare-image.js';
 import type { PhotoSource } from './render-pdf.js';
 
@@ -75,6 +78,13 @@ export async function renderCoverPdf(opts: RenderCoverPdfOptions): Promise<Rende
   const { cover, profile, resolvePhoto, outputPath } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
+  // Dieselbe Registrierung wie im Innenteil (`render-pdf.ts`) – sonst setzt
+  // pdfkit für den Umschlag stillschweigend Helvetica, eine der 14 nicht
+  // eingebetteten Basisschriften. Genau das war der Anlass für Issue #5.
+  registerFonts(
+    doc,
+    cover.boxes.filter((b) => b.kind === 'text'),
+  );
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
   const skipped: { photoId: PhotoId; reason: string }[] = [];
@@ -107,13 +117,21 @@ export async function renderCoverPdf(opts: RenderCoverPdfOptions): Promise<Rende
             origin: [mmToPt(box.xMm + box.wMm / 2), mmToPt(box.yMm + box.hMm / 2)],
           });
         }
+        // y ist die Grundlinie, nicht der Kastenoberrand – dieselbe Rechnung
+        // wie im Innenteil (render-pdf.ts). Ohne sie verschiebt pdfkit die
+        // Zeile um seinen eigenen Ascender nach unten, eine Layoutentscheidung
+        // des Adapters.
+        const baselineMm =
+          box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
         doc
+          .font(fontKey(box.family ?? 'sans', resolveWeight(box.family ?? 'sans', box.weight)))
           .fontSize(box.fontSizePt)
           .fillColor(box.color)
-          .text(box.content, mmToPt(box.xMm), mmToPt(box.yMm), {
+          .text(box.content, mmToPt(box.xMm), mmToPt(baselineMm), {
             width: mmToPt(box.wMm),
             align: box.align,
             lineBreak: false,
+            baseline: 'alphabetic',
           });
         if (drehung !== 0) doc.restore();
         break;

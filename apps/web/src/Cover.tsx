@@ -173,6 +173,11 @@ export function Cover({
           <label key={f.key} style={S.feldWrap}>
             <span style={B.marke}>{f.label}</span>
             <input
+              // Ein Schlüssel mit dem geladenen Wert, sonst überlebt ein
+              // Server-seitiges Zurücknehmen nicht: `defaultValue` setzt React
+              // nur beim ersten Mount, und das nächste Verlassen des Feldes
+              // schriebe den alten DOM-Wert erneut zurück.
+              key={`${f.key}-${data.design[f.key] ?? ''}`}
               defaultValue={data.design[f.key] ?? ''}
               onBlur={(e) => {
                 if (e.target.value !== (data.design[f.key] ?? ''))

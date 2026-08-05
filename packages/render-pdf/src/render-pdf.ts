@@ -15,8 +15,6 @@ import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import PDFDocument from 'pdfkit';
 import {
-  type FontFamilyId,
-  type FontWeight,
   resolveWeight,
   type ImageBox,
   type PhotoId,
@@ -25,7 +23,7 @@ import {
   mmToPt,
   textBaselineOffsetMm,
 } from '@franibook/core';
-import { fontFilePath } from '@franibook/fonts';
+import { fontKey, registerFonts } from './fonts.js';
 import { prepareImage } from './prepare-image.js';
 
 export interface PhotoSource {
@@ -64,44 +62,6 @@ export interface RenderPdfResult {
   pages: number;
   images: number;
   skipped: { photoId: PhotoId; reason: string }[];
-}
-
-/**
- * Registriert die Schriften, die auf diesen Seiten wirklich vorkommen.
- *
- * pdfkit bettet nur ein, was benutzt wurde – registrieren allein kostet nichts.
- * Trotzdem wird hier vorher gesammelt: Eine registrierte Schrift ist eine
- * geöffnete Datei, und bei vier Familien mit je zwei Schnitten wären das acht
- * Dateien für ein Buch, das oft nur eine braucht. Die Buchschrift kommt in
- * jedem Fall dazu; pdfkit setzt intern sonst Helvetica, und die ist eine der 14
- * Basisschriften, wird nicht eingebettet und hängt beim Druckdienstleister an
- * dessen Interpretation. Genau das war der Anlass für Issue #5.
- *
- * @returns Schlüssel je Familie und Schnitt, wie `doc.font()` sie erwartet.
- */
-function registerFonts(doc: PDFKit.PDFDocument, spreads: readonly RenderedSpread[]): void {
-  const gebraucht = new Set<string>([fontKey('sans', 'regular')]);
-  for (const spread of spreads) {
-    for (const box of spread.boxes) {
-      if (box.kind !== 'text') continue;
-      const family = box.family ?? 'sans';
-      gebraucht.add(fontKey(family, resolveWeight(family, box.weight)));
-    }
-  }
-
-  for (const key of gebraucht) {
-    const [family, weight] = key.split('/') as [FontFamilyId, FontWeight];
-    doc.registerFont(key, fontFilePath(family, weight));
-  }
-
-  // Voreinstellung, damit nichts auf Helvetica fällt, was pdfkit intern selbst
-  // setzt (Lesezeichen, Struktur-Tags).
-  doc.font(fontKey('sans', 'regular'));
-}
-
-/** Der Name, unter dem eine Schrift im Dokument registriert ist. */
-function fontKey(family: FontFamilyId, weight: FontWeight): string {
-  return `${family}/${weight}`;
 }
 
 /**
@@ -160,7 +120,10 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
-  registerFonts(doc, spreads);
+  registerFonts(
+    doc,
+    spreads.flatMap((s) => s.boxes.filter((b) => b.kind === 'text')),
+  );
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
   const skipped: { photoId: PhotoId; reason: string }[] = [];
@@ -385,7 +348,21 @@ async function drawImage(
     return true;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    const rescued = recoverPhoto ? await recoverPhoto(box.photoId, reason) : undefined;
+
+    let rescued: PhotoSource | undefined;
+    try {
+      rescued = recoverPhoto ? await recoverPhoto(box.photoId, reason) : undefined;
+    } catch (recoverErr) {
+      // Der Rettungshaken ist Sache des Aufrufers (plattformabhängig, s.o.) und
+      // kein Teil dieses Renderers – wirft er selbst, darf das nicht den ganzen
+      // Export mitreißen, sondern nur dieses eine Bild kosten.
+      skipped.push({
+        photoId: box.photoId,
+        reason: `${reason} (Rettungsversuch: ${recoverErr instanceof Error ? recoverErr.message : String(recoverErr)})`,
+      });
+      return false;
+    }
+
     if (rescued) {
       try {
         await place(rescued);

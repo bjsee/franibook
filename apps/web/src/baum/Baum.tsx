@@ -236,7 +236,10 @@ function Seitenzeile({
    * nichts.
    */
   const nimmtAn = !seite.locked;
-  const zieht = model.zug.length > 0;
+  // Solange ein Zug noch beim Server unterwegs ist, nimmt keine Seite ein
+  // weiteres Bild an – sonst überholte ein zweiter Zug den ersten, und
+  // `useBaum.laden()` liefe zweimal gegeneinander.
+  const zieht = model.zug.length > 0 && !model.busy;
   const ziel: Herkunft = { kind: 'spread', spreadIndex: seite.index };
 
   return (
@@ -338,7 +341,9 @@ function Poolspalte({
   bildVersion: number;
 }) {
   const [ueber, setUeber] = useState(false);
-  const zieht = model.zug.length > 0;
+  // Dieselbe Sperre wie bei den Seiten: kein zweites Fallenlassen, solange das
+  // erste noch beim Server unterwegs ist.
+  const zieht = model.zug.length > 0 && !model.busy;
 
   return (
     <aside
@@ -410,8 +415,12 @@ function Bildchen({
 
   return (
     <button
-      draggable
+      // Solange ein voriger Zug noch beim Server unterwegs ist, darf kein
+      // neuer beginnen – sonst überholt er den ersten, bevor `useBaum` neu
+      // geladen hat.
+      draggable={!model.busy}
       onDragStart={(e) => {
+        if (model.busy) return;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', photoId);
         // Dasselbe Zeichen wie beim Ziehen in der Doppelseite.

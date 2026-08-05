@@ -49,6 +49,7 @@ import {
   findBulkSeconds,
   FULL_CROP,
   generateBook,
+  isBackgroundColor,
   isFrameId,
   isJustified,
   movePhoto,
@@ -408,6 +409,23 @@ export class Project {
   importedAt = new Date().toISOString();
 
   /**
+   * Die laufende Ein- oder Zweitlese, solange eine läuft — sonst `null`.
+   *
+   * `importPhotos`/`reimport` enden mit `z.photos.clear()` und einer
+   * Neubefüllung (`project/bestand.ts`). Griffe, die währenddessen den Bestand
+   * ändern — Aussortieren, eine Datumskorrektur, ein zweiter Import —, würden
+   * sonst stillschweigend verschluckt: Die Änderung träfe eine Kopie, die der
+   * Import gleich verwirft. Die Routen fragen `importLaufend()` deshalb vorher
+   * ab und lehnen mit `409` ab, statt die Änderung verloren gehen zu lassen.
+   */
+  private importPromise: Promise<unknown> | null = null;
+
+  /** Ob gerade ein Import läuft. */
+  importLaufend(): boolean {
+    return this.importPromise !== null;
+  }
+
+  /**
    * Was sich zurücknehmen lässt.
    *
    * Der Verlauf hält ganze Stände und rührt sie über zwei Funktionen an: Der
@@ -548,11 +566,27 @@ export class Project {
   }
 
   importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
-    return bestand.importPhotos(this, limit, nurQuellen);
+    return this.mitImportSperre(bestand.importPhotos(this, limit, nurQuellen));
   }
 
   reimport(limit?: number, nurQuellen?: readonly string[]): Promise<ImportDiff> {
-    return bestand.reimport(this, limit, nurQuellen);
+    return this.mitImportSperre(bestand.reimport(this, limit, nurQuellen));
+  }
+
+  /**
+   * Hält `importPromise`, solange `versuch` läuft — der Kern von
+   * `importLaufend()`. Die Zuweisung geschieht synchron, bevor der Aufrufer
+   * die zurückgegebene Zusage überhaupt zu fassen bekommt: Wer `reimport()`
+   * ruft und danach sofort `importLaufend()` abfragt, sieht `true`, ganz gleich
+   * wie schnell der Import selbst durchläuft.
+   */
+  private async mitImportSperre<T>(versuch: Promise<T>): Promise<T> {
+    this.importPromise = versuch;
+    try {
+      return await versuch;
+    } finally {
+      if (this.importPromise === versuch) this.importPromise = null;
+    }
   }
 
   warmPreviews(ids: readonly PhotoId[]): void {
@@ -708,13 +742,16 @@ export class Project {
   setSpreadBackground(
     index: number,
     patch: { color?: string | null; photoId?: PhotoId | null },
-  ): { ok: boolean; hinweis?: string } {
+  ): { ok: boolean; error?: string; hinweis?: string } {
     const spread = this.spreads[index];
     if (!spread) return { ok: false };
 
     if (patch.color !== undefined) {
       if (patch.color === null) delete spread.background;
-      else spread.background = patch.color;
+      // Gegen die geschlossene Palette geprüft wie bei `tilt` und `frame`: Ein
+      // freier Hexwert wäre auf Dauer ein kräftiges Blau hinter Fotos.
+      else if (isBackgroundColor(patch.color)) spread.background = patch.color;
+      else return { ok: false, error: 'Unbekannte Hintergrundfarbe' };
     }
 
     if (patch.photoId !== undefined) {
@@ -1418,15 +1455,18 @@ export class Project {
 
     const block: TextBlock = {
       id: `text-${Date.now().toString(36)}-${(spread.blocks?.length ?? 0) + 1}`,
-      content: patch.content ?? 'Text',
-      rect: patch.rect ?? { x: 0.08, y: 0.44, w: 0.3, h: 0.08 },
-      weight: patch.weight ?? 'regular',
-      ...(patch.family ? { family: patch.family } : {}),
-      fontSizePt: patch.fontSizePt ?? 14,
-      align: patch.align ?? 'left',
-      ...(patch.color ? { color: patch.color } : {}),
-      ...(patch.rotateDeg !== undefined ? { rotateDeg: patch.rotateDeg } : {}),
+      content: 'Text',
+      rect: { x: 0.08, y: 0.44, w: 0.3, h: 0.08 },
+      weight: 'regular',
+      fontSizePt: 14,
+      align: 'left',
     };
+    // Dieselbe Prüf- und Klemmlogik wie bei `updateTextBlock` – vorher übernahm
+    // das Anlegen `family`, `fontSizePt`, `rotateDeg` & Co. ungeprüft, während
+    // die Änderung direkt danach dieselben Felder validierte. Ein Textblock
+    // sollte beim Erzeugen keine laxere Prüfung erfahren als bei jeder
+    // folgenden Änderung.
+    this.wendeTextBlockPatchAn(block, patch);
 
     spread.blocks = [...(spread.blocks ?? []), block];
     return block;
@@ -1450,6 +1490,19 @@ export class Project {
     const block = spread.blocks?.find((b) => b.id === id);
     if (!block) return { ok: false, error: 'Textblock nicht gefunden' };
 
+    this.wendeTextBlockPatchAn(block, patch);
+    return { ok: true };
+  }
+
+  /**
+   * Prüft und klemmt ein Textblock-Patch, angewandt auf `block`.
+   *
+   * Gemeinsam für `addTextBlock` und `updateTextBlock`: Ein Feld, das eine
+   * Änderung validiert, soll dieselbe Prüfung schon beim Anlegen erfahren –
+   * sonst käme ein unbrauchbarer Wert (eine unbekannte Schriftfamilie, eine
+   * Punktgröße von 99999) nur beim zweiten Aufruf ans Licht.
+   */
+  private wendeTextBlockPatchAn(block: TextBlock, patch: Partial<Omit<TextBlock, 'id'>>): void {
     if (patch.content !== undefined) block.content = patch.content;
     if (patch.weight === 'regular' || patch.weight === 'semibold') block.weight = patch.weight;
     if (patch.family && FONT_FAMILIES.some((f) => f.id === patch.family)) {
@@ -1475,7 +1528,6 @@ export class Project {
         block.rect = { x, y, w, h };
       }
     }
-    return { ok: true };
   }
 
   removeTextBlock(index: number, id: string): { ok: boolean; error?: string } {

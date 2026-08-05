@@ -7,6 +7,7 @@ import {
   BACKGROUND_MIN_DPI,
   backgroundFit,
   chapterBackgrounds,
+  isBackgroundColor,
   luminance,
   textColorOn,
 } from './background.js';
@@ -68,6 +69,21 @@ describe('Textfarbe auf dem Hintergrund', () => {
 
   it('wiegt Grün stärker als Blau, wie das Auge', () => {
     expect(luminance('#00ff00')).toBeGreaterThan(luminance('#0000ff'));
+  });
+});
+
+describe('isBackgroundColor', () => {
+  it('erkennt jeden Ton der Palette, unabhängig von der Groß-/Kleinschreibung', () => {
+    for (const farbe of BACKGROUND_COLORS) {
+      expect(isBackgroundColor(farbe.hex)).toBe(true);
+      expect(isBackgroundColor(farbe.hex.toUpperCase())).toBe(true);
+    }
+  });
+
+  it('weist eine freie Farbe außerhalb der Palette ab', () => {
+    expect(isBackgroundColor('#123456')).toBe(false);
+    expect(isBackgroundColor(undefined)).toBe(false);
+    expect(isBackgroundColor(42)).toBe(false);
   });
 });
 
