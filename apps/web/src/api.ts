@@ -789,13 +789,29 @@ export const layoutLaden = () => hole<LayoutDocument>('/api/book/layout');
  * Antwort ist auch bei `ok: false` eine Auskunft — die Mängelliste ist das
  * Ergebnis, kein Fehlschlag.
  */
-export async function layoutAnwenden(rohtext: string): Promise<LayoutErgebnis> {
+export function layoutAnwenden(rohtext: string): Promise<LayoutErgebnis> {
+  // Über `imFlug` wie jeder andere schreibende Aufruf hier: Sonst wartet
+  // `ausstehendSenden()` vor einem Cmd+Z nicht auf ihn, und eine spät
+  // eintreffende Antwort überschriebe den gerade zurückgenommenen Stand.
+  return imFlug(layoutAnwendenAnfrage(rohtext));
+}
+
+async function layoutAnwendenAnfrage(rohtext: string): Promise<LayoutErgebnis> {
   const res = await fetch('/api/book/layout', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: rohtext,
   });
-  return (await res.json()) as LayoutErgebnis;
+  const roh = await res.text();
+  const daten: unknown = roh ? JSON.parse(roh) : {};
+  // Ausdrücklich der HTTP-Status, nicht `daten.ok`: Ein `ok: false` im Rumpf
+  // ist hier eine gültige Auskunft – die Mängelliste des Editors –, kein
+  // Fehlschlag. Nur ein schlechter Status oder eine kaputte Antwort ist einer.
+  if (!res.ok) {
+    const satz = (daten as { error?: string } | null)?.error;
+    throw new ApiFehler(satz ?? `HTTP ${res.status} ${res.statusText}`.trim(), res.status);
+  }
+  return daten as LayoutErgebnis;
 }
 
 export const pdfExportieren = (spreadIndex?: number) =>

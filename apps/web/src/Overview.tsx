@@ -139,16 +139,22 @@ export function Overview({
 
       {/*
         Die letzte Stelle hat keine Kachel, an deren Kante sie sitzen könnte –
-        deshalb eine eigene Zelle am Ende des Gitters.
+        deshalb eine eigene Zelle am Ende des Gitters. Sie steht auch, wenn das
+        Buch noch leer ist: Ohne eine einzige Doppelseite gäbe es sonst gar
+        keinen Weg, eine erste einzufügen.
       */}
-      {onInsert && spreadCount > 0 && (
+      {onInsert && (
         <div style={S.zelle}>
           <button
             onClick={() => onInsert(spreadCount)}
             style={{ ...S.endKachel, width: KACHEL_PX, height: KACHEL_PX / 2 }}
-            title="Eigene Doppelseite am Ende des Buches einfügen"
+            title={
+              spreadCount === 0
+                ? 'Erste eigene Doppelseite einfügen'
+                : 'Eigene Doppelseite am Ende des Buches einfügen'
+            }
           >
-            ＋ eigene Seite
+            {spreadCount === 0 ? '＋ erste Seite' : '＋ eigene Seite'}
           </button>
         </div>
       )}

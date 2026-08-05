@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FONT_FAMILIES, type FontFamilyId, fontFamily } from '@franibook/core';
 import { fehlertext, textAendern, textErstellen, textLoeschen } from './api.js';
+import { planeSofort } from './ausstehend.js';
 import { B, T } from './theme.js';
 
 /**
@@ -67,10 +68,19 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
    */
   const [regler, setRegler] = useState<{ rotateDeg?: number; fontSizePt?: number } | null>(null);
   const sendeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Abmeldung bei `planeSofort` für den gerade laufenden Timer, falls einer läuft. */
+  const sendeAbmelden = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setEntwurf(null);
     setRegler(null);
+    // Ein Timer, der noch auf den vorher gewählten Block zielt, darf nach dem
+    // Wechsel nicht mehr feuern – und muss sich bei `planeSofort` abmelden,
+    // sonst wartete ein Cmd+Z auf einen Schreibvorgang, der nie mehr kommt.
+    if (sendeTimer.current) clearTimeout(sendeTimer.current);
+    sendeTimer.current = null;
+    sendeAbmelden.current?.();
+    sendeAbmelden.current = null;
   }, [selectedId]);
 
   /** Ein Aufruf mit der Doppelseite als Antwort – und einer Meldung im Fehlerfall. */
@@ -106,10 +116,22 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
   function reglerSetzen(patch: { rotateDeg?: number; fontSizePt?: number }) {
     setRegler((r) => ({ ...r, ...patch }));
     if (sendeTimer.current) clearTimeout(sendeTimer.current);
-    sendeTimer.current = setTimeout(() => {
-      void aendern(patch);
+    sendeAbmelden.current?.();
+
+    const senden = async () => {
+      sendeTimer.current = null;
+      sendeAbmelden.current = null;
+      await aendern(patch);
       setRegler(null);
-    }, SENDE_VERZOEGERUNG_MS);
+    };
+    sendeTimer.current = setTimeout(() => void senden(), SENDE_VERZOEGERUNG_MS);
+    // Cmd+Z zieht den Schreibvorgang vor: Sonst nähme der Server den Stand von
+    // vor der Bewegung zurück, und dieser Schreibvorgang stellte sie danach
+    // wieder her – dasselbe Muster wie in `useSpreadEditor.ts`.
+    sendeAbmelden.current = planeSofort(async () => {
+      if (sendeTimer.current) clearTimeout(sendeTimer.current);
+      await senden();
+    });
   }
 
   async function entfernen() {
