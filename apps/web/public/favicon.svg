@@ -1,0 +1,29 @@
+<!--
+  Das Zeichen der App ist ihr Gegenstand: eine aufgeschlagene Doppelseite.
+  Links die Jahresseite mit einer Textzeile, rechts ein Bild mit Unterschrift –
+  dieselbe Skizzenlogik wie in der Anordnungswahl (`TemplatePicker.tsx`), und
+  ausschließlich Farben aus `theme.css`: warm-900 als Grund, warm-50 als Papier,
+  warm-300 als Text, Türkis als Bild.
+
+  Ein Zeichen, keine Fotografie, und mit eigenem Grund: Der Tab kann hell oder
+  dunkel sein, ein freigestelltes Motiv verschwände in einem von beiden. Der
+  Falz ist die Lücke zwischen den Seiten und keine Linie – bei 16 px ist eine
+  Haarlinie ein grauer Schleier.
+
+  Verworfen: die formtreue Fassung mit zwei quadratischen Seiten (das Buch ist
+  30 × 30 cm, eine Doppelseite also 2:1). Sie ist richtiger und liest sich bei
+  16 px trotzdem als zwei Kacheln statt als Buch; hochformatige Seiten sind das
+  Bild, das jeder von einem Buch hat. Ebenfalls verworfen: ein Polaroid (sagt
+  „Foto", nicht „Fotobuch") und ein Bildstapel (verliert bei 16 px seine Kanten).
+
+  Eine Datei, kein PNG daneben: Chrome, Safari und Firefox nehmen SVG, und eine
+  gerasterte zweite Fassung liefe still auseinander.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#544c46" />
+  <rect x="8" y="14" width="22" height="36" rx="1.5" fill="#fbfaf8" />
+  <rect x="34" y="14" width="22" height="36" rx="1.5" fill="#fbfaf8" />
+  <rect x="11.5" y="18" width="12" height="7" rx="1" fill="#d6ccc4" />
+  <rect x="37.5" y="17.5" width="15" height="20" rx="1" fill="#00afcb" />
+  <rect x="37.5" y="41" width="15" height="5" rx="1" fill="#d6ccc4" />
+</svg>
