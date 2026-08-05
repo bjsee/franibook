@@ -543,4 +543,16 @@ describe('occasionOfDay', () => {
   it('liefert für einen gewöhnlichen Tag nichts', () => {
     expect(occasionOfDay('2016-09-08T12:00:00', ctx)).toBeUndefined();
   });
+
+  it('erkennt einen Geburtstag über eine Monatsgrenze hinweg', () => {
+    // Geburtstag am 30. März, Foto zwei Tage später schon im April.
+    const grenzCtx = { birthDate: '2008-03-30' };
+    expect(occasionOfDay('2026-04-01T12:00:00', grenzCtx)).toBe('18. Geburtstag');
+  });
+
+  it('erkennt Ostern über eine Monatsgrenze hinweg', () => {
+    // Ostersonntag 2018 war der 1. April, Karfreitag also der 30. März.
+    expect(occasionOfDay('2018-03-30T12:00:00')).toBe('Ostern 2018');
+    expect(occasionOfDay('2018-04-01T12:00:00')).toBe('Ostern 2018');
+  });
 });
