@@ -195,6 +195,13 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     spreadIndex: ausIndex,
     schluessel: amSlot('platz'),
   },
+  'PATCH /api/spreads/:index/slots/:slotId/layer': {
+    label: 'Ebene geändert',
+    spreadIndex: ausIndex,
+    // Mit Schlüssel, weil man sich durch den Stapel klickt: Dreimal „eine Ebene
+    // vor" ist ein Griff und soll ein Cmd+Z sein.
+    schluessel: amSlot('ebene'),
+  },
   'PATCH /api/spreads/:index/textslots/:slotId': {
     label: 'Vorlagentext geändert',
     spreadIndex: ausIndex,

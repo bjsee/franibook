@@ -12,6 +12,7 @@ import {
   type Crop,
   type DateContext,
   type DateEdit,
+  type Ebenenzug,
   type FrameId,
   type GenerateResult,
   type LayoutDocument,
@@ -52,6 +53,7 @@ import {
   isBackgroundColor,
   isFrameId,
   isJustified,
+  moveSlotLayer,
   movePhoto,
   movePhotos,
   addToGroup,
@@ -614,6 +616,16 @@ export class Project {
     hintergruende: number;
     zeitstrahl: number;
     positionen: number;
+    /**
+     * Bilder mit einer von Hand gesetzten Ebene im Stapel.
+     *
+     * Gezählt wird der Slot mit einem `layer`, nicht der Stapel: Ein Zug
+     * nummeriert alle Plätze der Doppelseite neu, also trägt danach jeder eine
+     * Ebene. Die Zahl sagt damit „auf so vielen Bildern liegt eine Aussage über
+     * das Vorn und Hinten" – und die verwirft der Neuaufbau, weil die neuen
+     * Plätze aus der Vorlage kommen.
+     */
+    ebenen: number;
     /** Von Hand gesetzte Textblöcke auf Seiten, die neu gebaut werden. */
     texte: number;
     /**
@@ -638,6 +650,7 @@ export class Project {
     let hintergruende = 0;
     let zeitstrahl = 0;
     let positionen = 0;
+    let ebenen = 0;
     let texte = 0;
     let textplaetze = 0;
     let festgehalten = 0;
@@ -667,6 +680,7 @@ export class Project {
       // gerechnet und nicht gesetzt: Der Neuaufbau stellt es wieder her.
       if (!isJustified(spread.templateId))
         positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
+      ebenen += spread.slots.filter((sl) => sl.layer !== undefined).length;
       if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
@@ -679,6 +693,7 @@ export class Project {
       hintergruende,
       zeitstrahl,
       positionen,
+      ebenen,
       texte,
       textplaetze,
       festgehalten,
@@ -1336,6 +1351,28 @@ export class Project {
     if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
 
     slot.rect = this.aufsBlatt(rect);
+    return { ok: true };
+  }
+
+  /**
+   * Verschiebt ein Bild im Stapel seiner Doppelseite.
+   *
+   * Gerechnet wird im Kern (`moveSlotLayer`), und zwar auf derselben Reihenfolge,
+   * in der `renderSpread` zeichnet – sonst meinten Knopf und Vorschau
+   * verschiedene Ebenen. Kein Neuanordnen: Die Ebene wirkt allein beim Rendern,
+   * wie Neigung und Rahmen.
+   */
+  setSlotLayer(index: number, slotId: string, zug: Ebenenzug): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const template = templateById(spread.templateId);
+    if (!template) return { ok: false, error: 'Vorlage nicht auflösbar' };
+
+    const neu = moveSlotLayer(spread, template, slotId, zug);
+    if (!neu) return { ok: false, error: 'Slot nicht gefunden' };
+
+    this.spreads[index] = neu;
     return { ok: true };
   }
 

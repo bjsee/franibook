@@ -216,12 +216,15 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
   },
 
   'PATCH /api/spreads/:index/half': ({ project }) => {
-    const { halves, current } = project.halfChoices(0);
+    // Nicht die erste Doppelseite: Ist sie ein Jahresauftakt, gibt es dort
+    // keine seitenweise Wahl – sie verlöre Jahreszahl und Ereigniszeilen.
+    const index = project.spreads.findIndex((_, i) => !project.halfChoices(i).auftakt);
+    const { halves, current } = project.halfChoices(index);
     const andere = halves.find((h) => h.id !== current.left);
-    if (!andere) throw new Error('Keine zweite Halbseite zur Wahl');
+    if (index < 0 || !andere) throw new Error('Keine zweite Halbseite zur Wahl');
     return {
       method: 'PATCH',
-      url: '/api/spreads/0/half',
+      url: `/api/spreads/${index}/half`,
       payload: { side: 'left', halfId: andere.id },
     };
   },
@@ -331,6 +334,15 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
       method: 'PATCH',
       url: `/api/spreads/${index}/slots/${slotId}/rect`,
       payload: { rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.25 } },
+    };
+  },
+
+  'PATCH /api/spreads/:index/slots/:slotId/layer': ({ project }) => {
+    const { index, slotId } = ersterSlot(project);
+    return {
+      method: 'PATCH',
+      url: `/api/spreads/${index}/slots/${slotId}/layer`,
+      payload: { zug: 'vorn' },
     };
   },
 

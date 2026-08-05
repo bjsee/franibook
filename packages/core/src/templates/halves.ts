@@ -8,16 +8,25 @@
  *
  * Erzeugt wird nichts Neues: Jede vorhandene Vorlage zerfällt an der Falzachse
  * in zwei Hälften. Am Bestand geprüft liegt **kein einziger Slot** über dem
- * Falz – die Templates lassen die Falzzone ohnehin frei –, sodass alle 105
- * Vorlagen des Flusses sauber zerlegbar sind. Das ergibt 126 verschiedene
- * Halbseiten, die sich frei zu Doppelseiten kombinieren lassen.
+ * Falz – die Templates lassen die Falzzone ohnehin frei –, sodass alle Vorlagen
+ * des Flusses sauber zerlegbar sind. Das ergibt 74 verschiedene Halbseiten, die
+ * sich frei zu Doppelseiten kombinieren lassen.
+ *
+ * Fast nichts Neues: Die Zerlegung deckt nicht jede Bilderzahl ab. Für sieben
+ * und acht Bilder gab sie je genau **eine** Anordnung her, für dreizehn keine
+ * einzige – wer eine solche Seite von Hand anordnen wollte, bekam keine Wahl,
+ * sondern eine Bestätigung. Die Bibliothek führt deshalb unter `halves` eigens
+ * entworfene Halbseiten, die die Lücken auf mindestens drei Anordnungen je
+ * Bilderzahl auffüllen. Sie kommen **nach** den abgeleiteten in die Liste: Eine
+ * Halbseitenkennung steht in gespeicherten Projekten, und die abgeleitete darf
+ * ihre nicht an eine gleich geformte neue verlieren.
  *
  * Geführt werden alle Halbseiten in **Linksform**. Für die rechte Seite wird
  * gespiegelt und nicht verschoben: Eine Seite hat außen mehr Rand als am Falz,
  * und eine nur verschobene linke Hälfte legte ihren Außenrand an den Falz.
  */
 import type { Template, TemplateId, TemplateSlot } from '../model/template.js';
-import { allTemplates, templateMeta } from './index.js';
+import { allTemplates, libraryHalves, templateMeta } from './index.js';
 
 /** Kennungspräfix einer zusammengesetzten Doppelseite. */
 export const PAIR_PREFIX = 'paar:';
@@ -28,6 +37,8 @@ export interface HalfPage {
   slots: TemplateSlot[];
   /** Aus welcher Vorlage die Hälfte stammt – für die Herkunft in der Oberfläche. */
   from: TemplateId;
+  /** Wie sie heißt, sofern sie eigens entworfen wurde – sonst die der Vorlage. */
+  name?: string;
 }
 
 /** Geometrische Signatur, um gleiche Hälften nur einmal anzubieten. */
@@ -119,8 +130,22 @@ function buildHalves(): HalfPage[] {
       if (teil.length === 0) continue;
       const sig = signature(teil);
       if (gesehen.has(sig)) continue;
-      gesehen.set(sig, { id: `halb:${t.id}:${seite}`, slots: teil, from: t.id });
+      gesehen.set(sig, { id: `halb:${t.id}:${seite}`, slots: teil, from: t.id, name: t.name });
     }
+  }
+
+  // Zuletzt die eigens entworfenen: Sie füllen die Bilderzahlen auf, für die
+  // die Zerlegung zu wenig hergibt, und treten dabei keiner abgeleiteten
+  // Halbseite ihre Kennung weg.
+  for (const eigen of libraryHalves()) {
+    const sig = signature(eigen.slots);
+    if (gesehen.has(sig)) continue;
+    gesehen.set(sig, {
+      id: eigen.id,
+      slots: eigen.slots,
+      from: eigen.id,
+      name: eigen.name,
+    });
   }
 
   return [...gesehen.values()].sort(

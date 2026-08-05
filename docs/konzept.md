@@ -1000,6 +1000,21 @@ Verworfen wurde ein auf den Median zentriertes Fenster: Dann steht der Marker au
 
 In die Spanne gehen nur Daten der Konfidenz `high` oder `medium` ein – ein Dateidatum ist häufig das Kopierdatum und würde den Balken über Jahre aufziehen. Fehlt jedes belastbare Datum, bleiben Achse und Ticks stehen und nur der Marker entfällt; ebenso auf Kapitelauftakten, deren Bild nach Auflösung gewählt wird und nicht nach Datum.
 
+> **Korrektur (5. August 2026): am Rand steht die Jahresseite auf ihrem Jahrgang**
+>
+> Der Satz oben gilt für den **Fußstrahl**: Dort unterdrückt `markerless` allein
+> die Spitze, Achse und Spannbalken bleiben. An der **Randachse** speist dasselbe
+> Datum den Marker _und_ den zurückgelegten Abschnitt – dort hieß „kein Datum"
+> deshalb „kein Fortschritt", und auf jeder der neunzehn Jahresseiten stand ein
+> leerer Balken.
+>
+> Eine Jahresseite steht jetzt auf dem **Beginn ihres Jahrgangs**
+> (`spread.chapterYear`, 1. Januar). Das ist keine Notlösung, sondern die
+> genauere Angabe: Der Median der Auftaktbilder liegt bei neun dichten Bildern
+> irgendwo im Frühjahr, und gewählt wurden sie nach Auflösung. Was der Auftakt
+> vertritt, ist der Jahreswechsel – und der ist an der Achse eine exakte Stelle.
+> Ohne `chapterYear` bleibt es beim Median: eine Stelle ist besser als keine.
+
 **Platz.** Die 14 mm zwischen dem Ende aller Vorlagen (278 mm) und dem Sicherheitsrand (292 mm), die die Bibliothek ohnehin frei lässt. Kein Template wurde angefasst, die Layouts sind bitidentisch, das Seitenbudget unberührt. Reicht ein Slot in den Fußraum, entfällt der Strahl – heute betrifft das allein den randabfallenden Gruppenauftakt.
 
 **Falzband.** Im ±7-mm-Band um die Falzachse stehen keine Ticks und keine Textkanten; das Label weicht auf die Seite mit mehr Platz aus. Achse, Balken und Spitze laufen durch, damit der Marker seine ehrliche Position behält. Systematisch betroffen ist der Juli-Tick: Weil das Fenster am 1. Oktober beginnt, liegt die Achsenmitte auf jeder Seite genau auf dem 1. Juli. Beim Marker ist es gemessen ein einziger Fall von 62.
@@ -1133,7 +1148,7 @@ Zwei Arten, unterschiedlich geregelt:
 
   Ein Jahreswechsel belegt damit **eine Seite, nicht eine Doppelseite**: Die rechte Seite tragen die ersten Fotos des Jahres, so dicht wie eine gewöhnliche Seite des Buches. Zwei Fassungen sind daran gescheitert: Ein einzelnes großes Auftaktbild fügte dem Jahr nichts hinzu, was die folgenden Doppelseiten nicht besser zeigen. Und eine Doppelseite nur für Jahreszahl und Ereignisse wären bei neunzehn Jahrgängen achtunddreißig Seiten für Text — ein Viertel des Buches.
 
-  Die Bibliothek hält Auftaktvorlagen für zwei, drei, vier und sechs Bilder; gewählt wird die größte, für die das Jahr genug Bilder übrig hat — mindestens doppelt so viele, wie der Auftakt nimmt, damit im Fluss noch etwas bleibt. Am echten Bestand greift überall die Sechsbildfassung. Reicht es nicht, bleibt die rechte Seite leer; eine Vorlage mit leeren Plätzen zu setzen wäre schlechter.
+  Die Automatik hält Auftaktvorlagen für zwei, drei, vier und sechs Bilder (die Bibliothek deckt inzwischen mehr ab, siehe Korrektur unten); gewählt wird die größte, für die das Jahr genug Bilder übrig hat — mindestens doppelt so viele, wie der Auftakt nimmt, damit im Fluss noch etwas bleibt. Am echten Bestand greift überall die Sechsbildfassung. Reicht es nicht, bleibt die rechte Seite leer; eine Vorlage mit leeren Plätzen zu setzen wäre schlechter.
 
   Die beiden alten Vorlagen mit einem großen Bild sind als `veraltet` markiert: Sie bleiben in der Bibliothek, damit gespeicherte Projekte auflösbar sind, und werden nicht mehr gewählt.
 
@@ -1146,6 +1161,48 @@ Zwei Arten, unterschiedlich geregelt:
   Der Schalter bleibt aus, weil die leere Jahresseite auch etwas ist: der Atemzug vor dem Jahrgang. Wer die Seiten braucht, gewinnt sie hier — das ist eine Abwägung und keine Verbesserung.
 
   Wie groß die Ereigniszeilen stehen, bestimmt nicht ihre Anzahl, sondern das Feld `lines` des Textplatzes: Drei Ereignisse sollen so groß gesetzt sein wie fünf.
+
+  > **Korrektur (5. August 2026): Auftakte für jede Bilderzahl, und die Automatik bleibt, wie sie ist**
+  >
+  > Der Absatz oben beschreibt, was die **Automatik** wählt — und das war zugleich
+  > alles, was es gab. Die Folge trug erst, wer eine Jahresseite von Hand anfasste:
+  > Im Baum sieben Bilder auf sie zu ziehen brachte die Absage „Eine Auftaktseite
+  > trägt 2, 3, 4, 6, 9 Bilder", und die Anordnungswahl zeigte für eine Jahresseite
+  > mit fünf, sieben oder acht Bildern keine einzige passende Fassung. Die
+  > Jahresseite war damit die einzige Doppelseite des Buches, an der sich die
+  > Anordnung nicht ändern ließ.
+  >
+  > Die Bibliothek hält jetzt Jahresauftakte für **jede Bilderzahl von 1 bis 12, je
+  > drei Fassungen** — hochkant, quer und gemischt, wie im Fluss. Schlank (Bilder
+  > nur rechts) für 1 bis 9, dicht (Bilder auch auf der Jahresseite) zusätzlich für
+  > 7, 8, 10, 11 und 12; die drei vorhandenen Neunerfassungen behalten ihre
+  > Kennungen. Gerechnet sind sie wie die Mosaike: Zellen in 4:3, 3:4 oder
+  > quadratisch, Reihen, die die 262 mm Nutzbreite füllen, und ein gemeinsamer
+  > Maßstab je Vorlage, damit der Block in die Höhe passt, ohne dass alle Reihen auf
+  > die kleinste Zelle schrumpfen. Die Reihe mit den wenigsten — und damit größten —
+  > Zellen steht oben und trägt die Betonung.
+  >
+  > **Die Automatik sieht davon nichts.** Die neuen Bilderzahlen tragen das Tag
+  > `nur-wahl` und bleiben aus `chapterTemplates()` heraus; nur `chapterChoices()`
+  > kennt sie, und das ruft, wer von Hand wählt (Anordnungswahl, Baum, Neuanordnen
+  > einer Seite). Ohne diese Trennung nähme `auftaktGroessen` die größte Fassung,
+  > für die ein Jahrgang genug Bilder hat, und füllte jeden Jahresauftakt mit acht
+  > statt sechs Bildern — Seitenzahl und Bildverteilung des ganzen Buchs wären
+  > andere, ungefragt. Ein Test hält die Zahlen der Automatik fest ({0, 2, 3, 4, 6}
+  > schlank, dazu 9 dicht).
+  >
+  > Die Ausnahme sind die neuen Fassungen für 2, 3 und 4 Bilder: Sie sind so groß
+  > wie die vorhandenen und tragen `nur-wahl` deshalb nicht. Sie ändern keine
+  > Bilderzahl, sondern nur die Passung — genau wie die drei Sechserfassungen, die
+  > es aus demselben Grund schon dreifach gibt. Am Probebestand greift dadurch bei
+  > einem Jahrgang mit drei querformatigen Bildern jetzt `spread.chapter.3up.quer`
+  > statt der hochkanten Fassung.
+  >
+  > **Seitenweise geht eine Jahresseite nicht.** Die Hälften des Flusses tragen
+  > keinen Textplatz; aus zwei zusammengesetzt verlöre der Auftakt Jahreszahl und
+  > Ereigniszeilen. `setSpreadHalf` lehnt das jetzt mit diesem Satz ab, und
+  > `halfChoices` meldet `auftakt: true` — die Oberfläche zeigt den Umschalter dort
+  > gar nicht erst, statt eine Wahl anzubieten, die der Server ablehnt.
 
 - **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
@@ -1184,6 +1241,47 @@ Der Betrag liegt zwischen 40 % und 100 % des Höchstwerts. Ohne diese Untergrenz
 Im RSM steht die Neigung als `ImageBox.rotateDeg`, in Grad im Uhrzeigersinn um den **Mittelpunkt** der Box — dieselbe Festlegung wie beim Rückentext des Umschlags. Der Drehpunkt ist die Mitte und nicht die obere linke Ecke, weil beide Renderer denselben Punkt treffen müssen: Bei der Mitte genügt dafür in DOM und PDF je eine Transformation (`transform: rotate()` bzw. `doc.rotate(…, { origin })`), bei der Ecke wären es Verschiebung plus Drehung — zwei Gelegenheiten für einen Vorzeichenfehler. Gedreht wird der Kasten samt Inhalt, nie das Foto im Ausschnitt: Der Ausschnitt bleibt unberührt, und die Auflösung ändert sich nicht.
 
 Gemessen kostet die Neigung nichts an Übereinstimmung. Im Parity-Test weichen mit Neigung **0,157 %** der Pixel ab, ohne sie **0,242 %** — die schrägen Kanten sind weichgezeichnet, wo das Millimeterraster der Fixtures sonst harte Ein-Pixel-Versätze erzeugt.
+
+### Ebenen: wer liegt vor wem
+
+Im Raster der Vorlage gibt es keinen Stapel — kein Slot überlappt einen anderen,
+das prüft `library.test.ts`. Seit sich die Bildkästen frei ziehen und aufziehen
+lassen (`SlotAssignment.rect`), gibt es ihn: Zwei überlappende Bilder haben eine
+Reihenfolge, ob man sie bestimmt oder nicht. Bestimmt hat sie bis dahin die
+**Reihenfolge der Vorlage** — also der Zufall des Templateentwurfs.
+
+`SlotAssignment.layer` ist die Antwort, und sie ist bewusst klein gehalten:
+
+- **Ohne Angabe gilt `0`,** und damit entscheidet weiter die Vorlage. Jede
+  Doppelseite, die niemand angefasst hat, zeichnet bitidentisch wie vorher.
+- **Eine Funktion bestimmt die Reihenfolge** (`slotReihenfolge` in
+  `model/spread.ts`), und beide Seiten benutzen sie: `renderSpread` beim Zeichnen
+  und `moveSlotLayer` beim Umstellen. Zwei Sortierungen wären der Fall, in dem
+  Knopf und Papier verschiedene Ebenen meinen.
+- **Kein Renderer sortiert.** Die Reihenfolge der Boxen im RSM _ist_ die
+  Zeichenreihenfolge — das gilt seit dem ersten Tag und trägt hier die ganze
+  Funktion: Vorschau und PDF können nicht auseinanderlaufen, und die Oberfläche
+  liest ihre Auskunft „Ebene 2 von 5" aus derselben Liste, statt sie
+  nachzurechnen.
+- **Vier Züge statt einer Ebenennummer** (`vorn`, `vor`, `zurueck`, `hinten`).
+  Eine Nummer ist das Ergebnis eines Zuges und nicht die Absicht: Man will „das
+  da vor das andere", nicht „Ebene 3" — und nach dem Umstellen der Nachbarn wäre
+  die Nummer von gestern die falsche von heute.
+- **Jeder Zug nummeriert den ganzen Stapel neu**, fortlaufend von 0. Der kürzere
+  Weg wäre ein `layer` weit jenseits der anderen (`max + 1`). Dann driften die
+  Zahlen mit jedem Zug auseinander, und aus dem Modell ist nicht mehr zu lesen,
+  in welcher Ebene ein Bild liegt.
+
+Betroffen sind nur Bilder. Vorlagentexte, Textblöcke und der Zeitstrahl liegen
+weiter darüber, in dieser Ordnung — ein Text unter einem Foto ist kein Layout,
+sondern ein Versehen. Und wo es keinen Stapel gibt (ein einziges Bild auf der
+Doppelseite), zeigt die Oberfläche die Züge nicht: Die Ebene wäre dort keine
+leere Wahl, sondern eine Frage ohne Sinn.
+
+Wie Neigung und Rahmen wirkt die Ebene **allein beim Rendern** — kein Neuaufbau,
+keine geänderte Fotoverteilung. Ein Neuanordnen verwirft sie trotzdem, weil die
+neuen Plätze aus der Vorlage kommen; `handwork().ebenen` sagt vorher, wie viel
+das kostet.
 
 ### Rahmen um die Bilder
 
@@ -2262,6 +2360,38 @@ Sie steht nicht in der Bibliothek — es gäbe 63 × 63 —, sondern wird von
 `requireTemplate` steht (Rendern, Neuaufbau, Umhängen), arbeitet unverändert
 weiter. Die Slots bekommen dabei Präfixe (`l-a`, `r-b`): Zwei Slots namens `a`
 auf derselben Doppelseite wären für einen Ausschnitt nicht auseinanderzuhalten.
+
+> **Korrektur (5. August 2026): die passende Bilderzahl zuerst — und drei
+> Anordnungen für jede**
+>
+> Zwei Mängel derselben Wurzel: Die Wahl war nach der Zahl der Plätze geordnet
+> und nicht nach der Bilderzahl der Seite, und für manche Bilderzahlen gab es
+> nichts zu wählen.
+>
+> **Der Fokus.** Die Halbseiten standen nach Plätzezahl aufsteigend im
+> Rollbereich — bei einer Seite mit sieben Bildern lag die eigene Zahl also in der
+> Mitte, hinter sechs Reihen kleinerer Anordnungen. Man suchte erst und wählte
+> dann. Jetzt stehen die Anordnungen der eigenen Bilderzahl in einem ersten Fach
+> und die übrigen darunter, nach Abstand zur eigenen Zahl geordnet. Sichtbar
+> bleiben sie, weil eine andere Bilderzahl eine berechtigte Absicht ist: Ein Bild
+> soll in den Pool, oder es soll eines dazukommen. (`Faecher` in
+> `TemplatePicker.tsx`; die ganze Doppelseite sortiert der Server schon so.)
+>
+> **Die Lücken.** Die Zerlegung deckt nicht jede Bilderzahl ab. Für sieben und
+> acht Bilder ergab sie je genau **eine** Anordnung, für dreizehn keine einzige,
+> für vierzehn zwei — dort war die Wahl keine Wahl, sondern eine Bestätigung. Die
+> Bibliothek führt deshalb unter `halves` **eigens entworfene Halbseiten**, die
+> auf mindestens drei Anordnungen je Bilderzahl von 1 bis 14 auffüllen (14 ist die
+> Obergrenze, weil keine Vorlage mehr Bilder auf eine Buchseite legt). Sie stehen
+> in Linksform wie jede Halbseite und werden **nach** den abgeleiteten in die
+> Liste gehängt: Eine Halbseitenkennung steht in gespeicherten Projekten, und die
+> abgeleitete darf ihre nicht an eine gleich geformte neue verlieren. Damit stehen
+> 82 Halbseiten zur Wahl statt 74.
+>
+> Der Grundsatz „erzeugt wird nichts Neues" ist damit nicht aufgegeben, sondern
+> begrenzt: Die Zerlegung bleibt die Quelle, entworfen wird nur, was sie nicht
+> hergibt. Geprüft werden die neuen Hälften wie Vorlagenslots — Nutzfläche,
+> Falzzone, Fußraum, Mindestauflösung (`halves.test.ts`).
 
 ### Zustandsmodell
 

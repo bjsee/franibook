@@ -187,9 +187,9 @@ Begründung wie bei `PATCH /api/photos`. Zwei Regeln stehen quer zum Einzelzug u
 sind Absicht: Eine leer gezogene Seite **bleibt stehen** (leere Vorlage, gemeldet
 über `leer`) statt den Stapel abzulehnen, und **festgehaltene Seiten sind weder
 Ziel noch Quelle** – sie verlören, wofür sie festgehalten wurden. **Ein Auftakt
-nimmt Bilder an**, wechselt dabei innerhalb seiner Familie (Sechser wird dichter
-Neuner, Textplätze bleiben) und lehnt nur die Zahlen ab, für die es keine Fassung
-gibt – 1, 2, 3, 4, 6, 9 beim Jahresauftakt, entschieden in `anordnen`. Die
+nimmt Bilder an**, wechselt dabei innerhalb seiner Familie (`chapterChoices`,
+Textplätze bleiben) und lehnt nur die Zahlen ab, für die es keine Fassung
+gibt – beim Jahresauftakt alles über zwölf, entschieden in `anordnen`. Die
 Auskunft je Seite liefert `GET /api/book/tree` (`project/baum.ts`), die Bilddaten
 kommen weiter über `GET /api/photos`. Der Texteditor der Aufteilung liegt jetzt
 unter `/aufteilung/json`. Begründung und verworfene Fassungen: `docs/konzept.md`,
@@ -210,12 +210,30 @@ Begründung und Messwerte: `docs/konzept.md`, Abschnitt „Justierte Zeilen".
 die Jahreszahl und fünf Ereigniszeilen. An: neun Bilder über beide Seiten
 (`spread.chapter.dicht.*`), die Jahreszahl größer und in einem Band, das kein Bild
 berührt — der Freiraum ist die Auszeichnung, nicht eine Farbfläche und nicht ein
-Bild darunter. Alle dichten Fassungen haben **dieselbe Platzzahl**, weil der
-Auftakt zuerst über die Bilderzahl gewählt wird und erst danach über die Passung;
-sonst entschiede die Platzzahl statt der Ausrichtung. Ein Jahrgang mit weniger als
-achtzehn übrigen Bildern behält die schlanke Fassung. Am echten Bestand sind das 57
-Bilder mehr in den Auftakten, rund vier Doppelseiten. Begründung und verworfene
-Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
+Bild darunter. Alle dichten Fassungen **der Automatik** haben dieselbe Platzzahl,
+weil der Auftakt zuerst über die Bilderzahl gewählt wird und erst danach über die
+Passung; sonst entschiede die Platzzahl statt der Ausrichtung. Ein Jahrgang mit
+weniger als achtzehn übrigen Bildern behält die schlanke Fassung. Am echten
+Bestand sind das 57 Bilder mehr in den Auftakten, rund vier Doppelseiten.
+Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
+
+**Von Hand steht der Jahresauftakt für jede Bilderzahl von 1 bis 12 zur Wahl**, je
+drei Fassungen (hochkant, quer, gemischt) — `chapterChoices()` gegen
+`chapterTemplates()`. Der Unterschied ist das Tag **`nur-wahl`**: Die Automatik
+nimmt die größte Fassung, für die ein Jahrgang genug Bilder hat, und füllte mit
+allen zusammen jeden Auftakt mit acht statt sechs Bildern — Seitenzahl und
+Bildverteilung des Buchs wären andere, ungefragt. Wer die Wahl von Hand erweitert,
+schreibt `nur-wahl` dazu; wer die Automatik ändern will, ändert den Test in
+`library.test.ts` mit. **Seitenweise geht eine Jahresseite nicht** (`halfChoices`
+meldet `auftakt`, `setSpreadHalf` lehnt ab): Die Hälften des Flusses tragen keinen
+Textplatz, die Seite verlöre Jahreszahl und Ereigniszeilen.
+
+**Die Anordnungswahl zeigt die eigene Bilderzahl zuerst** (`Faecher` in
+`TemplatePicker.tsx`), die übrigen darunter nach Abstand. Und für **jede**
+Bilderzahl von 1 bis 14 gibt es mindestens drei Halbseiten: Was die Zerlegung der
+Vorlagen nicht hergibt — sieben, acht, dreizehn, vierzehn —, steht als eigens
+entworfene Halbseite unter `halves` in `library.json` (`libraryHalves`), hinten
+angehängt, damit keine abgeleitete ihre Kennung verliert.
 
 ### Zeit und Datum
 
@@ -388,6 +406,20 @@ hat einen Fuß; bei anderen Rahmen bleibt der Text gespeichert und unsichtbar.
 Passt der Satz nicht in die Breite, wird die Schrift kleiner statt der Text
 umgebrochen. Messwerte und verworfene Fassungen: `docs/konzept.md`, Abschnitt
 „Rahmen um die Bilder".
+
+**Überlappende Bilder haben eine Ebene** (`SlotAssignment.layer`, `layout/ebene.ts`).
+Im Raster der Vorlage berührt sich kein Slot; seit die Kästen frei gezogen werden,
+ist „wer liegt vorn" eine Frage. `undefined` heißt `0` und damit die Reihenfolge
+der Vorlage — eine unangetastete Doppelseite zeichnet bitidentisch wie vorher.
+**Die Reihenfolge bestimmt genau eine Funktion** (`slotReihenfolge` in
+`model/spread.ts`), benutzt von `renderSpread` beim Zeichnen und von
+`moveSlotLayer` beim Umstellen; kein Renderer sortiert, die Boxenfolge im RSM
+_ist_ die Zeichenreihenfolge. Vier Züge statt einer Ebenennummer (`vorn`, `vor`,
+`zurueck`, `hinten`, `PATCH /api/spreads/:i/slots/:slot/layer`), und jeder
+nummeriert den Stapel neu — fortlaufend von 0, sonst driften die Zahlen. Texte
+und Zeitstrahl bleiben darüber. Wirkt beim Rendern wie Neigung und Rahmen, wird
+vom Neuaufbau aber verworfen (`handwork().ebenen`). Begründung:
+`docs/konzept.md`, Abschnitt „Ebenen: wer liegt vor wem".
 
 **Am Bild entscheidet der Ort des Griffs, was das Ziehen bewegt**
 (`spread/Bildgriffe.tsx`): im Bild der Ausschnitt, am Rand der Kasten auf der

@@ -20,7 +20,15 @@
  * Schreibvorgang auf das ganze Projekt-JSON.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Crop, FrameId, MoveSource, MoveTarget, Rect, RenderedSpread } from '@franibook/core';
+import type {
+  Crop,
+  Ebenenzug,
+  FrameId,
+  MoveSource,
+  MoveTarget,
+  Rect,
+  RenderedSpread,
+} from '@franibook/core';
 import {
   coverCrop,
   fitCropToAspect,
@@ -41,6 +49,7 @@ import {
   ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
   datumKorrigieren,
+  ebeneSetzen,
   fehlertext,
   type FotoInfo as PhotoInfo,
   fotopoolLaden,
@@ -329,6 +338,48 @@ export function useSpreadEditor({
   const gewaehlteBox = bildBox(selectedSlotId);
   /** Ob dieses Bild seinen Platz nicht mehr aus der Vorlage hat. */
   const istFreiGesetzt = gewaehlteBox?.manualRect === true || pendingRect !== null;
+
+  /**
+   * In welcher Ebene liegt das gewählte Bild, und wie viele gibt es?
+   *
+   * Abgelesen an der Reihenfolge der Boxen und nicht selbst gerechnet: Die
+   * Reihenfolge im RSM **ist** die Zeichenreihenfolge (`slotReihenfolge` im
+   * Kern). Eine zweite Sortierung hier wäre die zweite Wahrheit, bei der Panel
+   * und Papier verschiedene Ebenen meinen.
+   *
+   * Ohne das Hintergrundbild: Das liegt unter allem und ist keine Ebene, in die
+   * man etwas schieben könnte.
+   */
+  const ebene = useMemo(() => {
+    const stapel = imageBoxes(angezeigt)
+      .filter((b) => b.slotId !== 'background')
+      .map((b) => b.slotId);
+    const i = selectedSlotId ? stapel.indexOf(selectedSlotId) : -1;
+    if (i < 0) return null;
+    // Von vorn gezählt, weil vorn das ist, was man sieht: Ebene 1 liegt oben.
+    return { ebene: stapel.length - i, von: stapel.length };
+  }, [angezeigt, selectedSlotId]);
+
+  /**
+   * Ein Bild im Stapel bewegen.
+   *
+   * Vier Züge und keine Ebenennummer – dieselbe Geste wie in jedem
+   * Grafikprogramm. Gerechnet wird im Kern; die Antwort bringt die fertig
+   * gezeichnete Doppelseite mit, und die neue Reihenfolge der Boxen ist die
+   * Auskunft über die neue Ebene.
+   */
+  async function ebeneZiehen(zug: Ebenenzug) {
+    if (!selectedSlotId) return;
+    try {
+      const data = await ebeneSetzen(index, selectedSlotId, zug);
+      if (data.spread) {
+        onSpread(data.spread);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Ebene nicht geändert: ${fehlertext(e)}`);
+    }
+  }
 
   // --------------------------------------------------------- Speichern
 
@@ -1531,6 +1582,10 @@ export function useSpreadEditor({
     ausrichtungKippen,
     ausschnittHinweis,
     kastenHinweis,
+
+    // Ebene im Stapel
+    ebene,
+    ebeneZiehen,
 
     // Ausschnitt und Lage
     pendingCrop,

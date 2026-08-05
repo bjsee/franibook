@@ -19,6 +19,7 @@ import { BackgroundPicker } from '../BackgroundPicker.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Ebene } from './Ebene.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
@@ -346,6 +347,8 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
           Raster
         </button>
       </div>
+
+      <Ebene model={model} variante="karte" />
 
       <label style={{ ...B.haken, fontSize: 12, marginTop: 12 }}>
         Neigung

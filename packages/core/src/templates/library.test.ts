@@ -16,6 +16,7 @@ import type { PrintProfile } from '../print/profile.js';
 import {
   TEMPLATE_REFERENCE,
   allTemplates,
+  chapterChoices,
   chapterTemplates,
   requireTemplate,
   supportedSlotCounts,
@@ -84,7 +85,7 @@ describe('Bibliothek', () => {
     expect(chapterTemplates(true).some((t) => t.tags?.includes('dicht'))).toBe(true);
   });
 
-  it('gibt allen dichten Jahresauftakten dieselbe Plätzezahl', () => {
+  it('gibt allen dichten Jahresauftakten der Automatik dieselbe Plätzezahl', () => {
     // Die Engine wählt den Auftakt zuerst über die Bilderzahl und erst danach
     // über die Passung (`auftaktGroessen` in layout/generate.ts). Wären die
     // Fassungen verschieden groß, entschiede nicht die Ausrichtung der Bilder,
@@ -97,11 +98,70 @@ describe('Bibliothek', () => {
     expect(dicht[0]!.slots.length).toBeGreaterThan(schlank);
   });
 
+  it('hält die Bilderzahlen der Automatik unverändert', () => {
+    // Zur Wahl von Hand stehen Jahresauftakte für jede Bilderzahl bis zwölf.
+    // Die Automatik nimmt aber die größte Fassung, für die ein Jahrgang genug
+    // Bilder hat – ohne das Tag `nur-wahl` füllte sie jeden Jahresauftakt mit
+    // acht statt sechs Bildern, und die Seitenzahl des Buchs wäre eine andere.
+    // Wer die Automatik ändern will, ändert diesen Test mit.
+    const zahlen = (ts: { slots: unknown[] }[]) =>
+      [...new Set(ts.map((t) => t.slots.length))].sort((a, b) => a - b);
+    expect(zahlen(chapterTemplates())).toEqual([0, 2, 3, 4, 6]);
+    expect(zahlen(chapterTemplates(true))).toEqual([0, 2, 3, 4, 6, 9]);
+  });
+
+  it('bietet für jede Bilderzahl von 1 bis 12 drei Jahresauftakte zur Wahl', () => {
+    // Eine Jahresseite ist keine Ausnahme von der Wahlfreiheit: Vorher gab es
+    // Auftakte nur für 2, 3, 4, 6 und 9 Bilder. Wer im Baum sieben Bilder auf
+    // eine Jahresseite zog, bekam eine Absage, und die Anordnungswahl hatte für
+    // fünf, sieben oder acht Bilder keine einzige passende Fassung.
+    for (let n = 1; n <= 12; n++) {
+      const passend = chapterChoices().filter((t) => t.slots.length === n);
+      expect(
+        passend.length,
+        `nur ${passend.length} Jahresauftakte für ${n} Bilder`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('lässt jedem Jahresauftakt seinen Platz für Jahr und Ereignisse', () => {
+    // Was den Auftakt zum Auftakt macht, ist nicht das Bild, sondern die Zahl:
+    // Eine Fassung ohne Jahresplatz wäre eine Flussvorlage mit falschem Tag.
+    for (const t of chapterChoices().filter((t) => t.slots.length > 0)) {
+      expect(
+        t.textSlots?.some((s) => s.role === 'year'),
+        `${t.id} ohne Jahresplatz`,
+      ).toBe(true);
+      expect(
+        t.textSlots?.some((s) => s.id === 't-events'),
+        `${t.id} ohne Ereigniszeilen`,
+      ).toBe(true);
+    }
+  });
+
+  it('setzt die Jahreszahl in allen schlanken Fassungen an dieselbe Stelle', () => {
+    // Der Leser soll die Jahreszahl im ganzen Buch am gleichen Ort finden; nur
+    // die Bilder wechseln. Die gespiegelten Fassungen verlegen sie absichtlich
+    // auf die andere Seite, die dichten haben ihr eigenes, größeres Band.
+    const stellen = new Set(
+      chapterChoices()
+        .filter(
+          (t) => t.slots.length > 0 && !t.tags?.includes('dicht') && !t.id.endsWith('.mirrored'),
+        )
+        .map((t) => {
+          const jahr = t.textSlots!.find((s) => s.role === 'year')!;
+          return `${jahr.x.toFixed(5)},${jahr.y.toFixed(5)},${jahr.w.toFixed(5)}`;
+        }),
+    );
+    expect(stellen.size).toBe(1);
+  });
+
   it('lässt der Jahreszahl auch auf einer dichten Fassung ihr Band', () => {
     // Die Auszeichnung der Jahreszahl ist der Freiraum um sie herum: Sie steht
     // größer als in den bildlosen Fassungen und kein Bild berührt sie. Ragte
     // eines hinein, hinge die Lesbarkeit an der Helligkeit dieses Bildes.
-    for (const t of chapterTemplates(true).filter((t) => t.tags?.includes('dicht'))) {
+    // Geprüft werden alle dichten Fassungen, auch die, die nur zur Wahl stehen.
+    for (const t of chapterChoices().filter((t) => t.tags?.includes('dicht'))) {
       const jahr = t.textSlots?.find((s) => s.role === 'year');
       expect(jahr, `${t.id} ohne Jahresplatz`).toBeDefined();
       // 66 mm Kastenhöhe gegen 54 mm der bildlosen Fassungen.

@@ -88,6 +88,7 @@ export interface Handarbeit {
   hintergruende: number;
   zeitstrahl: number;
   positionen: number;
+  ebenen: number;
   texte: number;
   textplaetze: number;
   festgehalten: number;
@@ -132,6 +133,7 @@ export function BuchPanel({
     handwork.hintergruende > 0 ? `${handwork.hintergruende} Hintergründe` : null,
     handwork.zeitstrahl > 0 ? `${handwork.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
     handwork.positionen > 0 ? `${handwork.positionen} frei gesetzte Bilder` : null,
+    handwork.ebenen > 0 ? `${handwork.ebenen} gestapelte Bilder` : null,
     handwork.texte > 0 ? `${handwork.texte} Textblöcke` : null,
     handwork.textplaetze > 0 ? `${handwork.textplaetze} bewegte Vorlagentexte` : null,
   ].filter((s): s is string => s !== null);

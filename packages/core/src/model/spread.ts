@@ -64,6 +64,28 @@ export interface SlotAssignment {
    * mit ihm.
    */
   caption?: string;
+  /**
+   * Ebene im Stapel: Wer liegt vor wem, wenn sich zwei Bilder überlappen?
+   *
+   * Ohne Angabe gilt `0`, und damit entscheidet die Reihenfolge der Vorlage –
+   * so war es, bevor es das Feld gab, und so bleibt es für jede Doppelseite,
+   * die niemand angefasst hat. Größer heißt weiter vorn; gleiche Werte behalten
+   * die Reihenfolge der Vorlage (`slotReihenfolge`).
+   *
+   * Gebraucht wird das erst, seit sich Bildkästen frei ziehen lassen: Zwei
+   * überlappende Bilder haben eine Reihenfolge, ob man sie bestimmt oder nicht.
+   * Vorher war sie die der Vorlage und damit ein Zufall des Templateentwurfs.
+   *
+   * Fortlaufend von 0, weil jeder Zug den ganzen Stapel neu durchnummeriert
+   * (`moveSlotLayer`): Ein „ganz nach vorn" als `layer: 9999` wäre kürzer zu
+   * schreiben und ließe die Zahlen mit jedem Zug weiter auseinanderdriften,
+   * bis niemand mehr aus dem Modell liest, in welcher Ebene ein Bild liegt.
+   *
+   * Nur Bilder. Vorlagentexte, Textblöcke und der Zeitstrahl liegen weiter
+   * darüber, in dieser Ordnung – ein Text unter einem Foto ist kein Layout,
+   * sondern ein Versehen.
+   */
+  layer?: number;
 }
 
 export interface TextElement {
@@ -226,4 +248,28 @@ export interface Spread {
    * Doppelseite, die die Engine neu erzeugt.
    */
   timeline?: boolean;
+}
+
+/**
+ * Die Bildplätze einer Doppelseite in Zeichenreihenfolge – hinten zuerst.
+ *
+ * **Die einzige Stelle, die über das Vorn und Hinten entscheidet.** `renderSpread`
+ * geht die Plätze in dieser Folge durch, und `moveSlotLayer` rechnet auf ihr; eine
+ * zweite Sortierung an einer der beiden Stellen wäre die Art Doppelung, bei der
+ * Vorschau und Umstellknopf irgendwann verschiedene Ebenen meinen.
+ *
+ * Grundlage ist die Reihenfolge der Vorlage: Sie ist die Zeichenreihenfolge, die
+ * vor dem Feld `layer` galt, und damit die, die jede unangetastete Doppelseite
+ * behält. `layer` schlägt sie; bei gleichem Wert bleibt es bei der Vorlage
+ * (`sort` ist seit ES2019 stabil).
+ *
+ * Plätze ohne Zuordnung bleiben in der Liste: Sie zeichnen einen leeren Kasten,
+ * und der ist in der Oberfläche eine Fläche wie jede andere.
+ */
+export function slotReihenfolge<S extends { id: string }>(
+  slots: readonly S[],
+  spread: Pick<Spread, 'slots'>,
+): S[] {
+  const ebene = new Map(spread.slots.map((s) => [s.slotId, s.layer ?? 0]));
+  return [...slots].sort((a, b) => (ebene.get(a.id) ?? 0) - (ebene.get(b.id) ?? 0));
 }

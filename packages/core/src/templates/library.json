@@ -66,7 +66,10 @@
     "Je Bilderzahl gibt es eine quer- und (wo die Arithmetik es zulässt) eine",
     "hochformatbetonte Fassung. Die Engine wählt über `prefers` und den",
     "Orientierungsbruch die zur Gruppe passende – bei 51,3 % Hochformat im Bestand",
-    "ist das der Unterschied zwischen 5,8 % und 26,7 % Beschnittverlust."
+    "ist das der Unterschied zwischen 5,8 % und 26,7 % Beschnittverlust.",
+    "",
+    "Halbseiten stehen unter \"halves\": die Anordnungen einer einzelnen",
+    "Buchseite, die es in keiner Vorlage gibt. Siehe den Kommentar dort."
   ],
   "reference": {
     "widthMm": 600,
@@ -8276,6 +8279,3425 @@
     },
     {
       "$comment": [
+        "JAHRESAUFTAKTE FÜR JEDE BILDERZAHL VON 1 BIS 12:",
+        "",
+        "Vorher gab es sie für 2, 3, 4 und 6 Bilder (schlank, Bilder nur rechts)",
+        "und für 9 (dicht, Bilder auch auf der Jahresseite). Wer im Baum sieben",
+        "Bilder auf eine Jahresseite zog, bekam deshalb eine Absage: „Eine",
+        "Auftaktseite trägt 2, 3, 4, 6, 9 Bilder.“ Und in der Anordnungswahl stand",
+        "für diese Seite nichts, was zur Bilderzahl gepasst hätte – eine",
+        "Flussvorlage hätte Jahreszahl und Ereigniszeilen verloren.",
+        "",
+        "Jetzt gibt es je Bilderzahl drei Fassungen, wie im Fluss: hochkant, quer",
+        "und gemischt. Schlank für 1 bis 9, dicht zusätzlich für 7, 8, 10, 11 und",
+        "12 – die drei vorhandenen Neunerfassungen behalten ihre Kennungen.",
+        "",
+        "Gerechnet sind sie wie die Mosaike: Zellen in 4:3, 3:4 oder (bei einem",
+        "einzigen Bild) quadratisch, Reihen, die die 262 mm Nutzbreite füllen, und",
+        "ein gemeinsamer Maßstab je Vorlage, damit der Block in die Höhe passt,",
+        "ohne dass alle Reihen auf die kleinste Zelle schrumpfen. Die Reihe mit",
+        "den wenigsten – und damit größten – Zellen steht oben und trägt die",
+        "Betonung (prominence 2).",
+        "",
+        "Bei den dichten Fassungen trägt die Jahresseite **eine** Bildreihe unter",
+        "dem Jahresband. Zwei gingen dort auch hinein, aber nur mit Zellen um",
+        "50 mm – und eine Jahresseite mit Briefmarken darauf ist keine",
+        "Auszeichnung mehr.",
+        "",
+        "DAS TAG \"nur-wahl\" heißt: steht nur zur Wahl von Hand, nie in der",
+        "Automatik. Ohne es nähme `auftaktGroessen` (layout/generate.ts) die",
+        "größte Fassung, für die ein Jahrgang genug Bilder hat, und füllte jeden",
+        "Jahresauftakt mit acht statt sechs Bildern – das ändert Seitenzahl und",
+        "Bildverteilung des ganzen Buchs, und zwar ungefragt. Die neuen Fassungen",
+        "für 2, 3 und 4 Bilder tragen es nicht: Sie sind so groß wie die",
+        "vorhandenen und verbessern allein die Passung, wie es die drei",
+        "Sechserfassungen schon tun."
+      ],
+      "id": "spread.chapter.1up.hoch",
+      "name": "Jahresauftakt, rechts ein Bild hochkant",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 387,
+          "y": 70,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.1up.quer",
+      "name": "Jahresauftakt, rechts ein Bild quer",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 367,
+          "y": 90,
+          "w": 160,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.1up.quadrat",
+      "name": "Jahresauftakt, rechts ein Bild quadratisch",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 387,
+          "y": 90,
+          "w": 120,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "any"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.2up.quer",
+      "name": "Jahresauftakt, rechts zwei Bilder quer",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 367,
+          "y": 25,
+          "w": 160,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 367,
+          "y": 155,
+          "w": 160,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.2up.gemischt",
+      "name": "Jahresauftakt, rechts zwei Bilder gemischt",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 377,
+          "y": 22,
+          "w": 140,
+          "h": 105,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 394,
+          "y": 137,
+          "w": 105,
+          "h": 140,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.3up.quer",
+      "name": "Jahresauftakt, rechts drei Bilder quer",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 367,
+          "y": 38,
+          "w": 160,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 319,
+          "y": 168,
+          "w": 124,
+          "h": 93,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 451,
+          "y": 168,
+          "w": 124,
+          "h": 93,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.3up.gemischt",
+      "name": "Jahresauftakt, rechts drei Bilder gemischt",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 377,
+          "y": 22,
+          "w": 140,
+          "h": 105,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 338,
+          "y": 137,
+          "w": 105,
+          "h": 140,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 451,
+          "y": 137,
+          "w": 105,
+          "h": 140,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.4up.hoch",
+      "name": "Jahresauftakt, rechts vier Bilder hochkant",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 353,
+          "y": 25,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 25,
+          "w": 90,
+          "h": 120,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 353,
+          "y": 155,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 451,
+          "y": 155,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.4up.gemischt",
+      "name": "Jahresauftakt, rechts vier Bilder gemischt",
+      "tags": ["kapitel", "auftakt"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 323,
+          "y": 22,
+          "w": 120,
+          "h": 90,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 22,
+          "w": 120,
+          "h": 90,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 326,
+          "y": 122,
+          "w": 117,
+          "h": 156,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 451,
+          "y": 122,
+          "w": 117,
+          "h": 156,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.5up.hoch",
+      "name": "Jahresauftakt, rechts fünf Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 335,
+          "y": 25,
+          "w": 108,
+          "h": 144,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 25,
+          "w": 108,
+          "h": 144,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 331,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 411,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 491,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.5up.quer",
+      "name": "Jahresauftakt, rechts fünf Bilder quer",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 319,
+          "y": 68,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 68,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 319,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 407,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 495,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.5up.gemischt",
+      "name": "Jahresauftakt, rechts fünf Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 319,
+          "y": 44,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 44,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 318,
+          "y": 147,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 407,
+          "y": 147,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 496,
+          "y": 147,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.7up.hoch",
+      "name": "Jahresauftakt, rechts sieben Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 318,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 407,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 496,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 321,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 386,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 451,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 516,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.7up.quer",
+      "name": "Jahresauftakt, rechts sieben Bilder quer",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 327,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 327,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 451,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 325,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 409,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 493,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.7up.gemischt",
+      "name": "Jahresauftakt, rechts sieben Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 351,
+          "y": 23,
+          "w": 92,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 23,
+          "w": 92,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 353,
+          "y": 102,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 451,
+          "y": 102,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 349,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 417,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 485,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.8up.hoch",
+      "name": "Jahresauftakt, rechts acht Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 368,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 362,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 421,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 480,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 362,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 421,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 480,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.8up.quer",
+      "name": "Jahresauftakt, rechts acht Bilder quer",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 319,
+          "y": 34,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 34,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 319,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 407,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 495,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 319,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 407,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 495,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.8up.gemischt",
+      "name": "Jahresauftakt, rechts acht Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 331,
+          "y": 23,
+          "w": 112,
+          "h": 84,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 451,
+          "y": 23,
+          "w": 112,
+          "h": 84,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 331,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 411,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 491,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 331,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 411,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 491,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.9up.hoch",
+      "name": "Jahresauftakt, rechts neun Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 354,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 419,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 484,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 354,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 419,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 484,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 354,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 419,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "i",
+          "x": 484,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.9up.quer",
+      "name": "Jahresauftakt, rechts neun Bilder quer",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 319,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 407,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 495,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 319,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 407,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 495,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 319,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 407,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 495,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.9up.gemischt",
+      "name": "Jahresauftakt, rechts neun Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "a",
+          "x": 319,
+          "y": 26,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 407,
+          "y": 26,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 495,
+          "y": 26,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 318,
+          "y": 96,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 407,
+          "y": 96,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 496,
+          "y": 96,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 319,
+          "y": 214,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 407,
+          "y": 214,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 495,
+          "y": 214,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 44,
+          "w": 200,
+          "h": 54,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 110,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.7up.hoch",
+      "name": "Jahresauftakt dicht, sieben Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 62,
+          "y": 161,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 161,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ra",
+          "x": 335,
+          "y": 25,
+          "w": 108,
+          "h": 144,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 25,
+          "w": 108,
+          "h": 144,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 331,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 411,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "re",
+          "x": 491,
+          "y": 179,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.7up.quer",
+      "name": "Jahresauftakt dicht, sieben Bilder quer",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 319,
+          "y": 68,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 68,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rc",
+          "x": 319,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 407,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 495,
+          "y": 171,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.7up.gemischt",
+      "name": "Jahresauftakt dicht, sieben Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 323,
+          "y": 35,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 35,
+          "w": 120,
+          "h": 160,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 319,
+          "y": 205,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 407,
+          "y": 205,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 495,
+          "y": 205,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.8up.hoch",
+      "name": "Jahresauftakt dicht, acht Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 62,
+          "y": 161,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 161,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ra",
+          "x": 318,
+          "y": 37,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 407,
+          "y": 37,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 496,
+          "y": 37,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 318,
+          "y": 155,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "re",
+          "x": 407,
+          "y": 155,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rf",
+          "x": 496,
+          "y": 155,
+          "w": 81,
+          "h": 108,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.8up.quer",
+      "name": "Jahresauftakt dicht, acht Bilder quer",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 339,
+          "y": 23,
+          "w": 104,
+          "h": 78,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 23,
+          "w": 104,
+          "h": 78,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rc",
+          "x": 339,
+          "y": 111,
+          "w": 104,
+          "h": 78,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 451,
+          "y": 111,
+          "w": 104,
+          "h": 78,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 339,
+          "y": 199,
+          "w": 104,
+          "h": 78,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 451,
+          "y": 199,
+          "w": 104,
+          "h": 78,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.8up.gemischt",
+      "name": "Jahresauftakt dicht, acht Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 157,
+          "y": 172,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 318,
+          "y": 61,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 407,
+          "y": 61,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 496,
+          "y": 61,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 319,
+          "y": 179,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 407,
+          "y": 179,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 495,
+          "y": 179,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.10up.hoch",
+      "name": "Jahresauftakt dicht, zehn Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 24,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lc",
+          "x": 202,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ra",
+          "x": 318,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 407,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 496,
+          "y": 53,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 321,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "re",
+          "x": 386,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rf",
+          "x": 451,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rg",
+          "x": 516,
+          "y": 171,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.10up.quer",
+      "name": "Jahresauftakt dicht, zehn Bilder quer",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 327,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rc",
+          "x": 327,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 451,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 325,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 409,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rg",
+          "x": 493,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.10up.gemischt",
+      "name": "Jahresauftakt dicht, zehn Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 365,
+          "y": 24,
+          "w": 78,
+          "h": 104,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 24,
+          "w": 78,
+          "h": 104,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 363,
+          "y": 138,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 451,
+          "y": 138,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 362,
+          "y": 208,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rf",
+          "x": 421,
+          "y": 208,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rg",
+          "x": 480,
+          "y": 208,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.11up.hoch",
+      "name": "Jahresauftakt dicht, elf Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 24,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lc",
+          "x": 202,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ra",
+          "x": 368,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 362,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 421,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "re",
+          "x": 480,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rf",
+          "x": 362,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rg",
+          "x": 421,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rh",
+          "x": 480,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.11up.quer",
+      "name": "Jahresauftakt dicht, elf Bilder quer",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 319,
+          "y": 34,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 34,
+          "w": 124,
+          "h": 93,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rc",
+          "x": 319,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 407,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 495,
+          "y": 137,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 319,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rg",
+          "x": 407,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rh",
+          "x": 495,
+          "y": 207,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.11up.gemischt",
+      "name": "Jahresauftakt dicht, elf Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 356,
+          "y": 23,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 451,
+          "y": 23,
+          "w": 87,
+          "h": 116,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 355,
+          "y": 149,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 419,
+          "y": 149,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 483,
+          "y": 149,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 354,
+          "y": 201,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rg",
+          "x": 419,
+          "y": 201,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rh",
+          "x": 484,
+          "y": 201,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.12up.hoch",
+      "name": "Jahresauftakt dicht, zwölf Bilder hochkant",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 24,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "lc",
+          "x": 202,
+          "y": 165,
+          "w": 81,
+          "h": 108,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ra",
+          "x": 354,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 419,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 484,
+          "y": 26,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 354,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "re",
+          "x": 419,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rf",
+          "x": 484,
+          "y": 112,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rg",
+          "x": 354,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rh",
+          "x": 419,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ri",
+          "x": 484,
+          "y": 198,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.12up.quer",
+      "name": "Jahresauftakt dicht, zwölf Bilder quer",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 319,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rb",
+          "x": 407,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rc",
+          "x": 495,
+          "y": 50,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rd",
+          "x": 319,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 407,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 495,
+          "y": 120,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rg",
+          "x": 319,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rh",
+          "x": 407,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ri",
+          "x": 495,
+          "y": 190,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "id": "spread.chapter.dicht.12up.gemischt",
+      "name": "Jahresauftakt dicht, zwölf Bilder gemischt",
+      "tags": ["kapitel", "auftakt", "dicht", "nur-wahl"],
+      "chapterOnly": true,
+      "slots": [
+        {
+          "id": "la",
+          "x": 25,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lb",
+          "x": 113,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "lc",
+          "x": 201,
+          "y": 189,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "ra",
+          "x": 336,
+          "y": 22,
+          "w": 69,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rb",
+          "x": 413,
+          "y": 22,
+          "w": 69,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rc",
+          "x": 490,
+          "y": 22,
+          "w": 69,
+          "h": 92,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rd",
+          "x": 337,
+          "y": 124,
+          "w": 68,
+          "h": 51,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "re",
+          "x": 413,
+          "y": 124,
+          "w": 68,
+          "h": 51,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rf",
+          "x": 489,
+          "y": 124,
+          "w": 68,
+          "h": 51,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "rg",
+          "x": 336,
+          "y": 185,
+          "w": 69,
+          "h": 92,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "rh",
+          "x": 413,
+          "y": 185,
+          "w": 69,
+          "h": 92,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "ri",
+          "x": 490,
+          "y": 185,
+          "w": 69,
+          "h": 92,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-year",
+          "role": "year",
+          "x": 22,
+          "y": 36,
+          "w": 240,
+          "h": 66,
+          "style": "yearLarge",
+          "optional": false
+        },
+        {
+          "id": "t-events",
+          "role": "freeText",
+          "x": 22,
+          "y": 114,
+          "w": 250,
+          "h": 32,
+          "style": "body",
+          "optional": true,
+          "lines": 5
+        }
+      ]
+    },
+    {
+      "$comment": [
         "Die leere Doppelseite. Kein Bildplatz, kein Textplatz, nur Fläche.",
         "Sie wird nie automatisch gewählt – das Tag \"eigen\" hält sie aus der",
         "Auswahl heraus – sondern ausschließlich von Hand eingefügt, wenn jemand",
@@ -8287,6 +11709,818 @@
       "name": "Leere Doppelseite",
       "tags": ["eigen"],
       "slots": []
+    }
+  ],
+  "halves": [
+    {
+      "$comment": [
+        "EIGENS ENTWORFENE HALBSEITEN.",
+        "",
+        "Die Anordnung einer einzelnen Buchseite entsteht sonst aus der Zerlegung",
+        "der Vorlagen an der Falzachse (templates/halves.ts) – erzeugt wird dort",
+        "nichts Neues. Nur reicht das nicht überall: Für sieben und acht Bilder",
+        "gab es je genau eine Anordnung, für dreizehn keine einzige, für vierzehn",
+        "zwei. Wer eine solche Seite von Hand anordnen wollte, hatte damit keine",
+        "Wahl, sondern eine Bestätigung.",
+        "",
+        "Diese Fassungen ergänzen die Zerlegung auf mindestens drei Anordnungen je",
+        "Bilderzahl. Gerechnet sind sie wie die neuen Jahresauftakte; sie stehen",
+        "in Linksform (Nutzfläche x 22..284) und werden für die rechte Seite",
+        "gespiegelt wie jede andere Halbseite."
+      ],
+      "id": "halb:frei:7up.quer",
+      "name": "Sieben Bilder quer",
+      "slots": [
+        {
+          "id": "a",
+          "x": 33,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 157,
+          "y": 24,
+          "w": 116,
+          "h": 87,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 33,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 157,
+          "y": 121,
+          "w": 116,
+          "h": 87,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 31,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 115,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 199,
+          "y": 218,
+          "w": 76,
+          "h": 57,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:7up.gemischt",
+      "name": "Sieben Bilder gemischt",
+      "slots": [
+        {
+          "id": "a",
+          "x": 57,
+          "y": 23,
+          "w": 92,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 157,
+          "y": 23,
+          "w": 92,
+          "h": 69,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 59,
+          "y": 102,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 157,
+          "y": 102,
+          "w": 90,
+          "h": 120,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 55,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 123,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 191,
+          "y": 232,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:8up.hoch",
+      "name": "Acht Bilder hochkant",
+      "slots": [
+        {
+          "id": "a",
+          "x": 74,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 157,
+          "y": 22,
+          "w": 75,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 68,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 127,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 186,
+          "y": 132,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 68,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 127,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 186,
+          "y": 210,
+          "w": 51,
+          "h": 68,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:8up.gemischt",
+      "name": "Acht Bilder gemischt",
+      "slots": [
+        {
+          "id": "a",
+          "x": 37,
+          "y": 23,
+          "w": 112,
+          "h": 84,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 157,
+          "y": 23,
+          "w": 112,
+          "h": 84,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 37,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 117,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 197,
+          "y": 117,
+          "w": 72,
+          "h": 96,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 37,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 117,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 197,
+          "y": 223,
+          "w": 72,
+          "h": 54,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:13up.hoch",
+      "name": "Dreizehn Bilder hochkant",
+      "slots": [
+        {
+          "id": "a",
+          "x": 27,
+          "y": 34,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "b",
+          "x": 92,
+          "y": 34,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "c",
+          "x": 157,
+          "y": 34,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "d",
+          "x": 222,
+          "y": 34,
+          "w": 57,
+          "h": 76,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 27,
+          "y": 120,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 92,
+          "y": 120,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 157,
+          "y": 120,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "h",
+          "x": 222,
+          "y": 120,
+          "w": 57,
+          "h": 76,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "i",
+          "x": 24,
+          "y": 206,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "j",
+          "x": 77,
+          "y": 206,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "k",
+          "x": 130,
+          "y": 206,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l",
+          "x": 183,
+          "y": 206,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "m",
+          "x": 236,
+          "y": 206,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:13up.quer",
+      "name": "Dreizehn Bilder quer",
+      "slots": [
+        {
+          "id": "a",
+          "x": 25,
+          "y": 24,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 113,
+          "y": 24,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 201,
+          "y": 24,
+          "w": 80,
+          "h": 60,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 25,
+          "y": 94,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "e",
+          "x": 113,
+          "y": 94,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "f",
+          "x": 201,
+          "y": 94,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "g",
+          "x": 25,
+          "y": 164,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 113,
+          "y": 164,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 201,
+          "y": 164,
+          "w": 80,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 29,
+          "y": 234,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "k",
+          "x": 93,
+          "y": 234,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l",
+          "x": 157,
+          "y": 234,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "m",
+          "x": 221,
+          "y": 234,
+          "w": 56,
+          "h": 42,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:13up.gemischt",
+      "name": "Dreizehn Bilder gemischt",
+      "slots": [
+        {
+          "id": "a",
+          "x": 55,
+          "y": 22,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 123,
+          "y": 22,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 191,
+          "y": 22,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 55,
+          "y": 77,
+          "w": 60,
+          "h": 80,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 123,
+          "y": 77,
+          "w": 60,
+          "h": 80,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 191,
+          "y": 77,
+          "w": 60,
+          "h": 80,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 55,
+          "y": 167,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 123,
+          "y": 167,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 191,
+          "y": 167,
+          "w": 60,
+          "h": 45,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 57,
+          "y": 222,
+          "w": 42,
+          "h": 56,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "k",
+          "x": 107,
+          "y": 222,
+          "w": 42,
+          "h": 56,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l",
+          "x": 157,
+          "y": 222,
+          "w": 42,
+          "h": 56,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "m",
+          "x": 207,
+          "y": 222,
+          "w": 42,
+          "h": 56,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ]
+    },
+    {
+      "id": "halb:frei:14up.gemischt",
+      "name": "Vierzehn Bilder gemischt",
+      "slots": [
+        {
+          "id": "a",
+          "x": 55,
+          "y": 24,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "b",
+          "x": 123,
+          "y": 24,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "c",
+          "x": 191,
+          "y": 24,
+          "w": 60,
+          "h": 45,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "d",
+          "x": 50,
+          "y": 79,
+          "w": 63,
+          "h": 84,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "e",
+          "x": 121,
+          "y": 79,
+          "w": 63,
+          "h": 84,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "f",
+          "x": 192,
+          "y": 79,
+          "w": 63,
+          "h": 84,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "g",
+          "x": 53,
+          "y": 173,
+          "w": 44,
+          "h": 33,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "h",
+          "x": 105,
+          "y": 173,
+          "w": 44,
+          "h": 33,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "i",
+          "x": 157,
+          "y": 173,
+          "w": 44,
+          "h": 33,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "j",
+          "x": 209,
+          "y": 173,
+          "w": 44,
+          "h": 33,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "k",
+          "x": 51,
+          "y": 216,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l",
+          "x": 104,
+          "y": 216,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "m",
+          "x": 157,
+          "y": 216,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "n",
+          "x": 210,
+          "y": 216,
+          "w": 45,
+          "h": 60,
+          "prominence": 1,
+          "prefers": "portrait"
+        }
+      ]
     }
   ]
 }

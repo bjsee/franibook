@@ -12,6 +12,7 @@ import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio, orientationOf } from '../model/photo.js';
 import type { SlotAssignment, Spread, TextBlock, TextElement } from '../model/spread.js';
+import { slotReihenfolge } from '../model/spread.js';
 import type { Template, TemplateSlot, TemplateTextSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -411,7 +412,11 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
 
   const bySlotId = new Map(spread.slots.map((s) => [s.slotId, s]));
 
-  for (const slot of template.slots) {
+  // Nicht in der Reihenfolge der Vorlage, sondern in der des Stapels: Seit
+  // Bildkästen frei gezogen werden, überlappen sich Bilder, und dann ist die
+  // Zeichenreihenfolge eine Aussage (`SlotAssignment.layer`). Ohne `layer`
+  // liefert `slotReihenfolge` genau die Reihenfolge der Vorlage.
+  for (const slot of slotReihenfolge(template.slots, spread)) {
     const assignment = bySlotId.get(slot.id);
     const rect = toMm(slot, profile);
 
@@ -652,14 +657,27 @@ function buildTimeline(
     if (!tl.bookYears) return [];
     const sortiertSeitlich = [...dates].sort();
     const mitte = sortiertSeitlich[Math.floor(sortiertSeitlich.length / 2)];
+
+    // **Ein Jahresauftakt steht für den Beginn seines Jahrgangs**, nicht für den
+    // Median seiner Bilder: Die wählt die Auflösung und nicht das Datum, und bei
+    // neun dichten Auftaktbildern liegt der Median irgendwo im Frühjahr.
+    //
+    // Vorher entfiel `at` auf einer Auftaktseite ganz – gedacht war „kein
+    // Marker" wie am Fuß, gewirkt hat es anders: Am Rand speist dasselbe Datum
+    // den Marker **und** den zurückgelegten Abschnitt, also zeigte die
+    // Randachse auf jeder Jahresseite einen leeren Balken. Gerade dort ist die
+    // Stelle aber exakt bekannt.
+    const stelle =
+      templateMeta(template.id).chapterOnly && spread.chapterYear !== undefined
+        ? (`${spread.chapterYear}-01-01T00:00:00` as NaiveDateTime)
+        : mitte;
+
     return sideTimelineBoxes(
       {
         background,
         fromYear: tl.bookYears.from,
         toYear: tl.bookYears.to,
-        // Kapitelauftakte tragen keinen Marker: Ihr Bild wird nach Auflösung
-        // gewählt, nicht nach Datum – dieselbe Regel wie am Fuß.
-        ...(mitte && !templateMeta(template.id).chapterOnly ? { at: mitte } : {}),
+        ...(stelle ? { at: stelle } : {}),
         accentColor: tl.accentColor ?? accentOn(background),
         ...(tl.sideVariant ? { variant: tl.sideVariant } : {}),
       },

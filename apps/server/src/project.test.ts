@@ -323,6 +323,133 @@ describe('setSpreadTemplate', () => {
   });
 });
 
+describe('Ebene eines Bildes', () => {
+  /** Zwei Bilder, das erste von Hand über das zweite gezogen. */
+  function projektMitZwei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const id of ['p1', 'p2']) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.2up.pair',
+        slots: [
+          { slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } },
+          { slotId: 'b', photoId: 'p2', crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  it('holt ein Bild nach vorn und zeichnet es danach zuletzt', () => {
+    // Der beobachtbare Ausdruck der Ebene: die Reihenfolge der Boxen im RSM.
+    // Was zuletzt gezeichnet wird, liegt oben – in der Vorschau wie im PDF.
+    const p = projektMitZwei();
+    const vorher = p.render(0)!;
+    expect(vorher.boxes.filter((b) => b.kind === 'image').map((b) => b.slotId)).toEqual(['a', 'b']);
+
+    expect(p.setSlotLayer(0, 'a', 'vorn').ok).toBe(true);
+    const nachher = p.render(0)!;
+    expect(nachher.boxes.filter((b) => b.kind === 'image').map((b) => b.slotId)).toEqual([
+      'b',
+      'a',
+    ]);
+  });
+
+  it('zählt eine gesetzte Ebene als Handarbeit', () => {
+    // Was ein Neuaufbau verwirft, soll vorher dranstehen: Die neuen Plätze
+    // kommen aus der Vorlage und wissen nichts von einem Stapel.
+    const p = projektMitZwei();
+    expect(p.handwork().ebenen).toBe(0);
+    p.setSlotLayer(0, 'a', 'vorn');
+    expect(p.handwork().ebenen).toBe(2);
+  });
+
+  it('meldet einen unbekannten Slot, statt still nichts zu tun', () => {
+    const p = projektMitZwei();
+    const r = p.setSlotLayer(0, 'gibtsnicht', 'vorn');
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Slot');
+  });
+});
+
+describe('Anordnungen einer Jahresseite', () => {
+  /** Eine Jahresseite mit drei Bildern, Jahreszahl und Ereigniszeilen. */
+  function projektMitAuftakt(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const id of ['p1', 'p2', 'p3']) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.chapter.3up',
+        chapterYear: 2019,
+        texts: [{ id: 't', role: 'year', content: '2019', slotId: 't-year' }],
+        slots: [
+          { slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } },
+          { slotId: 'b', photoId: 'p2', crop: { ...FULL_CROP } },
+          { slotId: 'c', photoId: 'p3', crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  it('stellt für die eigene Bilderzahl mehrere Fassungen zur Wahl', () => {
+    // Vorher stand hier eine einzige Vorlage je Bilderzahl, und für fünf,
+    // sieben oder acht Bilder gar keine: Die Jahresseite war die einzige, an
+    // der sich die Anordnung nicht ändern ließ.
+    const wahl = projektMitAuftakt().templateChoices(0);
+    const passend = wahl.filter((v) => v.slotCount === 3);
+
+    expect(passend.length).toBeGreaterThanOrEqual(3);
+    // Nur Auftakte, und die stehen vorne: Sonst verlöre die Seite ihre Texte.
+    expect(wahl.every((v) => v.id.startsWith('spread.chapter.'))).toBe(true);
+    expect(wahl[0]!.slotCount).toBe(3);
+  });
+
+  it('bietet für eine Jahresseite keine seitenweise Anordnung an', () => {
+    const auskunft = projektMitAuftakt().halfChoices(0);
+
+    expect(auskunft.auftakt).toBe(true);
+    expect(auskunft.halves).toEqual([]);
+  });
+
+  it('lehnt die seitenweise Anordnung einer Jahresseite ab, statt sie zu zerlegen', () => {
+    // Aus zwei Hälften des Flusses zusammengesetzt hätte die Seite keinen
+    // Textplatz mehr – Jahreszahl und Ereigniszeilen wären weg.
+    const p = projektMitAuftakt();
+    const r = p.setSpreadHalf(0, 'left', 'halb:spread.4up.grid:L');
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Jahresseite');
+    expect(p.spreads[0]!.templateId).toBe('spread.chapter.3up');
+  });
+});
+
 describe('movePhotos', () => {
   /** Zwei Doppelseiten: vier Bilder auf der ersten, zwei auf der zweiten. */
   function projektMitVierUndZwei(): Project {
