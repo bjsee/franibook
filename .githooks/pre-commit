@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Pre-commit-Hook: lintet und formatiert staged TS/JS-Dateien, fixt automatisch
+# behebbare Verstöße und stagt die Korrekturen neu, damit der Commit sie enthält.
+#
+# Aktivierung passiert über `pnpm install` (Skript "prepare" setzt core.hooksPath).
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM -- '*.ts' '*.tsx' '*.js' '*.jsx')
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+echo "$STAGED" | xargs pnpm exec eslint --fix
+if [ $? -ne 0 ]; then
+  echo "eslint: nicht automatisch behebbare Fehler, Commit abgebrochen."
+  exit 1
+fi
+
+echo "$STAGED" | xargs pnpm exec prettier --write
+
+echo "$STAGED" | xargs git add
