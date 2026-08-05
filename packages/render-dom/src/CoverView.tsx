@@ -11,7 +11,17 @@
  * bei der Bindung real Fläche.
  */
 import type { CSSProperties, ReactNode } from 'react';
-import type { CoverBox, CoverGuide, ImageBox, RenderedCover } from '@franibook/core';
+import {
+  CSS_FONT_WEIGHT,
+  type CoverBox,
+  type CoverGuide,
+  type ImageBox,
+  type RenderedCover,
+  fontFamily,
+  ptToMm,
+  resolveWeight,
+  textBaselineOffsetMm,
+} from '@franibook/core';
 
 export interface CoverGuideVisibility {
   bleed?: boolean;
@@ -155,33 +165,56 @@ export function CoverView({
           />
         );
 
-      case 'text':
+      // Wie im Innenteil (`SpreadView.tsx`): Text steckt in einem SVG, weil
+      // dort die Grundlinie eine Koordinate ist. Eine `div` mit
+      // `align-items: center; line-height: 1` verlegt die Zeilenhöhe in den
+      // Halbdurchschuss der CSS-Zeilenbox – plattformabhängig und, wichtiger,
+      // eine zweite Rechnung über dieselbe Grundlinie, die der Kern längst
+      // festgelegt hat (`textBaselineOffsetMm`). Im SVG steht schlicht
+      // `y = Grundlinie`, genau wie im PDF `baseline: 'alphabetic'`.
+      case 'text': {
+        const baselineMm = textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
+        const anchor = box.align === 'center' ? 'middle' : box.align === 'right' ? 'end' : 'start';
+        const xMm = box.align === 'center' ? box.wMm / 2 : box.align === 'right' ? box.wMm : 0;
         return (
-          <div
+          <svg
             key={box.slotId}
             data-testid={`slot-${box.slotId}`}
+            viewBox={`0 0 ${box.wMm} ${box.hMm}`}
+            // Ober- und Unterlängen dürfen über den Kasten hinausreichen; ein
+            // SVG beschneidet am viewBox, wenn man es nicht abstellt.
             style={{
               ...rect(box),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent:
-                box.align === 'center'
-                  ? 'center'
-                  : box.align === 'right'
-                    ? 'flex-end'
-                    : 'flex-start',
-              fontSize: `${(box.fontSizePt / 72) * 25.4 * pxPerMm}px`,
-              color: box.color,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              // Drehung um den Mittelpunkt – dieselbe Festlegung wie im PDF.
-              // CSS dreht ohne `transform-origin` genau darum.
-              ...(box.rotateDeg ? { transform: `rotate(${box.rotateDeg}deg)` } : {}),
+              overflow: 'visible',
+              // Drehung um den Mittelpunkt der Box – dieselbe Festlegung, die
+              // die Vorschau des Innenteils und das PDF beide treffen.
+              ...(box.rotateDeg
+                ? {
+                    transform: `rotate(${box.rotateDeg}deg)`,
+                    transformOrigin: box.rotateAboutMm
+                      ? `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`
+                      : 'center',
+                  }
+                : {}),
             }}
           >
-            {box.content}
-          </div>
+            <text
+              x={xMm}
+              y={baselineMm}
+              textAnchor={anchor}
+              // Alle vier Werte stammen aus dem RCM. Die Größe steht in Punkt,
+              // im viewBox sind die Einheiten Millimeter.
+              fontFamily={fontFamily(box.family ?? 'sans').cssName}
+              fontWeight={CSS_FONT_WEIGHT[resolveWeight(box.family ?? 'sans', box.weight)]}
+              fontSize={ptToMm(box.fontSizePt)}
+              fill={box.color}
+              {...(box.letterSpacingMm ? { letterSpacing: box.letterSpacingMm } : {})}
+            >
+              {box.content}
+            </text>
+          </svg>
         );
+      }
 
       case 'rect':
         return <div key={`rect-${i}`} style={{ ...rect(box), background: box.fill }} />;
