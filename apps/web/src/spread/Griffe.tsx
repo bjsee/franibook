@@ -2,10 +2,13 @@
  * Die Griffe am gewählten Element — Größe ziehen und drehen, ohne Schaltfläche.
  *
  * Die Geste ist die aus Inkscape und Illustrator, und sie ist es bewusst: Wer ein
- * Bild oder einen Text anfasst, hat sie schon in der Hand. Der erste Klick wählt
- * und zeigt acht Größengriffe, ein weiterer Klick auf dasselbe Element stellt sie
- * auf vier Drehgriffe, der nächste zurück. Umschalt hält beim Aufziehen das
- * Seitenverhältnis (am Bild) und rastet beim Drehen auf 15°-Schritte.
+ * Bild oder einen Text anfasst, hat sie schon in der Hand. **Am Bild sind es drei
+ * Stufen** (`griffmodus.ts`): Der erste Klick wählt nur — verschieben und
+ * Ausschnitt gehen dort schon, ohne Griff (`Bildgriffe`) —, der zweite legt acht
+ * Größengriffe an, der dritte vier Drehgriffe, der vierte schließt den Kreis. Am
+ * Text sind es zwei: Er hat keinen Ausschnitt und kann ohne Griffe nichts.
+ * Umschalt hält beim Aufziehen das Seitenverhältnis (am Bild) und rastet beim
+ * Drehen auf 15°-Schritte.
  *
  * **Bild und Textblock teilen den Rahmen.** Was sie unterscheidet, steht in
  * `useSpreadEditor`: Am Bild folgt der Ausschnitt der neuen Form, am Text wächst
@@ -51,7 +54,8 @@ const DREH_GRIFFE: { sx: -1 | 1; sy: -1 | 1; cursor: string }[] = [
 const HINWEIS = {
   bildGroesse:
     'Ziehen ändert die Größe · Umschalt hält das Seitenverhältnis · Klick aufs Bild schaltet aufs Drehen',
-  bildDrehen: 'Ziehen dreht das Bild · Umschalt rastet auf 15° · Klick aufs Bild schaltet zurück',
+  bildDrehen:
+    'Ziehen dreht das Bild · Umschalt rastet auf 15° · Klick aufs Bild nimmt die Griffe wieder weg',
   textGroesse:
     'Ecke zieht Kasten und Schrift, Kante nur den Kasten · Klick auf den Text schaltet aufs Drehen',
   // Am Vorlagentext ist die Kastenhöhe die Schriftgröße, es gibt dort keine
@@ -139,6 +143,9 @@ export function Griffe({ model }: { model: SpreadEditorModel }) {
   let rahmen: RahmenProps | undefined;
 
   if (gewaehlteBox) {
+    // Erste Stufe: nur gewählt. Der blaue Rand steht, die Hand kann schieben und
+    // den Ausschnitt fassen – Griffe hätte man dabei nur im Weg.
+    if (griffModus === 'keine') return null;
     const drehen = griffModus === 'drehen' && !neigungGesperrt;
     rahmen = {
       links: gewaehlteBox.xMm * pxPerMm,

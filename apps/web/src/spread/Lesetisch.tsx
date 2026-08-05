@@ -225,20 +225,12 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
       </span>
       <Bilddaten model={model} />
       <span style={B.trenner} />
-      {(
-        [
-          ['ausschnitt', 'Ausschnitt'],
-          ['position', 'Position'],
-        ] as const
-      ).map(([wert, text]) => (
-        <button
-          key={wert}
-          onClick={() => model.setWerkzeug(wert)}
-          style={model.werkzeug === wert ? B.pilleAn : B.pilleAus}
-        >
-          {text}
-        </button>
-      ))}
+      {/*
+        Kein Umschalter mehr: Ob das Ziehen den Ausschnitt oder den Kasten
+        bewegt, sagt am Bild der Ort des Griffs. Die Zoomknöpfe bleiben, weil
+        die im Bild an kleinen Plätzen ausbleiben — dort verdeckten sie mehr,
+        als sie wert sind.
+      */}
       <button
         onClick={() => model.zoomen(ZOOM_SCHRITT)}
         style={B.pilleAus}

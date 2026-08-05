@@ -4,9 +4,10 @@
  * Vorher stand das als Reihe von zwölf Knöpfen in einer Werkzeugleiste, die je
  * nach Auswahl umsprang. Als Spalte lässt sich dieselbe Menge Griffe nach
  * Fragen ordnen: *Was ist das für ein Bild?* (Datei, Datum, Ort, Auflösung),
- * *was tut das Ziehen?* (Ausschnitt oder Position), *wie liegt es?* (Neigung),
- * *soll es weg?* — und die Auflösung bekommt dabei den Platz, den sie braucht,
- * weil sie in diesem Bestand die häufigste Ursache für eine Änderung ist.
+ * *was sieht man davon?* (Ausschnitt), *wo steht es?* (Kasten), *wie liegt es?*
+ * (Neigung), *soll es weg?* — und die Auflösung bekommt dabei den Platz, den
+ * sie braucht, weil sie in diesem Bestand die häufigste Ursache für eine
+ * Änderung ist.
  */
 import { FRAMES, photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
@@ -20,8 +21,8 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
     minDpi,
     targetDpi,
     infoVon,
-    werkzeug,
-    werkzeugHinweis,
+    ausschnittHinweis,
+    kastenHinweis,
     istFreiGesetzt,
     aktuelleNeigung,
     neigungGesperrt,
@@ -103,79 +104,58 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
         <LageWarnung model={model} />
       </div>
 
+      {/*
+        Beide Paare stehen nebeneinander, seit es keinen Umschalter mehr gibt:
+        Was das Ziehen bewegt, entscheidet am Bild der Ort des Griffs — innen
+        der Ausschnitt, am Rand der Kasten. Ein Segmentknopf hier wäre der
+        zweite Weg zu derselben Wahl und stünde bald quer zu dem, was die Hand
+        gerade tut. Die Knopfpaare bleiben trotzdem verschieden benannt: Beim
+        Ausschnitt heißt „näher" mehr Zoom im gleichen Kasten, beim Kasten heißt
+        „größer" mehr Platz auf der Seite.
+      */}
       <div style={B.abschnitt}>
-        <span style={B.marke}>Ziehen bewegt</span>
-        <div style={B.segRahmen}>
-          {(
-            [
-              ['ausschnitt', 'Ausschnitt'],
-              ['position', 'Position'],
-            ] as const
-          ).map(([wert, text]) => (
-            <button
-              key={wert}
-              onClick={() => model.setWerkzeug(wert)}
-              style={{ ...(werkzeug === wert ? B.segAn : B.segAus), flex: 1 }}
-              title={
-                wert === 'ausschnitt'
-                  ? 'Ziehen verschiebt den Bildausschnitt'
-                  : 'Ziehen verschiebt das Bild auf der Seite'
-              }
-            >
-              {text}
-            </button>
-          ))}
+        <span style={B.marke}>Ausschnitt · im Bild ziehen</span>
+        <div style={S.paar}>
+          <button onClick={() => model.zoomen(ZOOM_SCHRITT)} style={S.halb}>
+            Näher <kbd>+</kbd>
+          </button>
+          <button onClick={() => model.zoomen(1 / ZOOM_SCHRITT)} style={S.halb}>
+            Weiter <kbd>−</kbd>
+          </button>
         </div>
+        <div style={S.hinweisZeile}>
+          <span style={B.leise}>{ausschnittHinweis}</span>
+          <button
+            onClick={() => void model.ausschnittZuruecksetzen()}
+            style={B.knopfKlein}
+            title="Ausschnitt wieder von der Engine bestimmen lassen"
+          >
+            automatisch
+          </button>
+        </div>
+      </div>
 
-        {/*
-          Zwei Knopfpaare, weil die beiden Werkzeuge unterschiedliche Fragen
-          stellen: Beim Ausschnitt heißt „näher" mehr Zoom im gleichen Kasten,
-          bei der Position heißt „größer" ein größerer Kasten auf der Seite.
-        */}
-        {werkzeug === 'ausschnitt' ? (
-          <>
-            <div style={S.paar}>
-              <button onClick={() => model.zoomen(ZOOM_SCHRITT)} style={S.halb}>
-                Näher <kbd>+</kbd>
-              </button>
-              <button onClick={() => model.zoomen(1 / ZOOM_SCHRITT)} style={S.halb}>
-                Weiter <kbd>−</kbd>
-              </button>
-            </div>
-            <div style={S.hinweisZeile}>
-              <span style={B.leise}>{werkzeugHinweis}</span>
-              <button
-                onClick={() => void model.ausschnittZuruecksetzen()}
-                style={B.knopfKlein}
-                title="Ausschnitt wieder von der Engine bestimmen lassen"
-              >
-                automatisch
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={S.paar}>
-              <button onClick={() => void model.groesseAendern(1 / ZOOM_SCHRITT)} style={S.halb}>
-                Größer
-              </button>
-              <button onClick={() => void model.groesseAendern(ZOOM_SCHRITT)} style={S.halb}>
-                Kleiner
-              </button>
-            </div>
-            <div style={S.hinweisZeile}>
-              <span style={B.leise}>{werkzeugHinweis}</span>
-              <button
-                onClick={() => void model.insRaster()}
-                disabled={!istFreiGesetzt}
-                style={{ ...B.knopfKlein, ...(istFreiGesetzt ? {} : S.aus) }}
-                title="Zurück auf den Platz aus der Vorlage"
-              >
-                ins Raster
-              </button>
-            </div>
-          </>
-        )}
+      <div style={B.abschnitt}>
+        <span style={B.marke}>Kasten · am Rand ziehen</span>
+        <div style={S.paar}>
+          <button onClick={() => void model.groesseAendern(1 / ZOOM_SCHRITT)} style={S.halb}>
+            Größer
+          </button>
+          <button onClick={() => void model.groesseAendern(ZOOM_SCHRITT)} style={S.halb}>
+            Kleiner
+          </button>
+        </div>
+        <div style={S.hinweisZeile}>
+          <span style={B.leise}>{kastenHinweis}</span>
+          <button
+            onClick={() => void model.insRaster()}
+            disabled={!istFreiGesetzt}
+            style={{ ...B.knopfKlein, ...(istFreiGesetzt ? {} : S.aus) }}
+            title="Zurück auf den Platz aus der Vorlage"
+          >
+            ins Raster
+          </button>
+        </div>
       </div>
 
       {/*
