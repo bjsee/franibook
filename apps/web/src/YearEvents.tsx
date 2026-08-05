@@ -124,6 +124,12 @@ export function YearEvents({ chapters, onOpen, standVersion }: YearEventsProps) 
               </div>
               <div>
                 <textarea
+                  // Der Schlüssel trägt den geladenen Text mit: Ohne ihn setzt
+                  // React `defaultValue` nur beim ersten Mount, und ein Stand
+                  // nach einem Zurücknehmen bliebe im Feld unsichtbar – das
+                  // nächste Verlassen des Feldes schriebe den veralteten,
+                  // eigentlich zurückgenommenen Text erneut auf den Server.
+                  key={`${c.year}-${zeilen.join('\n')}`}
                   defaultValue={zeilen.join('\n')}
                   onChange={(e) => merkeLang(c.year, e.target.value)}
                   onBlur={(e) => void speichern(c.year, e.target.value)}

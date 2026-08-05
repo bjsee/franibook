@@ -379,7 +379,7 @@ export function PhotoGroups({
 
           {selected.size > 0 && (
             <>
-              <button onClick={() => void gruppieren()} style={B.knopfPrimaer}>
+              <button onClick={() => void gruppieren()} disabled={!!busy} style={B.knopfPrimaer}>
                 Gruppieren …
               </button>
               <button
@@ -388,6 +388,7 @@ export function PhotoGroups({
                     setSelected(new Set()),
                   )
                 }
+                disabled={!!busy}
                 style={B.knopf}
               >
                 Gruppierung lösen
@@ -403,6 +404,7 @@ export function PhotoGroups({
                     setNote(`${selected.size} Fotos zugeordnet`);
                   });
                 }}
+                disabled={!!busy}
                 style={B.auswahl}
               >
                 <option value="">Zu Gruppe hinzufügen …</option>
@@ -420,6 +422,7 @@ export function PhotoGroups({
                     if (erstes)
                       void call(() => gruppeAendern(aktiveGruppe.id, { coverPhotoId: erstes }));
                   }}
+                  disabled={!!busy}
                   style={B.knopf}
                 >
                   Als Hauptbild
@@ -445,7 +448,11 @@ export function PhotoGroups({
                   Im Buch zeigen
                 </button>
               )}
-              <button onClick={() => void umbenennen(aktiveGruppe)} style={B.knopf}>
+              <button
+                onClick={() => void umbenennen(aktiveGruppe)}
+                disabled={!!busy}
+                style={B.knopf}
+              >
                 Umbenennen
               </button>
               <label style={B.haken}>
@@ -455,6 +462,7 @@ export function PhotoGroups({
                   onChange={(e) =>
                     void call(() => gruppeAendern(aktiveGruppe.id, { active: e.target.checked }))
                   }
+                  disabled={!!busy}
                 />
                 gliedert das Buch
               </label>
@@ -472,6 +480,7 @@ export function PhotoGroups({
                     }),
                   )
                 }
+                disabled={!!busy}
                 style={B.auswahl}
                 title="Auftaktseite für diese Gruppe"
               >
@@ -495,6 +504,7 @@ export function PhotoGroups({
                     setNote(`„${aktiveGruppe.title}" ging in „${zielTitel}" auf`);
                   });
                 }}
+                disabled={!!busy}
                 style={B.auswahl}
               >
                 <option value="">Zusammenführen mit …</option>
@@ -517,6 +527,7 @@ export function PhotoGroups({
                   );
                   setFilter({ kind: 'all' });
                 }}
+                disabled={!!busy}
                 style={B.knopfWeg}
               >
                 Gruppe auflösen

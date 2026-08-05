@@ -15,7 +15,7 @@
  * „Anordnung ändern"-Knopf, hinter dem dieselbe Liste lag — zwei Klicks für
  * etwas, das in der Spalte ohnehin sichtbar sein kann.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type Anordnungen as Antwort,
   anordnungenLaden,
@@ -51,12 +51,23 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
    */
   const [modus, setModus] = useState<'seiten' | 'doppelseite'>('seiten');
   const [daten, setDaten] = useState<Antwort | null>(null);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /** Fahrschein je Ladeanfrage – wer beim Blättern zuletzt kam, gilt. */
+  const fahrschein = useRef(0);
 
   const laden = useCallback(() => {
+    const eigener = ++fahrschein.current;
+    setLadeFehler(null);
     anordnungenLaden(index)
-      .then(setDaten)
-      .catch(() => setDaten(null));
+      .then((d) => {
+        if (eigener === fahrschein.current) setDaten(d);
+      })
+      .catch((e: unknown) => {
+        if (eigener !== fahrschein.current) return;
+        setDaten(null);
+        setLadeFehler(`Die Anordnungen ließen sich nicht laden: ${fehlertext(e)}`);
+      });
   }, [index, version]);
 
   useEffect(laden, [laden]);
@@ -115,7 +126,10 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
     }
   }
 
-  if (daten === null) return <span style={B.leiser}>lade …</span>;
+  if (daten === null) {
+    if (ladeFehler) return <span style={B.fehlerfeld}>{ladeFehler}</span>;
+    return <span style={B.leiser}>lade …</span>;
+  }
 
   return (
     <>

@@ -412,15 +412,20 @@ export function useSpreadEditor({
    * Doppelseite bekommt den fertigen Satz.
    */
   const [pendingCaption, setPendingCaption] = useState<string | null>(null);
+  /** Wie bei Ausschnitt und Neigung: Ob die Antwort noch dem letzten Stand gilt. */
+  const zuletztCaption = useRef<string | null>(null);
 
   useEffect(() => {
+    zuletztCaption.current = pendingCaption;
     if (pendingCaption === null || !selectedSlotId) return;
 
     const gesendet = pendingCaption;
     const senden = async () => {
       try {
         const data = await unterschriftSetzen(index, selectedSlotId, gesendet);
-        if (data.spread) {
+        // Hat der Benutzer inzwischen weitergetippt, gilt sein Stand – die
+        // Antwort ist dann bereits veraltet.
+        if (data.spread && zuletztCaption.current === gesendet) {
           onSpread(data.spread);
           onChanged();
         }
