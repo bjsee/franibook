@@ -33,7 +33,7 @@ import type { PrintProfile } from '../print/profile.js';
 import type { Template } from '../model/template.js';
 import {
   BLANK_TEMPLATE_ID,
-  chapterTemplates,
+  chapterChoices,
   groupOpenerTemplates,
   templateById,
 } from '../templates/index.js';
@@ -121,15 +121,14 @@ function fotosVon(spread: Spread): PhotoId[] {
  *
  * Ein Auftakt bleibt ein Auftakt: Wächst er von sechs auf neun Bilder, wird er
  * die dichte Fassung und nicht irgendeine Flussvorlage, sonst verlöre er seine
- * Textplätze und damit Jahreszahl und Ereigniszeilen. Die dichten Fassungen
- * stehen dabei immer zur Wahl, auch wenn das Buch schlanke Auftakte vorgibt
- * (`settings.chapterOpenersDense`): Neun Bilder von Hand auf die Seite zu
- * ziehen ist die Ansage, nicht ihr Gegenteil.
+ * Textplätze und damit Jahreszahl und Ereigniszeilen. Gewählt wird unter
+ * `chapterChoices` und nicht unter dem, was die Automatik nimmt: Bilder von
+ * Hand auf die Seite zu ziehen ist die Ansage, nicht ihr Gegenteil.
  */
 function auftaktKandidaten(spread: Spread, anzahl: number): Template[] | undefined {
   const tags = templateById(spread.templateId)?.tags;
   const familie = tags?.includes('kapitel')
-    ? chapterTemplates(true)
+    ? chapterChoices()
     : tags?.includes('gruppenauftakt')
       ? groupOpenerTemplates()
       : undefined;
@@ -140,11 +139,10 @@ function auftaktKandidaten(spread: Spread, anzahl: number): Template[] | undefin
  * Ordnet eine Doppelseite mit einer neuen Bildmenge an.
  *
  * Auftaktseiten wählen aus ihrer eigenen Familie (siehe `auftaktKandidaten`).
- * Die trägt aber nicht jede Bilderzahl – Kapitelauftakte gibt es für 1, 2, 3,
- * 4, 6 und 9 Bilder, Gruppenauftakte nur für eines. Passt die neue Zahl in
- * keine, wird der Zug abgelehnt und die Meldung nennt die Zahlen, die gehen:
- * Eine Seite, die nach dem Zug ihre Beschriftung verloren hätte, wäre die
- * schlechtere Antwort.
+ * Die trägt aber nicht jede Bilderzahl – Jahresauftakte gibt es für bis zu
+ * zwölf Bilder, Gruppenauftakte nur für eines. Passt die neue Zahl in keine,
+ * wird der Zug abgelehnt und die Meldung nennt die Grenze: Eine Seite, die nach
+ * dem Zug ihre Beschriftung verloren hätte, wäre die schlechtere Antwort.
  *
  * Bei einer Seite mit Textplätzen ohne Auftaktfamilie genügt `withText` – sonst
  * wählte die Rechnung eine Vorlage ganz ohne Textplatz.
@@ -162,13 +160,16 @@ function anordnen(
 
   if (kandidaten?.length === 0) {
     const familie = templateById(spread.templateId)?.tags?.includes('kapitel')
-      ? chapterTemplates(true)
+      ? chapterChoices()
       : groupOpenerTemplates();
     const zahlen = [...new Set(familie.map((t) => t.slots.length))].sort((a, b) => a - b);
-    return (
-      `Eine Auftaktseite trägt ${zahlen.join(', ')} Bilder – ` +
-      `für ${photos.length} gibt es keine Fassung`
-    );
+    // Seit es Jahresauftakte für jede Bilderzahl bis zwölf gibt, wäre die
+    // Aufzählung eine Zahlenreihe. Eine Obergrenze sagt dasselbe kürzer.
+    const luecken = zahlen.some((n, i) => i > 0 && n !== zahlen[i - 1]! + 1);
+    const traegt = luecken
+      ? `${zahlen.join(', ')} Bilder`
+      : `höchstens ${zahlen[zahlen.length - 1]} Bilder`;
+    return `Eine Auftaktseite trägt ${traegt} – für ${photos.length} gibt es keine Fassung`;
   }
 
   const ergebnis = layoutSpread({

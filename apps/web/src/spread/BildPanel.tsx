@@ -12,6 +12,7 @@
 import { FRAMES, photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Ebene } from './Ebene.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 
@@ -157,6 +158,8 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
           </button>
         </div>
       </div>
+
+      <Ebene model={model} />
 
       {/*
         Der Rahmen steht zwischen Lage und Neigung, weil er zu beiden gehört: Er

@@ -6,7 +6,7 @@
  * ihren Zustand, statt nachzufragen, und keine Rechnung findet zweimal statt.
  */
 import type { FastifyInstance } from 'fastify';
-import type { TextBlock } from '@franibook/core';
+import { type TextBlock, isEbenenzug } from '@franibook/core';
 import { type Kontext, spreadAntwort } from './kontext.js';
 
 export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
@@ -123,6 +123,30 @@ export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
   }>('/api/spreads/:index/slots/:slotId/rect', async (req, reply) => {
     const index = Number(req.params.index);
     const result = project.setSlotRect(index, req.params.slotId, req.body?.rect ?? null);
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
+  /**
+   * Verschiebt ein Bild im Stapel der Doppelseite.
+   *
+   * Vier Züge statt einer Ebenennummer: `vorn`, `vor`, `zurueck`, `hinten`. Eine
+   * Nummer wäre das Ergebnis eines Zuges und keine Absicht – und beim Umstellen
+   * der Nachbarn die von gestern. Kein Neuanordnen; die Ebene wirkt beim
+   * Rendern, wie Neigung und Rahmen.
+   */
+  app.patch<{
+    Params: { index: string; slotId: string };
+    Body?: { zug?: string };
+  }>('/api/spreads/:index/slots/:slotId/layer', async (req, reply) => {
+    const zug = req.body?.zug;
+    if (!isEbenenzug(zug)) {
+      return reply.code(400).send({ error: `Unbekannter Zug: ${String(zug)}` });
+    }
+    const index = Number(req.params.index);
+    const result = project.setSlotLayer(index, req.params.slotId, zug);
     if (!result.ok) return reply.code(404).send({ error: result.error });
 
     void project.save();

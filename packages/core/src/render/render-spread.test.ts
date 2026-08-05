@@ -70,6 +70,50 @@ describe('Doppelseitengeometrie', () => {
   });
 });
 
+describe('Ebenen im Rendered Spread Model', () => {
+  it('zeichnet die Bilder in der Reihenfolge der Vorlage, solange keine Ebene gesetzt ist', () => {
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    expect(imageBoxes(rsm).map((b) => b.slotId)).toEqual(template.slots.map((s) => s.id));
+  });
+
+  it('zeichnet ein Bild mit höherer Ebene später und damit darüber', () => {
+    // Die Reihenfolge der Boxen *ist* die Zeichenreihenfolge – kein Renderer
+    // sortiert nach. Wäre es anders, könnten Vorschau und PDF verschiedene
+    // Bilder oben zeigen.
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const gestapelt = {
+      ...spread,
+      slots: spread.slots.map((s) => (s.slotId === 'a' ? { ...s, layer: 3 } : s)),
+    };
+    const rsm = renderSpread(gestapelt, ctx);
+    expect(imageBoxes(rsm).map((b) => b.slotId)).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('lässt Texte und Zeitstrahl über den Bildern, unabhängig von der Ebene', () => {
+    const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const rsm = renderSpread(
+      {
+        ...spread,
+        slots: spread.slots.map((s) => ({ ...s, layer: 99 })),
+        blocks: [
+          {
+            id: 'b1',
+            content: 'Nachsatz',
+            rect: { x: 0.1, y: 0.1, w: 0.2, h: 0.1 },
+            weight: 'regular' as const,
+            fontSizePt: 12,
+            align: 'left' as const,
+          },
+        ],
+      },
+      timelineCtx,
+    );
+    const letzteBild = rsm.boxes.map((b) => b.kind).lastIndexOf('image');
+    const text = rsm.boxes.findIndex((b) => b.kind === 'text');
+    expect(text).toBeGreaterThan(letzteBild);
+  });
+});
+
 describe('Slotgeometrie des 4er-Rasters', () => {
   it('setzt die Slots auf die geplanten 120 mm im Quadrat', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
@@ -431,6 +475,49 @@ describe('Zeitstrahl auf der Doppelseite', () => {
     // Die Jahresspalte zeichnet keine Linie, nur Zahlen und einen Punkt.
     expect(rand.boxes.filter((b) => b.kind === 'text')).toHaveLength(19);
     expect(rand.boxes.filter((b) => b.kind === 'rect')).toHaveLength(1);
+  });
+
+  it('zeigt den Fortschritt auch auf einer Jahresseite – am Beginn ihres Jahrgangs', () => {
+    // Vorher entfiel auf einer Auftaktseite das Datum ganz, damit sie keinen
+    // Marker trägt. Am Rand speist dasselbe Datum aber auch den zurückgelegten
+    // Abschnitt, und der Balken blieb auf jeder Jahresseite leer.
+    const auftakt = {
+      ...spreadOfTemplate('spread.chapter.4up', ['p1', 'p2', 'p3', 'p4']),
+      chapterYear: 2017,
+    };
+    const rand = {
+      ...timelineCtx,
+      template: requireTemplate('spread.chapter.4up'),
+      timeline: { dateOf: DATEN, style: 'side' as const, bookYears: { from: 2008, to: 2026 } },
+    };
+    const rsm = renderSpread(auftakt, rand);
+
+    // Die Perle sitzt am Jahreswechsel: neun von neunzehn Jahrgängen des Buchs
+    // liegen vor 2017. Gemessen an der Achse selbst und nicht an ihren
+    // Randmaßen – die sind eine Entscheidung von `side-timeline.ts`.
+    const perle = rsm.boxes.find(
+      (b) => b.kind === 'rect' && b.rxMm !== undefined && b.wMm === b.hMm,
+    );
+    const achse = rsm.boxes
+      .filter((b) => b.kind === 'rect' && b.rxMm === undefined)
+      .sort((a, b) => (b.kind === 'rect' ? b.hMm : 0) - (a.kind === 'rect' ? a.hMm : 0))[0];
+    if (perle?.kind !== 'rect' || achse?.kind !== 'rect') throw new Error('keine Achse mit Perle');
+    expect(perle.yMm + perle.hMm / 2).toBeCloseTo(achse.yMm + (9 / 19) * achse.hMm, 1);
+
+    // Und der zurückgelegte Abschnitt reicht genau dorthin.
+    const gefuellt = rsm.boxes.filter(
+      (b) => b.kind === 'rect' && b.rxMm === undefined && b.fill === perle.fill,
+    );
+    expect(gefuellt.length).toBeGreaterThan(0);
+
+    // Ohne Jahrgang bleibt es beim Median der Bilder – 2017 statt gar nichts.
+    const ohneJahr = renderSpread(
+      spreadOfTemplate('spread.chapter.4up', ['p1', 'p2', 'p3', 'p4']),
+      rand,
+    );
+    expect(
+      ohneJahr.boxes.some((b) => b.kind === 'rect' && b.rxMm !== undefined && b.wMm === b.hMm),
+    ).toBe(true);
   });
 
   it('nimmt eine gewählte Akzentfarbe, sonst die aus dem Hintergrund abgeleitete', () => {

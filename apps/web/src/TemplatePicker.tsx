@@ -131,28 +131,43 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
     return <span style={B.leiser}>lade …</span>;
   }
 
+  // Eine Auftaktseite kennt die seitenweise Wahl nicht: Aus zwei Hälften des
+  // Flusses zusammengesetzt verlöre sie Jahreszahl und Ereigniszeilen. Der
+  // Umschalter fehlt dort deshalb ganz, statt eine Wahl zu zeigen, die der
+  // Server ablehnt.
+  const gewaehlterModus = daten.auftakt ? 'doppelseite' : modus;
+
   return (
     <>
-      <div style={B.segRahmen}>
-        {(
-          [
-            ['seiten', 'einzelne Seite'],
-            ['doppelseite', 'ganze Doppelseite'],
-          ] as const
-        ).map(([wert, text]) => (
-          <button
-            key={wert}
-            onClick={() => setModus(wert)}
-            style={{ ...(modus === wert ? B.segAn : B.segAus), flex: 1, fontSize: 12 }}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
+      {daten.auftakt ? (
+        <span style={B.leiser}>
+          Eine Jahresseite wird als ganze Doppelseite angeordnet — seitenweise verlöre sie
+          Jahreszahl und Ereigniszeilen.
+        </span>
+      ) : (
+        <div style={B.segRahmen}>
+          {(
+            [
+              ['seiten', 'einzelne Seite'],
+              ['doppelseite', 'ganze Doppelseite'],
+            ] as const
+          ).map(([wert, text]) => (
+            <button
+              key={wert}
+              onClick={() => setModus(wert)}
+              style={{ ...(modus === wert ? B.segAn : B.segAus), flex: 1, fontSize: 12 }}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {modus === 'doppelseite' ? (
-        <div style={S.gitter}>
-          {daten.templates.map((v) => (
+      {gewaehlterModus === 'doppelseite' ? (
+        <Faecher
+          soll={photoCount}
+          eintraege={daten.templates}
+          kachel={(v) => (
             <button
               key={v.id}
               onClick={() => void waehlen(v)}
@@ -161,19 +176,10 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
               style={{ ...S.kachel, ...(v.current ? S.kachelAn : {}) }}
             >
               <Skizze slots={v.slots} />
-              <span style={S.zahl}>
-                {v.slotCount}
-                {v.slotCount !== photoCount && (
-                  <span style={S.abweichung}>
-                    {v.slotCount > photoCount
-                      ? ` +${v.slotCount - photoCount}`
-                      : ` −${photoCount - v.slotCount}`}
-                  </span>
-                )}
-              </span>
+              <Zahl hat={v.slotCount} soll={photoCount} />
             </button>
-          ))}
-        </div>
+          )}
+        />
       ) : (
         (['left', 'right'] as const).map((seite) => {
           const bisher = seite === 'left' ? daten.counts.left : daten.counts.right;
@@ -185,8 +191,11 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
                   {bisher} {bisher === 1 ? 'Bild' : 'Bilder'}
                 </span>
               </p>
-              <div style={S.gitter}>
-                {daten.halves.map((h) => {
+              <Faecher
+                soll={bisher}
+                benannt={false}
+                eintraege={daten.halves}
+                kachel={(h) => {
                   const aktiv =
                     (seite === 'left' ? daten.current.left : daten.current.right) === h.id;
                   return (
@@ -194,35 +203,104 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
                       key={`${seite}-${h.id}`}
                       onClick={() => void halbseiteWaehlen(seite, h)}
                       disabled={busy !== null}
-                      title={`${h.slotCount} ${h.slotCount === 1 ? 'Bild' : 'Bilder'} auf dieser Seite`}
+                      title={`${h.name ? `${h.name} · ` : ''}${h.slotCount} ${
+                        h.slotCount === 1 ? 'Bild' : 'Bilder'
+                      } auf dieser Seite`}
                       style={{ ...S.kachel, ...(aktiv ? S.kachelAn : {}) }}
                     >
                       {/* Für die rechte Seite gespiegelt – so wie die Engine sie einsetzt. */}
                       <Skizze slots={h.slots} halb={seite} />
-                      <span style={S.zahl}>
-                        {h.slotCount}
-                        {h.slotCount !== bisher && (
-                          <span style={S.abweichung}>
-                            {h.slotCount > bisher
-                              ? ` +${h.slotCount - bisher}`
-                              : ` −${bisher - h.slotCount}`}
-                          </span>
-                        )}
-                      </span>
+                      <Zahl hat={h.slotCount} soll={bisher} />
                     </button>
                   );
-                })}
-              </div>
+                }}
+              />
             </div>
           );
         })
       )}
 
       <span style={B.leiser}>
-        Erst die linke, dann die rechte Seite — oder die ganze Doppelseite. Die Bilder werden den
-        neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.
+        {daten.auftakt
+          ? 'Jede Fassung trägt Jahreszahl und Ereigniszeilen. Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.'
+          : 'Erst die linke, dann die rechte Seite — oder die ganze Doppelseite. Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.'}
       </span>
     </>
+  );
+}
+
+/**
+ * Zwei Fächer: erst die Anordnungen für diese Bilderzahl, dann die übrigen.
+ *
+ * Die Bibliothek hat für jede Bilderzahl mehrere Anordnungen und über vierzig
+ * Halbseiten insgesamt. Nach Plätzezahl sortiert lag die passende irgendwo in
+ * der Mitte des Rollbereichs – man suchte also erst die eigene Zahl und wählte
+ * dann. Umgekehrt ist es richtig: Wer die Anordnung anfasst, will diese Bilder
+ * anders liegen sehen, nicht andere Bilder.
+ *
+ * Die übrigen bleiben sichtbar, weil eine andere Bilderzahl eine berechtigte
+ * Absicht ist – ein Bild soll in den Pool, oder es soll eines dazukommen. Sie
+ * stehen nach Abstand zur eigenen Zahl, nicht nach ihrer Größe.
+ */
+function Faecher<T extends { id: string; slotCount: number }>({
+  soll,
+  eintraege,
+  kachel,
+  /**
+   * Ob das erste Fach seine Bilderzahl nennt.
+   *
+   * Bei den einzelnen Seiten steht sie schon in der Zeile darüber („Linke
+   * Seite · 2 Bilder"), und zweimal dieselbe Zahl übereinander liest sich wie
+   * zwei verschiedene Angaben.
+   */
+  benannt = true,
+}: {
+  soll: number;
+  eintraege: readonly T[];
+  kachel: (e: T) => React.ReactNode;
+  benannt?: boolean;
+}) {
+  const passend = eintraege.filter((e) => e.slotCount === soll);
+  const andere = eintraege
+    .filter((e) => e.slotCount !== soll)
+    .sort(
+      (a, b) =>
+        Math.abs(a.slotCount - soll) - Math.abs(b.slotCount - soll) || a.slotCount - b.slotCount,
+    );
+
+  return (
+    <div style={S.rolle}>
+      {passend.length === 0 ? (
+        <p style={S.fach}>
+          <span style={S.abweichung}>
+            Für {soll} {soll === 1 ? 'Bild' : 'Bilder'} gibt es keine Anordnung
+          </span>
+        </p>
+      ) : (
+        <>
+          {benannt && (
+            <p style={S.fach}>
+              {soll} {soll === 1 ? 'Bild' : 'Bilder'}
+            </p>
+          )}
+          <div style={S.gitter}>{passend.map(kachel)}</div>
+        </>
+      )}
+      <p style={S.fach}>andere Bilderzahlen</p>
+      <div style={S.gitter}>{andere.map(kachel)}</div>
+    </div>
+  );
+}
+
+/** Die Plätzezahl einer Anordnung, mit dem Abstand zur Bilderzahl der Seite. */
+function Zahl({ hat, soll }: { hat: number; soll: number }) {
+  return (
+    <span style={S.zahl}>
+      {hat}
+      {hat !== soll && (
+        <span style={S.abweichung}>{hat > soll ? ` +${hat - soll}` : ` −${soll - hat}`}</span>
+      )}
+    </span>
   );
 }
 
@@ -292,16 +370,25 @@ const S = {
    * zwanzig Reihen Skizzen. Ohne diese Grenze stünden Hintergrund und Text zwei
    * Bildschirmhöhen weiter unten, und die Anordnung — der Griff, den man am
    * seltensten braucht — hätte die Spalte für sich.
+   *
+   * Die Grenze sitzt am Rollbereich und nicht mehr am Gitter, weil darin jetzt
+   * zwei Fächer stehen: Läge sie am Gitter, hätte jedes Fach seine eigene
+   * Bildlaufleiste und die Spalte wäre doppelt so hoch.
    */
+  rolle: { maxHeight: 156, overflowY: 'auto' as const },
   gitter: {
     display: 'flex',
     flexWrap: 'wrap' as const,
     gap: 6,
     marginTop: 2,
-    maxHeight: 156,
-    overflowY: 'auto' as const,
     alignContent: 'flex-start' as const,
   },
+  /**
+   * Die Überschrift eines Fachs. Nicht klebend am oberen Rand: Die Komponente
+   * steht in drei Rahmen mit verschiedenem Hintergrund, und eine klebende Zeile
+   * bräuchte eine Fläche, die zu allen dreien passt.
+   */
+  fach: { margin: '6px 0 0', fontSize: 11, fontWeight: 600, color: T.fg4 },
   kachel: {
     padding: 3,
     border: `1px solid ${T.line}`,

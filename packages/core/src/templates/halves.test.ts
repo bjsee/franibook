@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { allTemplates, requireTemplate, templateById, templateMeta } from './index.js';
+import { effectiveDpi } from '../geometry/units.js';
+import { coverCrop } from '../model/crop.js';
+import {
+  allTemplates,
+  libraryHalves,
+  requireTemplate,
+  templateById,
+  templateMeta,
+} from './index.js';
 import { halfPages, halvesOfTemplate, pairId, pairTemplate, splitPairId } from './halves.js';
 
 describe('Halbseiten', () => {
@@ -23,6 +31,62 @@ describe('Halbseiten', () => {
     const ids = halfPages().map((h) => h.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(halfPages().length).toBeGreaterThan(20);
+  });
+
+  it('bietet für jede Bilderzahl von 1 bis 14 mindestens drei Anordnungen', () => {
+    // Die Zerlegung der Vorlagen allein reichte nicht: Für sieben und acht
+    // Bilder gab sie je genau eine Anordnung her, für dreizehn keine einzige.
+    // Wer eine solche Seite von Hand anordnen wollte, hatte damit keine Wahl,
+    // sondern eine Bestätigung – deshalb führt die Bibliothek unter `halves`
+    // eigens entworfene Hälften. Vierzehn ist die Obergrenze, weil keine
+    // Vorlage mehr Bilder auf eine Buchseite legt.
+    for (let n = 1; n <= 14; n++) {
+      const passend = halfPages().filter((h) => h.slots.length === n);
+      expect(passend.length, `nur ${passend.length} Anordnungen für ${n} Bilder`).toBeGreaterThan(
+        2,
+      );
+    }
+  });
+
+  it('hält auch die entworfenen Halbseiten in der Nutzfläche und über der Mindestauflösung', () => {
+    // Sie stehen als Millimeter in `library.json` und laufen nicht durch die
+    // Prüfungen von `library.test.ts`, weil sie keine Doppelseite sind. Was für
+    // einen Slot einer Vorlage gilt, gilt für sie genauso.
+    const SPREAD_W = 600;
+    const PAGE_H = 300;
+    for (const h of libraryHalves()) {
+      for (const s of h.slots) {
+        expect(s.x * SPREAD_W, `${h.id}/${s.id} links`).toBeGreaterThanOrEqual(8);
+        expect(s.y * PAGE_H, `${h.id}/${s.id} oben`).toBeGreaterThanOrEqual(8);
+        // In Linksform: rechts endet die Nutzfläche vor der Falzzone.
+        expect((s.x + s.w) * SPREAD_W, `${h.id}/${s.id} Falz`).toBeLessThanOrEqual(293);
+        // Der Zeitstrahl belegt die 14 mm unter 278.
+        expect((s.y + s.h) * PAGE_H, `${h.id}/${s.id} Fußraum`).toBeLessThanOrEqual(278.001);
+
+        // Mindestauflösung mit dem schlechtesten Format, das dieser Platz
+        // erwarten darf – gerechnet wie in `library.test.ts`.
+        const wMm = s.w * SPREAD_W;
+        const hMm = s.h * PAGE_H;
+        const formate = [
+          { w: 2048, h: 1536 },
+          { w: 2048, h: 1152 },
+          { w: 1536, h: 2048 },
+          { w: 1152, h: 2048 },
+        ].filter((f) => {
+          const quer = f.w > f.h;
+          if (s.prefers === 'landscape') return quer;
+          if (s.prefers === 'portrait') return !quer;
+          return true;
+        });
+        for (const f of formate) {
+          const crop = coverCrop(f.w / f.h, wMm / hMm);
+          expect(
+            effectiveDpi(crop.w * f.w, wMm),
+            `${h.id}/${s.id} mit ${f.w}×${f.h}`,
+          ).toBeGreaterThanOrEqual(240);
+        }
+      }
+    }
   });
 
   it('führt alle Halbseiten in Linksform', () => {

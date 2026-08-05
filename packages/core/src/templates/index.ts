@@ -49,8 +49,9 @@ interface RawTemplate {
 
 const REF = library.reference;
 
-function normalize(raw: RawTemplate): Template {
-  const slot = (s: RawSlot): TemplateSlot => ({
+/** Ein Bildplatz aus der Bibliothek: Millimeter hinein, 0..1 heraus. */
+function slot(s: RawSlot): TemplateSlot {
+  return {
     id: s.id,
     x: s.x / REF.widthMm,
     y: s.y / REF.heightMm,
@@ -59,8 +60,10 @@ function normalize(raw: RawTemplate): Template {
     prominence: s.prominence as 1 | 2 | 3,
     ...(s.prefers ? { prefers: s.prefers as 'landscape' | 'portrait' | 'any' } : {}),
     ...(s.bleed ? { bleed: true } : {}),
-  });
+  };
+}
 
+function normalize(raw: RawTemplate): Template {
   return {
     id: raw.id,
     name: raw.name,
@@ -84,6 +87,28 @@ function normalize(raw: RawTemplate): Template {
         }
       : {}),
   };
+}
+
+/**
+ * Eine eigens entworfene Halbseite, wie sie in der Bibliothek steht.
+ *
+ * Normiert wie ein Template und in Linksform – die Slots liegen in der
+ * Nutzfläche der linken Buchseite. `halves.ts` setzt sie neben die Hälften, die
+ * aus der Zerlegung der Vorlagen entstehen; warum es sie überhaupt gibt, steht
+ * im Kommentar der `halves`-Liste in `library.json`.
+ */
+export interface LibraryHalf {
+  id: string;
+  name: string;
+  slots: TemplateSlot[];
+}
+
+const HALVES: LibraryHalf[] = (library.halves as { id: string; name: string; slots: RawSlot[] }[])
+  .filter((h) => h.slots.length > 0)
+  .map((h) => ({ id: h.id, name: h.name, slots: h.slots.map(slot) }));
+
+export function libraryHalves(): readonly LibraryHalf[] {
+  return HALVES;
 }
 
 /** Merkmale, die die Engine bei der Auswahl braucht. */
@@ -257,7 +282,7 @@ export function groupOpenerTemplates(): Template[] {
 }
 
 /**
- * Kapitelauftakte, die zur Wahl stehen.
+ * Kapitelauftakte, die **die Automatik** wählen darf.
  *
  * Als `veraltet` markierte bleiben in der Bibliothek, damit gespeicherte
  * Projekte weiter auflösbar sind – gewählt werden sie nicht mehr. Betroffen
@@ -270,14 +295,35 @@ export function groupOpenerTemplates(): Template[] {
  * trägt der Auftakt neun statt sechs Bilder und kostet damit fast nichts. Weil
  * sie neun Plätze haben und die bildlosen höchstens sechs, bleiben die kleinen
  * Fassungen auch dann die Wahl, wenn ein Jahrgang zu wenige Bilder hat.
+ *
+ * `nur-wahl` bleibt draußen: Die Bibliothek hat Auftakte für jede Bilderzahl
+ * von 1 bis 12, aber `auftaktGroessen` (layout/generate.ts) nimmt die größte
+ * Fassung, für die ein Jahrgang genug Bilder hat – mit allen zusammen füllte
+ * ein Jahresauftakt acht statt sechs Bilder, und das ändert Seitenzahl und
+ * Bildverteilung des ganzen Buchs. Wer sie sehen will, wählt sie
+ * (`chapterChoices`).
  */
 export function chapterTemplates(dicht = false): Template[] {
-  return ALL.filter(
-    (t) =>
-      templateMeta(t.id).chapterOnly &&
-      !t.tags?.includes('veraltet') &&
-      (dicht || !t.tags?.includes('dicht')),
+  return chapterChoices().filter(
+    (t) => !t.tags?.includes('nur-wahl') && (dicht || !t.tags?.includes('dicht')),
   );
+}
+
+/**
+ * Alle Jahresauftakte, unter denen **von Hand** gewählt werden kann.
+ *
+ * Schlank und dicht, für jede Bilderzahl von 1 bis 12 je drei Fassungen –
+ * hochkant, quer und gemischt. Eine Wahl von Hand ist eine Absicht für diese
+ * eine Doppelseite und keine Vorgabe für das Buch; deshalb gilt hier weder
+ * `settings.chapterOpenersDense` noch die Zurückhaltung der Automatik.
+ *
+ * Gebraucht an drei Stellen, und überall aus demselben Grund: Eine Auftaktseite
+ * bleibt eine Auftaktseite. Beim Anordnen von Hand, beim Ziehen von Bildern in
+ * den Baum und beim Neuanordnen einer einzelnen Seite darf sie nur unter ihrer
+ * eigenen Familie wählen, sonst verliert sie Jahreszahl und Ereigniszeilen.
+ */
+export function chapterChoices(): Template[] {
+  return ALL.filter((t) => templateMeta(t.id).chapterOnly && !t.tags?.includes('veraltet'));
 }
 
 /** Welche Gruppengrößen die Bibliothek überhaupt abdeckt. */

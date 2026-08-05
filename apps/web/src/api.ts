@@ -19,6 +19,7 @@
 import type {
   CoverDesign,
   Crop,
+  Ebenenzug,
   FrameId,
   LayoutDocument,
   MoveSource,
@@ -135,6 +136,8 @@ export interface Handarbeit {
   hintergruende: number;
   zeitstrahl: number;
   positionen: number;
+  /** Bilder mit einer von Hand gesetzten Ebene im Stapel. */
+  ebenen: number;
   texte: number;
   /** Vorlagentexte, die von Hand verschoben, aufgezogen oder gedreht wurden. */
   textplaetze: number;
@@ -331,6 +334,8 @@ export interface Vorlage {
 /** Eine Anordnung für eine einzelne Buchseite, immer in Linksform. */
 export interface Halbseite {
   id: string;
+  /** Fehlt bei Hälften, die aus einer Vorlage entstanden und keinen eigenen Namen haben. */
+  name?: string;
   slotCount: number;
   slots: { x: number; y: number; w: number; h: number }[];
 }
@@ -340,6 +345,8 @@ export interface Anordnungen {
   halves: Halbseite[];
   current: { left?: string; right?: string };
   counts: { left: number; right: number };
+  /** Auftaktseite: nur als ganze Doppelseite anzuordnen, `halves` ist dann leer. */
+  auftakt: boolean;
 }
 
 /** Was eine geänderte Anordnung übrig lässt: Bilder ohne Platz. */
@@ -440,6 +447,10 @@ export const rahmenSetzen = (index: number, slotId: string, frame: FrameId | nul
 /** Bildunterschrift im Fuß des Rahmens. Ein leerer Text löscht sie. */
 export const unterschriftSetzen = (index: number, slotId: string, caption: string) =>
   sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/caption`, { caption });
+
+/** Ein Bild im Stapel der Doppelseite bewegen – vier Züge, keine Ebenennummer. */
+export const ebeneSetzen = (index: number, slotId: string, zug: Ebenenzug) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/layer`, { zug });
 
 /** Was ein Zug im Buch bewegt hat: die betroffenen Doppelseiten, fertig gerendert. */
 export interface Zugergebnis {

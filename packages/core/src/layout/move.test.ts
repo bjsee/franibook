@@ -214,7 +214,9 @@ describe('movePhotos – mehrere Bilder in einem Zug', () => {
     } as Photo;
   }
 
-  const ALLE = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'pa', 'pb', 'pc'];
+  // Dreizehn, weil eine Auftaktseite bis zwölf Bilder trägt: Die Ablehnung
+  // darüber lässt sich nur mit einem dreizehnten prüfen.
+  const ALLE = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'pa', 'pb', 'pc', 'pd'];
   const reflow = {
     photos: new Map(ALLE.map((id) => [id, foto(id)])) as ReadonlyMap<PhotoId, Photo>,
     profile: defaultProfile(),
@@ -371,16 +373,29 @@ describe('movePhotos – mehrere Bilder in einem Zug', () => {
     expect(r.spreads[1]!.templateId).toMatch(/^spread\.chapter\./);
   });
 
-  it('lehnt eine Bilderzahl ab, für die es keine Auftaktfassung gibt', () => {
-    // Fünf Bilder: Zwischen dem Vierer und dem Sechser gibt es nichts. Die
-    // Meldung nennt die Zahlen, die gehen, statt nur „geht nicht".
+  it('nimmt einem Jahresauftakt auch fünf Bilder ab', () => {
+    // Vorher lag zwischen dem Vierer und dem Sechser nichts, und derselbe Zug
+    // wurde abgelehnt. Seit es Fassungen für jede Bilderzahl gibt, geht er –
+    // und die Seite behält ihre Textplätze.
     const buch = [seiteMit(0, ['p1', 'p2']), auftaktMit(1, ['p3', 'p4', 'p5', 'p6'])];
     const r = movePhotos(buch, [zug(0, 's0', 1)], reflow);
 
+    expect(r.ok).toBe(true);
+    expect(bilderAuf(r.spreads, 1)).toHaveLength(5);
+    expect(r.spreads[1]!.templateId).toMatch(/^spread\.chapter\./);
+    expect(r.spreads[1]!.texts).toHaveLength(1);
+  });
+
+  it('lehnt eine Bilderzahl ab, für die es keine Auftaktfassung gibt', () => {
+    // Dreizehn Bilder: Bei zwölf hört die Familie auf. Weil die Zahlen darunter
+    // lückenlos abgedeckt sind, nennt die Meldung die Grenze und nicht die
+    // Aufzählung – „0, 1, 2, 3 … 12 Bilder" wäre eine Zahlenreihe.
+    const buch = [seiteMit(0, ['p1']), auftaktMit(1, ALLE.slice(1, 13))];
+    const r = movePhotos(buch, [zug(0, 's0', 1)], reflow);
+
     expect(r.ok).toBe(false);
-    expect(r.error).toContain('Auftaktseite trägt');
-    expect(r.error).toContain('6');
-    expect(r.spreads[1]!.slots).toHaveLength(4);
+    expect(r.error).toContain('Auftaktseite trägt höchstens 12 Bilder');
+    expect(r.spreads[1]!.slots).toHaveLength(12);
   });
 
   it('nimmt einen leeren Stapel ohne Wirkung hin', () => {

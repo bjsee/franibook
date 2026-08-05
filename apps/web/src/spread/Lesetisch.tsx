@@ -24,6 +24,7 @@ import { B, T, dpiFarbe } from '../theme.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import type { TextBlockData } from '../TextBlocks.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Ebene } from './Ebene.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage, zeitpunkt } from './SpreadStage.js';
 import { miniaturSrc, useNachbarn } from './useNachbarn.js';
@@ -260,6 +261,8 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
       <span style={S.grad}>
         {model.neigungGesperrt ? '—' : `${model.aktuelleNeigung.toFixed(1).replace('.', ',')}°`}
       </span>
+      <Ebene model={model} variante="leiste" />
+      <span style={B.trenner} />
       <button onClick={model.auswahlAufheben} style={S.rundKlein} title="Auswahl aufheben (Esc)">
         ×
       </button>

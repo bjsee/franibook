@@ -13,7 +13,7 @@ import {
   type PrintProfile,
   type Spread,
   allTemplates,
-  chapterTemplates,
+  chapterChoices,
   choosePairFor,
   effectivePhoto,
   halfPageById,
@@ -102,7 +102,7 @@ export function dreheAusschnitte(
  * Buches läuft, aber nur für diese eine Seite. Gedacht für den Fall, dass sich
  * die Bilder geändert haben und die Vorlage nicht: Nach einer
  * Ausrichtungskorrektur steht ein gekipptes Bild in einem Platz, der für seine
- * alte Lage gewählt wurde. Auftakte bleiben dabei unter sich (`chapterTemplates`),
+ * alte Lage gewählt wurde. Auftakte bleiben dabei unter sich (`chapterChoices`),
  * sonst verlöre die Seite ihre Textplätze.
  */
 export function setSpreadTemplate(
@@ -126,7 +126,7 @@ export function setSpreadTemplate(
     profile: z.profile,
     ...(auto ? {} : { templateId }),
     ...(auftakt
-      ? { candidates: chapterTemplates(true).filter((t) => t.slots.length === fotos.length) }
+      ? { candidates: chapterChoices().filter((t) => t.slots.length === fotos.length) }
       : {}),
     weightOf: gewicht(z),
   });
@@ -169,6 +169,19 @@ export function setSpreadHalf(
   if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
   if (!halfPageById(halfId) && !isOwnHalf(halfId)) {
     return { ok: false, error: `Anordnung ${halfId} gibt es nicht`, leftover: [] };
+  }
+  // Eine Jahresseite zerfällt nicht in zwei Buchseiten: Die Hälften des Flusses
+  // tragen keinen Textplatz, und aus zwei zusammengesetzt verlöre der Auftakt
+  // Jahreszahl und Ereigniszeilen. Er wählt als ganze Doppelseite unter seiner
+  // eigenen Familie (`templateChoices`).
+  if (templateMeta(spread.templateId).chapterOnly) {
+    return {
+      ok: false,
+      error:
+        'Eine Jahresseite lässt sich nur als ganze Doppelseite anordnen – ' +
+        'seitenweise verlöre sie Jahreszahl und Ereigniszeilen',
+      leftover: [],
+    };
   }
 
   const template = templateById(spread.templateId);
@@ -226,15 +239,30 @@ export function halfChoices(
 ): {
   halves: {
     id: string;
+    /** Wie die Anordnung heißt – als Erklärung an der Skizze. */
+    name?: string;
     slotCount: number;
     slots: { x: number; y: number; w: number; h: number }[];
   }[];
   current: { left?: string; right?: string };
   /** Bilder auf der linken und rechten Seite dieser Doppelseite. */
   counts: { left: number; right: number };
+  /**
+   * Ob dies eine Auftaktseite ist – dann gibt es keine seitenweise Wahl.
+   *
+   * Die Oberfläche zeigt sonst als Vorgabe die einzelne Seite, und das ist bei
+   * einer Jahresseite der Griff, der ihr die Jahreszahl nimmt (siehe
+   * `setSpreadHalf`). Sie soll ihn deshalb gar nicht erst anbieten.
+   */
+  auftakt: boolean;
 } {
   const spread = z.spreads[index];
-  if (!spread) return { halves: [], current: {}, counts: { left: 0, right: 0 } };
+  if (!spread) return { halves: [], current: {}, counts: { left: 0, right: 0 }, auftakt: false };
+
+  if (templateMeta(spread.templateId).chapterOnly) {
+    const belegt = spread.slots.filter((s) => s.photoId).length;
+    return { halves: [], current: {}, counts: { left: 0, right: belegt }, auftakt: true };
+  }
 
   const template = templateById(spread.templateId);
   const belegt = (pruefe: (x: number, w: number) => boolean) =>
@@ -243,6 +271,7 @@ export function halfChoices(
   return {
     halves: halfPages().map((h) => ({
       id: h.id,
+      ...(h.name ? { name: h.name } : {}),
       slotCount: h.slots.length,
       slots: h.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
     })),
@@ -251,6 +280,7 @@ export function halfChoices(
       left: belegt((x, w) => x + w <= 0.5001),
       right: belegt((x) => x >= 0.4999),
     },
+    auftakt: false,
   };
 }
 
@@ -282,11 +312,13 @@ export function templateChoices(
   // Kapitelauftakte und Gruppenauftakte bleiben unter sich: Ihre Vorlagen
   // tragen Text und werden gezielt vergeben, nicht über die Slotzahl gefunden.
   //
-  // Die dichten Fassungen stehen hier immer zur Wahl, auch wenn die Automatik
-  // sie nicht vergeben darf: Eine Wahl von Hand ist eine Absicht für diese eine
-  // Doppelseite und keine Vorgabe für das Buch.
+  // Für eine Jahresseite stehen alle Fassungen zur Wahl – die dichten und die,
+  // die die Automatik nicht vergibt (`nur-wahl`). Eine Wahl von Hand ist eine
+  // Absicht für diese eine Doppelseite und keine Vorgabe für das Buch. Vorher
+  // stand hier `chapterTemplates(true)`, und damit gab es für eine Jahresseite
+  // mit fünf, sieben oder acht Bildern keine einzige passende Anordnung.
   const auswahl = meta.chapterOnly
-    ? chapterTemplates(true).filter((t) => t.slots.length > 0)
+    ? chapterChoices().filter((t) => t.slots.length > 0)
     : allTemplates().filter((t) => {
         const m = templateMeta(t.id);
         if (m.chapterOnly || t.tags?.includes('veraltet')) return false;
