@@ -61,6 +61,7 @@ import { planeSofort } from '../ausstehend.js';
 import { fotoLoeschen, loeschMeldung } from '../deletePhoto.js';
 import type { Bewegtext } from './bewegtext.js';
 import { bewegtexte, mitOffenemStand } from './bewegtext.js';
+import { naechsterGriffmodus, type Griffmodus } from './griffmodus.js';
 import { usePlatz } from './usePlatz.js';
 
 /** Verzögerung, bis ein Ausschnitt zum Server geht. */
@@ -146,6 +147,14 @@ export function useSpreadEditor({
   /** Stellung des Neigungsreglers, solange sie noch nicht beim Server ist. */
   const [pendingTilt, setPendingTilt] = useState<number | null>(null);
   const [zug, setZug] = useState<Zug | null>(null);
+  /**
+   * Der Platz unter dem Zeiger, solange gezogen wird.
+   *
+   * Ohne ihn sähen beim Ziehen alle Plätze gleich aus, und was das Fallenlassen
+   * bedeutet – tauschen oder einsetzen –, stünde nirgends. Er ist reine
+   * Rückmeldung: Was der Zug tut, entscheidet beim Ablegen der Server.
+   */
+  const [ueberSlot, setUeberSlot] = useState<string | null>(null);
   const [pool, setPool] = useState<PoolPhoto[] | null>(null);
   const [poolOffen, setPoolOffen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -159,14 +168,6 @@ export function useSpreadEditor({
    * einem Umzug stimmt die Miniatur der Zielseite nicht mehr.
    */
   const [buchVersion, setBuchVersion] = useState(0);
-  /**
-   * Was die Maus im gewählten Slot tut.
-   *
-   * Ausschnitt ist die Vorgabe: Ihn justiert man an fast jedem Bild, die
-   * Position an wenigen. Beide auf derselben Maustaste brauchen einen sichtbaren
-   * Umschalter — eine Zusatztaste fände niemand.
-   */
-  const [werkzeug, setWerkzeug] = useState<'ausschnitt' | 'position'>('ausschnitt');
   /** Der Text, an dem gerade gearbeitet wird – Block oder Vorlagentext. */
   const [textId, setTextId] = useState<string | null>(null);
   /**
@@ -185,14 +186,16 @@ export function useSpreadEditor({
   /** Position und Größe, solange sie noch nicht beim Server sind. */
   const [pendingRect, setPendingRect] = useState<NormRect | null>(null);
   /**
-   * Was die Griffe am gewählten Bild tun: Größe oder Drehung.
+   * Was die Griffe am gewählten Element anbieten: nichts, Größe oder Drehung.
    *
-   * Zwei Sätze Griffe an derselben Stelle, umgeschaltet durch einen Klick auf
-   * das schon gewählte Bild – die Geste aus Inkscape und Illustrator. Ein
-   * Schalter in der Seitenspalte wäre der zweite Weg zu derselben Handlung, und
-   * die Hand ist beim Bild und nicht am Rand.
+   * Umgeschaltet durch einen Klick auf das schon gewählte Element – die Geste
+   * aus Inkscape und Illustrator. Ein Schalter in der Seitenspalte wäre der
+   * zweite Weg zu derselben Handlung, und die Hand ist beim Bild und nicht am
+   * Rand. Am Bild sind es drei Stufen (`griffmodus.ts`), am Text zwei: Ein Text
+   * hat keinen Ausschnitt, also gibt es bei ihm auch keine Stufe, die ihn frei
+   * lässt.
    */
-  const [griffModus, setGriffModus] = useState<'groesse' | 'drehen'>('groesse');
+  const [griffModus, setGriffModus] = useState<Griffmodus>('keine');
   /**
    * Maßangabe während des Ziehens, direkt am Bild.
    *
@@ -208,10 +211,11 @@ export function useSpreadEditor({
     setPendingCrop(null);
     setPendingTilt(null);
     setPendingRect(null);
-    // Größe ist der Anfang: Sie wird an fast jedem Bild einmal angefasst, die
-    // Drehung an wenigen. Ein Bild, das gedreht ausgewählt wird, käme sonst
-    // gleich mit dem seltener gebrauchten Werkzeug in der Hand.
-    setGriffModus('groesse');
+    // Ein frisch gewähltes Bild trägt keine Griffe: Verschieben und Ausschnitt
+    // gehen ohne, und wer wirklich die Größe meint, sagt es mit einem zweiten
+    // Klick. Ein Text dagegen kann ohne Griffe nichts – er beginnt bei der
+    // Größe.
+    setGriffModus(textId ? 'groesse' : 'keine');
   }, [index, selectedSlotId, textId]);
 
   const poolLaden = useCallback(() => {
@@ -522,25 +526,22 @@ export function useSpreadEditor({
   // ----------------------------------------------------------- Ziehen
 
   /**
-   * Ausschnitt mit der Maus verschieben.
+   * Ausschnitt mit der Maus verschieben – die Geste *im* Bild.
    *
    * Der sichtbare Bereich bewegt sich entgegen dem Zeiger – so folgt das Bild
    * der Hand, was jeder von Karten und Fotogalerien kennt. Umgerechnet wird
    * über die Slotbreite in Pixeln und die aktuelle Ausschnittsbreite: eine
    * Bewegung über den halben Slot verschiebt den Ausschnitt um die halbe
    * sichtbare Breite.
+   *
+   * Wo die Geste beginnt, entscheidet `Bildgriffe`: innen der Ausschnitt, am
+   * Rand der Kasten (`kastenZiehen`). Vorher lag beides auf derselben Fläche
+   * und wurde über einen Umschalter neben der Bühne getrennt.
    */
-  function slotPointerDown(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
+  function ausschnittZiehen(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
     if (slotId !== selectedSlotId || e.button !== 0) return;
     const box = bildBox(slotId);
     if (!box) return;
-
-    // Im Positionsmodus bewegt dieselbe Geste den ganzen Kasten statt des
-    // Ausschnitts darin.
-    if (werkzeug === 'position') {
-      positionZiehen(slotId, e);
-      return;
-    }
 
     e.preventDefault();
     gezogen.current = false;
@@ -567,14 +568,15 @@ export function useSpreadEditor({
   }
 
   /**
-   * Den Bildkasten selbst verschieben.
+   * Den Bildkasten selbst verschieben – die Geste *am Rand* des Bildes.
    *
    * Gerechnet wird in normierten Koordinaten des Endformats – dieselbe Einheit,
    * in der auch die Vorlagen stehen. Gespeichert wird erst beim Loslassen: Ein
    * Schreibvorgang je Mausbewegung wäre das ganze Projekt-JSON, hundertmal in
    * der Sekunde.
    */
-  function positionZiehen(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
+  function kastenZiehen(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
+    if (slotId !== selectedSlotId || e.button !== 0) return;
     const box = bildBox(slotId);
     if (!box) return;
 
@@ -1081,16 +1083,17 @@ export function useSpreadEditor({
   const gezogen = useRef(false);
 
   /**
-   * Klick auf ein Bild: auswählen, dann Griffe umschalten.
+   * Klick auf ein Bild: auswählen, dann durch die Griffe gehen.
    *
-   * Die Geste aus den Grafikprogrammen: Der erste Klick wählt und zeigt die
-   * Größengriffe, der zweite stellt sie auf Drehen, der dritte zurück. Vorher
-   * hob der zweite Klick die Auswahl auf – das übernehmen jetzt Escape und das
-   * Kreuz im Panel, wie in Inkscape auch.
+   * Die Geste aus den Grafikprogrammen: Der erste Klick wählt – blauer Rand,
+   * keine Griffe, und schon jetzt lässt sich im Bild der Ausschnitt schieben und
+   * am Rand der Kasten. Der zweite Klick legt die Größengriffe an, der dritte
+   * die Drehgriffe, der vierte schließt den Kreis. Abgewählt wird mit Escape
+   * oder dem Kreuz im Panel, wie in Inkscape auch.
    *
-   * Randabfallende Bilder bleiben bei den Größengriffen: Ihre Drehung wäre kein
-   * Gestaltungsmittel, sondern ein weißer Zwickel an der Papierkante. Gesagt wird
-   * das dann auch, statt den Klick stumm zu verschlucken.
+   * Randabfallende Bilder überspringen die Drehung: Sie wäre kein
+   * Gestaltungsmittel, sondern ein weißer Zwickel an der Papierkante. Gesagt
+   * wird das dabei auch – ein Klick, der nur nichts tut, sähe wie ein Fehler aus.
    */
   function slotClick(slotId: string) {
     if (gezogen.current) {
@@ -1109,9 +1112,8 @@ export function useSpreadEditor({
     }
     if (griffModus === 'groesse' && neigungGesperrt) {
       setNote('Randabfallend und deshalb gerade — geneigt entstünden weiße Zwickel am Papierrand.');
-      return;
     }
-    setGriffModus((m) => (m === 'groesse' ? 'drehen' : 'groesse'));
+    setGriffModus((m) => naechsterGriffmodus(m, neigungGesperrt));
   }
 
   // Eigener Handler, weil er auch ohne ausgewählten Slot gelten soll: Die
@@ -1241,6 +1243,7 @@ export function useSpreadEditor({
     const box = bildBox(slotId);
     if (!box) return;
     const px = photoPixelsOf(box);
+    setUeberSlot(null);
     setZug({
       source: { kind: 'slot', spreadIndex: index, slotId },
       ...(px ? { photo: px } : {}),
@@ -1251,6 +1254,12 @@ export function useSpreadEditor({
     if (!zug) return;
     void verschieben(zug.source, { kind: 'slot', spreadIndex: index, slotId });
     setZug(null);
+    setUeberSlot(null);
+  }
+
+  function zugBeenden() {
+    setZug(null);
+    setUeberSlot(null);
   }
 
   /** Das gewählte Bild aus dem Buch nehmen – es geht in den Fotopool. */
@@ -1455,15 +1464,14 @@ export function useSpreadEditor({
   /** Ob der gewählte Rahmen die Unterschrift überhaupt zeigt. */
   const unterschriftSichtbar = frameHatFuss(aktuellerRahmen);
 
-  /** Woher der Ausschnitt bzw. die Position gerade kommt, in einem Wort. */
-  const werkzeugHinweis =
-    werkzeug === 'position'
-      ? istFreiGesetzt
-        ? 'frei gesetzt'
-        : 'im Raster der Vorlage'
-      : gewaehlteBox && (pendingCrop ?? gewaehlteBox.crop).mode === 'manual'
-        ? 'Ausschnitt von Hand'
-        : 'Ausschnitt automatisch';
+  /** Woher der Ausschnitt gerade kommt, in einem Wort. */
+  const ausschnittHinweis =
+    gewaehlteBox && (pendingCrop ?? gewaehlteBox.crop).mode === 'manual'
+      ? 'von Hand'
+      : 'automatisch';
+
+  /** Woher der Platz des Kastens kommt, in einem Wort. */
+  const kastenHinweis = istFreiGesetzt ? 'frei gesetzt' : 'im Raster der Vorlage';
 
   /**
    * Ereignisse, die aus einer Fläche eine Ablage für den Fotopool machen.
@@ -1476,12 +1484,17 @@ export function useSpreadEditor({
   const poolAblage = {
     onDragOver: (e: React.DragEvent) => {
       if (zug?.source.kind === 'slot') e.preventDefault();
+      // Der Zeiger hat das Blatt verlassen – sonst bliebe die Marke auf dem
+      // zuletzt überfahrenen Platz stehen und verspräche einen Tausch, der
+      // hier gar nicht mehr zur Wahl steht.
+      setUeberSlot(null);
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       if (zug?.source.kind !== 'slot') return;
       void verschieben(zug.source, { kind: 'pool' });
       setZug(null);
+      setUeberSlot(null);
     },
   };
 
@@ -1511,9 +1524,8 @@ export function useSpreadEditor({
     datumSetzen,
     ortSetzen,
     ausrichtungKippen,
-    werkzeug,
-    setWerkzeug,
-    werkzeugHinweis,
+    ausschnittHinweis,
+    kastenHinweis,
 
     // Ausschnitt und Lage
     pendingCrop,
@@ -1546,10 +1558,12 @@ export function useSpreadEditor({
 
     // Bühnen-Handler
     slotClick,
-    slotPointerDown,
+    ausschnittZiehen,
+    kastenZiehen,
     slotDragStart,
     slotDrop,
-    zugBeenden: () => setZug(null),
+    slotDragOver: setUeberSlot,
+    zugBeenden,
 
     // Text
     textId,
@@ -1564,6 +1578,8 @@ export function useSpreadEditor({
     // Buch
     zug,
     setZug,
+    /** Der Platz unter dem Zeiger – nur während eines Zuges gesetzt. */
+    ueberSlot,
     verschieben,
     neuAnordnen,
     ausDemBuch,

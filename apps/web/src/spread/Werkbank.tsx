@@ -115,21 +115,6 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
           <span style={S.strich} />
           {(
             [
-              ['ausschnitt', 'Ausschnitt'],
-              ['position', 'Position'],
-            ] as const
-          ).map(([wert, text]) => (
-            <button
-              key={wert}
-              onClick={() => model.setWerkzeug(wert)}
-              style={model.werkzeug === wert ? B.pilleAn : B.pilleAus}
-            >
-              {text}
-            </button>
-          ))}
-          <span style={S.strich} />
-          {(
-            [
               ['anordnung', 'Anordnung'],
               ['hintergrund', 'Hintergrund'],
               ['text', 'Text'],
@@ -326,35 +311,41 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         </span>
       </div>
 
-      {model.werkzeug === 'ausschnitt' ? (
-        <div style={S.paar}>
-          <button onClick={() => model.zoomen(ZOOM_SCHRITT)} style={S.halb}>
-            Näher
-          </button>
-          <button onClick={() => model.zoomen(1 / ZOOM_SCHRITT)} style={S.halb}>
-            Weiter
-          </button>
-          <button onClick={() => void model.ausschnittZuruecksetzen()} style={S.halb}>
-            auto
-          </button>
-        </div>
-      ) : (
-        <div style={S.paar}>
-          <button onClick={() => void model.groesseAendern(1 / ZOOM_SCHRITT)} style={S.halb}>
-            Größer
-          </button>
-          <button onClick={() => void model.groesseAendern(ZOOM_SCHRITT)} style={S.halb}>
-            Kleiner
-          </button>
-          <button
-            onClick={() => void model.insRaster()}
-            disabled={!model.istFreiGesetzt}
-            style={S.halb}
-          >
-            Raster
-          </button>
-        </div>
-      )}
+      {/*
+        Beide Reihen, seit der Umschalter fort ist: Am Bild entscheidet der Ort
+        des Griffs, was das Ziehen bewegt — hier stehen dieselben zwei Fragen
+        nebeneinander statt hintereinander. Die Beschriftung sagt jeweils dazu,
+        wo die Hand dasselbe täte.
+      */}
+      <span style={{ ...B.marke, marginTop: 4 }}>Ausschnitt · im Bild ziehen</span>
+      <div style={S.paar}>
+        <button onClick={() => model.zoomen(ZOOM_SCHRITT)} style={S.halb}>
+          Näher
+        </button>
+        <button onClick={() => model.zoomen(1 / ZOOM_SCHRITT)} style={S.halb}>
+          Weiter
+        </button>
+        <button onClick={() => void model.ausschnittZuruecksetzen()} style={S.halb}>
+          auto
+        </button>
+      </div>
+
+      <span style={{ ...B.marke, marginTop: 8 }}>Kasten · am Rand ziehen</span>
+      <div style={S.paar}>
+        <button onClick={() => void model.groesseAendern(1 / ZOOM_SCHRITT)} style={S.halb}>
+          Größer
+        </button>
+        <button onClick={() => void model.groesseAendern(ZOOM_SCHRITT)} style={S.halb}>
+          Kleiner
+        </button>
+        <button
+          onClick={() => void model.insRaster()}
+          disabled={!model.istFreiGesetzt}
+          style={S.halb}
+        >
+          Raster
+        </button>
+      </div>
 
       <label style={{ ...B.haken, fontSize: 12, marginTop: 12 }}>
         Neigung

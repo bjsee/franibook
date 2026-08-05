@@ -383,10 +383,22 @@ Passt der Satz nicht in die Breite, wird die Schrift kleiner statt der Text
 umgebrochen. Messwerte und verworfene Fassungen: `docs/konzept.md`, Abschnitt
 „Rahmen um die Bilder".
 
+**Am Bild entscheidet der Ort des Griffs, was das Ziehen bewegt**
+(`spread/Bildgriffe.tsx`): im Bild der Ausschnitt, am Rand der Kasten auf der
+Seite. Kein Umschalter „Ausschnitt | Position" mehr — der Kasten hat einen
+Rand, und der sagt dasselbe dort, wo die Hand liegt. Zwei ineinanderliegende
+Kästen, der äußere mit durchsichtigem Rand: Die Randfläche eines Elements fängt
+Zeigerereignisse, also trägt jede Fläche ihren eigenen Cursor. Deshalb gibt es
+auch kein `onSlotPointerDown` in `render-dom` mehr; der Renderer liefert das
+Rechteck (`slotOverlay`), die Flächen darin baut die Oberfläche.
+
 **Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
-`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Texte): Klick wählt,
-ein weiterer Klick schaltet von Größen- auf Drehgriffe, Umschalt hält das
-Seitenverhältnis bzw. rastet auf 15°. Ein frei aufgezogener Bildkasten verzerrt
+`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Texte): Am Bild drei
+Stufen (`spread/griffmodus.ts`) — Klick wählt nur (blauer Rand, keine Griffe,
+Zoomknöpfe unten rechts im Bild), der nächste legt Größengriffe an, der nächste
+Drehgriffe, der nächste schließt den Kreis; randabfallende Bilder überspringen
+die Drehung. Am Text zwei Stufen, denn er hat keinen Ausschnitt. Umschalt hält
+das Seitenverhältnis bzw. rastet auf 15°. Ein frei aufgezogener Bildkasten verzerrt
 nicht, weil ein manueller Ausschnitt beim Rendern in die Form des Kastens gedreht
 wird (`fitCropToAspect` in `renderSpread`, Fläche bleibt gleich) — der
 gespeicherte Ausschnitt selbst bleibt unangetastet. Am Textblock wächst dagegen an

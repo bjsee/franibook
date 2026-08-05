@@ -1783,6 +1783,19 @@ Der Cache ist vollständig ableitbar und darf jederzeit gelöscht werden. `cache
 > Seitenrand und die Ausschnittsvorschau im Zielslot fehlen; angezeigt wird beim
 > Ziehen die zu erwartende Auflösung je Slot.
 >
+> **Ergänzt am 5. August 2026: der Tausch sagt sich an.** Getauscht wurde von
+> Anfang an, nur sah man es dem Zug nicht an — alle Plätze leuchteten gleich,
+> und die Auflösung stand überall. Der Platz unter dem Zeiger trägt jetzt
+> Zeichen und Wort dessen, was das Fallenlassen bedeutet („⇄ Tauschen", „↓
+> Einsetzen"), die übrigen bleiben blass; beim Tausch bekommt auch der
+> Ausgangsplatz eine blasse Marke „⇄ hierher", denn wo das verdrängte Bild
+> hingerät, ist die Hälfte der Auskunft. Was ein Zug bedeutet, rechnet
+> `spread/absicht.ts` aus Herkunft und Ziel — ohne DOM und deshalb prüfbar; der
+> Renderer meldet nur `onDragOverSlot`. Gemeldet aus `dragover` und nicht aus
+> `dragenter`: Ein Slot enthält sein Bild als eigenes Element, und der Wechsel
+> zwischen Kind und Elter feuert `dragenter`/`dragleave` paarweise — die Marke
+> flackerte damit.
+>
 > Damit bleibt von der Zeile „Drag-and-drop" in der
 > [Technologieauswahl](#technologieauswahl) die Anforderung, nicht die
 > Bibliothek. Von der Zeile „State" ebenso: Undo/Redo gibt es, Immer nicht.
@@ -1996,19 +2009,45 @@ verlorenes Foto. Auflösung und Falzwarnung rechnen mit dem tatsächlichen
 Rechteck, nicht mit dem der Vorlage. Eine so gesetzte Position zählt als
 Handarbeit und geht beim Neuanordnen verloren.
 
-In der Doppelseiten-Ansicht schaltet ein Knopf am gewählten Bild zwischen
-**Ausschnitt** und **Position** um: Zwei Werkzeuge auf derselben Maustaste
-brauchen einen sichtbaren Umschalter, eine Zusatztaste fände niemand.
+**Was das Ziehen bewegt, sagt der Ort des Griffs** (`spread/Bildgriffe.tsx`):
+im Bild der Ausschnitt, am Rand der Kasten auf der Seite. Vorher schaltete ein
+Knopf neben der Bühne zwischen **Ausschnitt** und **Position** um, mit der
+Begründung, zwei Werkzeuge auf derselben Maustaste brauchten einen sichtbaren
+Umschalter. Das stimmte, solange beide dieselbe Fläche beanspruchten — sie tun
+es nicht: Der Kasten hat einen Rand, und der ist am Bild dieselbe Auskunft, nur
+dort, wo die Hand schon liegt. Umgesetzt als zwei ineinanderliegende Kästen, der
+äußere mit durchsichtigem Rand von zwölf Pixeln (an schmalen Plätzen weniger):
+Die Randfläche eines Elements fängt Zeigerereignisse, also trägt jede Fläche
+ihren eigenen Cursor, und der Rand leuchtet auf, wenn man ihn überfährt. Eine
+Trefferrechnung im `pointerdown` täte dasselbe, könnte dem Zeiger aber nichts
+vorher sagen.
 
-**Größe und Winkel liegen dagegen als Griffe am Bild selbst** (`spread/Griffe.tsx`,
-und dieselben tragen auch die Textblöcke).
-Die Geste ist die aus Inkscape und Illustrator, und sie ist es bewusst — wer ein
-Bild anfasst, hat sie schon in der Hand: Der erste Klick wählt und zeigt acht
-Größengriffe, ein weiterer Klick auf dasselbe Bild stellt sie auf vier Drehgriffe,
-der nächste zurück. Umschalt hält beim Aufziehen das Seitenverhältnis und rastet
-beim Drehen auf 15°. Das Maß steht während des Ziehens am Bild, nicht nur in der
-Seitenspalte. Abgewählt wird mit Escape oder dem Kreuz im Panel; dass der zweite
-Klick das früher tat, ist der Preis dieser Geste und in Grafikprogrammen genauso.
+Damit ist auch `onSlotPointerDown` aus `render-dom` verschwunden: Wo im Slot
+welche Geste beginnt, ist eine Bedienungsentscheidung, und die gehört nicht in
+den Renderer. Er liefert das Rechteck (`slotOverlay`), die Flächen darin baut
+die Oberfläche.
+
+**Größe und Winkel liegen als Griffe am Bild selbst** (`spread/Griffe.tsx`, und
+dieselben tragen auch die Textblöcke). Die Geste ist die aus Inkscape und
+Illustrator, und sie ist es bewusst — wer ein Bild anfasst, hat sie schon in der
+Hand. **Am Bild sind es drei Stufen** (`spread/griffmodus.ts`): Der erste Klick
+wählt nur — blauer Rand, keine Griffe, verschieben und Ausschnitt gehen schon —,
+der zweite legt acht Größengriffe an, der dritte vier Drehgriffe, der vierte
+schließt den Kreis. Randabfallende Bilder überspringen die Drehung, weil sie
+dort weiße Zwickel an der Papierkante erzeugte. Am Text sind es zwei Stufen: Er
+hat keinen Ausschnitt und kann ohne Griffe nichts.
+
+Die erste Stufe ist der Grund für die drei: Größengriffe an einem Bild, das man
+nur greifen und schieben will, sind acht Ziele, die man nicht meint. In ihr
+stehen deshalb auch die beiden Zoomknöpfe unten rechts **im** Bild — Schieben
+und Zoomen sind dieselbe Frage („was sieht man davon?"), und die Antwort gehört
+neben die Hand. An Plätzen unter 96 px bleiben sie weg; dort verdeckten sie
+mehr, als sie wert sind, und in der Seitenspalte stehen sie ohnehin.
+
+Umschalt hält beim Aufziehen das Seitenverhältnis und rastet beim Drehen auf
+15°. Das Maß steht während des Ziehens am Bild, nicht nur in der Seitenspalte.
+Abgewählt wird mit Escape oder dem Kreuz im Panel; dass der zweite Klick das
+früher tat, ist der Preis dieser Geste und in Grafikprogrammen genauso.
 
 Drei Festlegungen darin sind Entscheidungen und nicht Umsetzung:
 

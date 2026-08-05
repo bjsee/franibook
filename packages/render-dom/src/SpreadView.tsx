@@ -10,7 +10,7 @@
  * könnte. Fehlt es, zeigt die Vorschau eine Systemschrift – auffällig genug,
  * und der Parity-Test schlägt an.
  */
-import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, ReactNode } from 'react';
 import {
   CSS_FONT_WEIGHT,
   type Crop,
@@ -48,6 +48,18 @@ export interface SlotDragHandlers {
   onDragStart: (slotId: string) => void;
   onDrop: (slotId: string) => void;
   onDragEnd?: () => void;
+  /**
+   * Über welchem Platz der Zeiger gerade steht – für die Rückmeldung, was das
+   * Fallenlassen hier bedeuten würde.
+   *
+   * Gemeldet aus `dragover` und nicht aus `dragenter`: Ein Slot enthält das
+   * Bild als eigenes Element, und der Wechsel zwischen Kind und Elter feuert
+   * `dragenter`/`dragleave` paarweise – die Markierung flackerte damit. `dragover`
+   * wiederholt sich ohnehin, solange der Zeiger steht, und meldet dabei immer
+   * denselben Slot. Wieder gelöscht wird beim Ablegen oder Zugende, also vom
+   * Aufrufer: Der Renderer weiß nicht, was ein Zug ist.
+   */
+  onDragOverSlot?: (slotId: string) => void;
 }
 
 export interface SpreadViewProps {
@@ -60,19 +72,17 @@ export interface SpreadViewProps {
   onSlotClick?: (slotId: string) => void;
   /** Kennzeichnet den ausgewählten Slot. */
   selectedSlotId?: string;
-  /**
-   * Beginn eines Ziehvorgangs im Slot – für den Ausschnitt-Editor.
-   *
-   * Der Aufrufer rechnet die Mausbewegung in eine Ausschnittsänderung um und
-   * schickt das Ergebnis als geändertes Modell zurück in diese Ansicht. Damit
-   * bleibt auch beim Ziehen jede Position eine Position aus dem RSM.
-   */
-  onSlotPointerDown?: (slotId: string, event: ReactPointerEvent<HTMLDivElement>) => void;
   slotDrag?: SlotDragHandlers;
   /**
    * Zusätzliche Einblendung über einem Slot, etwa die Auflösung, die ein
    * gezogenes Foto hier erreichen würde. Rein darstellend; der Renderer
    * bestimmt nur das Rechteck, den Inhalt der Aufrufer.
+   *
+   * Hier hängen auch die Zeigerflächen des Editors (`Bildgriffe`): Wo im Bild
+   * ein Ziehen den Ausschnitt bewegt und wo es den Kasten verschiebt, ist eine
+   * Bedienungsentscheidung — sie gehört in die Oberfläche, nicht in den
+   * Renderer. Deshalb gibt es kein `onSlotPointerDown` mehr; der Slot liefert
+   * das Rechteck, die Flächen darin baut der Aufrufer.
    */
   slotOverlay?: (slot: { slotId: string; kind: 'image' | 'empty' }) => ReactNode;
 }
@@ -182,7 +192,6 @@ export function SpreadView({
   guides = {},
   onSlotClick,
   selectedSlotId,
-  onSlotPointerDown,
   slotDrag,
   slotOverlay,
 }: SpreadViewProps) {
@@ -250,6 +259,7 @@ export function SpreadView({
       onDragOver: (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        slotDrag.onDragOverSlot?.(slotId);
       },
       onDrop: (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -270,7 +280,6 @@ export function SpreadView({
             data-testid={`slot-${box.slotId}`}
             data-dpi={Math.round(box.effectiveDpi)}
             onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
-            onPointerDown={onSlotPointerDown ? (e) => onSlotPointerDown(box.slotId, e) : undefined}
             {...dragProps(box.slotId, true)}
             style={{
               ...rect(box),
@@ -287,11 +296,7 @@ export function SpreadView({
                     transformOrigin: `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`,
                   }
                 : {}),
-              cursor: selectedSlotId === box.slotId ? 'grab' : onSlotClick ? 'pointer' : undefined,
-              // Beim Ziehen des Ausschnitts darf der Browser nicht anfangen,
-              // Text zu markieren – sonst reißt die Bewegung ab.
-              userSelect: onSlotPointerDown ? 'none' : undefined,
-              touchAction: onSlotPointerDown ? 'none' : undefined,
+              cursor: onSlotClick ? 'pointer' : undefined,
               background: missing
                 ? 'repeating-linear-gradient(45deg,#fbf1ee,#fbf1ee 6px,#f3ded8 6px,#f3ded8 12px)'
                 : undefined,

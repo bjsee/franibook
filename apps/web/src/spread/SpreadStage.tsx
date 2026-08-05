@@ -19,7 +19,9 @@ import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { dpiInSlot } from '@franibook/core';
 import { T, dpiFarbe } from '../theme.js';
+import { ABSICHT_WORT, absichtVon } from './absicht.js';
 import { textName } from './bewegtext.js';
+import { Bildgriffe } from './Bildgriffe.js';
 import { Griffe } from './Griffe.js';
 import type { PhotoInfo, SpreadEditorModel } from './useSpreadEditor.js';
 
@@ -55,6 +57,7 @@ interface Props {
 
 export function SpreadStage({ model, imageSrc, guides }: Props) {
   const {
+    index,
     stageRef,
     stageBreite,
     pxPerMm,
@@ -67,6 +70,7 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
     targetDpi,
     selectedSlotId,
     zug,
+    ueberSlot,
     infosSichtbar,
     infoVon,
     textId,
@@ -75,22 +79,64 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
   } = model;
 
   /**
+   * Ob der Platz unter dem Zeiger belegt ist – für die Marke am Ausgangsplatz.
+   *
+   * Der Ausgangsplatz muss wissen, was am *anderen* Ende geschieht: Wird
+   * getauscht, kommt das dortige Bild hierher, und das gehört gezeigt. Sonst
+   * sähe man nur ein Bild wandern und müsste raten, wohin das andere gerät.
+   */
+  const ueberBelegt =
+    ueberSlot !== null && angezeigt.boxes.some((b) => b.kind === 'image' && b.slotId === ueberSlot);
+
+  /**
    * Was über einem Slot liegt.
    *
    * Drei Dinge in einer Rangfolge, weil alle drei denselben Platz beanspruchen:
-   * Beim Ziehen zählt die Auflösung des Ziels — sie entscheidet, ob das Foto hier
-   * überhaupt hingehört. Sonst die Aufnahmedaten, wenn sie eingeschaltet sind.
+   * Beim Ziehen zählt, was das Fallenlassen hier bedeutet und welche Auflösung
+   * dabei herauskäme. Sonst die Aufnahmedaten, wenn sie eingeschaltet sind.
    * Die Marke „zu klein" steht immer, unabhängig von den Hilfslinien: Ein Bild,
    * das für seinen Platz nicht reicht, soll man sehen, ohne erst etwas
    * einschalten zu müssen.
    */
-  function overlay({ slotId }: { slotId: string; kind: 'image' | 'empty' }): ReactNode {
+  function overlay({ slotId, kind }: { slotId: string; kind: 'image' | 'empty' }): ReactNode {
     if (zug) {
       const rect = slotRect(slotId);
       if (!rect || !zug.photo) return null;
       const dpi = dpiInSlot(zug.photo, rect);
+      const absicht = absichtVon(zug.source, {
+        spreadIndex: index,
+        slotId,
+        belegt: kind === 'image',
+      });
+      const ueber = slotId === ueberSlot;
+      const quelle = absicht === 'nichts';
+
+      /*
+       * Am Ausgangsplatz steht kein zweites Mal die Auflösung – das Bild liegt
+       * ja schon dort. Beim Tausch steht dafür, was hierher kommt: dieselbe
+       * Marke wie am Ziel, nur blass. Zwei gleiche Zeichen an beiden Enden
+       * sagen „diese beiden" deutlicher als jeder Text.
+       */
+      if (quelle) {
+        return (
+          <div style={S.dropZiel}>
+            {ueberBelegt && (
+              <span style={{ ...S.dropAbsicht, ...S.dropAbsichtBlass }}>
+                <Tauschzeichen /> hierher
+              </span>
+            )}
+          </div>
+        );
+      }
+
       return (
-        <div style={S.dropZiel}>
+        <div style={{ ...S.dropZiel, ...(ueber ? S.dropZielUeber : {}) }}>
+          {ueber && (
+            <span style={S.dropAbsicht}>
+              {absicht === 'tauschen' ? <Tauschzeichen /> : <Einsetzzeichen />}
+              {ABSICHT_WORT[absicht]}
+            </span>
+          )}
           <span style={{ ...S.dropDpi, background: dpiFarbe(dpi, minDpi, targetDpi) }}>
             {Math.round(dpi)} dpi
           </span>
@@ -115,6 +161,19 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
           war die Auswahl unsichtbar.
         */}
         {slotId === selectedSlotId && <span style={S.ring} />}
+        {/*
+          Die Zeigerflächen liegen über dem Ring und unter den Marken: Sie
+          fangen das Ziehen ab, und was sie sagen (Rand oder Inneres), soll die
+          Auflösungsmarke nicht verdecken.
+        */}
+        {slotId === selectedSlotId && box?.kind === 'image' && (
+          <Bildgriffe
+            model={model}
+            slotId={slotId}
+            breitePx={box.wMm * pxPerMm}
+            hoehePx={box.hMm * pxPerMm}
+          />
+        )}
         {zuKlein && box.kind === 'image' && (
           <span style={S.zuKlein}>zu klein · {Math.round(box.effectiveDpi)} dpi</span>
         )}
@@ -142,11 +201,11 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
         guides={guides}
         onSlotClick={model.slotClick}
         {...(selectedSlotId ? { selectedSlotId } : {})}
-        onSlotPointerDown={model.slotPointerDown}
         slotDrag={{
           onDragStart: model.slotDragStart,
           onDrop: model.slotDrop,
           onDragEnd: model.zugBeenden,
+          onDragOverSlot: model.slotDragOver,
         }}
         slotOverlay={overlay}
       />
@@ -191,6 +250,55 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
   );
 }
 
+/**
+ * Zwei gegenläufige Pfeile: Die beiden Bilder nehmen die Plätze des anderen ein.
+ *
+ * Als Inline-SVG und nicht als Zeichen „⇄": Ein Glyph hinge an der Schrift des
+ * Systems, und die Marke steht auf einem Foto – dort zählt, dass die Form in
+ * jeder Umgebung gleich dick und gleich groß ist.
+ */
+function Tauschzeichen() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 9h15" />
+      <path d="M15 5l4 4-4 4" />
+      <path d="M20 15H5" />
+      <path d="M9 11l-4 4 4 4" />
+    </svg>
+  );
+}
+
+/** Ein Pfeil in den leeren Platz hinein. */
+function Einsetzzeichen() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5L12 15l4.5-4.5" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
+
 const S = {
   wrap: { position: 'relative' as const, boxShadow: T.schattenBuehne, lineHeight: 0 },
   /**
@@ -203,12 +311,46 @@ const S = {
     position: 'absolute' as const,
     inset: 0,
     display: 'flex',
+    flexDirection: 'column' as const,
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'rgba(0, 175, 203, 0.16)',
+    gap: 5,
+    // Blasser als vorher: Alle Plätze sind Ziel, aber nur einer ist gemeint.
+    // Färbte man sie gleich, wäre die Fläche eine Aufzählung und keine Antwort.
+    background: 'rgba(0, 175, 203, 0.10)',
     outline: `2px dashed ${T.cyan}`,
     outlineOffset: '-3px',
     pointerEvents: 'none' as const,
+  },
+  /** Der Platz unter dem Zeiger – der eine, auf den es ankommt. */
+  dropZielUeber: {
+    background: 'rgba(0, 175, 203, 0.26)',
+    outline: `3px solid ${T.cyan}`,
+  },
+  /**
+   * Was das Fallenlassen hier bedeutet – Zeichen und Wort in einer Marke.
+   *
+   * Beides zusammen, weil keins allein trägt: Der Pfeil sagt es schneller, das
+   * Wort sagt es eindeutig, und die Marke liegt über einem Foto, dessen Farbe
+   * niemand kennt.
+   */
+  dropAbsicht: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '4px 9px',
+    borderRadius: T.rMd,
+    background: T.cyan,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 600,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap' as const,
+  },
+  /** Am Ausgangsplatz: dieselbe Marke, nur zurückgenommen. */
+  dropAbsichtBlass: {
+    background: 'rgba(0, 175, 203, 0.75)',
+    fontWeight: 500,
   },
   dropDpi: {
     padding: '2px 7px',
