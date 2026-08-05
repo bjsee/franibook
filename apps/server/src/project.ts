@@ -199,6 +199,32 @@ interface PersistedProject {
 }
 
 /**
+ * Grobe Formprüfung, bevor `migriere()` die Struktur für bekannt hält.
+ *
+ * `JSON.parse` liefert `unknown` und kein `PersistedProject` – ein von Hand
+ * verändertes oder durch einen Sync-Konflikt beschädigtes `project.json`
+ * bekäme sonst erst tief im Rendering eine Ausnahme, statt hier kontrolliert
+ * abgelehnt zu werden. Derselbe Grundsatz wie bei einer unbekannten
+ * `schemaVersion`: lieber neu importieren als eine kaputte Struktur deuten.
+ */
+function istBrauchbareStruktur(data: unknown): data is PersistedProject {
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as Record<string, unknown>;
+  const book = d.book as Record<string, unknown> | undefined;
+  return (
+    typeof d.schemaVersion === 'number' &&
+    Array.isArray(d.photos) &&
+    Array.isArray(d.groups) &&
+    typeof d.overrides === 'object' &&
+    d.overrides !== null &&
+    typeof book === 'object' &&
+    book !== null &&
+    Array.isArray(book.spreads) &&
+    typeof d.importedAt === 'string'
+  );
+}
+
+/**
  * Hebt ein gespeichertes Projekt auf das aktuelle Schema.
  *
  * @returns `null`, wenn das Format unbekannt ist – dann importiert der Server
@@ -2037,9 +2063,9 @@ export class Project {
    */
   async ankerZurueck(name: string): Promise<boolean> {
     const roh = await ankerLesen(this.ankerOrdner, name);
-    if (roh === null) return false;
+    if (roh === null || !istBrauchbareStruktur(roh)) return false;
 
-    const data = migriere(roh as PersistedProject);
+    const data = migriere(roh);
     if (data === null) return false;
 
     if (data.sources?.length) this.sources.restore(data.sources);
@@ -2065,7 +2091,8 @@ export class Project {
     const pfad = join(this.projectPath, 'project.json');
     try {
       const raw = await readFile(pfad, 'utf8');
-      const data = migriere(JSON.parse(raw) as PersistedProject);
+      const parsed: unknown = JSON.parse(raw);
+      const data = istBrauchbareStruktur(parsed) ? migriere(parsed) : null;
 
       if (data === null) {
         // Ein neueres oder unbekanntes Format lieber gar nicht deuten als
