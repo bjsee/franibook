@@ -227,7 +227,21 @@ export type RenderWarning =
    * Motiv (siehe `render/background.ts`), aber irgendwann ist auch er sichtbar
    * unscharf.
    */
-  | { code: 'background-low-dpi'; dpi: number; recommendedDpi: number };
+  | { code: 'background-low-dpi'; dpi: number; recommendedDpi: number }
+  /**
+   * Bild und Platz stehen quer zueinander – ein Hochformat in einem
+   * Querformatplatz oder umgekehrt.
+   *
+   * Keine Aussage über die Auflösung, sondern über die Form: Der Ausschnitt hat
+   * immer die Form des Platzes, also bleibt von einem quer stehenden Bild nur
+   * ein Streifen übrig (`sichtbar`, Anteil der Bildfläche). Am häufigsten nach
+   * einer Ausrichtungskorrektur – das Bild kippt, sein Platz nicht, und der
+   * Zoom sitzt danach am Anschlag, ohne zu sagen warum.
+   *
+   * Die Engine bewertet dasselbe beim Anordnen als `orientationClash`
+   * (`layout/scoring.ts`); dort ist es ein Kostenzuschlag, hier eine Auskunft.
+   */
+  | { code: 'orientation-mismatch'; sichtbar: number };
 
 /** Hilfslinien. Ausschließlich für die Vorschau – nie Teil des PDFs. */
 export interface Guide {

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import { defaultProfile } from '../print/profiles/index.js';
-import { movePhoto } from './move.js';
+import { BLANK_TEMPLATE_ID } from '../templates/index.js';
+import { movePhoto, movePhotos } from './move.js';
 
 /** Zwei Doppelseiten mit je zwei Slots, der letzte bewusst leer. */
 function buch(): Spread[] {
@@ -196,5 +197,195 @@ describe('movePhoto auf eine ganze Doppelseite', () => {
     const r = movePhoto(buch(), slot(0, 'a'), seite(1));
     expect(r.ok).toBe(false);
     expect(r.error).toContain('Bildbestand');
+  });
+});
+
+describe('movePhotos – mehrere Bilder in einem Zug', () => {
+  function foto(id: string): Photo {
+    return {
+      id,
+      sourceId: 'q',
+      relPath: `${id}.jpg`,
+      fileName: `${id}.jpg`,
+      bytes: 1_000_000,
+      width: 4000,
+      height: 3000,
+      takenAt: '2020-01-01T12:00:00',
+    } as Photo;
+  }
+
+  const ALLE = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'pa', 'pb', 'pc'];
+  const reflow = {
+    photos: new Map(ALLE.map((id) => [id, foto(id)])) as ReadonlyMap<PhotoId, Photo>,
+    profile: defaultProfile(),
+  };
+
+  /** Eine Doppelseite mit `ids` als Bildern; Slotnamen sind hier ohne Belang. */
+  function seiteMit(index: number, ids: readonly string[], rest: Partial<Spread> = {}): Spread {
+    return {
+      id: `s${index}`,
+      index,
+      templateId: `spread.${ids.length}up.test`,
+      slots: ids.map((id, i) => ({
+        slotId: `s${i}`,
+        photoId: id,
+        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+      })),
+      ...rest,
+    };
+  }
+
+  /** Acht Bilder auf der ersten Doppelseite, vier auf der zweiten. */
+  const achtUndVier = (): Spread[] => [
+    seiteMit(0, ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']),
+    seiteMit(1, ['p9', 'pa', 'pb', 'pc']),
+  ];
+
+  const zug = (spreadIndex: number, slotId: string, ziel: number) => ({
+    source: { kind: 'slot', spreadIndex, slotId } as const,
+    target: { kind: 'spread', spreadIndex: ziel } as const,
+  });
+
+  const bilderAuf = (spreads: readonly Spread[], i: number) =>
+    spreads[i]!.slots.map((s) => s.photoId).filter(Boolean);
+
+  it('macht aus acht und vier ein sechs und sechs', () => {
+    const r = movePhotos(achtUndVier(), [zug(0, 's0', 1), zug(0, 's1', 1)], reflow);
+    expect(r.ok).toBe(true);
+    expect(bilderAuf(r.spreads, 0)).toHaveLength(6);
+    expect(bilderAuf(r.spreads, 1)).toHaveLength(6);
+    expect(bilderAuf(r.spreads, 1)).toContain('p1');
+    expect(bilderAuf(r.spreads, 1)).toContain('p2');
+    expect(r.touched).toEqual([0, 1]);
+    expect(r.leer).toEqual([]);
+  });
+
+  it('ordnet die Zielseite einmal an und nicht je Bild', () => {
+    // Der beobachtbare Ausdruck dafür: Die Seite hat am Ende genau so viele
+    // Plätze, wie sie Bilder trägt. Nacheinander gerechnet bliebe die Vorlage
+    // eines Zwischenstandes stehen, und ein Platz stünde leer.
+    const r = movePhotos(achtUndVier(), [zug(0, 's0', 1), zug(0, 's1', 1)], reflow);
+    expect(r.spreads[1]!.slots).toHaveLength(6);
+    expect(r.spreads[1]!.slots.every((s) => s.photoId !== null)).toBe(true);
+  });
+
+  it('lässt eine leer gezogene Seite stehen und meldet sie', () => {
+    const buch = [seiteMit(0, ['p1', 'p2']), seiteMit(1, ['p3'])];
+    const r = movePhotos(buch, [zug(0, 's0', 1), zug(0, 's1', 1)], reflow);
+    expect(r.ok).toBe(true);
+    expect(r.leer).toEqual([0]);
+    expect(r.spreads[0]!.templateId).toBe(BLANK_TEMPLATE_ID);
+    expect(r.spreads[0]!.slots).toEqual([]);
+    // Das Buch bleibt gleich lang: Herausnehmen ist eine eigene Entscheidung.
+    expect(r.spreads).toHaveLength(2);
+  });
+
+  it('ordnet die Quellseite auch beim Zug in den Pool neu an', () => {
+    // Anders als beim Einzelzug, der nur den Slot leert: Drei Löcher in einer
+    // Achterseite wären keine Aufteilung.
+    const moves = ['s0', 's1', 's2'].map((slotId) => ({
+      source: { kind: 'slot', spreadIndex: 0, slotId } as const,
+      target: { kind: 'pool' } as const,
+    }));
+    const r = movePhotos(achtUndVier(), moves, reflow);
+    expect(r.ok).toBe(true);
+    expect(r.spreads[0]!.slots).toHaveLength(5);
+    expect(r.spreads[0]!.slots.every((s) => s.photoId !== null)).toBe(true);
+    expect(r.touched).toEqual([0]);
+  });
+
+  it('holt Bilder aus dem Pool auf eine Seite', () => {
+    const buch = [seiteMit(0, ['p1', 'p2']), seiteMit(1, ['p3'])];
+    const moves = ['p4', 'p5'].map((photoId) => ({
+      source: { kind: 'pool', photoId } as const,
+      target: { kind: 'spread', spreadIndex: 1 } as const,
+    }));
+    const r = movePhotos(buch, moves, reflow);
+    expect(r.ok).toBe(true);
+    expect(bilderAuf(r.spreads, 1)).toHaveLength(3);
+    expect(r.touched).toEqual([1]);
+  });
+
+  it('lehnt den ganzen Stapel ab, wenn ein Zug nicht geht', () => {
+    const vorher = achtUndVier();
+    const r = movePhotos(
+      vorher,
+      [
+        zug(0, 's0', 1),
+        { source: { kind: 'pool', photoId: 'weg' }, target: { kind: 'spread', spreadIndex: 1 } },
+      ],
+      reflow,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Bestand');
+    expect(r.spreads[0]).toBe(vorher[0]);
+    expect(r.spreads[1]).toBe(vorher[1]);
+  });
+
+  it('nimmt dasselbe Foto nicht zweimal in den Stapel', () => {
+    const r = movePhotos(achtUndVier(), [zug(0, 's0', 1), zug(0, 's0', 1)], reflow);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('zweimal');
+  });
+
+  it('lässt unbeteiligte Doppelseiten bitweise unverändert', () => {
+    const vorher = [...achtUndVier(), seiteMit(2, ['p1'])];
+    vorher[2] = seiteMit(2, ['p1']);
+    const r = movePhotos(vorher, [zug(0, 's0', 1)], reflow);
+    expect(r.spreads[2]).toBe(vorher[2]);
+  });
+
+  it('rührt eine festgehaltene Seite nicht an', () => {
+    const buch = [seiteMit(0, ['p1', 'p2']), seiteMit(1, ['p3'], { locked: true })];
+    expect(movePhotos(buch, [zug(0, 's0', 1)], reflow).error).toContain('festgehalten');
+    expect(movePhotos(buch, [zug(1, 's0', 0)], reflow).error).toContain('festgehalten');
+  });
+
+  /** Ein Kapitelauftakt mit `n` Bildern, samt Jahreszahl. */
+  function auftaktMit(index: number, ids: readonly string[]): Spread {
+    return seiteMit(index, ids, {
+      templateId: 'spread.chapter.4up',
+      texts: [{ id: 't', role: 'year', content: '2019', slotId: 'jahr' }],
+      chapterYear: 2019,
+    });
+  }
+
+  it('lässt einen Auftakt wachsen und hält ihn in seiner Familie', () => {
+    // Vier auf sechs Bilder: Es gibt eine Auftaktfassung dafür, also geht der
+    // Zug – und die Seite behält ihre Textplätze.
+    const buch = [seiteMit(0, ['p1', 'p2', 'p3']), auftaktMit(1, ['p4', 'p5', 'p6', 'p7'])];
+    const r = movePhotos(buch, [zug(0, 's0', 1), zug(0, 's1', 1)], reflow);
+
+    expect(r.ok).toBe(true);
+    expect(bilderAuf(r.spreads, 1)).toHaveLength(6);
+    expect(r.spreads[1]!.templateId).toMatch(/^spread\.chapter\./);
+    expect(r.spreads[1]!.texts).toHaveLength(1);
+  });
+
+  it('gibt einem Auftakt auch Bilder ab', () => {
+    const buch = [seiteMit(0, ['p1', 'p2']), auftaktMit(1, ['p3', 'p4', 'p5', 'p6'])];
+    const r = movePhotos(buch, [zug(1, 's0', 0)], reflow);
+
+    expect(r.ok).toBe(true);
+    expect(bilderAuf(r.spreads, 1)).toHaveLength(3);
+    expect(r.spreads[1]!.templateId).toMatch(/^spread\.chapter\./);
+  });
+
+  it('lehnt eine Bilderzahl ab, für die es keine Auftaktfassung gibt', () => {
+    // Fünf Bilder: Zwischen dem Vierer und dem Sechser gibt es nichts. Die
+    // Meldung nennt die Zahlen, die gehen, statt nur „geht nicht".
+    const buch = [seiteMit(0, ['p1', 'p2']), auftaktMit(1, ['p3', 'p4', 'p5', 'p6'])];
+    const r = movePhotos(buch, [zug(0, 's0', 1)], reflow);
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Auftaktseite trägt');
+    expect(r.error).toContain('6');
+    expect(r.spreads[1]!.slots).toHaveLength(4);
+  });
+
+  it('nimmt einen leeren Stapel ohne Wirkung hin', () => {
+    const r = movePhotos(achtUndVier(), [], reflow);
+    expect(r.ok).toBe(true);
+    expect(r.touched).toEqual([]);
   });
 });

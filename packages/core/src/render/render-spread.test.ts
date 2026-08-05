@@ -164,6 +164,63 @@ describe('Auflösung', () => {
   });
 });
 
+describe('Bild und Platz stehen quer zueinander', () => {
+  // Sechs hochkante Plätze (3:4). Ein Querformat darin sieht zwangsläufig nur
+  // einen Streifen – dieselbe Lage wie nach einer Ausrichtungskorrektur, nur
+  // andersherum.
+  const hochkant = requireTemplate('spread.6up.portraits');
+  const hochCtx = { profile, template: hochkant, photos: PHOTOS };
+
+  function seiteMit(id: string): Spread {
+    return {
+      id: 's1',
+      index: 0,
+      templateId: hochkant.id,
+      slots: hochkant.slots.map((slot, i) => ({
+        slotId: slot.id,
+        photoId: i === 0 ? id : null,
+        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+      })),
+    };
+  }
+
+  it('meldet ein Querformat in einem Hochformatplatz', () => {
+    const box = imageBoxes(renderSpread(seiteMit('p3'), hochCtx))[0]!;
+    const warnung = box.warnings.find((w) => w.code === 'orientation-mismatch');
+    expect(warnung).toBeDefined();
+  });
+
+  it('nennt dabei, wie viel vom Bild übrig bleibt', () => {
+    // 16:9 in einem hochkanten Platz: Die volle Höhe bleibt, von der Breite
+    // nur der Anteil, der die Form des Platzes trifft.
+    const box = imageBoxes(renderSpread(seiteMit('p3'), hochCtx))[0]!;
+    const warnung = box.warnings.find((w) => w.code === 'orientation-mismatch');
+    expect(warnung).toMatchObject({ code: 'orientation-mismatch' });
+    if (warnung?.code === 'orientation-mismatch') {
+      expect(warnung.sichtbar).toBeCloseTo(box.wMm / box.hMm / (2048 / 1152), 3);
+      // Gut ein Drittel des Bildes ist weg – das ist die Zahl, die dem
+      // Benutzer erklärt, warum der Zoom am Anschlag sitzt.
+      expect(warnung.sichtbar).toBeLessThan(0.5);
+    }
+  });
+
+  it('schweigt, wenn Bild und Platz dieselbe Lage haben', () => {
+    const box = imageBoxes(renderSpread(seiteMit('p2'), hochCtx))[0]!;
+    expect(box.warnings.map((w) => w.code)).not.toContain('orientation-mismatch');
+  });
+
+  it('schweigt bei einem quadratischen Bild', () => {
+    // Quadratisch passt überall halbwegs; eine Warnung wäre hier nur Lärm.
+    const box = imageBoxes(renderSpread(seiteMit('p4'), hochCtx))[0]!;
+    expect(box.warnings.map((w) => w.code)).not.toContain('orientation-mismatch');
+  });
+
+  it('schweigt bei quadratischen Plätzen', () => {
+    const box = imageBoxes(renderSpread(spreadWith(['p3', null, null, null]), ctx))[0]!;
+    expect(box.warnings.map((w) => w.code)).not.toContain('orientation-mismatch');
+  });
+});
+
 describe('Ausschnitt', () => {
   it('berechnet auto-cover für die tatsächlichen Slotmaße', () => {
     const rsm = renderSpread(spreadWith(['p1', null, null, null]), ctx);

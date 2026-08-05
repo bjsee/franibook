@@ -20,6 +20,7 @@ import {
   layoutAnwenden,
   layoutLaden,
 } from './api.js';
+import { Link, type Route } from './router.js';
 import { B, T } from './theme.js';
 
 interface PhotoEntry {
@@ -42,12 +43,13 @@ interface LayoutDoc {
 interface Props {
   imageSrc: (photoId: string) => string;
   onApplied: () => void;
+  onNavigieren: (ziel: Route) => void;
 }
 
 /** Breite der Vorschau in der Seitenspalte. */
 const VORSCHAU_PX = 418;
 
-export function LayoutEditor({ imageSrc, onApplied }: Props) {
+export function LayoutEditor({ imageSrc, onApplied, onNavigieren }: Props) {
   const [text, setText] = useState('');
   const [doc, setDoc] = useState<LayoutDoc | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -148,6 +150,14 @@ export function LayoutEditor({ imageSrc, onApplied }: Props) {
   return (
     <div style={S.wrap}>
       <div style={S.leiste}>
+        {/*
+          Der Rückweg gehört hierher und nicht nur an den Reiter: Wer im Text
+          steht, hat den Baum verlassen und soll ihn ohne Umweg über die
+          Reiterzeile wiederfinden.
+        */}
+        <Link route={{ view: 'edit' }} onNavigieren={onNavigieren} style={B.knopf}>
+          ← Baum
+        </Link>
         <button onClick={load} disabled={busy} style={B.knopf}>
           Neu laden
         </button>

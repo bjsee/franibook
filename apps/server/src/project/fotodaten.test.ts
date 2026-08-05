@@ -201,6 +201,30 @@ describe('Ausrichtung kippen', () => {
     expect(p.overrides['a']).toBeUndefined();
   });
 
+  it('dreht einen von Hand gesetzten Ausschnitt mit', () => {
+    // Der Ausschnitt steht in Bildkoordinaten. Bliebe er stehen, zeigte er nach
+    // der Drehung auf eine andere Stelle – und ließe sich, weil eine Kante am
+    // Bildrand liegt, nicht einmal wieder aufziehen.
+    const p = projekt();
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.2up.pair',
+        slots: [
+          { slotId: 'l', photoId: 'a', crop: { x: 0.1, y: 0, w: 0.4, h: 0.3, mode: 'manual' } },
+          { slotId: 'r', photoId: 'b', crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' } },
+        ],
+      },
+    ];
+
+    p.kippeAusrichtung(['a'], 1);
+
+    expect(p.spreads[0]!.slots[0]!.crop).toMatchObject({ x: 0.7, y: 0.1, w: 0.3, h: 0.4 });
+    // Der automatische bleibt, wie er ist – ihn rechnet der Renderer neu.
+    expect(p.spreads[0]!.slots[1]!.crop).toMatchObject({ w: 1, h: 1, mode: 'auto-cover' });
+  });
+
   it('gibt die Ausrichtung mit null an die Datei zurück', () => {
     const p = projekt();
     p.kippeAusrichtung(['a'], 3);
@@ -216,6 +240,8 @@ describe('Ausrichtung kippen', () => {
       geaendert: 0,
       uebersprungen: [{ id: 'a', grund: 'Keine Ausrichtungskorrektur vorhanden' }],
       unbekannt: [],
+      // Nichts gedreht, also auch kein Ausschnitt nachzuziehen.
+      gedreht: [],
     });
   });
 

@@ -46,6 +46,7 @@ import {
   fotopoolLaden,
   fotosDerSeiteLaden,
   fotoVerschieben,
+  seiteNeuAnordnen,
   neigungSetzen,
   ortSetzen as apiOrtSetzen,
   rahmenSetzen,
@@ -1206,6 +1207,36 @@ export function useSpreadEditor({
     [index, onSpread, onSelect, onChanged, poolLaden],
   );
 
+  /**
+   * Die Doppelseite neu anordnen lassen – die Rechnung wählt die Vorlage.
+   *
+   * Der Ausweg, wenn sich die Bilder geändert haben und die Vorlage nicht: Ein
+   * gekipptes Bild steht danach in einem Platz, der für seine alte Lage gewählt
+   * wurde, und der Ausschnitt sitzt am Anschlag. Im Modell und nicht im Rahmen,
+   * damit der Knopf in allen drei Fassungen dieselbe Wirkung hat.
+   */
+  const neuAnordnen = useCallback(async () => {
+    setNote(null);
+    try {
+      const data = await seiteNeuAnordnen(index);
+      onSpread(data.spread);
+      setPendingCrop(null);
+      // Die Slots heißen danach anders – eine Auswahl auf einen alten wäre ein
+      // stiller Fehlgriff.
+      onSelect(null);
+      setBuchVersion((v) => v + 1);
+      if (data.leftover.length > 0) poolLaden();
+      onChanged();
+      setNote(
+        data.leftover.length > 0
+          ? `Neu angeordnet. ${data.leftover.length} Bild(er) haben keinen Platz mehr und liegen im Fotopool.`
+          : 'Neu angeordnet.',
+      );
+    } catch (e) {
+      setNote(`Die Doppelseite ließ sich nicht neu anordnen: ${fehlertext(e)}`);
+    }
+  }, [index, onSpread, onSelect, onChanged, poolLaden]);
+
   function slotDragStart(slotId: string) {
     const box = bildBox(slotId);
     if (!box) return;
@@ -1534,6 +1565,7 @@ export function useSpreadEditor({
     zug,
     setZug,
     verschieben,
+    neuAnordnen,
     ausDemBuch,
     loeschen,
     anordnungUebernommen,

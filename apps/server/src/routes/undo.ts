@@ -16,7 +16,7 @@
  * Liste und nicht daneben.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { MoveSource, MoveTarget } from '@franibook/core';
+import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import type { Kontext } from './kontext.js';
 
 /** Liest etwas aus Parametern oder Rumpf einer Anfrage. */
@@ -108,12 +108,27 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
 
   // ---------------------------------------------------------- Doppelseiten
   'POST /api/book/move': {
-    label: 'Foto umgehängt',
+    // Dieselbe Route nimmt einen Zug oder einen Stapel; „Foto umgehängt" wäre
+    // bei vierzig Bildern eine Untertreibung, die den Knopf unbrauchbar macht.
+    label: (_p, body) => {
+      const { moves } = (body ?? {}) as { moves?: unknown[] };
+      if (Array.isArray(moves) && moves.length > 1) return `${moves.length} Fotos umgehängt`;
+      return 'Foto umgehängt';
+    },
     spreadIndex: (_p, body) => {
-      const { source, target } = (body ?? {}) as { source?: MoveSource; target?: MoveTarget };
+      const { source, target, moves } = (body ?? {}) as {
+        source?: MoveSource;
+        target?: MoveTarget;
+        moves?: PhotoMove[];
+      };
+      // Beim Stapel der erste Zug: Er nennt die Stelle, an der die Bewegung
+      // begann, und dort steht der Blick des Benutzers noch.
+      const erster = Array.isArray(moves) ? moves[0] : undefined;
+      const quelle = erster?.source ?? source;
+      const ziel = erster?.target ?? target;
       // Das Ziel zuerst: Dort ist das Bild nach dem Zug, und dorthin schaut man.
-      if (target && target.kind !== 'pool') return target.spreadIndex;
-      if (source && source.kind === 'slot') return source.spreadIndex;
+      if (ziel && ziel.kind !== 'pool') return ziel.spreadIndex;
+      if (quelle && quelle.kind === 'slot') return quelle.spreadIndex;
       return undefined;
     },
   },

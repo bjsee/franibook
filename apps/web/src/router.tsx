@@ -37,7 +37,11 @@ export type Route =
   | { view: 'years' }
   | { view: 'fotodaten' }
   | { view: 'sources' }
-  | { view: 'edit' }
+  /**
+   * Die Aufteilung. Ohne `json` der Baum, mit `json` der Texteditor auf
+   * demselben Gegenstand – deshalb ein Unterpfad und keine zweite Ansicht.
+   */
+  | { view: 'edit'; json?: true }
   | { view: 'cover' };
 
 /** Zeitfenster, in dem zwei Navigationen mit gleichem Schlüssel zu einer Station verschmelzen. */
@@ -61,6 +65,7 @@ export function pfadVon(route: Route): string {
   if (route.view === 'groups' && route.groupId) {
     return `/gruppen/${encodeURIComponent(route.groupId)}`;
   }
+  if (route.view === 'edit' && route.json) return '/aufteilung/json';
   return PFADE[route.view];
 }
 
@@ -104,8 +109,12 @@ export function routeVon(pfad: string, suche = ''): Route {
     return id ? { view: 'groups', groupId: decodeURIComponent(id) } : { view: 'groups' };
   }
 
+  if (erstes === 'aufteilung') {
+    return teile[1] === 'json' ? { view: 'edit', json: true } : { view: 'edit' };
+  }
+
   // Die übrigen Ansichten tragen keine Kennung im Pfad.
-  for (const view of ['years', 'fotodaten', 'sources', 'edit', 'cover'] as const) {
+  for (const view of ['years', 'fotodaten', 'sources', 'cover'] as const) {
     if (PFADE[view] === `/${erstes}`) return { view };
   }
   return { view: 'overview' };
@@ -175,6 +184,24 @@ function startRoute(): Route {
   const soll = adresseVon(route);
   if (soll !== location.pathname + location.search) history.replaceState(null, '', soll);
   return route;
+}
+
+/**
+ * Einen Darstellungsparameter in der Query setzen, ohne eine Station zu erzeugen.
+ *
+ * Für die Einstellungen, die in der Query stehen und nicht im Pfad – die
+ * Bildgröße im Baum ist die erste, die sich zur Laufzeit ändert. Sie steht hier
+ * und nicht in der Ansicht, weil die Adresse dem Router gehört: Ein zweiter
+ * Ort, der `history` anfasst, ist genau der Anfang, an dessen Ende Adresse und
+ * Ansicht auseinanderlaufen (der Architekturtest prüft es).
+ *
+ * `null` entfernt den Parameter.
+ */
+export function queryErsetzen(name: string, wert: string | null): void {
+  const url = new URL(location.href);
+  if (wert === null) url.searchParams.delete(name);
+  else url.searchParams.set(name, wert);
+  history.replaceState(history.state, '', url.toString());
 }
 
 export interface NavOptionen {

@@ -18,6 +18,7 @@ const ALLE: Route[] = [
   { view: 'fotodaten' },
   { view: 'sources' },
   { view: 'edit' },
+  { view: 'edit', json: true },
   { view: 'cover' },
 ];
 
@@ -32,6 +33,14 @@ describe('pfadVon', () => {
     expect(pfadVon({ view: 'sources' })).toBe('/bildquellen');
     expect(pfadVon({ view: 'edit' })).toBe('/aufteilung');
     expect(pfadVon({ view: 'cover' })).toBe('/umschlag');
+  });
+
+  it('hängt den Texteditor der Aufteilung als Unterpfad an', () => {
+    // Derselbe Gegenstand, eine andere Art, ihn anzufassen – deshalb
+    // `/aufteilung/json` und keine eigene Ansicht.
+    expect(pfadVon({ view: 'edit', json: true })).toBe('/aufteilung/json');
+    expect(routeVon('/aufteilung/json')).toEqual({ view: 'edit', json: true });
+    expect(routeVon('/aufteilung/irgendwas')).toEqual({ view: 'edit' });
   });
 
   it('kodiert eine Gruppenkennung', () => {

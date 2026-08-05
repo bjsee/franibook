@@ -271,6 +271,103 @@ describe('setSpreadTemplate', () => {
     expect(r.ok).toBe(false);
     expect(p.spreads[0]!.templateId).toBe('spread.3up.two-and-one');
   });
+
+  it('sucht mit „auto" die Vorlage zur neuen Lage der Bilder', () => {
+    // Der Ausweg nach einer Ausrichtungskorrektur: Die Bilder liegen jetzt
+    // hochkant, die Vorlage wurde für quer gewählt. Ohne die Korrektur bliebe
+    // dieselbe Vorlage stehen, mit ihr wird eine hochkante gewählt.
+    const p = projektMitDrei();
+    for (const id of ['p1', 'p2', 'p3']) p.overrides[id] = { orientationTurns: 1 };
+
+    const r = p.setSpreadTemplate(0, 'auto');
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.templateId).not.toBe('spread.3up.two-and-one');
+    expect(p.spreads[0]!.slots.filter((s) => s.photoId)).toHaveLength(3);
+
+    // Die Plätze stehen jetzt hochkant wie die Bilder.
+    const platz = requireTemplate(p.spreads[0]!.templateId).slots[0]!;
+    expect(platz.w / platz.h).toBeLessThan(1);
+  });
+
+  it('lässt „auto" einen Auftakt ein Auftakt bleiben', () => {
+    const p = projektMitDrei();
+    p.spreads[0] = {
+      ...p.spreads[0]!,
+      templateId: 'spread.chapter.3up',
+      texts: [{ id: 't', role: 'year', content: '2019', slotId: 't-year' }],
+      chapterYear: 2019,
+    };
+
+    expect(p.setSpreadTemplate(0, 'auto').ok).toBe(true);
+    expect(p.spreads[0]!.templateId).toMatch(/^spread\.chapter\./);
+  });
+});
+
+describe('movePhotos', () => {
+  /** Zwei Doppelseiten: vier Bilder auf der ersten, zwei auf der zweiten. */
+  function projektMitVierUndZwei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
+    for (const id of ids) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    const seite = (index: number, auf: string[]) => ({
+      id: `s${index}`,
+      index,
+      templateId: `spread.${auf.length}up.grid`,
+      slots: auf.map((photoId, i) => ({ slotId: `s${i}`, photoId, crop: { ...FULL_CROP } })),
+    });
+    p.spreads = [seite(0, ids.slice(0, 4)), seite(1, ids.slice(4))];
+    return p;
+  }
+
+  it('übernimmt den Stapel und zieht den Bericht nach', () => {
+    const p = projektMitVierUndZwei();
+    const r = p.movePhotos([
+      {
+        source: { kind: 'slot', spreadIndex: 0, slotId: 's0' },
+        target: { kind: 'spread', spreadIndex: 1 },
+      },
+      {
+        source: { kind: 'slot', spreadIndex: 0, slotId: 's1' },
+        target: { kind: 'spread', spreadIndex: 1 },
+      },
+    ]);
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.slots.filter((s) => s.photoId)).toHaveLength(2);
+    expect(p.spreads[1]!.slots.filter((s) => s.photoId)).toHaveLength(4);
+    expect(p.spreads[1]!.slots.map((s) => s.photoId)).toContain('p1');
+    expect(r.touched).toEqual([0, 1]);
+  });
+
+  it('lässt den Stand unberührt, wenn ein Zug des Stapels nicht geht', () => {
+    const p = projektMitVierUndZwei();
+    const vorher = p.spreads;
+    const r = p.movePhotos([
+      {
+        source: { kind: 'slot', spreadIndex: 0, slotId: 's0' },
+        target: { kind: 'spread', spreadIndex: 1 },
+      },
+      {
+        source: { kind: 'pool', photoId: 'gibtesnicht' },
+        target: { kind: 'spread', spreadIndex: 1 },
+      },
+    ]);
+
+    expect(r.ok).toBe(false);
+    expect(p.spreads).toBe(vorher);
+  });
 });
 
 describe('Justierte Doppelseiten im Projekt', () => {

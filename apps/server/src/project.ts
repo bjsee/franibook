@@ -16,10 +16,12 @@ import {
   type GenerateResult,
   type LayoutDocument,
   type LayoutIssue,
+  type MoveManyResult,
   type MoveResult,
   type MoveSource,
   type MoveTarget,
   type NaiveDateTime,
+  type PhotoMove,
   type Photo,
   type PhotoId,
   type PhotoGroup,
@@ -50,6 +52,7 @@ import {
   isFrameId,
   isJustified,
   movePhoto,
+  movePhotos,
   addToGroup,
   createGroup,
   mergeGroups,
@@ -67,6 +70,7 @@ import {
 import type { DecodeCache } from './decode.js';
 import type { PreviewCache } from './previews.js';
 import * as anordnung from './project/anordnung.js';
+import { type BaumSeite, baum } from './project/baum.js';
 import * as bestand from './project/bestand.js';
 import type { ImportDiff, QuellenBericht } from './project/bestand.js';
 import * as fotodaten from './project/fotodaten.js';
@@ -912,11 +916,21 @@ export class Project {
    * ändert das Seitenverhältnis und damit, welche Vorlage passen *würde* — das
    * Buch selbst bleibt stehen, bis jemand neu anordnet.
    */
+  /**
+   * Kippt die Ausrichtung – und zieht die Ausschnitte mit.
+   *
+   * Zwei Schritte, weil es zwei Zuständigkeiten sind: Die Korrektur steht am
+   * Foto, der Ausschnitt am Slot. Ohne den zweiten zeigt ein von Hand gewählter
+   * Ausschnitt nach der Drehung auf eine andere Stelle des Bildes.
+   */
   kippeAusrichtung(
     ids: readonly PhotoId[],
     turns: 1 | 2 | 3 | null,
   ): fotodaten.Korrekturergebnis | { fehler: string } {
-    return fotodaten.kippeAusrichtung(this, ids, turns);
+    const ergebnis = fotodaten.kippeAusrichtung(this, ids, turns);
+    if ('fehler' in ergebnis) return ergebnis;
+    anordnung.dreheAusschnitte(this, ergebnis.gedreht);
+    return ergebnis;
   }
 
   /**
@@ -1468,6 +1482,27 @@ export class Project {
     return result;
   }
 
+  /**
+   * Hängt mehrere Fotos in einem Zug um.
+   *
+   * Nicht `movePhoto` in einer Schleife: Jede berührte Doppelseite wird genau
+   * einmal angeordnet, und der Verlauf sieht eine Handlung statt n. Die
+   * Begründung steht an `movePhotos` im Kern.
+   */
+  movePhotos(moves: readonly PhotoMove[]): MoveManyResult {
+    const result = movePhotos(this.spreads, moves, {
+      photos: this.photos,
+      overrides: this.overrides,
+      profile: this.profile,
+      weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
+    });
+    if (result.ok) {
+      this.spreads = result.spreads;
+      this.refreshReport();
+    }
+    return result;
+  }
+
   setSpreadTemplate(
     index: number,
     templateId: string,
@@ -1799,6 +1834,11 @@ export class Project {
 
   groupMarks(): { spreadIndex: number; id: string; title: string }[] {
     return gruppen.groupMarks(this);
+  }
+
+  /** Das Buch als Baum: je Doppelseite ihre Bilder und was an ihr auffällt. */
+  baum(): BaumSeite[] {
+    return baum(this);
   }
 
   firstSpreadOfGroup(): Map<string, number> {

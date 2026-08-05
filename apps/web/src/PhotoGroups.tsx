@@ -25,6 +25,7 @@ import {
   gruppenVorschlagen,
   gruppierungAufheben,
 } from './api.js';
+import { auswahlKlick } from './auswahl.js';
 import { B, T } from './theme.js';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
 
@@ -153,27 +154,15 @@ export function PhotoGroups({
   }, [photos, groups, filter, groupOf]);
 
   function toggle(id: string, e: React.MouseEvent) {
-    const next = new Set(selected);
-
-    if (e.shiftKey && lastClicked.current) {
-      // Bereich zwischen der letzten und dieser Zeile
-      const von = sichtbar.findIndex((p) => p.id === lastClicked.current);
-      const bis = sichtbar.findIndex((p) => p.id === id);
-      if (von >= 0 && bis >= 0) {
-        for (let i = Math.min(von, bis); i <= Math.max(von, bis); i++) {
-          next.add(sichtbar[i]!.id);
-        }
-      }
-    } else if (e.metaKey || e.ctrlKey) {
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-    } else {
-      next.clear();
-      next.add(id);
-    }
-
-    lastClicked.current = id;
-    setSelected(next);
+    const zug = auswahlKlick(
+      selected,
+      id,
+      e,
+      sichtbar.map((p) => p.id),
+      lastClicked.current,
+    );
+    lastClicked.current = zug.anker;
+    setSelected(zug.selected);
   }
 
   /**

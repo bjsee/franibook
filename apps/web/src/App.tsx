@@ -45,6 +45,7 @@ import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
 import { Fotodaten } from './Fotodaten.js';
 import { Overview } from './Overview.js';
+import { Baum } from './baum/Baum.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
 import { PhotoSources } from './PhotoSources.js';
@@ -856,13 +857,28 @@ export function App() {
           }}
         />
       ) : view === 'edit' ? (
-        <LayoutEditor
-          imageSrc={imageSrc}
-          onApplied={() => {
-            loadInfo();
-            neuRendern();
-          }}
-        />
+        // Derselbe Gegenstand in zwei Fassungen: der Baum zum Ziehen, das JSON
+        // für den großen Umbau. Welche gilt, steht im Pfad (`/aufteilung/json`).
+        route.view === 'edit' && route.json ? (
+          <LayoutEditor
+            imageSrc={imageSrc}
+            onNavigieren={navigieren}
+            onApplied={() => {
+              loadInfo();
+              neuRendern();
+            }}
+          />
+        ) : (
+          <Baum
+            bildVersion={bildVersion}
+            standVersion={standVersion}
+            onNavigieren={navigieren}
+            onChanged={() => {
+              loadInfo();
+              neuRendern();
+            }}
+          />
+        )
       ) : view === 'cover' ? (
         <Cover imageSrc={imageSrc} standVersion={standVersion} />
       ) : (

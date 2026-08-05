@@ -1,5 +1,5 @@
 /**
- * Einzelne Fotos umhängen.
+ * Fotos umhängen – einzeln (`movePhoto`) oder als Stapel (`movePhotos`).
  *
  * Gegenstück zum Layout-Dokument: Dort wird die ganze Aufteilung neu
  * eingelesen und jede Doppelseite samt Vorlage, Slotzuordnung und Ausschnitten
@@ -18,6 +18,11 @@
  * Der Fotopool ist keine eigene Liste, sondern die Rechnung „alle Fotos minus
  * die platzierten". Ein Bild aus dem Buch zu nehmen heißt deshalb nur, seinen
  * Slot zu leeren – es kann nicht verlorengehen.
+ *
+ * Der Stapel ist keine Schleife über den Einzelzug, sondern eine eigene
+ * Rechnung mit eigener Arbeitshöhe: Er bewegt Bilder zwischen Seiten und ordnet
+ * jede berührte Seite genau einmal an. Was ihn vom Einzelzug unterscheidet und
+ * warum, steht an `movePhotos`.
  */
 import { FULL_CROP } from '../model/crop.js';
 import type { PhotoOverride, PhotoWeight } from '../model/date.js';
@@ -25,6 +30,13 @@ import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
+import type { Template } from '../model/template.js';
+import {
+  BLANK_TEMPLATE_ID,
+  chapterTemplates,
+  groupOpenerTemplates,
+  templateById,
+} from '../templates/index.js';
 import { layoutSpread } from './rebuild.js';
 
 export type MoveSource =
@@ -96,6 +108,79 @@ function slotOf(spreads: readonly Spread[], ref: { spreadIndex: number; slotId: 
 /** Auf welcher Doppelseite liegt dieses Foto? `-1`, wenn es im Pool ist. */
 function findSpreadIndex(spreads: readonly Spread[], photoId: PhotoId): number {
   return spreads.findIndex((s) => s.slots.some((slot) => slot.photoId === photoId));
+}
+
+/** Die Bilder einer Doppelseite in Slotreihenfolge, ohne die leeren Plätze. */
+function fotosVon(spread: Spread): PhotoId[] {
+  return spread.slots.map((s) => s.photoId).filter((id): id is PhotoId => id !== null);
+}
+
+/**
+ * Die Vorlagen, unter denen eine Auftaktseite wählen darf – oder `undefined`
+ * für eine gewöhnliche Doppelseite.
+ *
+ * Ein Auftakt bleibt ein Auftakt: Wächst er von sechs auf neun Bilder, wird er
+ * die dichte Fassung und nicht irgendeine Flussvorlage, sonst verlöre er seine
+ * Textplätze und damit Jahreszahl und Ereigniszeilen. Die dichten Fassungen
+ * stehen dabei immer zur Wahl, auch wenn das Buch schlanke Auftakte vorgibt
+ * (`settings.chapterOpenersDense`): Neun Bilder von Hand auf die Seite zu
+ * ziehen ist die Ansage, nicht ihr Gegenteil.
+ */
+function auftaktKandidaten(spread: Spread, anzahl: number): Template[] | undefined {
+  const tags = templateById(spread.templateId)?.tags;
+  const familie = tags?.includes('kapitel')
+    ? chapterTemplates(true)
+    : tags?.includes('gruppenauftakt')
+      ? groupOpenerTemplates()
+      : undefined;
+  return familie?.filter((t) => t.slots.length === anzahl);
+}
+
+/**
+ * Ordnet eine Doppelseite mit einer neuen Bildmenge an.
+ *
+ * Auftaktseiten wählen aus ihrer eigenen Familie (siehe `auftaktKandidaten`).
+ * Die trägt aber nicht jede Bilderzahl – Kapitelauftakte gibt es für 1, 2, 3,
+ * 4, 6 und 9 Bilder, Gruppenauftakte nur für eines. Passt die neue Zahl in
+ * keine, wird der Zug abgelehnt und die Meldung nennt die Zahlen, die gehen:
+ * Eine Seite, die nach dem Zug ihre Beschriftung verloren hätte, wäre die
+ * schlechtere Antwort.
+ *
+ * Bei einer Seite mit Textplätzen ohne Auftaktfamilie genügt `withText` – sonst
+ * wählte die Rechnung eine Vorlage ganz ohne Textplatz.
+ *
+ * @returns die neue Doppelseite oder eine deutsche Fehlermeldung.
+ */
+function anordnen(
+  spread: Spread,
+  ids: readonly PhotoId[],
+  reflow: ReflowContext,
+  bestand: ReadonlyMap<PhotoId, Photo>,
+): Spread | string {
+  const photos = ids.map((id) => bestand.get(id)).filter((p): p is Photo => p !== undefined);
+  const kandidaten = auftaktKandidaten(spread, photos.length);
+
+  if (kandidaten?.length === 0) {
+    const familie = templateById(spread.templateId)?.tags?.includes('kapitel')
+      ? chapterTemplates(true)
+      : groupOpenerTemplates();
+    const zahlen = [...new Set(familie.map((t) => t.slots.length))].sort((a, b) => a - b);
+    return (
+      `Eine Auftaktseite trägt ${zahlen.join(', ')} Bilder – ` +
+      `für ${photos.length} gibt es keine Fassung`
+    );
+  }
+
+  const ergebnis = layoutSpread({
+    photos,
+    profile: reflow.profile,
+    ...(reflow.weightOf ? { weightOf: reflow.weightOf } : {}),
+    ...(kandidaten ? { candidates: kandidaten } : {}),
+    ...(!kandidaten && spread.texts?.length ? { withText: true } : {}),
+  });
+  if (!ergebnis) return `Für ${photos.length} Bilder gibt es keine Vorlage`;
+
+  return { ...spread, templateId: ergebnis.templateId, slots: ergebnis.slots };
 }
 
 /**
@@ -238,25 +323,9 @@ function moveToSpread(
     return unveraendert('Dieses Foto gehört nicht mehr zum Bestand');
   }
 
-  const fotosVon = (spread: Spread): PhotoId[] =>
-    spread.slots.map((s) => s.photoId).filter((id): id is PhotoId => id !== null);
-
   // Einmal für den Zug aufgelöst, nicht je Doppelseite: `anordnen` läuft für
   // Quelle und Ziel.
   const bestand = effectivePhotos(reflow.photos, reflow.overrides);
-
-  const anordnen = (spread: Spread, ids: readonly PhotoId[]): Spread | string => {
-    const photos = ids.map((id) => bestand.get(id)).filter((p): p is Photo => p !== undefined);
-
-    const ergebnis = layoutSpread({
-      photos,
-      profile: reflow.profile,
-      ...(reflow.weightOf ? { weightOf: reflow.weightOf } : {}),
-    });
-    if (!ergebnis) return `Für ${photos.length} Bilder gibt es keine Vorlage`;
-
-    return { ...spread, templateId: ergebnis.templateId, slots: ergebnis.slots };
-  };
 
   const kopie = [...spreads];
 
@@ -270,13 +339,13 @@ function moveToSpread(
           `Zieh zuerst ein anderes Bild dorthin.`,
       );
     }
-    const neu = anordnen(quelle, uebrig);
+    const neu = anordnen(quelle, uebrig, reflow, bestand);
     if (typeof neu === 'string')
       return unveraendert(`Doppelseite ${source.spreadIndex + 1}: ${neu}`);
     kopie[source.spreadIndex] = neu;
   }
 
-  const neuesZiel = anordnen(ziel, [...fotosVon(ziel), photoId]);
+  const neuesZiel = anordnen(ziel, [...fotosVon(ziel), photoId], reflow, bestand);
   if (typeof neuesZiel === 'string')
     return unveraendert(`Doppelseite ${zielIndex + 1}: ${neuesZiel}`);
   kopie[zielIndex] = neuesZiel;
@@ -287,4 +356,189 @@ function moveToSpread(
     touched:
       source.kind === 'slot' ? [source.spreadIndex, zielIndex].sort((a, b) => a - b) : [zielIndex],
   };
+}
+
+/**
+ * Ein Zug im Stapel.
+ *
+ * Kein Slot als Ziel: Der Platztausch ist eine andere Geste – „diese zwei
+ * Bilder tauschen ihre Plätze" – und gehört ans Bild in der aufgeschlagenen
+ * Doppelseite. Ein Stapel bewegt Bilder zwischen Seiten, und dafür ist der
+ * Platz auf der Zielseite gerade nicht die Aussage.
+ */
+export interface PhotoMove {
+  source: MoveSource;
+  target: { kind: 'spread'; spreadIndex: number } | { kind: 'pool' };
+}
+
+export interface MoveManyResult extends MoveResult {
+  /**
+   * Doppelseiten, die der Stapel leer zurücklässt. Sie stehen weiter im Buch –
+   * herausnehmen ist eine eigene Entscheidung, siehe `movePhotos`.
+   */
+  leer: number[];
+}
+
+/**
+ * Hängt mehrere Fotos in einem Zug um.
+ *
+ * Nicht dasselbe wie `movePhoto` n-mal hintereinander, und der Unterschied ist
+ * der Grund für diese Funktion: Zwei Bilder von einer Achterseite auf eine
+ * Viererseite gezogen sollen **einmal** in 6 und 6 münden. Nacheinander
+ * gerechnet bekäme die Zielseite erst eine Fünfer-, dann eine Sechservorlage,
+ * die Ausschnitte würden zweimal verworfen, und im Verlauf stünden zwei
+ * Schritte, wo der Benutzer eine Handlung gemacht hat – dieselbe Überlegung wie
+ * bei der mengenwertigen Datumskorrektur.
+ *
+ * Deshalb zwei Phasen: Erst wandert die Zugehörigkeit (welche Bilder liegen
+ * danach auf welcher Seite), dann wird jede berührte Seite genau einmal
+ * angeordnet.
+ *
+ * **Eine leer gezogene Seite bleibt stehen** – mit der leeren Vorlage und ohne
+ * Plätze – statt den Stapel abzulehnen, wie es der Einzelzug tut. Der
+ * Unterschied ist die Arbeitshöhe: Am Nachbarstreifen arbeitet man in einer
+ * Doppelseite, dort ist eine leere Seite ein Unfall. Im Baum arbeitet man am
+ * Buch, dort ist das Leerräumen einer Seite eine Bewegung, die man macht. Sie
+ * dann auch gleich zu entfernen wäre trotzdem falsch: Das verschiebt alle
+ * folgenden Seitenzahlen und gehört als eigene Entscheidung an
+ * `DELETE /api/spreads/:index`. Gemeldet wird sie über `leer`.
+ *
+ * Ein Zug in den Pool ordnet die Quellseite hier ebenfalls neu an – anders als
+ * beim Einzelzug, der nur den Slot leert. Drei Bilder aus einer Achterseite
+ * herauszunehmen und drei Löcher zu hinterlassen wäre keine Aufteilung.
+ *
+ * **Festgehaltene Seiten sind weder Ziel noch Quelle** – sie verlören genau
+ * das, wofür sie festgehalten wurden. Ein Bild dort auszutauschen bleibt
+ * möglich, als Platztausch über `movePhoto`, der die Bilderzahl nicht anrührt.
+ *
+ * **Auftaktseiten dagegen nehmen Bilder an und geben welche ab**, solange die
+ * neue Zahl eine Auftaktfassung hat (`anordnen`). Sie wechseln dann innerhalb
+ * ihrer Familie – ein Sechser-Auftakt wird zum dichten Neuner – und behalten
+ * ihre Textplätze.
+ *
+ * Alles oder nichts: Scheitert ein Zug, bleibt `spreads` unverändert.
+ */
+export function movePhotos(
+  spreads: readonly Spread[],
+  moves: readonly PhotoMove[],
+  reflow: ReflowContext,
+): MoveManyResult {
+  const unveraendert = (error: string): MoveManyResult => ({
+    ok: false,
+    error,
+    spreads: [...spreads],
+    touched: [],
+    leer: [],
+  });
+
+  if (moves.length === 0) return { ok: true, spreads: [...spreads], touched: [], leer: [] };
+
+  const bestand = effectivePhotos(reflow.photos, reflow.overrides);
+
+  /**
+   * Was eine Seite dem Umhängen entzieht, oder `null`.
+   *
+   * Nur das Festhalten, und das aus seiner eigenen Bedeutung heraus: Eine
+   * festgehaltene Seite ist die, die ein Neuanordnen unverändert übersteht –
+   * sie umzuhängen hieße, genau das zu tun, wogegen sie festgehalten wurde.
+   *
+   * **Auftaktseiten stehen hier bewusst nicht.** Sie nehmen Bilder an und geben
+   * welche ab, solange die neue Zahl eine Fassung hat; darüber entscheidet
+   * `anordnen`, wo die Vorlagen bekannt sind. Sie pauschal zu sperren war eine
+   * Vorsicht zu viel – ein Auftakt von sechs auf neun Bilder ist ein völlig
+   * gewöhnlicher Wunsch.
+   */
+  const unantastbar = (i: number): string | null => {
+    const seite = spreads[i];
+    if (!seite) return null;
+    if (seite.locked) {
+      return `Doppelseite ${i + 1} ist festgehalten – erst lösen, dann umhängen.`;
+    }
+    return null;
+  };
+
+  // Phase 1: nur die Zugehörigkeit. Kein Slot wird angefasst – erst wenn alle
+  // Züge eingerechnet sind, steht die Bilderzahl je Seite fest, und erst dann
+  // lohnt die Vorlagenwahl.
+  const belegung = spreads.map(fotosVon);
+  const beruehrt = new Set<number>();
+  const bewegt = new Set<PhotoId>();
+
+  for (const { source, target } of moves) {
+    let photoId: PhotoId;
+    /** Seite, von der das Bild kommt – `null` heißt aus dem Pool. */
+    let herkunft: number | null;
+
+    if (source.kind === 'slot') {
+      const gefunden = slotOf(spreads, source);
+      if ('error' in gefunden) return unveraendert(gefunden.error);
+      if (!gefunden.slot.photoId) return unveraendert('Der Ausgangsslot ist leer');
+      photoId = gefunden.slot.photoId;
+      herkunft = source.spreadIndex;
+      const schutz = unantastbar(herkunft);
+      if (schutz) return unveraendert(schutz);
+    } else {
+      photoId = source.photoId;
+      // Gegen die laufende Belegung geprüft, nicht gegen die Eingabe: Ein Bild,
+      // das ein früherer Zug des Stapels ins Freie gelegt hat, darf wieder ins
+      // Buch.
+      const liegtAuf = belegung.findIndex((ids) => ids.includes(photoId));
+      if (liegtAuf >= 0)
+        return unveraendert(`Das Foto liegt schon auf Doppelseite ${liegtAuf + 1}`);
+      herkunft = null;
+    }
+
+    // Sonst stünde dasselbe Foto am Ende zweimal im Buch: Die Slots der Quelle
+    // liest Phase 1 aus der unveränderten Eingabe, ein zweiter Zug auf denselben
+    // Slot fände es also noch dort.
+    if (bewegt.has(photoId)) return unveraendert('Dasselbe Foto steht zweimal im Stapel');
+
+    if (!bestand.has(photoId)) return unveraendert('Dieses Foto gehört nicht mehr zum Bestand');
+
+    if (target.kind === 'spread') {
+      if (!spreads[target.spreadIndex]) {
+        return unveraendert(`Doppelseite ${target.spreadIndex + 1} gibt es nicht`);
+      }
+      // Auf die eigene Seite gezogen: kein Fehler, nur nichts zu tun.
+      if (herkunft === target.spreadIndex) continue;
+      const schutz = unantastbar(target.spreadIndex);
+      if (schutz) return unveraendert(schutz);
+    } else if (herkunft === null) {
+      return unveraendert('Quelle und Ziel sind beide der Fotopool');
+    }
+
+    if (herkunft !== null) {
+      belegung[herkunft] = belegung[herkunft]!.filter((id) => id !== photoId);
+      beruehrt.add(herkunft);
+    }
+    if (target.kind === 'spread') {
+      // Hinten angehängt wie beim Einzelzug: Welchen Platz das Bild bekommt,
+      // entscheidet ohnehin die Kostenzuordnung in `layoutSpread`.
+      belegung[target.spreadIndex]!.push(photoId);
+      beruehrt.add(target.spreadIndex);
+    }
+    bewegt.add(photoId);
+  }
+
+  // Phase 2: je berührter Seite eine Anordnung.
+  const kopie = [...spreads];
+  const leer: number[] = [];
+  const touched = [...beruehrt].sort((a, b) => a - b);
+
+  for (const i of touched) {
+    const seite = spreads[i]!;
+    const ids = belegung[i]!;
+
+    if (ids.length === 0) {
+      kopie[i] = { ...seite, templateId: BLANK_TEMPLATE_ID, slots: [] };
+      leer.push(i);
+      continue;
+    }
+
+    const neu = anordnen(seite, ids, reflow, bestand);
+    if (typeof neu === 'string') return unveraendert(`Doppelseite ${i + 1}: ${neu}`);
+    kopie[i] = neu;
+  }
+
+  return { ok: true, spreads: kopie, touched, leer };
 }
