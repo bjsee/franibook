@@ -18,6 +18,16 @@ import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
 import type { Sources } from '../sources.js';
 
+/**
+ * Ein Dateiname für den PDF-Export.
+ *
+ * Der Name kommt aus dem Anfragekörper und landet über `join(outDir, name)` auf
+ * der Platte – ein `..` darin wäre ein Schreibloch, das quasi überallhin
+ * schreiben ließe, wo der Serverprozess Rechte hat. Derselbe Gedanke wie beim
+ * Notanker-Namen (`project/notanker.ts`), nur für Endungen statt Zeitstempel.
+ */
+export const EXPORT_DATEINAME = /^[a-zA-Z0-9_-]+\.pdf$/;
+
 export interface Kontext {
   project: Project;
   sources: Sources;

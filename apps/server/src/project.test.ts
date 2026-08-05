@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -122,6 +122,25 @@ describe('migriere', () => {
 
   it('lehnt ein unbekanntes Schema ab, statt es zu deuten', () => {
     expect(migriere({ ...altesProjekt(), schemaVersion: 99 })).toBeNull();
+  });
+});
+
+describe('load() mit einer beschädigten project.json', () => {
+  /**
+   * `JSON.parse` liefert `unknown`, keine geprüfte Struktur — eine von Hand
+   * verkürzte oder durch einen Sync-Konflikt zerschossene Datei darf nicht
+   * tief im Rendering krachen, sondern muss hier abgelehnt werden, genau wie
+   * eine unbekannte `schemaVersion`.
+   */
+  it('lädt nichts aus einer Datei ohne die erwartete Form und legt sie beiseite', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-project-'));
+    await writeFile(join(dir, 'project.json'), JSON.stringify({ schemaVersion: 3 }));
+
+    const project = new Project(null as never, null as never, null as never, dir);
+    expect(await project.load()).toBe(false);
+
+    const dateien = await readdir(dir);
+    expect(dateien.some((n) => n.startsWith('project.json.unlesbar-'))).toBe(true);
   });
 });
 
