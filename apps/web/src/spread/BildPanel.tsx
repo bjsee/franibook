@@ -100,6 +100,7 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
               : 'Reicht für den Druck.'}
         </p>
         <MaxFlaeche model={model} />
+        <LageWarnung model={model} />
       </div>
 
       <div style={B.abschnitt}>
@@ -349,6 +350,36 @@ function MaxFlaeche({ model }: { model: SpreadEditorModel }) {
   );
 }
 
+/**
+ * Bild und Platz stehen quer zueinander.
+ *
+ * Der Hinweis, der bisher fehlte: Der Ausschnitt hat immer die Form des
+ * Platzes, also sitzt der Zoom bei einem gekippten Bild am Anschlag, lange
+ * bevor man das ganze Bild sieht — und nichts sagte, warum. Die Zahl macht es
+ * greifbar, der Knopf löst es: Neu angeordnet bekommt das Bild einen Platz
+ * seiner Lage.
+ */
+function LageWarnung({ model }: { model: SpreadEditorModel }) {
+  const box = model.gewaehlteBox;
+  const warnung = box?.warnings.find((w) => w.code === 'orientation-mismatch');
+  if (!warnung || warnung.code !== 'orientation-mismatch') return null;
+
+  const hochkant = box!.wMm < box!.hMm;
+  return (
+    <div style={S.lage}>
+      <p style={{ margin: 0 }}>
+        Das Bild steht quer zu seinem Platz –{' '}
+        {hochkant ? 'querformatig im Hochformat' : 'hochkant im Querformat'}. Sichtbar sind{' '}
+        {Math.round(warnung.sichtbar * 100)} %; weiter herauszoomen geht nicht, ohne es zu
+        verzerren.
+      </p>
+      <button onClick={() => void model.neuAnordnen()} style={B.knopf}>
+        Doppelseite neu anordnen
+      </button>
+    </div>
+  );
+}
+
 const S = {
   kopfzeile: {
     display: 'flex',
@@ -457,6 +488,22 @@ const S = {
     margin: '8px 0 0',
     padding: '7px 9px',
     borderRadius: T.rMd,
+    fontSize: 12,
+    lineHeight: 1.5,
+    background: T.warnBg,
+    border: `1px solid ${T.warnRand}`,
+    color: T.warnText,
+  },
+  // Dieselbe warnende Fläche wie „zu klein": Beides ist eine Aussage über das
+  // Buch und nicht über die Bedienung – Türkis wäre hier falsch.
+  lage: {
+    margin: '8px 0 0',
+    padding: '7px 9px',
+    borderRadius: T.rMd,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
     fontSize: 12,
     lineHeight: 1.5,
     background: T.warnBg,

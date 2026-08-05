@@ -1880,6 +1880,108 @@ Händen. Der Zug wird dann abgelehnt.
 Als Ablagefläche dient ein Streifen mit den zwei Nachbarseiten in jede Richtung
 (`SpreadNeighbors`). Weiter zu springen ist selten und geht über den Fotopool.
 
+### Aufteilung im Baum
+
+Der Nachbarstreifen reicht zwei Seiten weit, und der Texteditor der Aufteilung
+zeigt Dateinamen statt Bilder. Damit war beides nicht ausführbar, was das
+Verteilen eigentlich ausmacht: **ein Bild zwanzig Seiten weiter zu schieben**,
+und **zu sehen, wo das Buch schief hängt** — dass Seite 12 acht Bilder trägt
+und Seite 13 vier, stand nirgends nebeneinander.
+
+Der Baum (`/aufteilung`, `apps/web/src/baum/`) zeigt das ganze Buch als
+scrollbare Liste: Jahr → Doppelseite → Bilder. Jede Seitenzeile ist ein Ziel,
+jedes Bild ist sichtbar, die Vorschaugröße ist einstellbar (48–320 px, `?bild=`
+in der Adresse — darüber gäbe es keine passende Vorschaustufe, und 1600 px wären
+bei 830 Bildern ein Download statt einer Ansicht).
+
+Drei Entscheidungen tragen das:
+
+**Der Stapel ist eine eigene Rechnung, keine Schleife** (`movePhotos` in
+`layout/move.ts`, `POST /api/book/move` mit `moves`). Zwei Bilder von einer
+Achterseite auf eine Viererseite gezogen ergeben in einem Zug 6 und 6.
+Nacheinander gerechnet bekäme die Zielseite erst eine Fünfer-, dann eine
+Sechservorlage, die Ausschnitte würden zweimal verworfen, und im Verlauf stünden
+zwei Schritte für eine Handlung — dieselbe Überlegung, aus der `PATCH
+/api/photos` mengenwertig ist. Deshalb zwei Phasen: erst wandert die
+Zugehörigkeit, dann wird jede berührte Seite genau einmal angeordnet.
+
+**Eine leer gezogene Seite bleibt stehen**, mit der leeren Vorlage und ohne
+Plätze, und wird über `leer` gemeldet. Der Einzelzug lehnt denselben Fall ab,
+und das bleibt richtig: Am Nachbarstreifen arbeitet man _in_ einer Doppelseite,
+dort ist eine leere Seite ein Unfall; im Baum arbeitet man _am Buch_, dort ist
+das Leerräumen eine Bewegung, die man macht. Sie gleich zu entfernen wäre
+trotzdem falsch — das verschiebt alle folgenden Seitenzahlen und gehört als
+eigene Entscheidung an `DELETE /api/spreads/:index`.
+
+**Festgehaltene Seiten sind weder Ziel noch Quelle** — sie verlören genau das,
+wofür sie festgehalten wurden. Ein Bild dort auszutauschen bleibt möglich, als
+Platztausch, der die Bilderzahl nicht anrührt; die Zeile sagt es vorher an.
+
+**Ein Auftakt nimmt dagegen Bilder an und gibt welche ab.** Er wechselt dabei
+innerhalb seiner Familie — ein Sechser-Auftakt wird zum dichten Neuner — und
+behält seine Textplätze; die dichten Fassungen stehen dafür immer zur Wahl, auch
+bei schlanker Buchvorgabe, denn neun Bilder von Hand hinzuziehen ist die Ansage.
+Die Familie trägt aber nicht jede Zahl: Kapitelauftakte gibt es für 1, 2, 3, 4,
+6 und 9 Bilder, Gruppenauftakte nur für eines. Für 5, 7 oder 8 wird der Zug
+abgelehnt, und die Meldung nennt die Zahlen, die gehen. Das war zuerst eine
+pauschale Sperre — „Auftakte sind keine Ziele" —, und das war eine Vorsicht zu
+viel: Einen Auftakt von sechs auf neun Bilder zu bringen ist ein gewöhnlicher
+Wunsch, kein Übergriff. Entschieden wird es in `anordnen`, wo die Vorlagen
+bekannt sind, und nicht in der Oberfläche: Sie müsste die Bibliothek sonst
+nachbauen.
+
+Verworfen: **die Übersicht aufzubohren.** Sie zeigt gerenderte Kacheln, also die
+_Gestalt_ der Seite — auf 248 px ist aber nicht zu erkennen, _welches_ Bild das
+ist. Gestalt und Inhalt teilen sich denselben Ort schlecht; die Übersicht bleibt
+für den Rhythmus zuständig, der Baum für die Verteilung.
+
+Ebenfalls verworfen: **Monat und Segment als dritte Ebene.** Sie schneiden die
+Doppelseiten, statt sie zu gliedern. Aus demselben Grund ist die Fotogruppe eine
+Marke an der Zeile und keine Ebene: Sie liegt quer zu den Seiten.
+
+Die Auskunft dahinter (`GET /api/book/tree`, `project/baum.ts`) nennt je Seite
+die belegten Plätze, den Jahrgang, die Gruppenmarke und was auffällt:
+festgehalten, Auftakt, leer, Handarbeit, Bilder unter der Zielauflösung. Ohne
+die Bilddaten selbst — die kommen über `GET /api/photos`, und eine zweite
+Fassung derselben Angaben wäre ein zweiter Weg zur Wahrheit.
+
+### Wenn Bild und Platz quer zueinander stehen
+
+Eine Ausrichtungskorrektur kippt das Bild, seinen Platz aber nicht. Danach steht
+ein Hochformat in einem Querformatplatz, und weil der Ausschnitt immer die Form
+des Platzes hat, sitzt der Zoom am Anschlag, lange bevor das ganze Bild zu sehen
+ist — bei 1536 × 2736 px in einem Platz von 82 × 61 mm sind das **42 % der
+Bildhöhe**. Das ist rechnerisch richtig und sah trotzdem nach einem Defekt aus,
+weil nichts sagte, warum es nicht weitergeht.
+
+Der Befund steht jetzt als Warnung an der Bildbox (`orientation-mismatch`, mit
+dem sichtbaren Flächenanteil) und damit überall dort, wo das RSM ohnehin gelesen
+wird: im Bildpanel der Doppelseite als Satz samt Zahl, in der Baumansicht als
+Marke an der Seitenzeile. Eine Warnung und keine Automatik — dieselbe Linie wie
+bei `structurePending`: Was das Buch umbaut, entscheidet der Benutzer.
+
+Dafür gibt es den Ausweg mit einem Griff: `PATCH /api/spreads/:index/template`
+mit `templateId: "auto"` ordnet **diese eine Doppelseite** neu an und überlässt
+die Vorlagenwahl der Rechnung, die auch beim Erzeugen läuft. Auftakte bleiben
+dabei unter sich (`chapterTemplates`), sonst verlöre die Seite ihre Textplätze.
+Verworfen wurde, beim Kippen sofort neu anzuordnen: Das verwirft die manuellen
+Ausschnitte der ganzen Seite und wählt womöglich eine Vorlage, die niemand
+wollte — und beides ungefragt, mitten in einer Korrektur, die nur ein Bild
+betraf.
+
+Ganz verschwindet der Befund nicht immer: Ein Bild im Verhältnis 0,56 findet in
+keiner Auftaktfassung einen Platz seiner Form. Die Warnung sagt dann weiterhin,
+was Sache ist — und das ist besser als ein Zoom, der grundlos klemmt.
+
+**Der Ausschnitt dreht mit** (`rotateCrop`, angewandt in `dreheAusschnitte`).
+Ein Ausschnitt steht in Bildkoordinaten; bleibt er beim Kippen stehen, zeigt er
+danach auf eine andere Stelle — wer den Kopf gewählt hatte, bekommt den Rand.
+Schlimmer noch: Liegt eine seiner Kanten am Bildrand, und nach einem Umzug in
+einen fremd geformten Platz tut sie das fast immer, lässt er sich nicht einmal
+mehr aufziehen; `zoomCrop` klemmt bei der Kante, die schon auf 1 steht. Gedreht
+werden nur die von Hand gesetzten Ausschnitte: Die automatischen rechnet der
+Renderer für die neue Lage ohnehin neu.
+
 ### Bilder von Hand setzen
 
 `SlotAssignment.rect` überschreibt den Platz aus der Vorlage: Ein Bild lässt sich

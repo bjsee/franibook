@@ -10,7 +10,7 @@ import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
 import type { EffectiveDate, PhotoOverride } from '../model/date.js';
 import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
-import { aspectRatio } from '../model/photo.js';
+import { aspectRatio, orientationOf } from '../model/photo.js';
 import type { SlotAssignment, Spread, TextBlock, TextElement } from '../model/spread.js';
 import type { Template, TemplateSlot, TemplateTextSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
@@ -323,6 +323,17 @@ function buildImageBox(
   // Auf das tatsächliche Rechteck geprüft: Wer ein Bild von Hand in den Falz
   // zieht, soll dieselbe Warnung bekommen wie eine Vorlage, die es täte.
   if (crossesGutter(assignment.rect ?? slot)) warnings.push({ code: 'crosses-gutter' });
+
+  // Bild und Platz stehen quer zueinander. Gemeldet wird die Form, nicht der
+  // Beschnitt: Ein von Hand eng gezogener Ausschnitt ist eine Entscheidung, ein
+  // Hochformat in einem Querformatplatz ist ein Missstand – und nach einer
+  // Ausrichtungskorrektur der Normalfall, weil das Bild kippt und sein Platz
+  // nicht.
+  const bildLage = orientationOf(photo);
+  const platzLage = orientationOf({ width: rect.wMm, height: rect.hMm });
+  if (bildLage !== 'square' && platzLage !== 'square' && bildLage !== platzLage) {
+    warnings.push({ code: 'orientation-mismatch', sichtbar: crop.w * crop.h });
+  }
 
   // Der Drehpunkt nur dann ausdrücklich, wenn der Rahmen ihn verschiebt: Beim
   // Polaroid liegt die Mitte des Kartons unter der des Bildes, und beide müssen

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type Crop,
   MIN_CROP_EDGE,
   coverCrop,
   cropLoss,
   cropToPixels,
   fitCropToAspect,
   panCrop,
+  rotateCrop,
   zoomCrop,
 } from './crop.js';
 
@@ -238,5 +240,50 @@ describe('fitCropToAspect', () => {
     const c = { x: 0.2, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' as const };
     expect(fitCropToAspect(c, 0, 2)).toBe(c);
     expect(fitCropToAspect(c, 1, Number.NaN)).toBe(c);
+  });
+});
+
+describe('rotateCrop', () => {
+  /** Ein Streifen im oberen Drittel, links angeschlagen. */
+  const oben = { x: 0.1, y: 0.0, w: 0.4, h: 0.3, mode: 'manual' as const };
+
+  it('dreht einen Ausschnitt im Uhrzeigersinn mit dem Bild', () => {
+    // Was oben links lag, liegt nach einer Vierteldrehung oben rechts – und die
+    // Kanten tauschen ihre Rolle.
+    expect(rotateCrop(oben, 1)).toMatchObject({ x: 0.7, y: 0.1, w: 0.3, h: 0.4 });
+  });
+
+  it('dreht auch gegen den Uhrzeigersinn, wenn drei Viertel gemeint sind', () => {
+    expect(rotateCrop(oben, 3)).toMatchObject({ x: 0, y: 0.5, w: 0.3, h: 0.4 });
+  });
+
+  it('spiegelt bei einer halben Drehung, ohne die Kanten zu tauschen', () => {
+    expect(rotateCrop(oben, 2)).toMatchObject({ x: 0.5, y: 0.7, w: 0.4, h: 0.3 });
+  });
+
+  it('führt vier Vierteldrehungen zum Ausgangspunkt zurück', () => {
+    let c: Crop = oben;
+    for (let i = 0; i < 4; i++) c = rotateCrop(c, 1);
+    expect(c.x).toBeCloseTo(oben.x, 10);
+    expect(c.y).toBeCloseTo(oben.y, 10);
+    expect(c.w).toBeCloseTo(oben.w, 10);
+    expect(c.h).toBeCloseTo(oben.h, 10);
+  });
+
+  it('lässt einen automatischen Ausschnitt in Ruhe', () => {
+    // Der wird beim Rendern ohnehin neu gerechnet.
+    const auto = { x: 0.2, y: 0.2, w: 0.5, h: 0.5, mode: 'auto-cover' as const };
+    expect(rotateCrop(auto, 1)).toBe(auto);
+  });
+
+  it('behält die Fläche und bleibt im Bild', () => {
+    for (const turns of [1, 2, 3] as const) {
+      const c = rotateCrop(oben, turns);
+      expect(c.w * c.h).toBeCloseTo(oben.w * oben.h, 10);
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+      expect(c.x + c.w).toBeLessThanOrEqual(1 + 1e-9);
+      expect(c.y + c.h).toBeLessThanOrEqual(1 + 1e-9);
+    }
   });
 });

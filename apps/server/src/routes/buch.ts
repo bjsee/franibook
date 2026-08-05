@@ -7,7 +7,7 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { MoveSource, MoveTarget } from '@franibook/core';
+import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import { renderPdf } from '@franibook/render-pdf';
 import { type Kontext, spreadAntwort } from './kontext.js';
 
@@ -32,6 +32,14 @@ export function buchRouten(
     return result;
   });
 
+  /**
+   * Das Buch als Baum – je Doppelseite ihre Bilder und was an ihr auffällt.
+   *
+   * Ohne die Bilddaten selbst: Die holt die Oberfläche über `GET /api/photos`.
+   * Was hier steht, ist die Gliederung und die Diagnose je Seite.
+   */
+  app.get('/api/book/tree', async () => ({ spreads: project.baum() }));
+
   /** Fotos, die derzeit in keinem Slot liegen. */
   app.get('/api/book/unplaced', async () => {
     const photos = project.unplacedPhotos();
@@ -55,11 +63,35 @@ export function buchRouten(
    * Doppelseite (`{ kind: 'spread' }`) gezogen zieht das Bild um, und beide
    * beteiligten Seiten werden neu angeordnet – dort ändert sich die Bilderzahl,
    * und eine Lücke stehen zu lassen wäre keine Aufteilung, sondern ein Loch.
+   *
+   * **Mit `moves` nimmt dieselbe Route einen Stapel** – mengenwertig wie
+   * `PATCH /api/photos`, und aus demselben Grund: Zwei Bilder auf eine andere
+   * Seite zu ziehen ist eine Handlung, also ein Cmd+Z. Nebenher spart es die
+   * Zwischenanordnung, die niemand bestellt hat. `leer` nennt die Seiten, die
+   * der Stapel leer zurücklässt; herausgenommen werden sie nicht.
    */
-  app.post<{ Body: { source?: MoveSource; target?: MoveTarget } }>(
+  app.post<{ Body: { source?: MoveSource; target?: MoveTarget; moves?: PhotoMove[] } }>(
     '/api/book/move',
     async (req, reply) => {
-      const { source, target } = req.body ?? {};
+      const { source, target, moves } = req.body ?? {};
+
+      if (moves !== undefined) {
+        if (!Array.isArray(moves) || moves.length === 0) {
+          return reply.code(400).send({ error: 'moves ist leer' });
+        }
+        const stapel = project.movePhotos(moves);
+        if (!stapel.ok) return reply.code(409).send({ ok: false, error: stapel.error });
+
+        void project.save();
+        return {
+          ok: true,
+          touched: stapel.touched,
+          leer: stapel.leer,
+          spreads: stapel.touched.map((index) => spreadAntwort(project, index)),
+          report: project.lastReport,
+        };
+      }
+
       if (!source || !target) return reply.code(400).send({ error: 'source und target fehlen' });
 
       const result = project.movePhoto(source, target);

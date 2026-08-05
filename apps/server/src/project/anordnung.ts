@@ -28,6 +28,7 @@ import {
   justifiedTemplateId,
   layoutSpread,
   pairId,
+  rotateCrop,
   templateById,
   templateMeta,
 } from '@franibook/core';
@@ -58,6 +59,35 @@ function fotosVon(z: Bestand, spread: Spread): Photo[] {
     .map((p) => effectivePhoto(p, z.overrides[p.id]));
 }
 
+/** Kennung für „such die passende Vorlage selbst". */
+export const AUTO_TEMPLATE = 'auto';
+
+/**
+ * Zieht die Ausschnitte nach, wenn Fotos gekippt wurden.
+ *
+ * Ein Ausschnitt steht in Bildkoordinaten; kippt das Bild, zeigt derselbe
+ * Ausschnitt auf eine andere Stelle. Wer den Kopf gewählt hatte, bekäme nach
+ * einer Vierteldrehung den Bildrand – und da eine Kante des Ausschnitts oft
+ * schon am Rand liegt, ließe er sich danach nicht einmal wieder aufziehen.
+ *
+ * Angefasst werden nur von Hand gesetzte Ausschnitte: Die automatischen rechnet
+ * der Renderer für die neue Lage ohnehin neu.
+ */
+export function dreheAusschnitte(
+  z: { spreads: Spread[] },
+  gedreht: readonly { id: PhotoId; turns: 1 | 2 | 3 }[],
+): void {
+  if (gedreht.length === 0) return;
+  const drehung = new Map(gedreht.map((g) => [g.id, g.turns]));
+
+  for (const spread of z.spreads) {
+    for (const slot of spread.slots) {
+      const turns = slot.photoId ? drehung.get(slot.photoId) : undefined;
+      if (turns) slot.crop = rotateCrop(slot.crop, turns);
+    }
+  }
+}
+
 /**
  * Setzt eine andere Vorlage für eine Doppelseite.
  *
@@ -67,6 +97,13 @@ function fotosVon(z: Bestand, spread: Spread): Photo[] {
  * Plätze leer. Beides ist erlaubt, denn genau darum geht es beim Wechsel von
  * Hand: Man will die Seite anders aufteilen, nicht dieselbe Aufteilung mit
  * anderen Kanten.
+ *
+ * **`auto` überlässt die Wahl der Rechnung** – dieselbe, die beim Erzeugen des
+ * Buches läuft, aber nur für diese eine Seite. Gedacht für den Fall, dass sich
+ * die Bilder geändert haben und die Vorlage nicht: Nach einer
+ * Ausrichtungskorrektur steht ein gekipptes Bild in einem Platz, der für seine
+ * alte Lage gewählt wurde. Auftakte bleiben dabei unter sich (`chapterTemplates`),
+ * sonst verlöre die Seite ihre Textplätze.
  */
 export function setSpreadTemplate(
   z: Bestand,
@@ -75,18 +112,32 @@ export function setSpreadTemplate(
 ): { ok: boolean; error?: string; leftover: PhotoId[] } {
   const spread = z.spreads[index];
   if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
-  if (!templateById(templateId)) {
+
+  const auto = templateId === AUTO_TEMPLATE;
+  if (!auto && !templateById(templateId)) {
     return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, leftover: [] };
   }
 
+  const fotos = fotosVon(z, spread);
+  const auftakt = auto && templateMeta(spread.templateId).chapterOnly;
+
   const angeordnet = layoutSpread({
-    photos: fotosVon(z, spread),
+    photos: fotos,
     profile: z.profile,
-    templateId,
+    ...(auto ? {} : { templateId }),
+    ...(auftakt
+      ? { candidates: chapterTemplates(true).filter((t) => t.slots.length === fotos.length) }
+      : {}),
     weightOf: gewicht(z),
   });
   if (!angeordnet) {
-    return { ok: false, error: `Vorlage ${templateId} lässt sich nicht anwenden`, leftover: [] };
+    return {
+      ok: false,
+      error: auto
+        ? `Für ${fotos.length} Bilder gibt es hier keine Vorlage`
+        : `Vorlage ${templateId} lässt sich nicht anwenden`,
+      leftover: [],
+    };
   }
 
   spread.templateId = angeordnet.templateId;

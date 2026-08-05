@@ -172,6 +172,23 @@ dichten Seiten unvermeidlich). Blätter, die durch das Umpaaren ganz leer wären
 entstehen nicht. `DELETE /api/spreads/page/:atPage` ist das Gegenstück: dieselbe
 Rechnung, die Seite fällt heraus, ihre Bilder gehen in den Fotopool.
 
+**Die Bilder verteilt man im Baum** (`/aufteilung`, `apps/web/src/baum/`): das ganze
+Buch als Liste, Jahr → Doppelseite → Bilder, jede Zeile ein Ziel. Der Zug dahinter
+ist **mengenwertig** (`movePhotos` in `layout/move.ts`, `POST /api/book/move` mit
+`moves`) — zwei Bilder von einer Achterseite auf eine Viererseite ergeben in einem
+Zug 6 und 6 und **ein** Cmd+Z, statt zweier Anordnungen und zweier Schritte; dieselbe
+Begründung wie bei `PATCH /api/photos`. Zwei Regeln stehen quer zum Einzelzug und
+sind Absicht: Eine leer gezogene Seite **bleibt stehen** (leere Vorlage, gemeldet
+über `leer`) statt den Stapel abzulehnen, und **festgehaltene Seiten sind weder
+Ziel noch Quelle** – sie verlören, wofür sie festgehalten wurden. **Ein Auftakt
+nimmt Bilder an**, wechselt dabei innerhalb seiner Familie (Sechser wird dichter
+Neuner, Textplätze bleiben) und lehnt nur die Zahlen ab, für die es keine Fassung
+gibt – 1, 2, 3, 4, 6, 9 beim Jahresauftakt, entschieden in `anordnen`. Die
+Auskunft je Seite liefert `GET /api/book/tree` (`project/baum.ts`), die Bilddaten
+kommen weiter über `GET /api/photos`. Der Texteditor der Aufteilung liegt jetzt
+unter `/aufteilung/json`. Begründung und verworfene Fassungen: `docs/konzept.md`,
+Abschnitt „Aufteilung im Baum".
+
 **Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
 `layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
 jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die
@@ -235,6 +252,18 @@ vorhandene mit, frei getippt entsteht `manual:<Name>`. Ein gesetzter Ort wird in
 Die Gliederung ändert er nicht, also kein `structurePending`. Dieselbe Route
 `PATCH /api/photos` nimmt Datum **oder** Ort, nie beides — deshalb darf
 `UndoEintrag.label` eine Funktion sein.
+
+**Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** Der Ausschnitt hat
+immer die Form des Platzes, also sieht man von einem Hochformat im Querformatplatz
+nur einen Streifen, und der Zoom sitzt am Anschlag. Das meldet `renderSpread` als
+`orientation-mismatch` mit dem sichtbaren Flächenanteil – gezeigt im Bildpanel und
+als Marke im Baum –, und `PATCH /api/spreads/:index/template` mit
+`templateId: "auto"` ordnet diese eine Doppelseite neu an (Auftakte bleiben unter
+sich). Nicht automatisch beim Kippen: Das verwürfe die Ausschnitte der ganzen Seite.
+**Der Ausschnitt selbst dreht dagegen mit** (`rotateCrop`, angewandt in
+`dreheAusschnitte`) – er steht in Bildkoordinaten und zeigte sonst nach der Drehung
+auf eine andere Stelle, mit einer Kante am Bildrand, an der `zoomCrop` klemmt.
+Begründung: `docs/konzept.md`, Abschnitt „Wenn Bild und Platz quer zueinander stehen".
 
 **Auch die Ausrichtung lässt sich kippen** (`orientationTurns`, 1–3
 Vierteldrehungen, sie addieren sich). Bei 90° und 270° tauscht `effectivePhoto`
@@ -393,8 +422,10 @@ werden beim Start in ihre Normalform ersetzt — der Parity-Test ruft die
 Doppelseite so auf. Blättern **verschmilzt** zu einer Station (1,5 s, wie beim
 Zurücknehmen am Server), sonst wäre die Zurück-Taste nach achtzig
 Pfeiltastenanschlägen eine Kurbel. `history.pushState` steht nur dort, geprüft
-in `tests/architektur/architektur.test.ts`. Begründung und verworfene Fassungen:
-`docs/konzept.md`, Abschnitt „Adressen".
+in `tests/architektur/architektur.test.ts`; ein Darstellungsparameter, der sich
+zur Laufzeit ändert (`?bild=` im Baum), geht über `queryErsetzen` — auch die
+Query gehört dem Router. Begründung und verworfene Fassungen: `docs/konzept.md`,
+Abschnitt „Adressen".
 
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
 Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.

@@ -164,16 +164,23 @@ export function setzeOrte(
  * Bei 90° und 270° tauschen Breite und Höhe (`effectivePhoto`). Das ändert die
  * Vorlagenwahl, aber **nicht** die Gliederung: Das Buch bleibt, wie es ist, und
  * das Bild steht bis zum Neuanordnen in einem Platz, der jetzt schlechter passt.
+ *
+ * **Was sich mitdreht, sind die Ausschnitte** – aber nicht hier: Diese Funktion
+ * kennt keine Doppelseiten. Sie meldet über `gedreht`, welches Foto um wie viel
+ * gekippt wurde, und der Aufrufer zieht die Slots nach (`dreheAusschnitte` in
+ * `anordnung.ts`). Ohne das zeigt ein von Hand gewählter Ausschnitt nach der
+ * Drehung auf eine ganz andere Stelle des Bildes.
  */
 export function kippeAusrichtung(
   z: Fotodatenstand,
   ids: readonly PhotoId[],
   turns: 1 | 2 | 3 | null,
-): Korrekturergebnis | { fehler: string } {
+): (Korrekturergebnis & { gedreht: { id: PhotoId; turns: 1 | 2 | 3 }[] }) | { fehler: string } {
   if (ids.length === 0) return { fehler: 'Keine Fotos ausgewählt' };
 
   const unbekannt: PhotoId[] = [];
   const uebersprungen: { id: PhotoId; grund: string }[] = [];
+  const gedreht: { id: PhotoId; turns: 1 | 2 | 3 }[] = [];
   let geaendert = 0;
 
   for (const id of ids) {
@@ -200,10 +207,15 @@ export function kippeAusrichtung(
     } else {
       z.overrides[id] = { ...bestand, orientationTurns: nachher };
     }
+    // Der Weg von der alten zur neuen Lage – nicht die neue Lage selbst: Der
+    // Ausschnitt liegt im Bild, wie es zuletzt stand, und dreht sich um genau
+    // diesen Betrag mit.
+    const schritt = ((nachher - vorher + 4) % 4) as 0 | 1 | 2 | 3;
+    if (schritt !== 0) gedreht.push({ id, turns: schritt });
     geaendert++;
   }
 
-  return { geaendert, uebersprungen, unbekannt };
+  return { geaendert, uebersprungen, unbekannt, gedreht };
 }
 
 /**

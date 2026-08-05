@@ -24,6 +24,7 @@ import type {
   MoveSource,
   MoveTarget,
   PhotoGroup,
+  PhotoMove,
   RenderedCover,
   RenderedSpread,
   TextElement,
@@ -356,6 +357,15 @@ export const anordnungenLaden = (index: number) =>
 export const vorlageSetzen = (index: number, templateId: string) =>
   sende<AnordnungErgebnis>('PATCH', `/api/spreads/${index}/template`, { templateId });
 
+/**
+ * Die Doppelseite neu anordnen – die Rechnung wählt die Vorlage.
+ *
+ * Für den Fall, dass sich die Bilder geändert haben und die Vorlage nicht: Ein
+ * gekipptes Bild steht danach in einem Platz, der für seine alte Lage gewählt
+ * wurde.
+ */
+export const seiteNeuAnordnen = (index: number) => vorlageSetzen(index, 'auto');
+
 export const halbseiteSetzen = (index: number, side: 'left' | 'right', halfId: string) =>
   sende<AnordnungErgebnis>('PATCH', `/api/spreads/${index}/half`, { side, halfId });
 
@@ -441,6 +451,21 @@ export interface Zugergebnis {
 
 export const fotoVerschieben = (source: MoveSource, target: MoveTarget) =>
   sende<Zugergebnis>('POST', '/api/book/move', { source, target });
+
+/** Was ein Stapel bewegt hat – wie `Zugergebnis`, plus die leer gebliebenen Seiten. */
+export interface Stapelergebnis extends Zugergebnis {
+  leer: number[];
+}
+
+/**
+ * Mehrere Fotos in einem Zug umhängen.
+ *
+ * Ein Aufruf und nicht n: Jede berührte Doppelseite wird genau einmal
+ * angeordnet, und im Verlauf steht eine Handlung statt n. Slots sind hier kein
+ * Ziel – der Platztausch bleibt `fotoVerschieben`.
+ */
+export const fotosVerschieben = (moves: readonly PhotoMove[]) =>
+  sende<Stapelergebnis>('POST', '/api/book/move', { moves });
 
 // ─── Textblöcke ─────────────────────────────────────────────────────────────
 
@@ -599,6 +624,30 @@ export interface AussortierErgebnis {
 }
 
 export const fotopoolLaden = () => hole<{ photos: PoolFoto[] }>('/api/book/unplaced');
+
+/**
+ * Eine Doppelseite im Baum – `BaumSeite` aus `project/baum.ts`.
+ *
+ * Ohne die Bilddaten selbst: Die kommen über `fotosLaden()`. Hier steht die
+ * Gliederung und was an der Seite auffällt.
+ */
+export interface BaumSeite {
+  index: number;
+  /** Die belegten Plätze in Slotreihenfolge – mit dem Slotnamen, den ein Zug braucht. */
+  bilder: { slotId: string; photoId: string }[];
+  templateId: string;
+  year?: number;
+  groupTitle?: string;
+  locked: boolean;
+  auftakt: boolean;
+  leer: boolean;
+  handarbeit: boolean;
+  zuKlein: number;
+  /** Bilder, die quer zu ihrem Platz stehen – meist nach einer Ausrichtungskorrektur. */
+  falscheLage: number;
+}
+
+export const baumLaden = () => hole<{ spreads: BaumSeite[] }>('/api/book/tree');
 
 export const fotosDerSeiteLaden = (index: number) =>
   hole<{ photos: FotoInfo[] }>(`/api/spreads/${index}/photos`);

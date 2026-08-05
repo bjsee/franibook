@@ -181,6 +181,35 @@ export function panCrop(crop: Crop, dx: number, dy: number): Crop {
 }
 
 /**
+ * Dreht einen Ausschnitt mit dem Bild.
+ *
+ * Ein Ausschnitt steht in Bildkoordinaten. Kippt das Bild, zeigen dieselben
+ * Zahlen auf eine andere Stelle – wer den Kopf im oberen Drittel gewählt hatte,
+ * bekommt nach einer Vierteldrehung den linken Rand. Das ist keine Kleinigkeit:
+ * Der Ausschnitt springt beim Drehen scheinbar grundlos, und weil eine seiner
+ * Kanten oft schon am Bildrand liegt, lässt er sich danach nicht einmal
+ * herausziehen.
+ *
+ * Gedreht wird im Uhrzeigersinn, in derselben Zählung wie
+ * `PhotoOverride.orientationTurns` und wie die Bildaufbereitung dreht. Breite
+ * und Höhe tauschen bei einer Viertel- und Dreivierteldrehung – wie die
+ * Bildmaße in `effectivePhoto`.
+ *
+ * `auto-cover` bleibt `auto-cover`: Dort rechnet der Renderer den Ausschnitt
+ * ohnehin neu, und ein gedrehter Vollausschnitt wäre derselbe.
+ */
+export function rotateCrop(crop: Crop, turns: 0 | 1 | 2 | 3): Crop {
+  if (turns === 0 || crop.mode !== 'manual') return crop;
+
+  const { x, y, w, h } = crop;
+  if (turns === 2) return { ...crop, x: 1 - (x + w), y: 1 - (y + h) };
+
+  return turns === 1
+    ? { ...crop, x: 1 - (y + h), y: x, w: h, h: w }
+    : { ...crop, x: y, y: 1 - (x + w), w: h, h: w };
+}
+
+/**
  * Kleinste zulässige Kantenlänge eines Ausschnitts.
  *
  * Bei 5 % bleiben von den 2048 px dieses Bestands rund 100 px übrig – schon
