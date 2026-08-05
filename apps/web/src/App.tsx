@@ -16,7 +16,7 @@
  * damit war jede Stelle im Buch unteilbar: kein Zurück, kein neuer Tab, kein
  * Link an jemand anderen.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
@@ -104,6 +104,8 @@ function useImageSrc(bildVersion: number) {
 export function App() {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [spread, setSpread] = useState<SpreadResponse | null>(null);
+  /** Zählt jede Anfrage nach einer Doppelseite hoch – der Stale-Guard dafür. */
+  const spreadFahrschein = useRef(0);
   // Zählt hoch, wenn sich am Rendern etwas ändert, ohne dass das Buch neu
   // erzeugt wurde. Die Übersicht hält geladene Doppelseiten selbst vor und
   // wird darüber verworfen.
@@ -250,14 +252,21 @@ export function App() {
   useEffect(() => {
     if (view !== 'spread' && !bare) return;
     setSpread(null);
+    // Ein Fahrschein für diese eine Anfrage: Wer schnell blättert, feuert eine
+    // neue an, bevor die vorherige zurück ist, und deren Antwort träfe sonst
+    // ein, nachdem man längst weitergezogen ist – eine ältere Doppelseite
+    // überschriebe die neuere.
+    const fahrschein = ++spreadFahrschein.current;
     doppelseiteLaden(index)
-      .then(setSpread)
+      .then((geladen) => {
+        if (fahrschein === spreadFahrschein.current) setSpread(geladen);
+      })
       .catch((e: unknown) => {
         // Während des Anlaufs still bleiben: `loadInfo` wartet bereits und
         // holt die Doppelseite nach, sobald der Server steht. Zwei Stellen, die
         // dasselbe pollen, wären doppelte Last und ein doppelter Satz.
         if (e instanceof ApiFehler && e.status === 503) return;
-        setError(fehlertext(e));
+        if (fahrschein === spreadFahrschein.current) setError(fehlertext(e));
       });
   }, [index, view, bare, renderVersion]);
 

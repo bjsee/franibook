@@ -38,6 +38,7 @@ const SKIZZE_HOEHE = 66;
 
 export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFehler }: Props) {
   const [vorlagen, setVorlagen] = useState<Vorlage[] | null>(null);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
   const [gewaehlt, setGewaehlt] = useState<string | null>(null);
   const [titel, setTitel] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
         setVorlagen(d.templates);
         setGewaehlt(d.templates[0]?.id ?? null);
       })
-      .catch(() => setVorlagen([]));
+      .catch((e: unknown) => setLadeFehler(fehlertext(e)));
   }, []);
 
   // Escape schließt: Derselbe Griff wie überall sonst in der Oberfläche.
@@ -111,7 +112,13 @@ export function InsertSpread({ at, spreadCount, onEingefuegt, onAbbrechen, onFeh
         </p>
 
         {vorlagen === null ? (
-          <p style={S.muted}>Lade Vorlagen …</p>
+          ladeFehler ? (
+            <p style={{ ...S.muted, color: T.fehler }}>
+              Vorlagen ließen sich nicht laden: {ladeFehler}
+            </p>
+          ) : (
+            <p style={S.muted}>Lade Vorlagen …</p>
+          )
         ) : (
           (['page', 'spread'] as const).map((scope) => {
             const gruppe = vorlagen.filter((v) => v.scope === scope);

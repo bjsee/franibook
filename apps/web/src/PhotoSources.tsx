@@ -152,6 +152,10 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
             <div style={S.karteReihe}>
               <div style={{ minWidth: 0 }}>
                 <input
+                  // Trägt den geladenen Namen im Schlüssel: Sonst überlebt
+                  // eine serverseitig zurückgenommene Umbenennung nicht, weil
+                  // React `defaultValue` nur beim ersten Mount setzt.
+                  key={`${q.id}-${q.label}`}
                   defaultValue={q.label}
                   onBlur={(e) => void umbenennen(q, e.target.value)}
                   style={S.name}

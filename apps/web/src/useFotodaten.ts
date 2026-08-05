@@ -106,7 +106,9 @@ export function useFotodaten(opts: {
   const orteLaden = useCallback(() => {
     ortsListeLaden()
       .then((d) => setOrte(d.places))
-      .catch(() => setOrte([]));
+      // Dasselbe Muster wie beim Hauptladen oben: sichtbar statt still
+      // verschluckt, sonst fehlt die Vervollständigung ohne jede Erklärung.
+      .catch((e: unknown) => setFehler(fehlertext(e)));
   }, []);
 
   useEffect(orteLaden, [orteLaden, standVersion]);

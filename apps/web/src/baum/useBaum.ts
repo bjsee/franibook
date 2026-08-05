@@ -73,19 +73,34 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
   /** Woher der laufende Zug kommt – ohne das wäre jedes Ziel dasselbe. */
   const herkunft = useRef<Herkunft | null>(null);
 
-  const laden = useCallback(() => {
-    return Promise.all([baumLaden(), fotosLaden(), fotopoolLaden()])
-      .then(([baum, alle, frei]) => {
-        setSeiten(baum.spreads);
-        setFotos(alle.photos);
-        setPool(frei.photos);
-        setGeladen(true);
-      })
-      .catch((e: unknown) => setNote(`Der Baum ließ sich nicht laden: ${fehlertext(e)}`));
+  /**
+   * Lädt Gliederung, Bilddaten und Fotopool neu und meldet, ob es geklappt hat.
+   *
+   * Das Ergebnis geht an den Aufrufer zurück, statt hier selbst eine Meldung zu
+   * setzen: `schicken` unten braucht es, um seine eigene Erfolgsmeldung nicht
+   * blind über einen Ladefehler zu schreiben – „Zug erfolgreich" und „Nachladen
+   * fehlgeschlagen" sind zwei verschiedene Sätze, und nur einer passt.
+   */
+  const laden = useCallback(async (): Promise<{ ok: true } | { ok: false; fehler: string }> => {
+    try {
+      const [baum, alle, frei] = await Promise.all([baumLaden(), fotosLaden(), fotopoolLaden()]);
+      setSeiten(baum.spreads);
+      setFotos(alle.photos);
+      setPool(frei.photos);
+      setGeladen(true);
+      return { ok: true };
+    } catch (e: unknown) {
+      // Auch ein Fehlschlag gilt als „geladen": Sonst bliebe „Lade Baum …"
+      // stehen, während daneben schon die Fehlermeldung steht.
+      setGeladen(true);
+      return { ok: false, fehler: fehlertext(e) };
+    }
   }, []);
 
   useEffect(() => {
-    void laden();
+    void laden().then((stand) => {
+      if (!stand.ok) setNote(`Der Baum ließ sich nicht laden: ${stand.fehler}`);
+    });
   }, [laden, standVersion]);
 
   const infos = useMemo(() => new Map(fotos.map((f) => [f.id, f])), [fotos]);
@@ -135,13 +150,20 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
       setBusy(true);
       try {
         const ergebnis = await fotosVerschieben(moves);
-        await laden();
+        const stand = await laden();
         onChanged();
         const leer = ergebnis.leer.map((i) => i + 1);
-        setNote(
+        const zugText =
           leer.length === 0
             ? erfolg(moves.length)
-            : `${erfolg(moves.length)} — Doppelseite ${leer.join(', ')} steht jetzt leer.`,
+            : `${erfolg(moves.length)} — Doppelseite ${leer.join(', ')} steht jetzt leer.`;
+        // Der Zug selbst ist durch, auch wenn das Nachladen scheitert – eine
+        // Erfolgsmeldung darf das dann nicht verdecken, sonst hält man den
+        // angezeigten (veralteten) Stand für den aktuellen.
+        setNote(
+          stand.ok
+            ? zugText
+            : `${zugText} Aber: Der Baum ließ sich danach nicht neu laden (${stand.fehler}) — der angezeigte Stand ist veraltet.`,
         );
       } catch (e: unknown) {
         setNote(fehlertext(e));

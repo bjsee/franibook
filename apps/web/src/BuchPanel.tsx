@@ -173,6 +173,7 @@ export function BuchPanel({
         <label style={{ ...B.haken, justifyContent: 'space-between' }}>
           Seiten
           <input
+            key={settings.targetPages}
             type="number"
             min={24}
             max={400}
@@ -182,6 +183,7 @@ export function BuchPanel({
               const v = Number(e.target.value);
               if (v !== settings.targetPages) onNeuAnordnen({ targetPages: v });
             }}
+            disabled={busy}
             style={S.zahl}
           />
         </label>
@@ -190,6 +192,7 @@ export function BuchPanel({
             type="checkbox"
             checked={settings.chapterOpeners}
             onChange={(e) => onNeuAnordnen({ chapterOpeners: e.target.checked })}
+            disabled={busy}
           />
           Jahresauftakte
         </label>
@@ -207,6 +210,7 @@ export function BuchPanel({
               type="checkbox"
               checked={settings.chapterOpenersDense}
               onChange={(e) => onNeuAnordnen({ chapterOpenersDense: e.target.checked })}
+              disabled={busy}
             />
             Bilder auf der Jahresseite
           </label>
@@ -216,6 +220,7 @@ export function BuchPanel({
             type="checkbox"
             checked={settings.chapterColors}
             onChange={(e) => onNeuAnordnen({ chapterColors: e.target.checked })}
+            disabled={busy}
           />
           Jahresfarben
         </label>
@@ -233,6 +238,7 @@ export function BuchPanel({
                 groupOpeners: e.target.value === 'auto' ? 'auto' : e.target.value === 'true',
               })
             }
+            disabled={busy}
             style={B.auswahl}
           >
             <option value="auto">wie Zeitstrahl</option>
