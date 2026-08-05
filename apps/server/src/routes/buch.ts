@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import { renderPdf } from '@franibook/render-pdf';
-import { EXPORT_DATEINAME, type Kontext, spreadAntwort } from './kontext.js';
+import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
 
 export function buchRouten(
   app: FastifyInstance,
@@ -134,41 +134,52 @@ export function buchRouten(
       await mkdir(outDir, { recursive: true });
       const outputPath = join(outDir, fileName);
 
-      const result = await renderPdf({
-        spreads,
-        profile: project.profile,
-        outputPath,
-        resolvePhoto: (photoId) => {
-          const photo = project.photo(photoId);
-          if (!photo) return undefined;
-          return {
-            path: sources.pfad(photo),
-            orientation: photo.orientation,
-            ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
-          };
-        },
-        // Zweiter Anlauf für Dateien, die sharp nicht dekodieren kann – ein
-        // 13-MB-PNG im Bestand fiel dem ersten Vollexport zum Opfer.
-        //
-        // Die Orientierung bleibt die des Originals, weil `sips` die EXIF-Daten
-        // übernimmt statt die Pixel zu drehen (Phase 0). Für den bekannten Fall
-        // ist das ohnehin gegenstandslos: PNG kennt keine EXIF-Orientierung, der
-        // Wert ist 1. Bei einer gedrehten HEIC wäre das der Punkt zum Nachmessen.
-        recoverPhoto: async (photoId) => {
-          const photo = project.photo(photoId);
-          if (!photo) return undefined;
-          const path = await decodes.rescue(photo);
-          return path
-            ? {
-                path,
-                orientation: photo.orientation,
-                ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
-              }
-            : undefined;
-        },
-      });
+      try {
+        const result = await renderPdf({
+          spreads,
+          profile: project.profile,
+          outputPath,
+          resolvePhoto: (photoId) => {
+            const photo = project.photo(photoId);
+            if (!photo) return undefined;
+            return {
+              path: sources.pfad(photo),
+              orientation: photo.orientation,
+              ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+            };
+          },
+          // Zweiter Anlauf für Dateien, die sharp nicht dekodieren kann – ein
+          // 13-MB-PNG im Bestand fiel dem ersten Vollexport zum Opfer.
+          //
+          // Die Orientierung bleibt die des Originals, weil `sips` die EXIF-Daten
+          // übernimmt statt die Pixel zu drehen (Phase 0). Für den bekannten Fall
+          // ist das ohnehin gegenstandslos: PNG kennt keine EXIF-Orientierung, der
+          // Wert ist 1. Bei einer gedrehten HEIC wäre das der Punkt zum Nachmessen.
+          recoverPhoto: async (photoId) => {
+            const photo = project.photo(photoId);
+            if (!photo) return undefined;
+            const path = await decodes.rescue(photo);
+            return path
+              ? {
+                  path,
+                  orientation: photo.orientation,
+                  ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+                }
+              : undefined;
+          },
+        });
 
-      return { outputPath, ...result };
+        return { outputPath, ...result };
+      } catch (err) {
+        // Ein ausgehängtes NAS etwa: Die rohe Exception trüge den vollen Pfad
+        // in die Antwort, ein deutscher Satz mit 503 ist die ehrlichere Auskunft.
+        if (istDateiFehler(err)) {
+          return reply.code(503).send({
+            error: 'Eine Bilddatei ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+          });
+        }
+        throw err;
+      }
     },
   );
 }

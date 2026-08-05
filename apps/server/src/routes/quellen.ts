@@ -35,6 +35,11 @@ export function quellenRouten(app: FastifyInstance, { project, sources }: Kontex
   app.post<{ Body?: { root?: string; label?: string } }>('/api/sources', async (req, reply) => {
     const root = req.body?.root?.trim();
     if (!root) return reply.code(400).send({ error: 'Pfad fehlt' });
+    // `addSource` liest gleich ein – lief bereits ein Import, träfe dessen
+    // abschließendes `z.photos.clear()` diesen Griff.
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+    }
 
     try {
       const ergebnis = await project.addSource(root, req.body?.label);

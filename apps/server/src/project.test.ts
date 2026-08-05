@@ -520,6 +520,72 @@ describe('save', () => {
   });
 });
 
+describe('addTextBlock', () => {
+  /** Ein Projekt mit einer einzigen, leeren Doppelseite. */
+  function projektMitSeite(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    p.spreads = [{ id: 's0', index: 0, templateId: 'spread.blank', slots: [] }];
+    return p;
+  }
+
+  it('validiert und klemmt beim Anlegen wie updateTextBlock', () => {
+    const p = projektMitSeite();
+    const block = p.addTextBlock(0, {
+      family: 'gibt-es-nicht' as never,
+      fontSizePt: 99999,
+      rotateDeg: 400,
+      weight: 'fett' as never,
+    });
+
+    expect(block).toBeDefined();
+    // Eine unbekannte Schriftfamilie wird verworfen statt übernommen.
+    expect(block!.family).toBeUndefined();
+    // Über 200 pt passt keine Zeile mehr auf die Seite.
+    expect(block!.fontSizePt).toBe(200);
+    // 400° sind 40° in der Normalform.
+    expect(block!.rotateDeg).toBe(40);
+    // Ein unbekannter Schriftschnitt bleibt bei der Vorgabe.
+    expect(block!.weight).toBe('regular');
+  });
+
+  it('übernimmt eine gültige Schriftfamilie', () => {
+    const p = projektMitSeite();
+    const block = p.addTextBlock(0, { family: 'serif' });
+    expect(block!.family).toBe('serif');
+  });
+});
+
+describe('Import-Sperre', () => {
+  /**
+   * `reimport()` ruft `bestand.reimport()`, die selbst `await importPhotos(…)`
+   * enthält – die Zusage kommt also erst nach dem ersten `await` zurück, und
+   * `this.importPromise` ist bis dahin schon gesetzt. Wer die Zusage ruft und
+   * `importLaufend()` sofort danach abfragt, sieht deshalb `true`, unabhängig
+   * davon, wie schnell der leere Bestand durchläuft.
+   */
+  it('meldet einen laufenden Import, solange er nicht abgeschlossen ist', async () => {
+    const sources = { list: () => [] } as never;
+    const p = new Project(sources, null as never, null as never, '');
+
+    expect(p.importLaufend()).toBe(false);
+    const laufend = p.reimport();
+    expect(p.importLaufend()).toBe(true);
+
+    await laufend;
+    expect(p.importLaufend()).toBe(false);
+  });
+
+  it('meldet auch importPhotos() als laufenden Import', async () => {
+    const sources = { list: () => [] } as never;
+    const p = new Project(sources, null as never, null as never, '');
+
+    const laufend = p.importPhotos();
+    expect(p.importLaufend()).toBe(true);
+    await laufend;
+    expect(p.importLaufend()).toBe(false);
+  });
+});
+
 describe('Eigene Doppelseiten', () => {
   /**
    * Ein Projekt mit zwei Doppelseiten aus je einem Bild.

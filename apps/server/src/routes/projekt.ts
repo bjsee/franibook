@@ -5,6 +5,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import {
+  isBackgroundColor,
   isFrameId,
   MAX_TILT_DEG,
   TIMELINE_ACCENTS,
@@ -95,7 +96,10 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     if (akzent !== undefined && TIMELINE_ACCENTS.some((a) => a.value === akzent)) {
       project.settings.timelineAccent = akzent;
     }
-    if (req.body.background !== undefined) project.settings.background = req.body.background;
+    // Gegen die geschlossene Palette geprüft wie Rahmen und Zeitstrahlwerte:
+    // Ein freier Hexwert wäre über achtzig Seiten hinweg schnell ein Fehler,
+    // den die Palette gerade unmöglich machen soll.
+    if (isBackgroundColor(req.body.background)) project.settings.background = req.body.background;
     // Die Neigung gehört aus demselben Grund hierher wie der Zeitstrahl: Sie
     // entsteht beim Rendern und rührt die Fotoverteilung nicht an.
     if (req.body.tilt !== undefined && Number.isFinite(req.body.tilt)) {
@@ -115,7 +119,12 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
    * Das Buch bleibt stehen. Neue Fotos landen im Fotopool, verschwundene werden
    * gemeldet – auch solche, die noch in einer Doppelseite stehen.
    */
-  app.post<{ Body?: { limit?: number; sourceId?: string } }>('/api/import', async (req) => {
+  app.post<{ Body?: { limit?: number; sourceId?: string } }>('/api/import', async (req, reply) => {
+    // Ein zweiter Import während des ersten dürfte `z.photos.clear()` treffen,
+    // während der erste noch liest – der Bestand danach wäre Zufall.
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+    }
     const ergebnis = await project.reimport(
       req.body?.limit ?? importLimit,
       req.body?.sourceId ? [req.body.sourceId] : undefined,

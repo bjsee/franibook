@@ -267,7 +267,9 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
   'PATCH /api/spreads/:index/background': () => ({
     method: 'PATCH',
     url: '/api/spreads/1/background',
-    payload: { color: '#f0eae2' },
+    // Ein Ton aus der geschlossenen Palette (`BACKGROUND_COLORS`): Ein freier
+    // Hexwert wird seit der Prüfung in `setSpreadBackground` abgelehnt.
+    payload: { color: '#eae5db' },
   }),
 
   'PATCH /api/spreads/:index/timeline': () => ({

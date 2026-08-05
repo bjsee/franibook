@@ -6,10 +6,11 @@
  * eines Fotos sein Inhaltshash ist: Ändert sich das Bild, ändert sich die URL.
  */
 import { createReadStream } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { type DateEdit, istDateEdit } from '@franibook/core';
-import { type Kontext, spreadAntwort } from './kontext.js';
+import { istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
 
 /**
  * Eine Datumskorrektur, wie sie im Körper der Anfrage steht.
@@ -92,6 +93,12 @@ export function fotoRouten(
   app.patch<{ Body: { ids?: unknown; date?: unknown; place?: unknown; orientation?: unknown } }>(
     '/api/photos',
     async (req, reply) => {
+      // Ein laufender Import endet mit `z.photos.clear()` und einer
+      // Neubefüllung – eine Korrektur währenddessen träfe eine Kopie, die
+      // gleich verworfen wird.
+      if (project.importLaufend()) {
+        return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+      }
       const ids = leseIds(req.body?.ids);
       if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
 
@@ -142,7 +149,20 @@ export function fotoRouten(
       if (!photo) return reply.code(404).send({ error: 'Foto nicht gefunden' });
 
       const size = req.query.size === 'thumb' ? 'thumb' : 'preview';
-      const path = await previews.get(photo, size);
+      let path: string;
+      try {
+        path = await previews.get(photo, size);
+      } catch (err) {
+        // Etwa: die Quelle ist gerade nicht eingehängt, und die Vorschau lässt
+        // sich nicht erst erzeugen. Die rohe Exception trüge den vollen Pfad
+        // in die Antwort.
+        if (istDateiFehler(err)) {
+          return reply.code(503).send({
+            error: 'Das Bild ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+          });
+        }
+        throw err;
+      }
       return reply
         .type('image/webp')
         .header('Cache-Control', 'public, max-age=31536000, immutable')
@@ -164,7 +184,21 @@ export function fotoRouten(
     // libvips unlesbaren Datei genau diese Pixel, und der Parity-Test darf nicht
     // Original gegen Konvertat vergleichen.
     const gerettet = await decodes.existing(photo.id);
-    const path = gerettet ?? sources.pfad(photo);
+    let path: string;
+    try {
+      path = gerettet ?? sources.pfad(photo);
+      // `createReadStream` wirft bei einer fehlenden Datei nicht synchron,
+      // sondern erst asynchron über das Streamobjekt – zu spät für ein
+      // try/catch um den Aufruf. Deshalb hier vorab prüfen.
+      await access(path);
+    } catch (err) {
+      if (istDateiFehler(err)) {
+        return reply.code(503).send({
+          error: 'Das Original ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+        });
+      }
+      throw err;
+    }
     const ext = extname(gerettet ?? photo.fileName).toLowerCase();
     const type = ext === '.png' ? 'image/png' : 'image/jpeg';
     return reply
@@ -183,6 +217,11 @@ export function fotoRouten(
    * Oberfläche sie neu holen kann.
    */
   app.delete<{ Params: { id: string } }>('/api/photos/:id', async (req, reply) => {
+    // Dieselbe Sorge wie bei `PATCH /api/photos`: Aussortieren während des
+    // Imports träfe eine Kopie des Bestands, die der Import gleich verwirft.
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+    }
     try {
       const ergebnis = await project.deletePhoto(req.params.id);
       if (!ergebnis) return reply.code(404).send({ error: 'Foto nicht gefunden' });

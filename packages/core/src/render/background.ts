@@ -46,6 +46,21 @@ export const BACKGROUND_COLORS: readonly BackgroundColor[] = [
 export const DEFAULT_BACKGROUND = '#ffffff';
 
 /**
+ * Ob ein Wert einer der wählbaren Hintergrundfarben entspricht.
+ *
+ * Analog zu `isFrameId`: eine geschlossene Liste und kein freier Farbwähler –
+ * aus demselben Grund wie bei `BACKGROUND_COLORS` selbst. Groß-/Kleinschreibung
+ * des Hexcodes ist gleichgültig, `PATCH /api/settings` und `setSpreadBackground`
+ * prüfen beide gegen diese Funktion, statt einen Wert ungeprüft zu übernehmen.
+ */
+export function isBackgroundColor(wert: unknown): wert is string {
+  return (
+    typeof wert === 'string' &&
+    BACKGROUND_COLORS.some((c) => c.hex.toLowerCase() === wert.toLowerCase())
+  );
+}
+
+/**
  * Empfohlene Mindestauflösung für ein Hintergrundbild.
  *
  * Deutlich unter der Mindestauflösung für Motive (240 dpi im Profil): Ein
