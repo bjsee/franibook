@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { CoverDesign } from '@franibook/core';
 import { renderCoverPdf } from '@franibook/render-pdf';
-import { coverAntwort, type Kontext } from './kontext.js';
+import { coverAntwort, EXPORT_DATEINAME, type Kontext } from './kontext.js';
 
 export function umschlagRouten(app: FastifyInstance, { project, sources, outDir }: Kontext): void {
   app.get('/api/cover', async () => coverAntwort(project));
@@ -22,9 +22,14 @@ export function umschlagRouten(app: FastifyInstance, { project, sources, outDir 
   });
 
   /** Der Umschlag als eigene PDF-Datei. */
-  app.post<{ Body?: { fileName?: string } }>('/api/export/cover', async (req) => {
+  app.post<{ Body?: { fileName?: string } }>('/api/export/cover', async (req, reply) => {
+    const fileName = req.body?.fileName ?? 'cover.pdf';
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
     await mkdir(outDir, { recursive: true });
-    const outputPath = join(outDir, req.body?.fileName ?? 'cover.pdf');
+    const outputPath = join(outDir, fileName);
 
     const result = await renderCoverPdf({
       cover: project.renderCover(),

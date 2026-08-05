@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import { renderPdf } from '@franibook/render-pdf';
-import { type Kontext, spreadAntwort } from './kontext.js';
+import { EXPORT_DATEINAME, type Kontext, spreadAntwort } from './kontext.js';
 
 export function buchRouten(
   app: FastifyInstance,
@@ -125,9 +125,13 @@ export function buchRouten(
         return reply.code(404).send({ error: 'Keine Doppelseite zum Exportieren' });
       }
 
-      await mkdir(outDir, { recursive: true });
       const fileName =
         req.body?.fileName ?? (index === undefined ? 'buch.pdf' : `spread-${index}.pdf`);
+      if (!EXPORT_DATEINAME.test(fileName)) {
+        return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+      }
+
+      await mkdir(outDir, { recursive: true });
       const outputPath = join(outDir, fileName);
 
       const result = await renderPdf({
