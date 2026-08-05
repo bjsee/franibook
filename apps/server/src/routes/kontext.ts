@@ -28,6 +28,33 @@ import type { Sources } from '../sources.js';
  */
 export const EXPORT_DATEINAME = /^[a-zA-Z0-9_-]+\.pdf$/;
 
+/**
+ * Ob ein Fehler von einer nicht lesbaren Datei stammt – ein ausgehängtes
+ * Netzlaufwerk etwa, oder eine Quelle, die zwischen Anfrage und Zugriff
+ * verschwunden ist.
+ *
+ * Gebraucht in den Export- und Bildendpunkten (`buch.ts`, `umschlag.ts`,
+ * `fotos.ts`): Ohne diese Prüfung schlägt die rohe Exception bis zu Fastifys
+ * Standardfehler durch, und die enthält den vollen NAS-Pfad – ein deutscher
+ * Satz mit `503` ist die ehrlichere und ungefährlichere Antwort. Bewusst
+ * großzügig gefasst wie `istDecoderFehler` in `decode.ts`: Ein zu Unrecht als
+ * Dateifehler gedeuteter Fehler kostet eine falsche Statuszahl, ein
+ * übersehener eine Exception mit Pfad in der Antwort.
+ */
+export function istDateiFehler(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  if (
+    code &&
+    /^E(NOENT|ACCES|PERM|NOTDIR|ISDIR|STALE|IO|CONNRESET|TIMEDOUT|HOSTUNREACH|NETDOWN|NETUNREACH)$/.test(
+      code,
+    )
+  ) {
+    return true;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /ENOENT|no such file|permission denied|nicht erreichbar/i.test(msg);
+}
+
 export interface Kontext {
   project: Project;
   sources: Sources;

@@ -110,16 +110,27 @@ async function start(): Promise<void> {
       try {
         await sources.add(SOURCE_ROOT);
       } catch (err) {
+        // Kein Abbruch: Ein echter Erststart ohne erreichbare Quelle soll
+        // trotzdem lauschen, mit leerem Bestand – genau wie eine im laufenden
+        // Betrieb unerreichbare Quelle übersprungen und gemeldet wird, statt
+        // den Prozess zu beenden. Über `POST /api/sources` lässt sich später
+        // eine erreichbare Quelle nachtragen.
         process.stdout.write(`\nBildquelle unbrauchbar: ${String(err)}\n`);
-        throw err;
       }
     }
     const roots = sources
       .list()
       .map((q) => q.root)
       .join(', ');
-    anlauf = `Die Bilder werden eingelesen (${roots}).`;
-    process.stdout.write(`Importiere ${roots}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `);
+    if (roots) {
+      anlauf = `Die Bilder werden eingelesen (${roots}).`;
+      process.stdout.write(
+        `Importiere ${roots}${IMPORT_LIMIT ? ` (max. ${IMPORT_LIMIT})` : ''} … `,
+      );
+    } else {
+      anlauf = 'Keine Bildquelle bekannt.';
+      process.stdout.write('Keine Bildquelle bekannt – starte mit leerem Bestand … ');
+    }
     await project.importPhotos(IMPORT_LIMIT);
     process.stdout.write(`${project.photos.size} Fotos (${Date.now() - t0} ms)\n`);
 

@@ -265,7 +265,11 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
   }>('/api/spreads/:index/background', async (req, reply) => {
     const ergebnis = project.setSpreadBackground(Number(req.params.index), req.body);
     if (!ergebnis.ok) {
-      return reply.code(404).send({ error: 'Doppelseite oder Foto nicht gefunden' });
+      // Eine unbekannte Farbe ist ein Formfehler des Aufrufers (400), eine
+      // fehlende Doppelseite oder ein fehlendes Foto eine unbekannte Kennung (404).
+      return reply
+        .code(ergebnis.error ? 400 : 404)
+        .send({ error: ergebnis.error ?? 'Doppelseite oder Foto nicht gefunden' });
     }
     await project.save();
     return { ok: true, ...(ergebnis.hinweis ? { hinweis: ergebnis.hinweis } : {}) };

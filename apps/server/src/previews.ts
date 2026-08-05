@@ -24,6 +24,15 @@ const QUALITY: Record<PreviewSize, number> = {
 };
 
 export class PreviewCache {
+  /**
+   * Laufende Erzeugungen, je Zielpfad. Ohne diese Zusammenführung schreiben
+   * zwei gleichzeitige Anfragen nach derselben noch nicht gecachten Vorschau
+   * (etwa Vorschau-Warmlauf und ein Scroll-Zugriff auf dasselbe Foto) beide
+   * unabhängig in dieselbe Datei – dieselbe Sorge wie bei `DecodeCache.rescue()`
+   * (`laufend`-Map dort).
+   */
+  private readonly laufend = new Map<string, Promise<string>>();
+
   constructor(
     private readonly cacheDir: string,
     /**
@@ -59,6 +68,27 @@ export class PreviewCache {
       // noch nicht erzeugt
     }
 
+    // Läuft schon eine Erzeugung für genau diese Datei (Warmlauf und ein
+    // gleichzeitiger Zugriff etwa), an deren Ergebnis andocken statt ein
+    // zweites Mal zu rendern und zu schreiben.
+    const laufend = this.laufend.get(target);
+    if (laufend) return laufend;
+
+    const versuch = this.erzeuge(photo, size, turns, target);
+    this.laufend.set(target, versuch);
+    try {
+      return await versuch;
+    } finally {
+      this.laufend.delete(target);
+    }
+  }
+
+  private async erzeuge(
+    photo: PhotoRef,
+    size: PreviewSize,
+    turns: number,
+    target: string,
+  ): Promise<string> {
     await mkdir(join(this.cacheDir, size, photo.id.slice(0, 2)), { recursive: true });
     const buffer = await this.decodes.withFallback(photo, (path) =>
       sharp(path)
