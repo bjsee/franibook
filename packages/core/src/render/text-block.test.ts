@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { Photo } from '../model/photo.js';
 import type { Spread, TextBlock } from '../model/spread.js';
@@ -45,9 +45,10 @@ const texte = (s: Spread): TextBox[] =>
 describe('Textblöcke von Hand', () => {
   it('setzt den Block an die normierte Stelle', () => {
     const [box] = texte(spreadMit([block()]));
-    // 0,1 der Doppelseitenbreite (600 mm) plus 3 mm Beschnitt.
-    expect(box!.xMm).toBeCloseTo(3 + 60, 6);
-    expect(box!.yMm).toBeCloseTo(3 + 120, 6);
+    // 0,1 der Doppelseitenbreite (540 mm) plus 3 mm Beschnitt, und 0,4 der
+    // Seitenhöhe (270 mm).
+    expect(box!.xMm).toBeCloseTo(3 + 0.1 * 2 * profile.page.trimWidthMm, 6);
+    expect(box!.yMm).toBeCloseTo(3 + 0.4 * profile.page.trimHeightMm, 6);
     expect(box!.fontSizePt).toBe(14);
     expect(box!.weight).toBe('regular');
   });
@@ -69,7 +70,8 @@ describe('Textblöcke von Hand', () => {
     expect(boxen.every((b) => b.rotateDeg === 30)).toBe(true);
     expect(boxen[0]!.rotateAboutMm).toEqual(boxen[1]!.rotateAboutMm);
     // Der Drehpunkt ist die Mitte des ganzen Kastens.
-    expect(boxen[0]!.rotateAboutMm!.yMm).toBeCloseTo(3 + 120 + (0.08 * 300) / 2, 6);
+    const seiteH = profile.page.trimHeightMm;
+    expect(boxen[0]!.rotateAboutMm!.yMm).toBeCloseTo(3 + 0.4 * seiteH + (0.08 * seiteH) / 2, 6);
   });
 
   it('lässt einen leeren Block weg, statt eine leere Zeile zu setzen', () => {

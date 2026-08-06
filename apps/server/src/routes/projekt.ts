@@ -5,9 +5,12 @@
  */
 import type { FastifyInstance } from 'fastify';
 import {
+  allProfiles,
   isBackgroundColor,
   isFrameId,
   MAX_TILT_DEG,
+  nextValidPageCount,
+  profileById,
   TIMELINE_ACCENTS,
   TIMELINE_FOOT_VARIANTS,
   TIMELINE_SIDE_VARIANTS,
@@ -22,6 +25,19 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
   app.get('/api/project', async () => ({
     sources: await sources.status(),
     profile: project.profile,
+    // Die wählbaren Formate, auf das reduziert, was die Oberfläche zeigt.
+    // Hier und nicht in einem eigenen Endpunkt: Die Liste ändert sich nur mit
+    // einer neuen Programmfassung, und diese Auskunft holt die Oberfläche
+    // ohnehin bei jedem Start.
+    profiles: allProfiles().map((p) => ({
+      id: p.id,
+      vendor: p.vendor,
+      product: p.product,
+      trimWidthMm: p.page.trimWidthMm,
+      trimHeightMm: p.page.trimHeightMm,
+      maxPages: p.pageCount.max,
+      minPages: p.pageCount.min,
+    })),
     settings: project.settings,
     // Was ein Neugenerieren verwerfen würde – die Oberfläche schreibt es an den Knopf.
     handwork: project.handwork(),
@@ -111,6 +127,54 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     if (isFrameId(req.body.frame)) project.settings.frame = req.body.frame;
     await project.save();
     return { settings: project.settings };
+  });
+
+  /**
+   * Wechselt das Buchformat.
+   *
+   * Eigene Route und nicht `/api/settings`: Ein Formatwechsel ist keine
+   * Darstellungsfrage. Er ändert Seitenmaß, Seitenverhältnis und die zulässige
+   * Seitenzahl, und damit auch, welches Bild noch genug Pixel hat.
+   *
+   * Was er **nicht** tut, ist neu anordnen. Jede Vorlage ist normiert, also
+   * überstehen die Doppelseiten den Wechsel unverändert – und wer von Hand
+   * gezogen hat, verlöre das durch ein ungefragtes Neuanordnen. Passt die
+   * Seitenzahl nicht mehr ins neue Format, wird sie geklemmt und das gemeldet;
+   * neu gebaut wird erst auf Klick.
+   */
+  app.patch<{ Body: { printProfileId?: string } }>('/api/format', async (req, reply) => {
+    const gewaehlt = req.body.printProfileId;
+    const profil = gewaehlt === undefined ? undefined : profileById(gewaehlt);
+    if (!profil) {
+      return reply
+        .code(400)
+        .send({ error: `Unbekanntes Buchformat: ${gewaehlt ?? '(keines angegeben)'}` });
+    }
+
+    project.settings.printProfileId = profil.id;
+
+    // Die Seitenzahl ist die einzige Einstellung, die im neuen Format ungültig
+    // werden kann – 160 Seiten gibt es nicht in jedem.
+    const vorher = project.settings.targetPages;
+    const geklemmt = nextValidPageCount(profil, vorher);
+    project.settings.targetPages = geklemmt;
+
+    await project.save();
+    return {
+      settings: project.settings,
+      profile: project.profile,
+      // Deutsche Sätze wie überall, damit die Oberfläche sie unverändert zeigt.
+      hinweise: [
+        ...(geklemmt !== vorher
+          ? [`Seitenzahl von ${vorher} auf ${geklemmt} angepasst – mehr lässt dieses Format nicht.`]
+          : []),
+        ...(project.spreads.length > 0
+          ? [
+              'Das Buch behält seine Aufteilung. Neu anordnen ändert die Bildgrößen ans neue Format.',
+            ]
+          : []),
+      ],
+    };
   });
 
   /**

@@ -22,6 +22,7 @@ import { useMemo } from 'react';
 import {
   accentOn,
   defaultProfile,
+  profileById,
   sideTimelineBoxes,
   spreadHeightMm,
   spreadWidthMm,
@@ -33,7 +34,17 @@ import {
 } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 
-const profile = defaultProfile();
+/**
+ * Das Profil des gewählten Formats.
+ *
+ * Nicht mehr fest `defaultProfile()`: Die Miniatur zeigt dieselbe Geometrie,
+ * die ins Buch geht, und die hängt am Format. Aufgelöst wird hier und nicht
+ * über den Server, weil `@franibook/core` im Browser läuft – die Oberfläche
+ * hat die Profile bereits.
+ */
+function profilVon(id: string | undefined) {
+  return (id ? profileById(id) : undefined) ?? defaultProfile();
+}
 
 /**
  * Die Doppelseite, die die Miniaturen vorführen.
@@ -85,9 +96,18 @@ export interface ZeitleisteMiniProps {
   akzent?: string;
   /** Papierton der Doppelseite – die Miniatur zeigt das Buch, nicht die Oberfläche. */
   background: string;
+  /** Kennung des Druckprofils; ohne Angabe die Vorgabe. */
+  printProfileId?: string;
 }
 
-export function ZeitleisteMini({ ort, fassung, akzent, background }: ZeitleisteMiniProps) {
+export function ZeitleisteMini({
+  ort,
+  fassung,
+  akzent,
+  background,
+  printProfileId,
+}: ZeitleisteMiniProps) {
+  const profile = profilVon(printProfileId);
   const spread = useMemo<RenderedSpread>(() => {
     const accentColor = akzent ?? accentOn(background);
     const boxes =
@@ -124,7 +144,7 @@ export function ZeitleisteMini({ ort, fassung, akzent, background }: ZeitleisteM
       boxes,
       guides: [],
     };
-  }, [ort, fassung, akzent, background]);
+  }, [ort, fassung, akzent, background, profile]);
 
   const a = AUSSCHNITT[ort];
   const breite = (a.x1 - a.x0) * a.pxPerMm;

@@ -105,8 +105,8 @@ apps/web (React 19 + Vite, 5173)  ──/api-Proxy──▶  apps/server (Fastif
    (`render/rendered-spread.ts`). Weicht die Vorschau vom PDF ab, ist das per
    Konstruktion ein Adapterfehler — abgesichert durch den Parity-Test.
 3. **Der Druckdienstleister steckt ausschließlich im `PrintProfile`**
-   (`print/profile.ts`, Daten in `print/profiles/saal-30x30.json`). Die Engine kennt
-   nie einen Anbieternamen.
+   (`print/profile.ts`, Daten in `print/profiles/*.json` — acht Formate, Vorgabe
+   `format-28x28`). Die Engine kennt nie einen Anbieternamen.
 4. **Die Generierung ist deterministisch.** Gleiche Eingaben ergeben exakt dasselbe
    Buch; Variation läuft über `settings.seed`. Voraussetzung für Snapshot-Tests und
    dafür, dass eine lokale Korrektur nicht das ganze Buch umwirft.
@@ -234,6 +234,33 @@ Bilderzahl von 1 bis 14 gibt es mindestens drei Halbseiten: Was die Zerlegung de
 Vorlagen nicht hergibt — sieben, acht, dreizehn, vierzehn —, steht als eigens
 entworfene Halbseite unter `halves` in `library.json` (`libraryHalves`), hinten
 angehängt, damit keine abgeleitete ihre Kennung verliert.
+
+### Buchformat
+
+**Das Format ist eine Wahl im Buchpanel**, keine Konstante: acht Druckprofile
+(`print/profiles/*.json`), am 05.08.2026 aus dem Profibereich des Anbieters
+abgelesen und mit `provenance.verifiedAt` als geprüft markiert. Vorgabe ist
+`format-28x28` — 160 Seiten, das größte quadratische Format.
+
+**Die Produktnamen des Anbieters sind gerundet.** „28 × 28" heißt 270 × 270 mm
+Endformat: Die Doppelseite wird als eine Datei von 546 × 276 mm abgegeben, davon
+3 mm Beschnitt ringsum. Wer in Millimetern rechnet, nimmt `page.trimWidthMm` und
+nie die Zahl aus dem Namen.
+
+Gewechselt wird über `PATCH /api/format` (`settings.printProfileId`), und die
+Route **ordnet nichts neu**: Jede Vorlage ist auf ihre Referenz-Doppelseite von
+600 × 300 mm normiert, also übersteht die Aufteilung samt Handarbeit den
+Wechsel. Was sich ändert, ist die Größe jedes Bildes auf dem Papier — und damit
+seine Auflösung. Eine Seitenzahl, die das neue Format nicht hergibt (160 gibt es
+nur in drei der acht), wird geklemmt und das als Satz gemeldet.
+
+**Der Umschlag misst seitlich anders als oben und unten.** `cover.bleed` und
+`cover.overhang` sind deshalb Paare aus `sideMm`/`topMm`; ein gemeinsamer Wert
+traf die Umschlagbreite um 4 mm daneben. `cover.hingeSafeMm` ist der Falzbereich
+des Anbieters — die Zone links und rechts des Rückens, in der kein Text stehen
+darf. Sie ist breiter als das Gelenkfeld und ragt in die Deckelflächen hinein,
+weshalb `safeArea()` Vorder- und Rückseite zur Rückenseite hin stärker einrückt
+als zum Papierrand.
 
 ### Zeit und Datum
 
@@ -494,6 +521,14 @@ Die Schwellen sind gemessen, nicht geraten: korrekt 0,157 %, mit manuellen Crops
 0,153 %, bei 1 mm eingebautem Versatz 1,018 % bzw. 1,388 % — Schwelle 0,5 %. Wer sie
 anfasst, hebt die Empfindlichkeit auf, die den Test überhaupt wertvoll macht.
 Überschreibbar über `PARITY_WIDTH`, `PARITY_THRESHOLD`, `PARITY_MAX_DIFF`.
+
+**Die Vergleichsbreite kommt aus dem Profil** (4,25 px je Millimeter
+Doppelseitenbreite), nicht als feste Pixelzahl. Sonst rastert der Test das PDF
+mit einer anderen Auflösung als den Screenshot, `fit: 'fill'` zwingt beide
+aufeinander, und die Skalierungsunschärfe zählt als Abweichung — beim Wechsel
+auf 28×28 waren das 0,58 % statt 0,16 %. Die 4,25 statt glatter 4 sind ebenfalls
+gemessen: Bei genau vier Pixeln je Millimeter fällt die Zeitstrahlachse auf eine
+Pixelgrenze, und Browser und `pdftoppm` verteilen das Antialiasing verschieden.
 
 Seit der Bildneigung deckt der Test sie mit ab: Ohne sie liegt derselbe Lauf bei
 0,242 % — die schrägen Kanten sind weichgezeichnet, wo das Millimeterraster der

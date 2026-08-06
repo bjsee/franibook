@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { effectiveDpi } from '../geometry/units.js';
 import { coverCrop } from '../model/crop.js';
 import { crossesGutter, slotAspect, slotPage } from '../model/template.js';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import {
   TEMPLATE_REFERENCE,
@@ -26,8 +26,12 @@ import {
 } from './index.js';
 
 const profile = saal as PrintProfile;
-const SPREAD_W = 2 * profile.page.trimWidthMm; // 600
-const PAGE_H = profile.page.trimHeightMm; // 300
+// Die Bibliothek ist in den Maßen ihrer Referenz-Doppelseite geschrieben
+// (600 × 300 mm), nicht in denen des gewählten Formats – beim Laden wird
+// normiert. Also prüft dieser Test gegen die Referenz; sonst hinge jede Zahl
+// darin am Standardprofil und ein Formatwechsel machte sie falsch.
+const SPREAD_W = TEMPLATE_REFERENCE.widthMm; // 600
+const PAGE_H = TEMPLATE_REFERENCE.heightMm; // 300
 
 /** Die Bildformate, die im Bestand tatsächlich vorkommen. */
 const BESTAND = [
@@ -510,8 +514,15 @@ describe('Spiegelung', () => {
 });
 
 describe('Referenzmaße', () => {
-  it('entspricht dem Format, für das die Bibliothek entworfen wurde', () => {
-    expect(TEMPLATE_REFERENCE.widthMm).toBe(SPREAD_W);
-    expect(TEMPLATE_REFERENCE.heightMm).toBe(PAGE_H);
+  it('hat das Seitenverhältnis, für das die Bibliothek entworfen wurde', () => {
+    // Nicht dieselben Millimeter: Das Standardformat misst 540 × 270 mm, die
+    // Referenz 600 × 300. Beim Laden wird normiert, das ist folgenlos. Was
+    // nicht folgenlos wäre, ist ein anderes Seitenverhältnis – dann zöge die
+    // Normierung jeden Slot in die Länge. Bricht dieser Test, ist ein
+    // nichtquadratisches Format Vorgabe geworden, und die Bibliothek braucht
+    // eigene Vorlagen dafür.
+    const referenz = TEMPLATE_REFERENCE.widthMm / TEMPLATE_REFERENCE.heightMm;
+    const format = (2 * profile.page.trimWidthMm) / profile.page.trimHeightMm;
+    expect(format).toBeCloseTo(referenz, 6);
   });
 });

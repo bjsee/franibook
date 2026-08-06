@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import { requireTemplate, templateById } from '../templates/index.js';
 import { HALF_BLANK_ID, halvesOfTemplate } from '../templates/halves.js';
