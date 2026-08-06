@@ -16,7 +16,7 @@
  * wohnt und `date.ts` seinerseits `photo.ts` importiert.
  */
 import type { PhotoOverride } from './date.js';
-import type { Photo, PhotoId } from './photo.js';
+import { type Photo, type PhotoId, rotateFocusRect } from './photo.js';
 
 /**
  * Kennung eines von Hand gesetzten Ortes.
@@ -53,6 +53,13 @@ export function effectivePhoto(photo: Photo, override?: PhotoOverride): Photo {
     ...(override.placeOverride ? { place: override.placeOverride } : {}),
     ...(turns ? { quarterTurns: turns } : {}),
     ...(kippt ? { width: photo.height, height: photo.width } : {}),
+    // Gesichter und Salienz stehen in Bildkoordinaten und müssen mitdrehen —
+    // dieselbe Sorge wie bei `rotateCrop` für den Ausschnitt. Ohne das zielt der
+    // Fokuspunkt nach einer Ausrichtungskorrektur auf eine andere Stelle, und
+    // zwar unauffällig: Das Bild sieht richtig aus, nur der Ausschnitt sitzt
+    // falsch.
+    ...(turns && photo.faces ? { faces: photo.faces.map((f) => rotateFocusRect(f, turns)) } : {}),
+    ...(turns && photo.salience ? { salience: rotateFocusRect(photo.salience, turns) } : {}),
   };
 }
 

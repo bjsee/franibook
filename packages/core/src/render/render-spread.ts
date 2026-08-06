@@ -7,6 +7,7 @@
  */
 import { effectiveDpi, ptToMm } from '../geometry/units.js';
 import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
+import { focalForCrop } from '../model/focal.js';
 import type { EffectiveDate, PhotoOverride } from '../model/date.js';
 import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
@@ -320,10 +321,18 @@ function buildImageBox(
   // Kasten ab, ein anderes Seitenverhältnis wäre also ein gestauchtes Bild.
   // Vorher traf das jeden Vorlagenwechsel mit manuellem Ausschnitt; seit sich
   // der Kasten am Griff frei aufziehen lässt, wäre es der Normalfall.
+  // Der Fokuspunkt wird beim Rendern gerechnet und nicht beim Anordnen
+  // gespeichert — wie Neigung und Rahmen. Zwei Gründe: Ein bestehendes Buch
+  // bekommt die besseren Ausschnitte, sobald die Gesichter erkannt sind, ohne
+  // Neuaufbau. Und die beste Lage hängt an der Slotform, ein gespeicherter Wert
+  // wäre nach jedem Vorlagenwechsel für die alte Form optimiert. Auf die
+  // Auflösung schlägt das nicht durch: Der Fokus verschiebt den Ausschnitt, er
+  // verkleinert ihn nicht — `bookStats` und `slotCost` rechnen deshalb weiter
+  // ohne ihn und bekommen dieselbe Pixelzahl.
   const crop =
     assignment.crop.mode === 'manual'
       ? fitCropToAspect(assignment.crop, aspectRatio(photo), slotAr)
-      : coverCrop(aspectRatio(photo), slotAr, assignment.crop.focal);
+      : coverCrop(aspectRatio(photo), slotAr, assignment.crop.focal ?? focalForCrop(photo, slotAr));
 
   // Die effektive Auflösung hängt an den *sichtbaren* Pixeln, nicht an der
   // Bildgröße – nach einem starken Ausschnitt kann ein großes Foto darunter
