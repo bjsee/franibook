@@ -25,6 +25,7 @@ import {
   coverWarningText,
   mmToPt,
 } from '@franibook/core';
+import { setzeAusgabeIntent } from './farbe.js';
 import { fontKey, registerFonts } from './fonts.js';
 import { prepareImage } from './prepare-image.js';
 import type { PhotoSource } from './render-pdf.js';
@@ -81,6 +82,9 @@ export async function renderCoverPdf(opts: RenderCoverPdfOptions): Promise<Rende
   const { cover, profile, resolvePhoto, outputPath } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
+  // Derselbe Ausgabe-Intent wie im Innenteil: Der Umschlag geht als eigene
+  // Datei zum Anbieter und trüge die Farbraumaussage sonst nicht mit.
+  setzeAusgabeIntent(doc, profile);
   // Dieselbe Registrierung wie im Innenteil (`render-pdf.ts`) – sonst setzt
   // pdfkit für den Umschlag stillschweigend Helvetica, eine der 14 nicht
   // eingebetteten Basisschriften. Genau das war der Anlass für Issue #5.

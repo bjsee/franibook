@@ -109,6 +109,15 @@ export class PreviewCache {
           fit: 'inside',
           withoutEnlargement: true,
         })
+        // Dieselbe Farbraumabsicherung wie im PDF-Pfad
+        // (`render-pdf/src/farbe.ts`): sharp wandelt ein weitfarbiges Bild beim
+        // Einlesen selbst nach sRGB, überspringt das aber, sobald ein Aufrufer
+        // die Metadaten behalten will und kein Ausgabeprofil nennt. Am Bestand
+        // betrifft das 23 % der Dateien. Hier steht `'srgb'` fest und nicht der
+        // Wert aus dem Druckprofil: Die Vorschau geht in einen Browser, nicht
+        // zur Druckerei. Ohne diese Zeile wäre die Parität von Vorschau und PDF
+        // an einem Aufruf aufzuheben, der nach Metadaten aussieht.
+        .withIccProfile('srgb', { attach: false })
         .webp({ quality: QUALITY[size] })
         .toBuffer(),
     );
