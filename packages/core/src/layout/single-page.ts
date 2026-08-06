@@ -22,8 +22,11 @@
  * eingefügte Seite setzt eine bis zwei neu zusammen.
  */
 import { FULL_CROP } from '../model/crop.js';
+import type { PhotoWeight } from '../model/date.js';
+import type { Photo, PhotoId } from '../model/photo.js';
 import type { SlotAssignment, Spread, TextBlock } from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
+import type { PrintProfile } from '../print/profile.js';
 import {
   HALF_BLANK_ID,
   halfPageById,
@@ -33,6 +36,7 @@ import {
 } from '../templates/halves.js';
 import { isJustified } from '../templates/justified.js';
 import { templateById, templateMeta } from '../templates/index.js';
+import { layoutHalf } from './rebuild.js';
 
 /**
  * Eine Buchseite als Baustein der Folge.
@@ -166,6 +170,12 @@ function zerlege(spread: Spread): [BookPage, BookPage] | undefined {
         crop: bestand?.crop ?? { ...FULL_CROP },
         ...(bestand?.rotateDeg !== undefined ? { rotateDeg: bestand.rotateDeg } : {}),
         ...(bestand?.rect ? { rect: which === 'left' ? bestand.rect : spiegel(bestand.rect) } : {}),
+        // Rahmen, Bildunterschrift und Ebene gehören zum Bild und nicht zum
+        // Platz – sie müssen die Zerlegung überleben. Vorher fielen sie hier
+        // stumm heraus, und ein Polaroid verlor beim Umpaaren seinen Karton.
+        ...(bestand?.frame !== undefined ? { frame: bestand.frame } : {}),
+        ...(bestand?.caption !== undefined ? { caption: bestand.caption } : {}),
+        ...(bestand?.layer !== undefined ? { layer: bestand.layer } : {}),
       });
     }
 
@@ -249,6 +259,112 @@ function paare(links: BookPage, rechts: BookPage, index: number): Spread | undef
     ...(background !== undefined ? { background } : {}),
     ...(timeline !== undefined ? { timeline } : {}),
     ...(links.own || rechts.own ? { locked: true as const } : {}),
+  };
+}
+
+export interface SetHalfPageOptions {
+  side: 'left' | 'right';
+  /** Die gewählte Anordnung dieser Buchseite. */
+  halfId: string;
+  /**
+   * Die Fotos dieser Doppelseite, aufgelöst.
+   *
+   * Verteilt werden nur die der gewählten Seite; die übrigen stehen hier, weil
+   * die Zuweisungen Kennungen tragen und die Zuordnung Maße braucht.
+   */
+  photos: readonly Photo[];
+  profile: PrintProfile;
+  weightOf?: (photoId: PhotoId) => PhotoWeight;
+}
+
+/**
+ * Ordnet **eine** Buchseite neu an; die gegenüberliegende bleibt, wie sie ist.
+ *
+ * Der Weg dahin ist derselbe wie beim Einschieben einer Seite: Das Blatt
+ * zerfällt an der Falzachse in zwei Buchseiten, eine davon wird ersetzt, und
+ * beide werden wieder gepaart. Die Gegenseite behält damit jedes Bild in seinem
+ * Platz – samt Ausschnitt, Rahmen, Neigung, Ebene und Bildunterschrift.
+ *
+ * Vorher lief der Griff über `layoutSpread` mit der zusammengesetzten
+ * Paarkennung, und der ordnet die **ganze** Doppelseite neu an: Wer die rechte
+ * Seite umstellte, fand links andere Bilder in anderen Plätzen und jeden
+ * Ausschnitt verworfen. Die Rechnung war nicht falsch, nur zu weit gefasst –
+ * eine Zuordnung über beide Seiten hinweg ist gültig und trifft trotzdem nicht,
+ * was verlangt war.
+ *
+ * @returns `ok: false`, wenn das Blatt sich nicht an der Falzachse trennen
+ * lässt – ein Auftakt, justierte Zeilen, ein randabfallendes Bild über dem Falz.
+ * Der Aufrufer muss dann die ganze Doppelseite anordnen; hier wird nichts
+ * geraten.
+ */
+export function setHalfPage(
+  spread: Spread,
+  opts: SetHalfPageOptions,
+): { ok: boolean; error?: string; spread?: Spread; leftover: PhotoId[] } {
+  const half = halfPageById(opts.halfId);
+  if (!half) return { ok: false, error: `Halbseite ${opts.halfId} gibt es nicht`, leftover: [] };
+
+  // Ohne Rücksicht auf das Schloss, wie beim Löschen einer einzelnen Seite: Wer
+  // eine Seite seiner selbst gebauten Doppelseite umstellt, verlangt genau
+  // diese Trennung. Das Schloss schützt die Handarbeit vor der Umpaarung, nicht
+  // vor dem Benutzer.
+  const teile = teilbar(spread) ? zerlege(spread) : undefined;
+  if (!teile) {
+    return {
+      ok: false,
+      error: 'Diese Doppelseite lässt sich nicht in einzelne Buchseiten trennen',
+      leftover: [],
+    };
+  }
+
+  const [links, rechts] = teile;
+  const alt = opts.side === 'left' ? links : rechts;
+
+  const nachKennung = new Map(opts.photos.map((p) => [p.id, p]));
+  const eigene = (alt.slots ?? [])
+    .map((s) => (s.photoId ? nachKennung.get(s.photoId) : undefined))
+    .filter((p): p is Photo => p !== undefined);
+
+  const angeordnet = layoutHalf({
+    photos: eigene,
+    slots: half.slots,
+    profile: opts.profile,
+    ...(opts.weightOf ? { weightOf: opts.weightOf } : {}),
+  });
+
+  const neue: BookPage = {
+    span: 1,
+    halfId: opts.halfId,
+    slots: angeordnet.slots,
+    // Textblöcke stehen frei und gehören nicht zur Anordnung – sie bleiben, wo
+    // sie stehen. Übernommen werden sie hier trotzdem, damit `paare` dieselbe
+    // Seite zusammensetzt, die es zerlegt hat.
+    ...(alt.blocks ? { blocks: alt.blocks } : {}),
+    ...(alt.background !== undefined ? { background: alt.background } : {}),
+    ...(alt.timeline !== undefined ? { timeline: alt.timeline } : {}),
+    ...(alt.from !== undefined ? { from: alt.from } : {}),
+  };
+
+  const blatt = paare(
+    opts.side === 'left' ? neue : links,
+    opts.side === 'left' ? rechts : neue,
+    spread.index,
+  );
+  if (!blatt) {
+    return {
+      ok: false,
+      error: `Die Anordnung ${opts.halfId} lässt sich hier nicht einsetzen`,
+      leftover: [],
+    };
+  }
+
+  // Nur Vorlage und Plätze wechseln. Kennung, Schloss, Anker, Jahr und
+  // Textblöcke gehören der Doppelseite und nicht ihrer Anordnung: `paare` baut
+  // ein neues Blatt, hier wird ein bestehendes umgestellt.
+  return {
+    ok: true,
+    spread: { ...spread, templateId: blatt.templateId, slots: blatt.slots },
+    leftover: angeordnet.leftover,
   };
 }
 
