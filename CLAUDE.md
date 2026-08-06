@@ -379,11 +379,23 @@ er darf nicht ins Netz.
 Foto-Kennung ist `contentHash`: Dateigröße + SHA-256 über die ersten und letzten 64 KB.
 Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
 
-**Aussortieren** (`DELETE /api/photos/:id`) verschiebt die Datei nach
-`<quelle>/.franibook-geloescht/` — der einzige schreibende Zugriff auf eine Bildquelle,
-und auch er löscht nichts. Versteckte Ordner liest der Scan nicht, das Foto kommt also
-bei keinem Reimport zurück; wer die Datei im Finder zurücklegt, bekommt sie samt ihrem
-alten Platz im Buch wieder. `Project.vergessen()` räumt dabei Gruppen, Hintergrund- und
+**Aussortieren** (`DELETE /api/photos/:id`) **fasst keine Datei an.** Es nimmt das Foto
+aus dem Projekt und trägt es in eine Merkliste ein (`aussortiert`, ein ganzes `Photo` je
+Eintrag), und der Import übergeht jede Datei, deren Kennung dort steht — geprüft direkt
+nach dem Hash, vor EXIF und Pixeln. Damit hat der Server **keinen schreibenden Zugriff
+auf eine Bildquelle mehr**.
+
+Vorher wanderte die Datei nach `<quelle>/.franibook-geloescht/`, und der Punkt im Namen
+sollte genügen, weil der Scan versteckte Ordner überspringt. Das hielt bis zu dem Tag,
+an dem Synology Drive den Quellordner zurückspielte: Der Client ignoriert Ordner mit
+führendem Punkt, deutete das Verschieben als Löschung und schrieb alle 968 Dateien neu —
+samt der sechs aussortierten, die danach wieder im Buch standen. Eine Merkliste im
+Projekt kann kein fremdes Werkzeug rückgängig machen.
+
+Der Weg zurück führt deshalb nicht mehr durch den Finder, sondern durch die Oberfläche:
+`GET /api/photos/aussortiert` und `DELETE /api/photos/aussortiert/:id` (Liste und Knopf
+in der Bildquellenansicht). Das Foto landet dabei im Fotopool, nicht auf seiner alten
+Doppelseite. `Project.vergessen()` räumt beim Aussortieren Gruppen, Hintergrund- und
 Umschlagbilder auf, lässt aber Slots und `PhotoOverride` stehen.
 
 **Bildquellen** (`sources.ts`) sind eine Liste von Ordnern im Projekt, nicht ein

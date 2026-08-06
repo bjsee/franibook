@@ -136,12 +136,14 @@ Drei Handgriffe folgen daraus:
   Instanz beim Anmelden einer Route an sie; später hinzugefügt greifen sie für
   keine einzige.
 
-Eine Wirkung außerhalb des Projektzustands braucht einen `Dateizug` am Schritt
-(`merkeDateizug`), und sie muss umkehrbar sein — beim Aussortieren ist es ein
-`rename` zurück. Scheitert er, geschieht nichts: Ein Zustand, der auf eine
-fehlende Datei zeigt, ist schlimmer als ein abgelehntes Undo. Was sich nicht
-sinnvoll zurücknehmen lässt (Import, Quellenwechsel), ist eine `barriere` und
-leert den Verlauf.
+**Keine Route wirkt außerhalb des Projektzustands.** Es gab dafür einmal einen
+`Dateizug` am Schritt: Das Aussortieren verschob die Datei, und das Zurücknehmen
+musste das `rename` umkehren — die einzige Wirkung, die scheitern konnte. Seit
+eine Merkliste im Projekt entscheidet (siehe unten), ist Zurücknehmen wieder eine
+Zuweisung. Wer eine Route baut, die eine fremde Datei anfasst, baut diesen
+Mechanismus wieder auf — und sollte vorher prüfen, ob es einen Weg über den
+Projektzustand gibt. Was sich nicht sinnvoll zurücknehmen lässt (Import,
+Quellenwechsel), ist eine `barriere` und leert den Verlauf.
 
 ## Der Umgang mit fremden Dateien
 
@@ -150,10 +152,17 @@ wird rekursiv gescannt. `Sources.pfad()` ist die einzige Stelle, an der aus eine
 Foto ein Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen
 Resolver, nie einen Pfad.
 
-**Aussortieren löscht nicht.** `DELETE /api/photos/:id` verschiebt die Datei nach
-`<quelle>/.franibook-geloescht/`. Das ist der einzige schreibende Zugriff auf eine
-Bildquelle. Wer die Datei im Finder zurücklegt, bekommt sie samt ihrem alten Platz
-im Buch wieder.
+**Auch Aussortieren schreibt nichts.** `DELETE /api/photos/:id` nimmt das Foto aus
+dem Projekt und vermerkt es in der Merkliste `aussortiert`; der Import übergeht
+jede Datei, deren Kennung dort steht. Die Datei bleibt liegen, wo sie liegt.
+
+Vorher wanderte sie nach `<quelle>/.franibook-geloescht/` — versteckter Ordner,
+also übergeht der Scan sie ohnehin. Das war der einzige schreibende Zugriff auf
+eine Bildquelle, und er hielt nicht: Synology Drive bewirtschaftet den
+Quellordner, ignoriert Ordner mit führendem Punkt und spielte alle 968 Dateien
+samt der aussortierten zurück. **Wer eine Zusage an das Verhalten fremder
+Werkzeuge hängt, hat keine Zusage.** Der Weg zurück liegt jetzt in der
+Oberfläche (`DELETE /api/photos/aussortiert/:id`).
 
 **Eine unlesbare Quelle ist kein leerer Ordner.** Sie wird beim Einlesen
 übersprungen und gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu
