@@ -23,6 +23,7 @@ import {
   mmToPt,
   textBaselineOffsetMm,
 } from '@franibook/core';
+import { setzeAusgabeIntent } from './farbe.js';
 import { fontKey, registerFonts } from './fonts.js';
 import { prepareImage } from './prepare-image.js';
 
@@ -120,6 +121,10 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
+  // Vor dem ersten Bild: `setzeAusgabeIntent` prüft über `iccProfil` mit, dass
+  // das Druckprofil einen Farbraum verlangt, den dieser Weg auch liefert. Ein
+  // Wurf hier kostet nichts – einer nach 84 Doppelseiten kostet 56 Sekunden.
+  setzeAusgabeIntent(doc, profile);
   registerFonts(
     doc,
     spreads.flatMap((s) => s.boxes.filter((b) => b.kind === 'text')),
