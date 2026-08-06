@@ -25,9 +25,17 @@ import { importSource } from '../import.js';
 import type { PreviewCache } from '../previews.js';
 import type { PhotoSource, Sources } from '../sources.js';
 
-/** Quellen, die beim Einlesen nicht erreichbar waren. */
+/** Was beim Einlesen zu berichten war, unabhängig vom Vorher-Nachher. */
 export interface QuellenBericht {
+  /** Quellen, die nicht erreichbar waren. */
   offline: (PhotoSource & { photoCount: number })[];
+  /**
+   * Wie viele Dateien als aussortiert übergangen wurden.
+   *
+   * Gemeldet, damit die Zahl im Ordner und die Zahl im Buch zusammenpassen –
+   * sonst sucht man nach sechs Bildern, die absichtlich fehlen.
+   */
+  aussortiert: number;
 }
 
 export interface ImportDiff extends QuellenBericht {
@@ -38,9 +46,45 @@ export interface ImportDiff extends QuellenBericht {
   imBuchVerschwunden: PhotoId[];
 }
 
+/**
+ * Ein aussortiertes Foto, wie es das Projekt sich merkt.
+ *
+ * **Die Merkliste entscheidet, nicht das Dateisystem.** Vorher wurde die Datei
+ * nach `<quelle>/.franibook-geloescht/` geschoben und darauf vertraut, dass der
+ * Scan versteckte Ordner überspringt. Das hielt genau so lange, bis ein
+ * Sync-Dienst den Quellordner bewirtschaftete: Synology Drive ignoriert Ordner
+ * mit führendem Punkt, deutete das Verschieben als Löschung und spielte alle
+ * 968 Dateien vom Server zurück – samt der sechs aussortierten, die beim
+ * nächsten Einlesen wieder im Buch standen. Eine Merkliste im Projekt kann
+ * kein fremdes Werkzeug rückgängig machen.
+ *
+ * Damit ist auch der einzige schreibende Zugriff auf eine Bildquelle entfallen:
+ * Die Datei bleibt liegen, wo sie liegt.
+ *
+ * Gemerkt wird das **ganze Foto** und nicht nur seine Kennung. Zwei Gründe: Die
+ * Liste steht in der Oberfläche und muss lesbar sein – eine Kennung allein ist
+ * ein Hexstring –, und das Wiederaufnehmen ist damit genau die Umkehrung des
+ * Aussortierens, eine Zuweisung ohne Dateizugriff. Die Datei erneut einzulesen
+ * hieße exiftool, `sips` und eine Kennungsprüfung für eine Auskunft, die schon
+ * dasteht.
+ */
+export interface Aussortiert {
+  photo: Photo;
+  /**
+   * Wann – als ISO-Zeitstempel wie `PhotoSource.addedAt`.
+   *
+   * Und nicht als naive lokale Zeit: Die gilt für Aufnahmezeitpunkte, weil ein
+   * Fotobuch chronologisch im Sinne des Erlebens ist. Hier steht ein Vorgang am
+   * Projekt, kein Bild.
+   */
+  at: string;
+}
+
 /** Was diese Funktionen vom Projekt brauchen. */
 export interface Bestandstand {
   photos: Map<PhotoId, Photo>;
+  /** Aussortierte Fotos, nach Kennung – siehe `Aussortiert`. */
+  aussortiert: Record<PhotoId, Aussortiert>;
   overrides: Record<PhotoId, PhotoOverride>;
   groups: PhotoGroup[];
   spreads: Spread[];
@@ -124,8 +168,8 @@ export function removeSource(
  * Titelbild, das es nicht mehr gibt, wären stille Fehler.
  *
  * `PhotoOverride` bleibt bewusst erhalten. Er hängt an der Kennung, nicht am
- * Foto, und ist sofort wieder gültig, wenn die Datei aus dem Papierkorb
- * zurückkommt.
+ * Foto, und ist sofort wieder gültig, wenn das Foto wieder aufgenommen wird
+ * oder ein Reimport es zurückbringt.
  */
 export function vergessen(
   z: Bestandstand,
@@ -165,35 +209,58 @@ export function vergessen(
 }
 
 /**
- * Legt die Datei eines Fotos in den Papierkorb seiner Quelle und vergisst es.
+ * Sortiert ein Foto aus: vergisst es und merkt sich, dass es draußen bleibt.
  *
- * Der Rückweg bleibt offen: Die Datei liegt unter `.franibook-geloescht` in
- * derselben Quelle und lässt sich im Finder zurücklegen. Ein späterer Reimport
- * holt sie erst wieder ins Projekt, wenn sie dort auch wirklich liegt –
- * versteckte Ordner liest der Scan nicht.
+ * **Die Datei wird nicht angefasst.** Sie liegt weiter in ihrer Quelle, und der
+ * Import übergeht sie, weil ihre Kennung auf der Merkliste steht (siehe
+ * `Aussortiert`). Das Verschieben in einen versteckten Ordner war der Versuch,
+ * dieselbe Zusage dem Dateisystem zu überlassen, und ein Sync-Dienst hat ihn
+ * widerlegt.
  *
- * Beide Pfade stehen in der Rückgabe, damit der Verlauf den Zug umkehren kann.
- * `von` wird **vor** dem Verschieben aufgelöst: Danach kennt kein `Photo` mehr
- * seine Quelle, weil es das Foto nicht mehr gibt.
+ * Der Rückweg führt damit nicht mehr durch den Finder, sondern durch die
+ * Oberfläche: `wiederAufnehmen`.
  */
-export async function deletePhoto(
+export function deletePhoto(
   z: Bestandstand,
   id: PhotoId,
-): Promise<{
-  fileName: string;
-  /** Wo die Datei lag. */
-  von: string;
-  papierkorb: string;
-  imBuch: number;
-  spreads: number[];
-} | null> {
+): { fileName: string; imBuch: number; spreads: number[] } | null {
   const photo = z.photos.get(id);
   if (!photo) return null;
 
-  const von = z.sources.pfad(photo);
-  const papierkorb = await z.sources.inDenPapierkorb(photo);
+  z.aussortiert[id] = { photo, at: new Date().toISOString() };
   const { imBuch, spreads } = vergessen(z, [id]);
-  return { fileName: photo.fileName, von, papierkorb, imBuch, spreads };
+  return { fileName: photo.fileName, imBuch, spreads };
+}
+
+/**
+ * Nimmt ein aussortiertes Foto zurück ins Projekt.
+ *
+ * Das gemerkte `Photo` wandert zurück in den Bestand – kein Einlesen, kein
+ * Warten. Seinen alten Platz im Buch bekommt es nicht wieder, der Slot ist beim
+ * Aussortieren leer geworden; seine Korrekturen dagegen schon, denn
+ * `PhotoOverride` hängt an der Kennung und wurde nie angerührt.
+ *
+ * **Ob die Datei noch da ist, wird nicht geprüft.** Ein Foto ohne Datei ist im
+ * Projekt ein bekannter Zustand: Der Platz meldet `photo-missing`, und der
+ * nächste Reimport führt es als verschwunden. Prüfen hieße, EXIF und Pixel zu
+ * lesen, um dasselbe zu erfahren.
+ *
+ * @returns das Foto, oder `null` wenn die Kennung nicht auf der Liste stand.
+ */
+export function wiederAufnehmen(z: Bestandstand, id: PhotoId): Photo | null {
+  const eintrag = z.aussortiert[id];
+  if (!eintrag) return null;
+  delete z.aussortiert[id];
+
+  // Neu einsortieren statt hinten anhängen: Die Reihenfolge der Map ist die
+  // Reihenfolge des Fotopools, und ein zurückgeholtes Bild gehört an seinen Tag
+  // und nicht ans Ende des Bestands.
+  const alle = [...z.photos.values(), eintrag.photo].sort(nachAufnahme);
+  z.photos.clear();
+  for (const p of alle) z.photos.set(p.id, p);
+
+  z.rebuildStructure();
+  return eintrag.photo;
 }
 
 /**
@@ -214,6 +281,10 @@ export async function importPhotos(
   const offline: QuellenBericht['offline'] = [];
   const skippedVideos: string[] = [];
   const failed: { file: string; reason: string }[] = [];
+  // Einmal für alle Quellen: Die Kennung ist der Inhalt, und ein aussortiertes
+  // Foto bleibt es auch, wenn dieselbe Datei in einem zweiten Ordner liegt.
+  const draussen = new Set(Object.keys(z.aussortiert));
+  let uebersprungen = 0;
   let rest = limit;
 
   for (const quelle of z.sources.list()) {
@@ -230,10 +301,11 @@ export async function importPhotos(
       continue;
     }
 
-    const result = await importSource(quelle, z.decodes, rest);
+    const result = await importSource(quelle, z.decodes, rest, draussen);
     gesammelt.push(...result.photos);
     skippedVideos.push(...result.skippedVideos.map((f) => `${quelle.label}/${f}`));
     failed.push(...result.failed.map((f) => ({ ...f, file: `${quelle.label}/${f.file}` })));
+    uebersprungen += result.aussortiert.length;
     if (rest !== undefined) rest = Math.max(0, rest - result.photos.length);
   }
 
@@ -248,7 +320,7 @@ export async function importPhotos(
   z.skippedVideos = skippedVideos;
   z.failed = failed;
   z.importedAt = new Date().toISOString();
-  return { offline };
+  return { offline, aussortiert: uebersprungen };
 }
 
 /**
@@ -268,7 +340,7 @@ export async function reimport(
   nurQuellen?: readonly string[],
 ): Promise<ImportDiff> {
   const vorher = new Set(z.photos.keys());
-  const { offline } = await importPhotos(z, limit, nurQuellen);
+  const { offline, aussortiert } = await importPhotos(z, limit, nurQuellen);
   const nachher = new Set(z.photos.keys());
 
   const neu = [...nachher].filter((id) => !vorher.has(id));
@@ -286,6 +358,7 @@ export async function reimport(
     unveraendert: [...nachher].filter((id) => vorher.has(id)).length,
     imBuchVerschwunden,
     offline,
+    aussortiert,
   };
 }
 

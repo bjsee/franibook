@@ -374,7 +374,7 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         <button
           onClick={() => void model.loeschen(box.photoId, model.dateiname(box.photoId), true)}
           style={{ ...S.halb, borderColor: T.fehlerRand, color: T.fehler }}
-          title="Legt die Datei in den Papierkorb ihrer Bildquelle."
+          title="Nimmt das Foto aus dem Projekt; die Datei bleibt liegen."
         >
           aussortieren
         </button>

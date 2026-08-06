@@ -123,6 +123,7 @@ async function abdruck(p: Probe): Promise<string> {
     info,
     gruppen: await hole('/api/groups'),
     umschlag: await hole('/api/cover'),
+    aussortiert: await hole('/api/photos/aussortiert'),
     spreads: p.project.spreads,
     overrides: p.project.overrides,
     photos: [...p.project.photos.entries()],
@@ -435,6 +436,13 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     method: 'DELETE',
     url: `/api/photos/${photoIds[2]}`,
   }),
+
+  // Erst aussortieren, dann die Route: Sie nimmt genau das zurück, und der
+  // Rundlauf prüft, dass ein Cmd+Z danach wieder den aussortierten Stand ergibt.
+  'DELETE /api/photos/aussortiert/:id': ({ project, photoIds }) => {
+    project.deletePhoto(photoIds[2]!);
+    return { method: 'DELETE', url: `/api/photos/aussortiert/${photoIds[2]}` };
+  },
 
   // Um einen Monat und nicht um Minuten: Damit wechselt das Foto vom März- ins
   // Aprilsegment, und der Fall deckt neben den Overrides auch den Abdruck der

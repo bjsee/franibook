@@ -296,9 +296,9 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
         <button
           onClick={() => void model.loeschen(box.photoId, model.dateiname(box.photoId), true)}
           style={{ ...S.breit, ...B.knopfWeg, textAlign: 'left' }}
-          title="Legt die Datei in den Papierkorb ihrer Bildquelle. Der Platz im Buch bleibt leer."
+          title="Nimmt das Foto aus dem Projekt; die Datei bleibt liegen. Der Platz im Buch bleibt leer."
         >
-          Foto aussortieren — in den Papierkorb
+          Foto aussortieren — aus dem Projekt
         </button>
         <p style={B.leiser}>
           Pfeiltasten justieren fein, mit <kbd>⇧</kbd> gröber. <kbd>0</kbd> setzt den Ausschnitt

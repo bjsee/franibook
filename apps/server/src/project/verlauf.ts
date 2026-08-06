@@ -18,25 +18,16 @@
  * eine Funktion.
  *
  * Das Modul weiß nichts über Fotos, Doppelseiten oder Dateien: Der Stand ist
- * ein Typparameter, die Bewegung einer Datei eine eingespeiste Wirkung. Damit
- * ist der Verlauf ohne Projekt prüfbar — und die Uhr ist es auch, denn das
- * Verschmelzen hängt an ihr.
- */
-
-/**
- * Eine Datei, die diese Aktion verschoben hat.
+ * ein Typparameter. Damit ist der Verlauf ohne Projekt prüfbar — und die Uhr ist
+ * es auch, denn das Verschmelzen hängt an ihr.
  *
- * Nur das Aussortieren hat eine Wirkung außerhalb des Projektzustands
- * (`<quelle>/.franibook-geloescht/`), und sie ist genau ein `rename`. Als Daten
- * am Schritt und nicht als Rückruf: So bleibt der Verlauf eine Datenstruktur,
- * die man ausdrucken kann, und das Zurücknehmen bleibt nachvollziehbar.
+ * Es gab hier einmal einen `Dateizug`: Das Aussortieren verschob die Datei nach
+ * `<quelle>/.franibook-geloescht/`, und ein Zurücknehmen musste das `rename`
+ * umkehren — die einzige Wirkung außerhalb des Projektzustands und die einzige,
+ * die scheitern konnte. Seit eine Merkliste im Projekt entscheidet, ob ein Foto
+ * draußen bleibt (`project/bestand.ts`), gibt es sie nicht mehr, und
+ * Zurücknehmen ist wieder eine Zuweisung.
  */
-export interface Dateizug {
-  /** Wo die Datei vorher lag. */
-  von: string;
-  /** Wohin sie gelegt wurde. */
-  nach: string;
-}
 
 /** Ein Stand, wie er vor einer Aktion war — samt allem, was ihn beschreibt. */
 export interface Schritt<S> {
@@ -50,7 +41,6 @@ export interface Schritt<S> {
   zeit: number;
   /** Welche Doppelseite betroffen war, damit die Oberfläche hinspringen kann. */
   spreadIndex?: number;
-  dateizug?: Dateizug;
 }
 
 /**
@@ -78,14 +68,6 @@ export interface VerlaufOptionen<S> {
   lies: () => S;
   /** Einen Stand wieder in Kraft setzen. */
   schreib: (stand: S) => void;
-  /**
-   * Eine Datei zurück- oder wieder wegbewegen.
-   *
-   * Wirft die Funktion, geschieht **nichts** — kein Stand wird gesetzt, kein
-   * Stapel bewegt. Ein Zustand, der auf eine Datei zeigt, die nicht da ist,
-   * wäre schlimmer als ein abgelehntes Zurücknehmen.
-   */
-  verschiebe?: (zug: Dateizug, richtung: 'zurueck' | 'vor') => Promise<void>;
   jetzt?: () => number;
   tiefe?: number;
   fenster?: number;
@@ -162,17 +144,6 @@ export class Verlauf<S> {
   }
 
   /**
-   * Vermerkt am zuletzt angelegten Schritt, welche Datei bewegt wurde.
-   *
-   * Getrennt von `punkt()`, weil erst die Aktion selbst weiß, wohin die Datei
-   * gewandert ist — der Hook, der den Stand festhält, läuft vorher.
-   */
-  merkeDateizug(zug: Dateizug): void {
-    const oben = this.zurueckStapel.at(-1);
-    if (oben) oben.dateizug = zug;
-  }
-
-  /**
    * Vergisst alles Zurückliegende.
    *
    * Für Aktionen, deren Rücknahme nur so aussähe wie eine: Ein Import legt
@@ -194,13 +165,13 @@ export class Verlauf<S> {
   }
 
   /** @returns der zurückgenommene Schritt, oder `null` bei leerem Stapel. */
-  zurueck(): Promise<Schritt<S> | null> {
-    return this.bewege(this.zurueckStapel, this.vorStapel, 'zurueck');
+  zurueck(): Schritt<S> | null {
+    return this.bewege(this.zurueckStapel, this.vorStapel);
   }
 
   /** @returns der wiederholte Schritt, oder `null` bei leerem Stapel. */
-  vor(): Promise<Schritt<S> | null> {
-    return this.bewege(this.vorStapel, this.zurueckStapel, 'vor');
+  vor(): Schritt<S> | null {
+    return this.bewege(this.vorStapel, this.zurueckStapel);
   }
 
   /**
@@ -209,21 +180,10 @@ export class Verlauf<S> {
    * Zurücknehmen und Wiederholen sind dieselbe Bewegung in verschiedene
    * Richtungen — der aktuelle Stand tritt an die Stelle des gespeicherten. Weil
    * beide Stapel ganze Stände halten, braucht es dafür keine zweite Rechnung.
-   *
-   * Die Datei zuerst, der Stand danach: Scheitert das `rename`, ist noch
-   * nichts geschehen und der Aufrufer kann es melden.
    */
-  private async bewege(
-    von: Schritt<S>[],
-    nach: Schritt<S>[],
-    richtung: 'zurueck' | 'vor',
-  ): Promise<Schritt<S> | null> {
+  private bewege(von: Schritt<S>[], nach: Schritt<S>[]): Schritt<S> | null {
     const schritt = von.at(-1);
     if (!schritt) return null;
-
-    if (schritt.dateizug && this.opts.verschiebe) {
-      await this.opts.verschiebe(schritt.dateizug, richtung);
-    }
 
     von.pop();
     nach.push({
@@ -233,7 +193,6 @@ export class Verlauf<S> {
       // Aktion hineinverschmelzen, sonst verschluckt sie ihn.
       zeit: this.jetzt(),
       ...(schritt.spreadIndex !== undefined ? { spreadIndex: schritt.spreadIndex } : {}),
-      ...(schritt.dateizug ? { dateizug: schritt.dateizug } : {}),
     });
     this.opts.schreib(schritt.stand);
     return schritt;

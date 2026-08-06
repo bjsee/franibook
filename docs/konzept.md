@@ -1339,17 +1339,25 @@ Jede Quelle wird rekursiv gescannt, versteckte Einträge ausgenommen: Nachschub 
 
 ### Ein Foto aussortieren
 
-Nicht jedes Bild im Bestand gehört ins Buch, und manches gehört überhaupt nicht in den Bestand: Dubletten, Verwackeltes, der versehentliche Auslöser. `DELETE /api/photos/:id` verschiebt die Datei in den Ordner `.franibook-geloescht` **innerhalb ihrer Bildquelle** und nimmt das Foto aus dem Projekt.
+Nicht jedes Bild im Bestand gehört ins Buch, und manches gehört überhaupt nicht in den Bestand: Dubletten, Verwackeltes, der versehentliche Auslöser. `DELETE /api/photos/:id` nimmt das Foto aus dem Projekt und trägt es in die **Merkliste** `aussortiert` ein. Die Datei wird dabei nicht angefasst — sie bleibt liegen, wo sie liegt.
 
-Der Punkt vor dem Ordnernamen erledigt zwei Dinge auf einmal: `sammleDateien` überspringt versteckte Einträge ohnehin, das Foto kommt also bei keinem Reimport zurück — ohne dass eine Liste gelöschter Dateien gepflegt werden müsste. Und weil der Ordner in derselben Quelle liegt, ist das Aussortieren ein `rename` auf demselben Datenträger: augenblicklich und atomar, auch über das Netzlaufwerk. Im Finder ist der Ordner mit ⌘⇧. sichtbar, die Datei lässt sich von Hand zurücklegen; der nächste Reimport holt sie dann wieder ins Projekt, und weil die Foto-Kennung der Inhaltshash ist, füllt sie ihren alten Platz im Buch wieder.
+Der Import übergeht jede Datei, deren Inhaltshash in der Merkliste steht, und zwar direkt nach dem Hashen: EXIF und Pixelmaße einer Datei zu lesen, die man gleich wegwirft, ist genau die Arbeit, die man sich spart. Gemerkt wird das ganze `Photo` und nicht bloß die Kennung — die Liste steht in der Oberfläche und muss lesbar sein, und das Wiederaufnehmen ist damit eine Zuweisung statt eines zweiten Einlesevorgangs.
+
+**Verworfen: der versteckte Papierkorb.** Bis dahin verschob `DELETE /api/photos/:id` die Datei nach `.franibook-geloescht` innerhalb ihrer Bildquelle. Der Punkt vor dem Ordnernamen erledigte scheinbar zwei Dinge auf einmal: `sammleDateien` überspringt versteckte Einträge ohnehin, das Foto kam also bei keinem Reimport zurück, ohne dass eine Liste gepflegt werden musste — und weil der Ordner in derselben Quelle lag, war das Aussortieren ein `rename` auf demselben Datenträger, augenblicklich und atomar. Im Finder ließ sich die Datei mit ⌘⇧. wiederfinden und von Hand zurücklegen.
+
+Das hielt, bis der Quellordner nicht mehr uns allein gehörte. Der Grundbestand liegt in einem Ordner, den Synology Drive synchronisiert. Der Client ignoriert Ordner mit führendem Punkt, deutete das Verschieben also als Löschung und schrieb bei einem Abgleich **alle 968 Dateien** neu vom Server — samt der sechs aussortierten, die beim nächsten Einlesen wieder im Buch standen (nachweisbar an drei Kopien derselben Datei mit drei Inodes und identischem SHA-256). Die Lehre steht in `.claude/rules/server.md`: Wer eine Zusage an das Verhalten fremder Werkzeuge hängt, hat keine Zusage. Eine Merkliste im Projekt kann kein Sync-Dienst rückgängig machen.
+
+Der Nebeneffekt ist ein Gewinn: Damit hat der Server **keinen schreibenden Zugriff auf eine Bildquelle mehr**, und der Verlauf braucht keinen `Dateizug` — Aussortieren ist eine Zustandsänderung wie jede andere.
+
+Der Weg zurück führt nicht mehr durch den Finder, sondern durch die Oberfläche: Die Bildquellenansicht zeigt die aussortierten Fotos mit Vorschau, Datum und einem Knopf (`GET /api/photos/aussortiert`, `DELETE /api/photos/aussortiert/:id`). Das Foto landet dabei im **Fotopool** und nicht auf seiner alten Doppelseite — der Platz dort ist beim Aussortieren leer geworden, und ihn stillschweigend wieder zu füllen hieße, eine seither getroffene Entscheidung zu überschreiben. Ob die Datei noch existiert, prüft dabei niemand: Ein Foto ohne Datei ist ein bekannter Zustand (`photo-missing`), und der nächste Reimport sagt es ohnehin.
 
 Was ein aussortiertes Foto im Projekt hinterlässt, ist eine bewusste Unterscheidung (`Project.vergessen`):
 
 - **Slots behalten ihre Kennung** und werden zu fehlenden Bildern (`photo-missing`). Das Buch beim Aussortieren eines einzigen Fotos umzubauen, wäre die schlechtere Antwort — der Platz soll sichtbar bleiben, damit man ihn füllt.
 - **Alles andere, was auf das Foto zeigt, muss mit**: die Mitgliedschaft in einer Gruppe samt Hauptbild, ein Hintergrundbild einer Doppelseite, ein Titel- oder Rückseitenbild des Umschlags. Eine tote Kennung an diesen Stellen wäre ein stiller Fehler statt einer sichtbaren Lücke.
-- **`PhotoOverride` bleibt.** Er hängt an der Kennung, nicht am Foto, und ist sofort wieder gültig, wenn die Datei zurückkommt.
+- **`PhotoOverride` bleibt.** Er hängt an der Kennung, nicht am Foto, und ist sofort wieder gültig, wenn das Foto wieder aufgenommen wird.
 
-Erreichbar ist das Aussortieren an den drei Stellen, an denen man Fotos einzeln vor sich hat: im Fotopool, am ausgewählten Slot der Doppelseite (dort neben „Aus dem Buch nehmen", in Rot — die beiden sind leicht zu verwechseln, und nur eines von beiden fasst die Datei an) und in der Fotoliste der Gruppenansicht.
+Erreichbar ist das Aussortieren an den drei Stellen, an denen man Fotos einzeln vor sich hat: im Fotopool, am ausgewählten Slot der Doppelseite (dort neben „Aus dem Buch nehmen", in Rot — die beiden sind leicht zu verwechseln, und nur eines von beiden nimmt das Foto aus dem Projekt) und in der Fotoliste der Gruppenansicht.
 
 ### Aufnahmedaten in der Doppelseite
 
@@ -1947,11 +1955,12 @@ HTTP: fünf Ausschnittsanfragen, ein Schritt.
 
 **Drei Grenzfälle, die die Form bestimmt haben:**
 
-- **Aussortieren** ist die einzige Aktion mit einer Wirkung außerhalb des
-  Zustands. Der Schritt merkt sich beide Pfade und legt die Datei beim
-  Zurücknehmen aus `.franibook-geloescht` zurück. Scheitert das `rename`,
-  geschieht _nichts_ — ein Zustand, der auf eine fehlende Datei zeigt, wäre
-  schlimmer als ein abgelehntes Undo.
+- **Aussortieren** war einmal die einzige Aktion mit einer Wirkung außerhalb des
+  Zustands: Der Schritt merkte sich beide Pfade und legte die Datei beim
+  Zurücknehmen aus `.franibook-geloescht` zurück — die einzige Rücknahme, die
+  scheitern konnte. Seit eine Merkliste im Projekt entscheidet (siehe „Ein Foto
+  aussortieren"), gibt es diesen Fall nicht mehr, und mit ihm ist der `Dateizug`
+  aus `project/verlauf.ts` verschwunden.
 - **Import und Quellenwechsel** leeren den Verlauf. Sie legen Fotos, Vorschauen
   und aufgelöste Orte an; ein zurückgesetzter Stand ließe die halbe Wirkung
   stehen. Der Notanker ist hier der ehrliche Weg zurück.
