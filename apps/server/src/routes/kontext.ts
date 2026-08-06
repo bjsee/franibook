@@ -55,6 +55,30 @@ export function istDateiFehler(err: unknown): boolean {
   return /ENOENT|no such file|permission denied|nicht erreichbar/i.test(msg);
 }
 
+/**
+ * Liest eine eingeworfene Datei aus Rumpf und Query.
+ *
+ * Zwei Routen nehmen einen Einwurf an – in den Pool und auf eine Doppelseite –,
+ * und beide müssen dieselben zwei Dinge prüfen: dass überhaupt Bytes ankamen
+ * (ein `POST` ohne Rumpf oder mit einem Medientyp, für den kein Parser
+ * angemeldet ist, liefert keinen Buffer) und dass ein Name dabei ist. Was ein
+ * brauchbarer *Name* ist, entscheidet dagegen die Fachlogik (`pruefeName` in
+ * `project/einwurf.ts`) – die Endungen des Imports haben in einer Route nichts
+ * zu suchen.
+ */
+export function leseEinwurf(
+  body: unknown,
+  name: string | undefined,
+): { datei: { name: string; bytes: Buffer } } | { error: string } {
+  if (!Buffer.isBuffer(body) || body.length === 0) {
+    return { error: 'Es kamen keine Bilddaten an' };
+  }
+  if (!name || name.trim().length === 0) {
+    return { error: 'Der Dateiname fehlt (Query `name`)' };
+  }
+  return { datei: { name, bytes: body } };
+}
+
 export interface Kontext {
   project: Project;
   sources: Sources;

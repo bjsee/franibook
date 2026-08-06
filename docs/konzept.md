@@ -2065,6 +2065,70 @@ festgehalten, Auftakt, leer, Handarbeit, Bilder unter der Zielauflösung. Ohne
 die Bilddaten selbst — die kommen über `GET /api/photos`, und eine zweite
 Fassung derselben Angaben wäre ein zweiter Weg zur Wahrheit.
 
+### Bilder einwerfen
+
+Nachschub kam bis August 2026 nur auf einem Weg ins Buch: Datei in den
+Quellordner legen, Bildquellen neu einlesen, Bild im Fotopool suchen, auf eine
+Seite ziehen. Vier Schritte für „das gehört auch noch rein", und der zweite ist
+eine Barriere im Verlauf. Der **Einwurf** macht daraus eine Geste: Datei aus dem
+Finder auf das Buch fallen lassen.
+
+Drei Abwurfstellen, und jede bedeutet etwas anderes:
+
+| Abwurfstelle             | Wirkung                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Doppelseite (das Papier) | Bild liegt an der Fallstelle, Anordnung bleibt; Frage nach Neuanordnen |
+| Fotopool                 | Bild kommt in den Bestand, auf keine Seite                             |
+| Zeile im Baum            | Bild kommt auf diese Seite, die danach neu angeordnet wird             |
+
+**Auf dem Papier bleibt die Seite, wie sie ist.** Das Bild bekommt einen
+**freien Platz** – ein `SlotAssignment` mit `rect`, dessen `slotId` in keiner
+Vorlage steht (`wirksamePlaetze` in `model/spread.ts`, `layout/einwurf.ts`). Es
+steht dort, wo die Hand losgelassen hat, in einem Kasten von einem Drittel der
+Seitenhöhe im Seitenverhältnis des Fotos – also unbeschnitten. Danach fragt eine
+Karte auf dem Papier, ob die Seite dafür neu angeordnet werden soll; unbeantwortet
+bleibt alles, wie es ist.
+
+Verworfen: **von selbst neu anordnen.** Das rechnet jeden Platz der Seite neu und
+verwirft ihre Ausschnitte – der Einwurf hätte damit als Nebenwirkung mehr geändert
+als als Wirkung. Ebenfalls verworfen: **eine Trägervorlage je Bilderzahl** (wie
+bei den justierten Zeilen). Sie hätte alle Bilder der Seite neu zugeordnet, also
+genau das Umwerfen, das die Geste vermeiden soll. Und verworfen: **das Bild in
+einen freien Platz der Vorlage setzen**, falls es einen gibt – dann sprang es beim
+Fallenlassen an eine andere Stelle als die, auf die man gezielt hat.
+
+**Im Baum wird dagegen neu angeordnet**, und das ist keine Inkonsequenz: Eine
+Zeile hat keine Stelle im Millimeterraster, auf die man zielen könnte, und wer im
+Baum arbeitet, verteilt Bilder auf Seiten. Es ist derselbe Zug wie jeder andere
+dort, nur mit einer Datei als Quelle.
+
+**Die Datei wird in die erste Bildquelle geschrieben**, nach
+`<quelle>/eingeworfen/` (`project/einwurf.ts`). Das bricht die Regel „Bildquellen
+werden ausschließlich gelesen" bewusst, und der Unterschied zum Fall, der sie
+aufgestellt hat, ist die Richtung: Eine **neue** Datei kann kein Sync-Dienst
+missverstehen – er kopiert sie auf den Server, und genau das ist gewollt, denn
+das Bild soll im Bestand liegen und nicht im Programm. (Das Aussortieren hatte
+Dateien **verschoben**, und Synology Drive deutete das als Löschung.) Verworfen:
+**in einen eigenen Ordner neben dem Projekt schreiben** und ihn als weitere
+Quelle führen. Dann läge der Bestand an zwei Orten, und die Sicherung des NAS
+hätte die eingeworfenen Bilder nicht.
+
+Die Kennung wird **vor** dem Schreiben aus den Bytes gerechnet (`inhaltsKennung`,
+dieselbe Formel wie im Import). Damit legt dasselbe Bild zweimal eingeworfen keine
+zweite Datei an, sondern setzt das vorhandene Foto ein; ein aussortiertes wird von
+der Merkliste genommen, denn „eingeworfen" heißt „ich will dieses Bild". Eine
+abgelehnte Datei – falsche Endung, keine Pixelmaße – hinterlässt nichts im Ordner.
+
+**Zurücknehmen holt die Datei nicht zurück.** Ein Undo-Schritt ist ein Stand des
+Projekts, kein Dateizug; nach einem Cmd+Z ist das Bild aus Buch und Bestand, seine
+Datei liegt aber weiter im Ordner und kommt beim nächsten Einlesen als neues Foto
+zurück. Wer sie dauerhaft draußen haben will, sortiert sie aus – das ist der
+Griff, der genau das zusagt.
+
+Ein Einwurf ist **eine** Datei. Mehrere an dieselbe Stelle zu legen ergäbe einen
+Stapel, in dem man die unteren nicht mehr findet; wer viele Bilder nachlegt, legt
+sie in den Ordner und liest neu ein. Gesagt wird es beim Versuch.
+
 ### Wenn Bild und Platz quer zueinander stehen
 
 Eine Ausrichtungskorrektur kippt das Bild, seinen Platz aber nicht. Danach steht

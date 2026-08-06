@@ -2,7 +2,9 @@
  * Projektzustand.
  *
  * Hält Fotos, Struktur und Buch im Speicher und schreibt sie atomar auf
- * Platte. Die Originaldateien werden ausschließlich gelesen.
+ * Platte. Bestehende Bilddateien werden ausschließlich gelesen; die einzige
+ * Ausnahme ist `einwerfen`, das eine **neue** Datei in der ersten Bildquelle
+ * anlegt (`project/einwurf.ts`).
  */
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -37,6 +39,7 @@ import {
   type TimelineFootVariant,
   type TimelineSideVariant,
   splitKept,
+  aufsBlatt,
   bookStats,
   buildStructure,
   DEFAULT_BACKGROUND,
@@ -78,6 +81,7 @@ import * as anordnung from './project/anordnung.js';
 import { type BaumSeite, baum } from './project/baum.js';
 import * as bestand from './project/bestand.js';
 import type { Aussortiert, ImportDiff, QuellenBericht } from './project/bestand.js';
+import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
 import * as layoutDokument from './project/layout-dokument.js';
@@ -607,6 +611,19 @@ export class Project {
   /** Nimmt ein aussortiertes Foto zurück ins Projekt. */
   wiederAufnehmen(id: PhotoId): Photo | null {
     return bestand.wiederAufnehmen(this, id);
+  }
+
+  /**
+   * Nimmt eine eingeworfene Datei auf und setzt sie ein.
+   *
+   * Die einzige Methode, die in eine Bildquelle **schreibt** – Begründung und
+   * Grenzen stehen im Kopf von `project/einwurf.ts`.
+   */
+  einwerfen(
+    datei: { name: string; bytes: Buffer },
+    ziel: einwurf.Einwurfziel,
+  ): Promise<einwurf.Einwurfergebnis> {
+    return einwurf.einwerfen(this, datei, ziel);
   }
 
   importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
@@ -1392,7 +1409,7 @@ export class Project {
     }
     if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
 
-    slot.rect = this.aufsBlatt(rect);
+    slot.rect = aufsBlatt(rect, this.profile);
     return { ok: true };
   }
 
@@ -1416,34 +1433,6 @@ export class Project {
 
     this.spreads[index] = neu;
     return { ok: true };
-  }
-
-  /**
-   * Hält ein normiertes Rechteck auf dem Blatt.
-   *
-   * Über die Endformatkante hinaus darf es sehr wohl – randabfallend ist
-   * gewollt, dafür ist der Beschnitt da. Ganz außerhalb der Seite wäre dagegen
-   * kein Gestaltungsmittel, sondern ein verlorenes Element.
-   */
-  private aufsBlatt(rect: { x: number; y: number; w: number; h: number }): {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  } {
-    // Der Beschnitt in normierten Einheiten: So weit darf etwas über das
-    // Endformat hinausragen, ohne dass es aus dem Blatt fällt.
-    const { bleedMm, trimWidthMm, trimHeightMm } = this.profile.page;
-    const randX = bleedMm / (2 * trimWidthMm);
-    const randY = bleedMm / trimHeightMm;
-    const klemme = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-
-    return {
-      x: klemme(rect.x, -randX, 1 + randX - rect.w),
-      y: klemme(rect.y, -randY, 1 + randY - rect.h),
-      w: klemme(rect.w, 0.02, 1 + 2 * randX),
-      h: klemme(rect.h, 0.02, 1 + 2 * randY),
-    };
   }
 
   // --------------------------------------------------------- Vorlagentexte
@@ -1502,7 +1491,7 @@ export class Project {
         return { ok: false, error: 'Position ist keine Zahl' };
       }
       if (w <= 0 || h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
-      text.rect = this.aufsBlatt(patch.rect);
+      text.rect = aufsBlatt(patch.rect, this.profile);
     }
 
     if (patch.rotateDeg === null) delete text.rotateDeg;

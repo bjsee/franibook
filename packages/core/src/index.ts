@@ -32,6 +32,7 @@ export * from './layout/document.js';
 export * from './layout/rebuild.js';
 export * from './layout/move.js';
 export * from './layout/ebene.js';
+export * from './layout/einwurf.js';
 export * from './layout/keep.js';
 export * from './layout/single-page.js';
 export * from './layout/stats.js';

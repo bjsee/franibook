@@ -10,7 +10,7 @@ import { access } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { type DateEdit, istDateEdit } from '@franibook/core';
-import { istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
+import { istDateiFehler, type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
 
 /**
  * Eine Datumskorrektur, wie sie im Körper der Anfrage steht.
@@ -138,6 +138,40 @@ export function fotoRouten(
         photos: project.photoViewsOf(ids),
         structurePending: project.structurePending(),
         undatedCount: project.structure.undated.length,
+      };
+    },
+  );
+
+  /**
+   * Wirft eine Datei in den Bestand, ohne sie einzusetzen.
+   *
+   * Der Rumpf ist das Bild selbst (rohe Bytes, siehe den Parser in `app.ts`),
+   * der Name steht in der Query: Ein `Content-Disposition` wäre die formal
+   * richtigere Stelle, ist aber nur mit Sonderregeln für Nicht-ASCII zu
+   * schreiben – und der Bestand ist voller Umlaute.
+   *
+   * Das Foto landet im Fotopool. Auf eine Doppelseite wirft man es über
+   * `POST /api/spreads/:index/einwurf`.
+   */
+  app.post<{ Querystring: { name?: string }; Body: Buffer }>(
+    '/api/photos/einwurf',
+    async (req, reply) => {
+      // Dieselbe Sorge wie bei `PATCH /api/photos`: Ein laufender Import endet
+      // mit einer Neubefüllung des Bestands und verwürfe das eingeworfene Foto.
+      if (project.importLaufend()) {
+        return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+      }
+      const gelesen = leseEinwurf(req.body, req.query.name);
+      if ('error' in gelesen) return reply.code(400).send({ error: gelesen.error });
+
+      const ergebnis = await project.einwerfen(gelesen.datei, { kind: 'pool' });
+      if (!ergebnis.ok) return reply.code(400).send({ error: ergebnis.error });
+
+      await project.save();
+      return {
+        ...ergebnis,
+        photo: ergebnis.photo ? project.photoViewsOf([ergebnis.photo.id])[0] : undefined,
+        photoCount: project.photos.size,
       };
     },
   );

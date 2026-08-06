@@ -5,7 +5,7 @@ import type { Crop } from './crop.js';
 import type { PhotoId } from './photo.js';
 import type { FrameId } from '../render/frame.js';
 import type { FontFamilyId } from '../render/typography.js';
-import type { TemplateId } from './template.js';
+import type { TemplateId, TemplateSlot } from './template.js';
 
 export type SpreadId = string;
 
@@ -248,6 +248,41 @@ export interface Spread {
    * Doppelseite, die die Engine neu erzeugt.
    */
   timeline?: boolean;
+}
+
+/**
+ * Die Plätze, die eine Doppelseite tatsächlich hat: die der Vorlage plus die
+ * freien.
+ *
+ * **Ein freier Platz ist ein `SlotAssignment` mit `rect`, dessen `slotId` in
+ * keiner Vorlage steht.** So kommt ein eingeworfenes Bild auf die Seite
+ * (`layout/einwurf.ts`): Es liegt dort, wo es fallen gelassen wurde, und die
+ * übrigen Bilder rühren sich nicht. Die Vorlage um einen Platz zu erweitern
+ * hätte geheißen, für jede Bilderzahl eine neue Trägervorlage zu bauen und
+ * jedes Bild der Seite neu zuzuordnen – also genau das Umwerfen, das ein
+ * Einwurf gerade nicht sein soll.
+ *
+ * Der freie Platz bringt seine Geometrie selbst mit; die synthetische
+ * `TemplateSlot`-Form trägt sie nur, damit alles Weitere – Zeichenreihenfolge,
+ * Rahmen, Neigung, Warnungen – ohne Sonderfall weiterrechnet. `prominence: 2`
+ * ist dabei keine Aussage: Wer den Platz selbst hingesetzt hat, hat die
+ * Gewichtung schon getroffen, und gebraucht wird sie erst wieder, wenn die
+ * Seite neu angeordnet wird – dann kommt der Platz aus der Vorlage.
+ *
+ * Plätze der Vorlage kommen zuerst, die freien in der Reihenfolge der Slots.
+ * `layer` schlägt das ohnehin (`slotReihenfolge`), aber ohne Angabe liegt ein
+ * eingeworfenes Bild damit obenauf – und das ist die richtige Vorgabe: Man hat
+ * es gerade hingelegt.
+ */
+export function wirksamePlaetze(
+  template: { slots: readonly TemplateSlot[] },
+  spread: Pick<Spread, 'slots'>,
+): readonly TemplateSlot[] {
+  const bekannt = new Set(template.slots.map((s) => s.id));
+  const frei = spread.slots.flatMap((s): TemplateSlot[] =>
+    s.rect && !bekannt.has(s.slotId) ? [{ id: s.slotId, ...s.rect, prominence: 2 }] : [],
+  );
+  return frei.length === 0 ? template.slots : [...template.slots, ...frei];
 }
 
 /**
