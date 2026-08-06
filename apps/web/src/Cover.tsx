@@ -124,8 +124,8 @@ export function Cover({
           label="Bogen"
           wert={`${geo.widthMm.toFixed(1)} × ${geo.heightMm.toFixed(1)} mm`}
         />
-        <Kennzahl label="Gelenkzone" wert={`${geo.hingeMm} mm je Seite`} />
-        <Kennzahl label="Umschlag" wert={`${geo.wrapMm} mm`} />
+        <Kennzahl label="Falzbereich" wert={`${geo.hingeSafeMm} mm je Seite`} />
+        <Kennzahl label="Überstand" wert={`${geo.overhangSideMm} mm`} />
         <span style={B.dehner} />
         <button onClick={() => void exportCover()} disabled={!!busy} style={B.knopfPrimaer}>
           Umschlag als PDF

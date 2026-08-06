@@ -28,6 +28,9 @@ import sharp from 'sharp';
 // entscheidet dort `estimatedTextWidthMm`, und der Test soll dieselbe Näherung
 // benutzen. Relativ, weil das Wurzelpaket den Kern nicht als Abhängigkeit führt.
 import { estimatedTextWidthMm } from '../../packages/core/src/render/typography.js';
+import { defaultProfile } from '../../packages/core/src/print/profiles/index.js';
+import { spreadHeightMm, spreadWidthMm } from '../../packages/core/src/print/profile.js';
+import { timelineFootTopMm } from '../../packages/core/src/render/timeline.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,16 +38,45 @@ const OUT = join(process.cwd(), 'tests/parity/.out');
 const ARTIFACTS = join(process.cwd(), 'tests/parity/.artifacts');
 
 /**
- * Vergleichsbreite in Pixeln. 2424 px auf 606 mm Doppelseitenbreite ergeben
- * rund 102 dpi, also gut vier Pixel je Millimeter.
+ * Die Doppelseite des Standardformats, einschließlich Beschnitt.
+ *
+ * Aus dem Profil und nicht als Zahl: Der Test rastert das PDF mit einer
+ * Auflösung, die er aus dieser Breite rechnet. Stand hier eine andere Zahl als
+ * im Profil, wären Screenshot und Rasterbild verschieden groß, würden per
+ * `fit: 'fill'` aufeinander gezwungen – und die Skalierungsunschärfe zählte als
+ * Abweichung. Genau das trat beim Formatwechsel auf: 0,58 % statt 0,16 %, ohne
+ * dass sich am Layout etwas geändert hätte.
+ */
+const SPREAD_W_MM = spreadWidthMm(defaultProfile());
+const SPREAD_H_MM = spreadHeightMm(defaultProfile());
+
+/**
+ * Vergleichsbreite in Pixeln: vier Pixel je Millimeter Doppelseitenbreite,
+ * also rund 102 dpi. Beim 28×28-Format sind das 2184 px.
  *
  * Die Auflösung bestimmt die Empfindlichkeit: Ein Versatz erzeugt an jeder
  * Kante einen Fehlerstreifen, dessen Breite mit der Auflösung wächst, während
  * das JPEG-Ringing weitgehend gleich bleibt. Bei 1212 px lag ein
  * Millimeter Versatz nur knapp über der Nachweisgrenze – siehe die gemessenen
  * Werte unten.
+ *
+ * Aus der Blattbreite gerechnet und nicht als feste 2424: Die Schwellen unten
+ * sind bei gut vier Pixeln je Millimeter gemessen. Eine feste Pixelzahl hieße
+ * bei einem anderen Format eine andere Auflösung – und damit wären die
+ * gemessenen Werte nicht mehr die, gegen die geprüft wird. Bei 4,44 px/mm
+ * stiegen die Textfassungen auf 0,51 bis 0,56 %, ohne dass sich am Layout etwas
+ * geändert hätte.
+ *
+ * 4,25 und nicht glatt 4: Bei genau vier Pixeln je Millimeter fällt die
+ * Zeitstrahlachse des Standardformats auf eine Pixelgrenze, und Browser und
+ * pdftoppm verteilen das Antialiasing dann verschieden – die Achse färbt sich
+ * über die ganze Breite rot und die Fassungen `band` und `ruler` landen bei
+ * 0,52 %. Bei 4,25, 4,5 und 5 px/mm ist derselbe Lauf sauber. Ein halbes Pixel
+ * Rasterrundung ist keine Abweichung des Layouts, deshalb wird hier die
+ * Auflösung gerückt und nicht die Schwelle.
  */
-const COMPARE_WIDTH = Number(process.env['PARITY_WIDTH'] ?? 2424);
+const PX_PRO_MM = 4.25;
+const COMPARE_WIDTH = Number(process.env['PARITY_WIDTH'] ?? Math.round(SPREAD_W_MM * PX_PRO_MM));
 
 /**
  * Farbtoleranz je Pixel. Muss JPEG-Ringing an den Gitterlinien abfangen –
@@ -205,7 +237,7 @@ async function messeParitaet(
   await execFileAsync('pdftoppm', [
     '-png',
     '-r',
-    String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+    String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
     '-singlefile',
     join(OUT, `parity-${name}.pdf`),
     rasterPrefix,
@@ -213,7 +245,7 @@ async function messeParitaet(
 
   const meta = await sharp(shot).metadata();
   const width = meta.width ?? COMPARE_WIDTH;
-  const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+  const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
   const a = await toPng(shot, width, height);
   const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -294,7 +326,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       pdfPath,
       rasterPrefix,
@@ -305,7 +337,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     // --- 4. Vergleich ---------------------------------------------------
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(rasterBuf, width, height);
@@ -402,7 +434,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       join(OUT, 'parity-manual.pdf'),
       rasterPrefix,
@@ -410,7 +442,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -477,7 +509,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       join(OUT, 'parity-timeline.pdf'),
       rasterPrefix,
@@ -485,7 +517,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -503,7 +535,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     // darf er etwas verändert haben. Abweichende Pixel markiert pixelmatch rot;
     // die übrigen zeichnet es abgeschwächt weiter, deshalb wird auf Rot geprüft
     // und nicht auf „von Null verschieden".
-    const fussOben = Math.round((281 / 306) * height);
+    const fussOben = Math.round((timelineFootTopMm(defaultProfile()) / SPREAD_H_MM) * height);
     let imFuss = 0;
     for (let y = fussOben; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -578,7 +610,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       join(OUT, 'parity-text.pdf'),
       rasterPrefix,
@@ -586,7 +618,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -676,7 +708,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       join(OUT, 'parity-textslot.pdf'),
       rasterPrefix,
@@ -684,7 +716,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -842,7 +874,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await execFileAsync('pdftoppm', [
       '-png',
       '-r',
-      String(Math.round((COMPARE_WIDTH / 606) * 25.4)),
+      String(Math.round((COMPARE_WIDTH / SPREAD_W_MM) * 25.4)),
       '-singlefile',
       join(OUT, 'parity-fonts.pdf'),
       rasterPrefix,
@@ -850,7 +882,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     const meta = await sharp(shot).metadata();
     const width = meta.width ?? COMPARE_WIDTH;
-    const height = meta.height ?? Math.round((COMPARE_WIDTH * 306) / 606);
+    const height = meta.height ?? Math.round((COMPARE_WIDTH * SPREAD_H_MM) / SPREAD_W_MM);
 
     const a = await toPng(shot, width, height);
     const b = await toPng(await readFile(`${rasterPrefix}.png`), width, height);
@@ -939,15 +971,15 @@ test.describe('Vorschau und PDF stimmen überein', () => {
 
     // MediaBox: volle Fläche einschließlich Beschnitt
     const media = box('MediaBox');
-    expect(media[2]).toBeCloseTo(mm2pt(606), 1);
-    expect(media[3]).toBeCloseTo(mm2pt(306), 1);
+    expect(media[2]).toBeCloseTo(mm2pt(SPREAD_W_MM), 1);
+    expect(media[3]).toBeCloseTo(mm2pt(SPREAD_H_MM), 1);
 
     // TrimBox: das Endformat – daran schneidet die Druckerei
     const trim = box('TrimBox');
     expect(trim[0]).toBeCloseTo(mm2pt(3), 1);
     expect(trim[1]).toBeCloseTo(mm2pt(3), 1);
-    expect(trim[2]).toBeCloseTo(mm2pt(603), 1);
-    expect(trim[3]).toBeCloseTo(mm2pt(303), 1);
+    expect(trim[2]).toBeCloseTo(mm2pt(SPREAD_W_MM - 3), 1);
+    expect(trim[3]).toBeCloseTo(mm2pt(SPREAD_H_MM - 3), 1);
   });
 
   test('erzeugte Artefakte sind vorhanden', async () => {

@@ -124,7 +124,21 @@ export interface Einstellungen {
   /** Rahmen aller Bilder ohne eigenen; `keiner` ist die Vorgabe. */
   frame: FrameId;
   seed: number;
+  /** Kennung des Druckprofils, also das Buchformat. */
+  printProfileId: string;
   birthDate?: string;
+}
+
+/** Ein wählbares Buchformat, so knapp wie die Auswahl es braucht. */
+export interface Buchformat {
+  id: string;
+  /** Der Druckdienstleister. Gruppiert die Auswahl, sobald es mehr als einen gibt. */
+  vendor: string;
+  product: string;
+  trimWidthMm: number;
+  trimHeightMm: number;
+  minPages: number;
+  maxPages: number;
 }
 
 /** Was ein Neuanordnen verwerfen würde. */
@@ -153,8 +167,20 @@ export interface Kapitel {
 export interface ProjectInfo {
   /** Die Ordner, aus denen das Buch gespeist wird. */
   sources: { id: string; label: string; root: string; erreichbar: boolean }[];
-  /** Nur die Auflösungsschwellen: Der Editor bewertet damit jede Änderung sofort. */
-  profile: { resolution: { minDpi: number; targetDpi: number } };
+  /**
+   * Das aktive Druckprofil, so weit die Oberfläche es braucht: die
+   * Auflösungsschwellen, mit denen der Editor jede Änderung sofort bewertet,
+   * und das Seitenmaß für die Vorschauen.
+   */
+  profile: {
+    id: string;
+    product: string;
+    page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number };
+    pageCount: { min: number; max: number; step: number };
+    resolution: { minDpi: number; targetDpi: number };
+  };
+  /** Die wählbaren Formate, in der Reihenfolge der Bibliothek. */
+  profiles: Buchformat[];
   settings: Einstellungen;
   photoCount: number;
   spreadCount: number;
@@ -219,6 +245,18 @@ export const projektLaden = () => hole<ProjectInfo>('/api/project');
 
 export const einstellungenAendern = (patch: Partial<Einstellungen>) =>
   sende<unknown>('PATCH', '/api/settings', patch);
+
+/**
+ * Wechselt das Buchformat.
+ *
+ * Eigener Aufruf und nicht `einstellungenAendern`: Der Server ordnet dabei
+ * nichts neu, klemmt aber die Seitenzahl und sagt in `hinweise`, was das
+ * bedeutet – die Oberfläche zeigt diese Sätze unverändert.
+ */
+export const formatWechseln = (printProfileId: string) =>
+  sende<{ settings: Einstellungen; hinweise: string[] }>('PATCH', '/api/format', {
+    printProfileId,
+  });
 
 /** Liest Bildquellen erneut ein — alle, oder nur eine. */
 export const neuEinlesen = (body?: { limit?: number; sourceId?: string }) =>

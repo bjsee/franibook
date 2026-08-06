@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { PrintProfile } from '../print/profile.js';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import type { NaiveDateTime } from '../model/photo.js';
 import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
 import { TIMELINE_FOOT_HEIGHT_MM, timelineBoxes, timelineFootTopMm } from './timeline.js';
 
 const profile = saal as PrintProfile;
 
-/** Achse: 3 mm Beschnitt + 8 mm Sicherheitsrand bis 600 mm − 8 mm. */
-const AXIS_X0 = 11;
-const AXIS_X1 = 595;
+/**
+ * Achse: Beschnitt plus Sicherheitsrand, bis zur gegenüberliegenden Kante
+ * abzüglich desselben. Im Standardformat also 13 mm bis 533 mm.
+ */
+const AXIS_X0 = profile.page.bleedMm + profile.page.safetyMm;
+const AXIS_X1 = profile.page.bleedMm + 2 * profile.page.trimWidthMm - profile.page.safetyMm;
 const AXIS_LEN = AXIS_X1 - AXIS_X0;
-const GUTTER_X = 303;
+const GUTTER_X = profile.page.bleedMm + profile.page.trimWidthMm;
 
 function boxesOf(dates: string[], extra: Record<string, unknown> = {}): RenderBox[] {
   return timelineBoxes({ dates: dates as NaiveDateTime[], ...extra }, profile);
@@ -63,8 +66,9 @@ describe('Zeitstrahl: Fenster und Maßstab', () => {
     // 31 Tage März, in beiden Jahren dieselbe Strecke. Die Fensterlänge
     // unterscheidet sich nur um den Schalttag, deshalb nicht auf die Stelle.
     expect(abstand(2017)).toBeCloseTo(abstand(2023), 1);
-    expect(abstand(2017)).toBeGreaterThan(30);
-    expect(abstand(2017)).toBeLessThan(34);
+    // Ein Monat auf der 520 mm langen Achse: gut 28 mm.
+    expect(abstand(2017)).toBeGreaterThan(27);
+    expect(abstand(2017)).toBeLessThan(31);
   });
 
   it('springt erst zum 1. Januar, nicht mit jeder Doppelseite', () => {
@@ -99,8 +103,9 @@ describe('Zeitstrahl: Marker', () => {
     // 11,7 Monate ist die breiteste gemessene Doppelseite des Bestands.
     const boxes = boxesOf(['2012-01-10T00:00:00', '2012-06-01T00:00:00', '2012-12-28T00:00:00']);
     const kapsel = balken(boxes)[0];
-    expect(kapsel!.wMm).toBeGreaterThan(340);
-    expect(kapsel!.wMm).toBeLessThan(390);
+    // Knapp zwei Drittel der Achse.
+    expect(kapsel!.wMm).toBeGreaterThan(0.6 * AXIS_LEN);
+    expect(kapsel!.wMm).toBeLessThan(0.75 * AXIS_LEN);
     // Runde Enden: der Radius ist die halbe Höhe.
     expect(kapsel!.rxMm).toBe(0.6);
   });
@@ -190,7 +195,7 @@ describe('Zeitstrahl: Platz im Fußraum', () => {
     const boxes = boxesOf(['2017-06-15T00:00:00'], { label: 'Irgendwo' });
     const top = timelineFootTopMm(profile);
     const unten = profile.page.bleedMm + profile.page.trimHeightMm - profile.page.safetyMm;
-    expect(top).toBe(281); // 3 + 300 − 8 − 14
+    expect(top).toBe(249); // 3 + 270 − 10 − 14
     expect(TIMELINE_FOOT_HEIGHT_MM).toBe(14);
 
     for (const box of boxes) {

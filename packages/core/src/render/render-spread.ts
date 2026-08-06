@@ -131,12 +131,29 @@ export interface RenderContext {
  *
  * Normiert bezieht sich auf den Endformatbereich; der Ursprung des RSM liegt
  * dagegen an der Beschnittkante. Der Beschnitt ist deshalb der Versatz.
+ *
+ * Wer über das Endformat hinausragt, wird bis an die Blattkante gezogen. Die
+ * Vorlagen der Bibliothek schreiben ihren Überstand als Anteil der
+ * Referenzseite (3 mm auf 600 sind 0,005), der Beschnitt ist aber in jedem
+ * Format dieselben 3 mm: Auf der 540 mm breiten Doppelseite blieben sonst
+ * 0,3 mm weißes Papier neben einem randabfallenden Bild – und `randabfallend`
+ * erkennte es nicht mehr als solches, gäbe ihm also auch noch eine Neigung.
  */
 function toMm(
   slot: Pick<TemplateSlot, 'x' | 'y' | 'w' | 'h'>,
   profile: PrintProfile,
 ): { xMm: number; yMm: number; wMm: number; hMm: number } {
-  return rectMm(slot, profile.page);
+  const r = rectMm(slot, profile.page);
+  const { bleedMm } = profile.page;
+  const rechts = bleedMm + 2 * profile.page.trimWidthMm;
+  const unten = bleedMm + profile.page.trimHeightMm;
+
+  const links = slot.x < 0 ? 0 : r.xMm;
+  const oben = slot.y < 0 ? 0 : r.yMm;
+  const kanteRechts = slot.x + slot.w > 1 ? rechts + bleedMm : r.xMm + r.wMm;
+  const kanteUnten = slot.y + slot.h > 1 ? unten + bleedMm : r.yMm + r.hMm;
+
+  return { xMm: links, yMm: oben, wMm: kanteRechts - links, hMm: kanteUnten - oben };
 }
 
 /**

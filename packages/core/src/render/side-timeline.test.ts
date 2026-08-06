@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime } from '../model/photo.js';
 import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
@@ -101,8 +101,11 @@ describe('Randachse: Fassungen', () => {
     const segmente = boxen.filter((r) => r.wMm === 1.3 && r.hMm > 10);
     expect(segmente).toHaveLength(19);
 
+    // Die Achse ist die Seitenhöhe abzüglich zweimal 26 mm Rand, im
+    // Standardformat also 218 mm: (218 − 18 · 0,7) / 19 = 10,81.
+    const achsenLaenge = profile.page.trimHeightMm - 2 * 26;
     const [erst, zweit] = segmente;
-    expect(erst!.hMm).toBeCloseTo(12.389, 3); // (248 − 18 · 0,7) / 19
+    expect(erst!.hMm).toBeCloseTo((achsenLaenge - 18 * 0.7) / 19, 3);
     expect(zweit!.yMm - (erst!.yMm + erst!.hMm)).toBeCloseTo(0.7, 6);
     // Vergangen und kommend unterscheiden sich, sonst wäre die Teilung stumm.
     expect(segmente[0]!.fill).not.toBe(segmente[18]!.fill);

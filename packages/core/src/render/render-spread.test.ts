@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime, Photo } from '../model/photo.js';
 import type { Spread, TextElement } from '../model/spread.js';
@@ -50,14 +50,14 @@ const ctx = { profile, template, photos: PHOTOS };
 describe('Doppelseitengeometrie', () => {
   it('hat die Maße des Druckprofils einschließlich Beschnitt', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
-    expect(rsm.widthMm).toBe(606);
-    expect(rsm.heightMm).toBe(306);
+    expect(rsm.widthMm).toBe(546); // 2 × 270 + 2 × 3
+    expect(rsm.heightMm).toBe(276);
     expect(rsm.bleedMm).toBe(3);
   });
 
   it('legt die Falzachse in die Mitte des Endformats', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
-    expect(rsm.gutterXMm).toBe(303); // 3 mm Beschnitt + 300 mm Seitenbreite
+    expect(rsm.gutterXMm).toBe(273); // 3 mm Beschnitt + 270 mm Seitenbreite
   });
 
   it('erzeugt Hilfslinien für Beschnitt, Endformat, Sicherheit und Falz', () => {
@@ -114,12 +114,19 @@ describe('Ebenen im Rendered Spread Model', () => {
   });
 });
 
+/**
+ * Die Slots der Bibliothek sind auf ihre 600 × 300 mm große Referenzseite
+ * geschrieben und werden beim Laden normiert. Im Standardformat (540 × 270)
+ * ergeben die dort geplanten 120 mm also 108.
+ */
+const SLOT_MM = 120 * (profile.page.trimHeightMm / 300);
+
 describe('Slotgeometrie des 4er-Rasters', () => {
-  it('setzt die Slots auf die geplanten 120 mm im Quadrat', () => {
+  it('setzt die Slots auf die geplanten 120 mm im Quadrat der Referenz', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
     for (const box of imageBoxes(rsm)) {
-      expect(box.wMm).toBeCloseTo(120, 1);
-      expect(box.hMm).toBeCloseTo(120, 1);
+      expect(box.wMm).toBeCloseTo(SLOT_MM, 1);
+      expect(box.hMm).toBeCloseTo(SLOT_MM, 1);
     }
   });
 
@@ -178,7 +185,7 @@ describe('Auflösung', () => {
     const rsm = renderSpread(spreadWith(['p3', null, null, null]), ctx);
     const box = imageBoxes(rsm)[0]!;
     const sichtbarePx = 1152; // die kurze Kante, nicht die lange
-    expect(box.effectiveDpi).toBeCloseTo(sichtbarePx / (120 / 25.4), 0);
+    expect(box.effectiveDpi).toBeCloseTo(sichtbarePx / (SLOT_MM / 25.4), 0);
     expect(box.effectiveDpi).toBeGreaterThanOrEqual(profile.resolution.minDpi);
   });
 
@@ -195,9 +202,9 @@ describe('Auflösung', () => {
   });
 
   it('warnt zwischen Mindest- und Zielauflösung getrennt', () => {
-    // 1300 px in 124 mm ergibt rund 266 dpi: über 240, unter 300
+    // 1150 px in 108 mm ergibt rund 270 dpi: über 240, unter 300
     const mittel = new Map(PHOTOS);
-    mittel.set('mittel', photo('mittel', 1300, 1300));
+    mittel.set('mittel', photo('mittel', 1150, 1150));
     const rsm = renderSpread(spreadWith(['mittel', null, null, null]), {
       ...ctx,
       photos: mittel,
