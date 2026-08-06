@@ -29,6 +29,7 @@ import {
   layoutSpread,
   pairId,
   rotateCrop,
+  setHalfPage,
   templateById,
   templateMeta,
   wirksamePlaetze,
@@ -149,16 +150,22 @@ export function setSpreadTemplate(
 /**
  * Setzt die Anordnung einer einzelnen Buchseite; die andere bleibt stehen.
  *
- * Die Gegenseite muss dafür als Halbseite benannt sein – und genau das ist
- * nicht immer der Fall. Bei justierten Zeilen liegen die Rechtecke über die
- * ganze Satzbreite, es gibt dort keine Halbseite, die sie beschreibt. Vorher
- * scheiterte der Griff daran und die Oberfläche sagte, die Doppelseite reiche
- * über den Falz; sie war damit nicht mehr seitenweise zu ändern.
+ * **Und zwar wirklich stehen.** Der übliche Weg ist `setHalfPage`: Das Blatt
+ * zerfällt an der Falzachse in zwei Buchseiten, nur die gewählte wird neu
+ * angeordnet, und beide werden wieder gepaart. Die Gegenseite behält jedes Bild
+ * in seinem Platz samt Ausschnitt, Rahmen, Neigung und Ebene. Vorher lief auch
+ * dieser Fall über `setSpreadTemplate`, und der ordnet die ganze Doppelseite neu
+ * an: Wer die rechte Seite umstellte, fand links andere Bilder in anderen
+ * Plätzen.
  *
- * Jetzt wird für die Gegenseite eine Anordnung gerechnet: die Halbseite, die
- * ihre Bilder am besten trägt (`choosePairFor`). Das ist eine
- * Layoutentscheidung, aber die verlangte – wer eine Seite neu anordnet, will
- * die andere nicht verlieren.
+ * **Nicht jedes Blatt zerfällt.** Bei justierten Zeilen liegen die Rechtecke
+ * über die ganze Satzbreite, es gibt dort keine Halbseite, die die Gegenseite
+ * beschreibt. Dann bleibt nur die ganze Doppelseite, und für die Gegenseite wird
+ * eine Anordnung gerechnet: die Halbseite, die ihre Bilder am besten trägt
+ * (`choosePairFor`). Das ist eine Layoutentscheidung, aber die verlangte – wer
+ * eine Seite neu anordnet, will die andere nicht verlieren. Vorher scheiterte
+ * der Griff daran, und die Oberfläche sagte, die Doppelseite reiche über den
+ * Falz.
  */
 export function setSpreadHalf(
   z: Bestand,
@@ -185,6 +192,22 @@ export function setSpreadHalf(
     };
   }
 
+  const fotos = fotosVon(z, spread);
+
+  // Der seitenweise Weg zuerst: Er lässt die Gegenseite unberührt und ist damit
+  // der, den der Griff verspricht.
+  const seitenweise = setHalfPage(spread, {
+    side,
+    halfId,
+    photos: fotos,
+    profile: z.profile,
+    weightOf: gewicht(z),
+  });
+  if (seitenweise.ok && seitenweise.spread) {
+    z.spreads[index] = seitenweise.spread;
+    return { ok: true, leftover: seitenweise.leftover };
+  }
+
   const template = templateById(spread.templateId);
   const bekannt = template ? halvesOfTemplate(template) : {};
   const gegenId = side === 'left' ? bekannt.right : bekannt.left;
@@ -208,7 +231,7 @@ export function setSpreadHalf(
     : choosePairFor({
         side,
         halfId,
-        photos: fotosVon(z, spread),
+        photos: fotos,
         restCount: gegenBilder,
         profile: z.profile,
         weightOf: gewicht(z),

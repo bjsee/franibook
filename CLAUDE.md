@@ -248,6 +248,19 @@ schreibt `nur-wahl` dazu; wer die Automatik ändern will, ändert den Test in
 meldet `auftakt`, `setSpreadHalf` lehnt ab): Die Hälften des Flusses tragen keinen
 Textplatz, die Seite verlöre Jahreszahl und Ereigniszeilen.
 
+**Eine Buchseite umstellen lässt die andere stehen** (`setHalfPage` in
+`layout/single-page.ts`): Das Blatt zerfällt an der Falzachse, nur die gewählte
+Seite wird neu angeordnet (`layoutHalf` — dieselbe Zuordnungsrechnung wie
+`layoutSpread`, ohne Vorlagenwahl), dann wird umgepaart. Die Gegenseite behält
+jedes Bild in seinem Platz, samt Ausschnitt, Rahmen, Neigung, Ebene und
+Bildunterschrift. Vorher setzte `setSpreadHalf` die Paarkennung zusammen und
+gab sie an `setSpreadTemplate` weiter, und **der ordnet die ganze Doppelseite
+neu an** — wer die rechte Seite umstellte, fand links andere Bilder in anderen
+Plätzen. Wo sich ein Blatt nicht trennen lässt (justierte Zeilen, Auftakte, ein
+randabfallendes Bild über dem Falz), bleibt es beim alten Weg: Für die
+Gegenseite wird eine Anordnung gerechnet (`choosePairFor`). Begründung:
+`docs/konzept.md`, Abschnitt „Anordnung von Hand wählen".
+
 **Die Anordnungswahl zeigt die eigene Bilderzahl zuerst** (`Faecher` in
 `TemplatePicker.tsx`), die übrigen darunter nach Abstand. Und für **jede**
 Bilderzahl von 1 bis 14 gibt es mindestens drei Halbseiten: Was die Zerlegung der

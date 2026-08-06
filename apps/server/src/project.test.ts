@@ -500,6 +500,101 @@ describe('Bildzahl je Buchseite', () => {
   });
 });
 
+describe('Eine Buchseite anordnen', () => {
+  /** Vier Bilder im Raster – zwei links, zwei rechts –, links mit Handarbeit. */
+  function projektMitVier(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const id of ['p1', 'p2', 'p3', 'p4']) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.4up.grid',
+        slots: [
+          {
+            slotId: 'a',
+            photoId: 'p1',
+            crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' },
+            rotateDeg: 7,
+            frame: 'polaroid',
+            caption: 'Am Strand',
+          },
+          { slotId: 'b', photoId: 'p2', crop: { ...FULL_CROP } },
+          { slotId: 'c', photoId: 'p3', crop: { ...FULL_CROP } },
+          { slotId: 'd', photoId: 'p4', crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  it('lässt die gegenüberliegende Seite unverändert stehen', () => {
+    // Der Bug: Der Griff lief über die zusammengesetzte Paarkennung und damit
+    // über `setSpreadTemplate` – die Zuordnung wurde für die ganze Doppelseite
+    // neu gerechnet. Wer die rechte Seite umstellte, fand links andere Bilder in
+    // anderen Plätzen und jeden Ausschnitt verworfen.
+    const p = projektMitVier();
+    const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
+
+    const r = p.setSpreadHalf(0, 'right', einPlatz.id);
+    expect(r.ok).toBe(true);
+
+    const links = p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('l-'));
+    expect(links.map((s) => s.photoId)).toEqual(['p1', 'p2']);
+    expect(links[0]!.crop).toEqual({ x: 0.1, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' });
+    expect(links[0]!.rotateDeg).toBe(7);
+    expect(links[0]!.frame).toBe('polaroid');
+    expect(links[0]!.caption).toBe('Am Strand');
+  });
+
+  it('ordnet die gewählte Seite neu an und meldet, was in den Pool geht', () => {
+    // Zwei Bilder rechts, eine Halbseite mit einem Platz: Das zweite Bild soll
+    // nicht stumm verschwinden.
+    const p = projektMitVier();
+    const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
+
+    const r = p.setSpreadHalf(0, 'right', einPlatz.id);
+
+    const rechts = p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('r-'));
+    expect(rechts.filter((s) => s.photoId)).toHaveLength(1);
+    expect(r.leftover).toHaveLength(1);
+    // Genommen wird nur von der gewählten Seite.
+    expect(['p3', 'p4']).toContain(r.leftover[0]);
+  });
+
+  it('ordnet bei justierten Zeilen weiter die ganze Doppelseite an', () => {
+    // Deren Rechtecke laufen über die ganze Satzbreite: Es gibt keine
+    // Halbseite, die die Gegenseite beschreibt, also lässt sich das Blatt nicht
+    // trennen. Der Rückfall auf die ganze Doppelseite ist dort keine Nachlässigkeit,
+    // sondern die einzige Rechnung, die aufgeht.
+    const p = projektMitVier();
+    p.spreads[0]!.templateId = justifiedTemplateId(4);
+    p.spreads[0]!.slots = p.spreads[0]!.slots.map((s, i) => ({
+      ...s,
+      crop: { ...FULL_CROP },
+      rect: { x: 0.05 + i * 0.22, y: 0.3, w: 0.2, h: 0.3 },
+    }));
+    const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
+
+    const r = p.setSpreadHalf(0, 'right', einPlatz.id);
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.templateId.startsWith('paar:')).toBe(true);
+    expect(isJustified(p.spreads[0]!.templateId)).toBe(false);
+  });
+});
+
 describe('movePhotos', () => {
   /** Zwei Doppelseiten: vier Bilder auf der ersten, zwei auf der zweiten. */
   function projektMitVierUndZwei(): Project {

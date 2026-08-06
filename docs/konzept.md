@@ -2466,6 +2466,41 @@ auf derselben Doppelseite wären für einen Ausschnitt nicht auseinanderzuhalten
 > hergibt. Geprüft werden die neuen Hälften wie Vorlagenslots — Nutzfläche,
 > Falzzone, Fußraum, Mindestauflösung (`halves.test.ts`).
 
+> **Korrektur (6. August 2026): und zwar wirklich, wie sie ist**
+>
+> „Die gegenüberliegende bleibt, wie sie ist" stand hier von Anfang an und war von
+> Anfang an nur halb wahr. Der Griff setzte die Paarkennung zusammen und gab sie
+> an `setSpreadTemplate` weiter — und der ordnet die **ganze** Doppelseite neu an:
+> Er sammelt alle Bilder des Blattes ein und verteilt sie nach Passung auf die
+> Plätze der neuen Vorlage. Wer die rechte Seite umstellte, fand links andere
+> Bilder in anderen Plätzen und jeden Ausschnitt verworfen. Falsch gerechnet war
+> nichts; die Rechnung war nur zu weit gefasst.
+>
+> Der Weg, der die Zusage einhält, lag schon im Haus. Beim Einschieben einer
+> einzelnen Buchseite zerfällt das Blatt an der Falzachse, die Seiten werden
+> umgepaart, und kein Foto wechselt dabei seinen Platz — nur seine
+> Blattzugehörigkeit (`zerlege`/`paare` in `layout/single-page.ts`). `setHalfPage`
+> benutzt dieselben zwei Handgriffe: Die gewählte Buchseite wird ersetzt, die
+> andere geht unangetastet durch, samt Ausschnitt, Rahmen, Neigung, Ebene und
+> Bildunterschrift. Angeordnet wird nur noch die eine Seite — `layoutHalf`, die
+> halbe Schwester von `layoutSpread`: dieselbe Zuordnungsrechnung, aber ohne
+> Vorlagenwahl, denn die Halbseite ist gewählt. Die Plätze stehen in Linksform, und
+> für die Kosten ist das gleichgültig: `slotCost` liest Breite, Höhe, Vorliebe und
+> Prominenz, nicht die Lage auf dem Papier.
+>
+> Zwei Nebenwirkungen. **Erstens** trug `zerlege` bisher nur Ausschnitt, Neigung
+> und freien Platz mit; Rahmen, Bildunterschrift und Ebene fielen stumm heraus.
+> Das traf nicht nur den neuen Weg — auch eine eingeschobene Seite nahm den
+> Nachbarblättern ihre Polaroids. Sie gehören zum Bild und nicht zum Platz, also
+> überleben sie jetzt die Zerlegung. **Zweitens** bleibt der alte Weg für die
+> Blätter, die sich nicht trennen lassen: justierte Zeilen (ihre Rechtecke laufen
+> über die ganze Satzbreite), Auftakte, ein randabfallendes Bild über dem Falz.
+> Dort wird für die Gegenseite weiterhin eine Anordnung gerechnet
+> (`choosePairFor`) — das ist keine Nachlässigkeit, sondern die einzige Rechnung,
+> die dort aufgeht. Verworfen wurde, in diesen Fällen abzulehnen: Eine justierte
+> Doppelseite wäre damit wieder die, an der sich keine Seite ändern lässt, und
+> genau das war der Mangel, den `choosePairFor` behoben hat.
+
 ### Zustandsmodell
 
 Der Frontend-Store hält das gesamte Projekt. Jede Mutation läuft über `produceWithPatches` von Immer und liefert dabei zwei Dinge gleichzeitig:
