@@ -107,10 +107,14 @@ export function iccProfil(profile: PrintProfile): Buffer {
   const datei = basename(profile.color.iccProfilePath);
   try {
     return readFileSync(join(ICC_DIR, datei));
-  } catch {
+  } catch (err) {
+    // `cause` mitgeben, nicht schlucken: Ein fehlendes Profil und eine Datei
+    // ohne Leserecht führen sonst zur selben Meldung, und die schickt bei
+    // EACCES in die falsche Richtung.
     throw new Error(
       `Druckprofil ${profile.id} nennt das ICC-Profil „${profile.color.iccProfilePath}", ` +
-        `render-pdf liefert es nicht mit (erwartet in icc/${datei}).`,
+        `render-pdf kann es nicht lesen (erwartet in icc/${datei}).`,
+      { cause: err },
     );
   }
 }
@@ -168,6 +172,12 @@ export function setzeAusgabeIntent(doc: PDFKit.PDFDocument, profile: PrintProfil
   // Dieselbe Stelle, die pdfkit für PDF/A benutzt. Ein zweites Setzen
   // überschreibt, kein Anhängen: Mehr als einen Ausgabe-Intent hat dieses
   // Dokument nicht.
+  //
+  // `_root` ist pdfkit-Innenleben, und ein Cast darauf ist die einzige Stelle
+  // in diesem Paket, die eine Aktualisierung der Bibliothek still brechen
+  // könnte. Deshalb prüft `farbe.test.ts` („trägt den Farbraum als
+  // Ausgabe-Intent") das fertige PDF und nicht diesen Aufruf: Fällt der Test,
+  // ist der Katalog gemeint und nicht die Farbe.
   (doc as unknown as { _root: { data: Record<string, unknown> } })._root.data.OutputIntents = [
     intentRef,
   ];
