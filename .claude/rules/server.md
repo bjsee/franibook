@@ -145,12 +145,26 @@ Mechanismus wieder auf — und sollte vorher prüfen, ob es einen Weg über den
 Projektzustand gibt. Was sich nicht sinnvoll zurücknehmen lässt (Import,
 Quellenwechsel), ist eine `barriere` und leert den Verlauf.
 
+Der **Einwurf** ist die eine Route, die trotzdem eine Datei anlegt, und sie tut es
+ohne Dateizug: Zurückgenommen wird nur der Projektzustand, die Datei bleibt liegen
+und kommt beim nächsten Einlesen als neues Foto zurück. Das ist die ehrlichere
+Antwort als eine Rücknahme, die eine Datei löschen müsste und daran scheitern
+kann — und keine `barriere`, denn ein eingeworfenes Bild soll ein Cmd+Z wert sein.
+
 ## Der Umgang mit fremden Dateien
 
-**Bildquellen werden ausschließlich gelesen.** Kopiert wird nichts, jede Quelle
-wird rekursiv gescannt. `Sources.pfad()` ist die einzige Stelle, an der aus einem
-Foto ein Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen
-Resolver, nie einen Pfad.
+**Bildquellen werden gelesen, nicht bewirtschaftet.** Kopiert wird nichts,
+umbenannt nichts, verschoben nichts, gelöscht nichts; jede Quelle wird rekursiv
+gescannt. `Sources.pfad()` ist die einzige Stelle, an der aus einem Foto ein
+Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen Resolver, nie
+einen Pfad.
+
+**Die einzige Ausnahme ist der Einwurf** (`project/einwurf.ts`): Er legt eine
+**neue** Datei unter `<erste Quelle>/eingeworfen/` an. Der Unterschied zum Fall,
+der diese Regel aufgestellt hat, ist die Richtung — eine neue Datei kann ein
+Sync-Dienst nicht missverstehen, er kopiert sie auf den Server, und genau das ist
+gewollt. Wer eine zweite schreibende Stelle bauen will, liest vorher den
+Modulkopf dort und den Abschnitt „Bilder einwerfen" in `docs/konzept.md`.
 
 **Auch Aussortieren schreibt nichts.** `DELETE /api/photos/:id` nimmt das Foto aus
 dem Projekt und vermerkt es in der Merkliste `aussortiert`; der Import übergeht

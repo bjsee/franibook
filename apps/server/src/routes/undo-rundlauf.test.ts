@@ -21,8 +21,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { requireTemplate } from '@franibook/core';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { baueApp } from '../app.js';
+import { DecodeCache } from '../decode.js';
 import { Project } from '../project.js';
 import { Sources } from '../sources.js';
 import type { Kontext } from './kontext.js';
@@ -43,6 +45,30 @@ interface Probe {
   project: Project;
   sourceId: string;
   photoIds: string[];
+  /** Der Quellordner – der Einwurf schreibt hinein. */
+  quelle: string;
+}
+
+/** Ein Bild als Bytes, für den Einwurf. */
+async function bildBytes(breite: number, hoehe: number): Promise<Buffer> {
+  return await sharp({ create: { width: breite, height: hoehe, channels: 3, background: '#777' } })
+    .png()
+    .toBuffer();
+}
+
+/**
+ * Eine Anfrage, die eine Datei einwirft.
+ *
+ * Als eigene Form, weil der Rumpf hier kein JSON ist: Der Parser hängt am
+ * Medientyp (`app.ts`), also muss der Kopf mit.
+ */
+async function einwurfAnfrage(url: string): Promise<Anfrage> {
+  return {
+    method: 'POST',
+    url,
+    payload: await bildBytes(600, 400),
+    headers: { 'content-type': 'image/png' },
+  };
 }
 
 /**
@@ -60,7 +86,11 @@ async function probe(): Promise<Probe> {
 
   const sources = new Sources();
   const { source } = await sources.add(quelle, 'Probe');
-  const project = new Project(sources, null as never, null as never, dir);
+  // Ein echter Decode-Cache, weil der Einwurf die eingeworfene Datei einliest;
+  // die Vorschauen bleiben ungebaut – der Einwurf wärmt keine, ein einzelnes Bild
+  // entsteht beim ersten Abruf.
+  const decodes = new DecodeCache(join(dir, 'cache'), sources);
+  const project = new Project(sources, null as never, decodes, dir);
 
   const photoIds: string[] = [];
   for (const [i, datei] of DATEIEN.entries()) {
@@ -90,12 +120,12 @@ async function probe(): Promise<Probe> {
     project,
     sources,
     previews: null as never,
-    decodes: null as never,
+    decodes,
     outDir: dir,
   } as Kontext;
 
   const { app } = baueApp({ kontext, anlauf: () => null, logger: false });
-  return { app, project, sourceId: source.id, photoIds };
+  return { app, project, sourceId: source.id, photoIds, quelle };
 }
 
 /**
@@ -152,7 +182,8 @@ function ersterTextplatz(project: Project): { index: number; slotId: string } {
 interface Anfrage {
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   url: string;
-  payload?: object;
+  payload?: object | Buffer;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -289,6 +320,14 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     url: '/api/spreads/1/timeline',
     payload: { timeline: false },
   }),
+
+  // Mit Fallstelle: Das Bild bekommt einen freien Platz, die Anordnung bleibt.
+  // Der Rundlauf prüft hier vor allem, dass der freie Platz beim Zurücknehmen
+  // wieder verschwindet – er steht in `spreads`, das Foto in `photos`.
+  'POST /api/spreads/:index/einwurf': async () =>
+    await einwurfAnfrage('/api/spreads/1/einwurf?name=Einwurf.png&x=0.3&y=0.4'),
+
+  'POST /api/photos/einwurf': async () => await einwurfAnfrage('/api/photos/einwurf?name=Pool.png'),
 
   'PATCH /api/spreads/:index/slots/:slotId/crop': ({ project }) => {
     const { index, slotId } = ersterSlot(project);
@@ -488,6 +527,7 @@ describe('Rundlauf über alle ändernden Routen', () => {
         method: anfrage.method,
         url: anfrage.url,
         ...(anfrage.payload !== undefined ? { payload: anfrage.payload } : {}),
+        ...(anfrage.headers ? { headers: anfrage.headers } : {}),
       });
 
       expect(antwort.statusCode, antwort.body.slice(0, 300)).toBeLessThan(400);

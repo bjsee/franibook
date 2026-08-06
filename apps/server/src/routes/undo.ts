@@ -169,6 +169,16 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   },
   'PATCH /api/spreads/:index/timeline': { label: 'Zeitstrahl gesetzt', spreadIndex: ausIndex },
 
+  // Der Einwurf ist die eine Route, die eine **Datei anlegt** – und trotzdem ein
+  // gewöhnlicher Schritt: Der Stand von vorher kennt das Foto nicht, also ist es
+  // nach einem Cmd+Z aus Buch und Bestand. Die Datei bleibt liegen und kommt beim
+  // nächsten Einlesen als neues Foto zurück; ein Dateizug am Schritt wäre der
+  // Mechanismus, den das Aussortieren einmal gebraucht hat und der beim
+  // Zurücknehmen scheitern konnte (Begründung in `project/einwurf.ts`).
+  // Kein Verschmelzschlüssel: Zwei eingeworfene Bilder sind zwei Bilder.
+  'POST /api/spreads/:index/einwurf': { label: 'Bild eingeworfen', spreadIndex: ausIndex },
+  'POST /api/photos/einwurf': { label: 'Bild eingeworfen' },
+
   // ------------------------------------------------- Bilder und Texte darauf
   'PATCH /api/spreads/:index/slots/:slotId/crop': {
     label: 'Ausschnitt gesetzt',

@@ -18,7 +18,14 @@ import { lookupPlace } from '@franibook/geo';
 import type { DecodeCache } from './decode.js';
 import type { PhotoSource } from './sources.js';
 
-const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
+/**
+ * Was als Bild gilt.
+ *
+ * Exportiert, weil der Einwurf dieselbe Menge braucht: Eine Datei, die der Scan
+ * übergehen würde, darf auch nicht durch ein Fallenlassen ins Buch kommen –
+ * sonst läge sie im Quellordner und wäre nach dem nächsten Einlesen wieder weg.
+ */
+export const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
 const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
 const HASH_WINDOW = 64 * 1024;
 
@@ -40,13 +47,23 @@ export interface ImportResult {
 }
 
 /**
- * Foto-Kennung: Dateigröße plus SHA-256 über Kopf und Ende der Datei.
+ * Foto-Kennung aus Größe, Kopf und Ende – die Formel, an einer Stelle.
  *
  * Vollständiges Hashing von mehreren Gigabyte bei jedem Start wäre unnötig;
  * die Kombination ist für die Unterscheidung von Fotos praktisch
  * kollisionsfrei und macht Umbenennen und Verschieben folgenlos. Nebeneffekt:
  * Duplikate im Quellordner fallen sofort auf.
  */
+function kennungAus(size: number, head: Buffer, tail: Buffer): string {
+  return createHash('sha256')
+    .update(String(size))
+    .update(head)
+    .update(tail)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/** Die Kennung einer Datei, gelesen mit zwei Sprüngen statt einem Durchlauf. */
 async function contentHash(path: string, size: number): Promise<string> {
   const fh = await open(path, 'r');
   try {
@@ -55,15 +72,27 @@ async function contentHash(path: string, size: number): Promise<string> {
     const tailLen = Math.min(HASH_WINDOW, Math.max(0, size - head.length));
     const tail = Buffer.allocUnsafe(tailLen);
     if (tailLen > 0) await fh.read(tail, 0, tailLen, size - tailLen);
-    return createHash('sha256')
-      .update(String(size))
-      .update(head)
-      .update(tail)
-      .digest('hex')
-      .slice(0, 16);
+    return kennungAus(size, head, tail);
   } finally {
     await fh.close();
   }
+}
+
+/**
+ * Die Kennung von Bytes, die noch keine Datei sind.
+ *
+ * Gebraucht beim Einwurf: Ob dieses Bild schon im Bestand liegt oder auf der
+ * Aussortierliste steht, muss **vor** dem Schreiben feststehen – sonst legt ein
+ * versehentlich zweimal eingeworfenes Foto eine zweite Datei im Quellordner an,
+ * die niemand mehr von der ersten unterscheidet. Dieselbe Formel wie beim
+ * Import, damit dieselbe Datei dieselbe Kennung bekommt, ob sie gescannt oder
+ * eingeworfen wurde.
+ */
+export function inhaltsKennung(bytes: Buffer): string {
+  const kopf = bytes.subarray(0, Math.min(HASH_WINDOW, bytes.length));
+  const endeLaenge = Math.min(HASH_WINDOW, Math.max(0, bytes.length - kopf.length));
+  const ende = bytes.subarray(bytes.length - endeLaenge);
+  return kennungAus(bytes.length, kopf, ende);
 }
 
 /** exiftool liefert je nach Tag Strings oder ExifDateTime-Objekte. */
@@ -252,6 +281,27 @@ async function leseFoto(
     ...(place ? { place: { key: `${place.kind}:${place.label}`, label: place.label } } : {}),
     ...(camera ? { camera } : {}),
   };
+}
+
+/**
+ * Liest **eine** Datei einer Quelle zu einem `Photo`.
+ *
+ * Für den Einwurf: Die Datei ist gerade geschrieben worden, ihre Kennung steht
+ * schon fest (sie wurde vor dem Schreiben aus den Bytes gerechnet). Derselbe
+ * Weg wie im Scan, damit ein eingeworfenes Foto genau dieselben Felder trägt
+ * wie ein gescanntes – Datumskaskade, Ort, Kamera, orientierungsnormalisierte
+ * Maße. Ein eigener kleiner Leser hätte hier die Hälfte davon vergessen.
+ *
+ * @throws wenn die Datei unlesbar ist oder keine Pixelmaße hergibt.
+ */
+export async function leseEinzelfoto(
+  source: PhotoSource,
+  relPath: string,
+  decodes: DecodeCache,
+  id: string,
+): Promise<Photo> {
+  const st = await stat(join(source.root, relPath));
+  return await leseFoto(source, relPath, decodes, { id, st });
 }
 
 /**

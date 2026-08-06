@@ -4,9 +4,11 @@
  * Das Buch entsteht nicht aus einem Ordner, sondern aus einer Liste von
  * Ordnern: Der Grundbestand liegt auf dem NAS, die Nachzügler kommen aus einem
  * Handy-Export, von der Kamera, aus einem geteilten Album. Kopiert wird dabei
- * nichts – jede Quelle bleibt, wo sie ist, und wird **ausschließlich gelesen**.
- * Auch das Aussortieren schreibt nichts mehr: Es vermerkt die Kennung im
- * Projekt, statt die Datei zu verschieben (`project/bestand.ts`).
+ * nichts – jede Quelle bleibt, wo sie ist, und **keine ihrer Dateien wird
+ * verändert**. Auch das Aussortieren schreibt nichts: Es vermerkt die Kennung im
+ * Projekt, statt die Datei zu verschieben (`project/bestand.ts`). Angelegt wird
+ * einzig beim Einwurf eine neue Datei, unter `eingeworfen/` in der ersten Quelle
+ * (`project/einwurf.ts`) – die einzige schreibende Stelle des Servers.
  *
  * Die Kennung einer Quelle leitet sich aus ihrem Pfad ab. Dieselbe Quelle
  * zweimal hinzuzufügen ist damit folgenlos statt doppelt, und die Kennung
