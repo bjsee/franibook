@@ -265,8 +265,11 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
     }
 
     const farbe = (aufBild ? d.accentText : d.accent) ?? '#1a1a1a';
-    const xMm = front.xMm + geo.safetyMm;
-    const wMm = front.wMm - 2 * geo.safetyMm;
+    // Nicht `front.xMm + safetyMm`: Zur Rückenseite hin ist der Falzbereich
+    // breiter als der Sicherheitsabstand, und die Prüfung weiter unten misst
+    // gegen genau diese Fläche. Zwei Rechnungen für dieselbe Kante wären eine
+    // zu viel.
+    const { xMm, wMm } = safeArea(geo, 'front');
 
     if (d.title) {
       boxes.push(
@@ -305,10 +308,11 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
       });
     }
 
+    const sicher = safeArea(geo, 'back');
     boxes.push(
       textBox(
         'back-text',
-        { xMm: back.xMm + geo.safetyMm, yMm, wMm: back.wMm - 2 * geo.safetyMm, hMm },
+        { xMm: sicher.xMm, yMm, wMm: sicher.wMm, hMm },
         d.backText,
         (aufBild ? d.accentText : d.accent) ?? '#1a1a1a',
       ),

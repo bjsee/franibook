@@ -33,9 +33,20 @@ export interface CoverGeometry {
   widthMm: number;
   /** Gesamthöhe des Bogens einschließlich Umschlag und Beschnitt. */
   heightMm: number;
+  /** Beschnitt an den seitlichen Kanten – der Ursprung der x-Achse. */
   bleedMm: number;
-  wrapMm: number;
+  /** Beschnitt an Ober- und Unterkante; beim Anbieter kleiner als seitlich. */
+  bleedTopMm: number;
+  overhangSideMm: number;
+  overhangTopMm: number;
   hingeMm: number;
+  /**
+   * Warnzone links und rechts des Rückens (Falzbereich des Anbieters).
+   *
+   * Sie ist breiter als das Gelenk und ragt deshalb in die Deckelflächen
+   * hinein – anders als `hingeMm`, das ein eigenes Feld des Bogens ist.
+   */
+  hingeSafeMm: number;
   /** Sicherheitsabstand ab sichtbarer Kante, gilt für Vorder- und Rückseite. */
   safetyMm: number;
   /**
@@ -69,16 +80,17 @@ export interface CoverGeometry {
  */
 export function coverGeometry(profile: PrintProfile, pageCount: number): CoverGeometry {
   const { trimWidthMm, trimHeightMm } = profile.page;
-  const { wrapMm, hingeMm, safetyMm, bleedMm } = profile.cover;
+  const { overhang, hingeMm, hingeSafeMm, safetyMm, bleed } = profile.cover;
+  const bleedMm = bleed.sideMm;
 
   const spineMm = spineWidthMm(profile, pageCount);
   const widthMm = coverWidthMm(profile, pageCount);
   const heightMm = coverHeightMm(profile);
 
-  const yMm = bleedMm + wrapMm;
+  const yMm = bleed.topMm + overhang.topMm;
   const hMm = trimHeightMm;
 
-  const xBack = bleedMm + wrapMm;
+  const xBack = bleedMm + overhang.sideMm;
   const xHingeBack = xBack + trimWidthMm;
   const xSpine = xHingeBack + hingeMm;
   const xHingeFront = xSpine + spineMm;
@@ -88,8 +100,11 @@ export function coverGeometry(profile: PrintProfile, pageCount: number): CoverGe
     widthMm,
     heightMm,
     bleedMm,
-    wrapMm,
+    bleedTopMm: bleed.topMm,
+    overhangSideMm: overhang.sideMm,
+    overhangTopMm: overhang.topMm,
     hingeMm,
+    hingeSafeMm,
     safetyMm,
     spineToleranceMm: bleedMm,
     spineMm,
@@ -119,16 +134,25 @@ function insetOf(geo: CoverGeometry, panel: CoverPanelKind): number {
 /**
  * Bereich eines Feldes, in dem Text unbedenklich steht.
  *
+ * An der Rückenseite von Vorder- und Rückseite ist der Abstand größer als der
+ * Sicherheitsabstand, wenn der Falzbereich über das schmale Gelenkfeld hinaus
+ * in die Deckelfläche greift: Beim gemessenen 28×28 sind das bei 160 Seiten
+ * 17 mm Falz gegen 10 mm Sicherheitsabstand. Ohne diese Unterscheidung stünde
+ * die Beschriftung rechnerisch sicher und real im Falz.
+ *
  * Nie negativ: Bei einem schmalen Rücken schrumpft der Bereich auf null, statt
  * ein umgekehrtes Rechteck zu liefern, mit dem sich nicht weiterrechnen lässt.
  */
 export function safeArea(geo: CoverGeometry, panel: CoverPanelKind): Rect {
   const rect = geo.panels[panel];
   const inset = insetOf(geo, panel);
+  const falzUeberstand = Math.max(0, geo.hingeSafeMm - geo.hingeMm);
+  const links = panel === 'front' ? Math.max(inset, falzUeberstand) : inset;
+  const rechts = panel === 'back' ? Math.max(inset, falzUeberstand) : inset;
   return {
-    xMm: rect.xMm + inset,
+    xMm: rect.xMm + links,
     yMm: rect.yMm + inset,
-    wMm: Math.max(0, rect.wMm - 2 * inset),
+    wMm: Math.max(0, rect.wMm - links - rechts),
     hMm: Math.max(0, rect.hMm - 2 * inset),
   };
 }
@@ -150,14 +174,31 @@ function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /**
- * Ragt ein Rechteck in eine der beiden Gelenkzonen?
+ * Die beiden Falzbereiche: ab Rückenkante nach außen, `hingeSafeMm` breit.
+ *
+ * Sie enthalten die schmalen Gelenkfelder und greifen darüber hinaus auf die
+ * Deckelflächen über – so gibt der Anbieter sie an. Deshalb sind sie keine
+ * Felder des Bogens, sondern eine Zone darüber.
+ */
+export function hingeSafeZones(geo: CoverGeometry): [Rect, Rect] {
+  const spine = geo.panels.spine;
+  const breite = Math.max(geo.hingeSafeMm, geo.hingeMm);
+  return [
+    { xMm: spine.xMm - breite, yMm: spine.yMm, wMm: breite, hMm: spine.hMm },
+    { xMm: spine.xMm + spine.wMm, yMm: spine.yMm, wMm: breite, hMm: spine.hMm },
+  ];
+}
+
+/**
+ * Ragt ein Rechteck in einen der beiden Falzbereiche?
  *
  * Für Bilder ist das erwünscht – sie sollen über den Falz laufen, damit an der
  * Kante kein weißer Streifen entsteht. Für Text ist es ein Befund: dort
  * verschwindet bei der Bindung real Fläche.
  */
 export function overlapsHinge(geo: CoverGeometry, rect: Rect): boolean {
-  return overlaps(rect, geo.panels['hinge-back']) || overlaps(rect, geo.panels['hinge-front']);
+  const [links, rechts] = hingeSafeZones(geo);
+  return overlaps(rect, links) || overlaps(rect, rechts);
 }
 
 /** Liegt `inner` vollständig in `outer`? Toleranz gegen Rundungsreste. */

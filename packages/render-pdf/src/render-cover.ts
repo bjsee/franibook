@@ -59,17 +59,20 @@ export interface RenderCoverPdfResult {
  * Beschnitt- und Endformatrahmen des Coverbogens.
  *
  * Anders als beim Innenteil ist die TrimBox **nicht** die sichtbare Fläche: Der
- * Umschlag (`cover.wrapMm`) wird nicht abgeschnitten, sondern um die Deckel
+ * Umschlag (`cover.overhang`) wird nicht abgeschnitten, sondern um die Deckel
  * gefalzt. Geschnitten wird ausschließlich der Beschnitt.
  */
 function setCoverBoxes(doc: PDFKit.PDFDocument, profile: PrintProfile, cover: RenderedCover): void {
-  const bleed = profile.cover.bleedMm;
+  // Seitlich und oben/unten getrennt: Der Anbieter gibt für den Umschlagbogen
+  // zwei verschiedene Beschnittzugaben an (28×28: 9,31 mm gegen 7,03 mm).
+  const seite = profile.cover.bleed.sideMm;
+  const oben = profile.cover.bleed.topMm;
   const dict = doc.page.dictionary.data as unknown as Record<string, unknown>;
   dict['TrimBox'] = [
-    mmToPt(bleed),
-    mmToPt(bleed),
-    mmToPt(cover.widthMm - bleed),
-    mmToPt(cover.heightMm - bleed),
+    mmToPt(seite),
+    mmToPt(oben),
+    mmToPt(cover.widthMm - seite),
+    mmToPt(cover.heightMm - oben),
   ];
   dict['BleedBox'] = [0, 0, mmToPt(cover.widthMm), mmToPt(cover.heightMm)];
 }

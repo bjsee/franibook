@@ -1,0 +1,57 @@
+{
+  "id": "saal-21x15",
+  "vendor": "Saal Digital",
+  "product": "Fotobuch Hardcover 21×15 cm",
+  "binding": "layflat",
+  "page": {
+    "trimWidthMm": 199,
+    "trimHeightMm": 144,
+    "bleedMm": 3,
+    "safetyMm": 10,
+    "gutterSafeMm": 7
+  },
+  "pageCount": {
+    "min": 26,
+    "max": 130,
+    "step": 2
+  },
+  "spreadExport": "spread",
+  "cover": {
+    "kind": "wrap",
+    "overhang": {
+      "sideMm": 2.98,
+      "topMm": 2.98
+    },
+    "hingeMm": 3.07,
+    "hingeSafeMm": 16,
+    "spine": {
+      "pageThicknessMm": 0.1537,
+      "baseMm": 8.03,
+      "minMm": 12.03
+    },
+    "bleed": {
+      "sideMm": 7.4,
+      "topMm": 7.4
+    },
+    "safetyMm": 10
+  },
+  "color": {
+    "workingSpace": "srgb",
+    "iccProfilePath": "icc/sRGB-IEC61966-2.1.icc",
+    "renderingIntent": "perceptual"
+  },
+  "resolution": {
+    "targetDpi": 300,
+    "minDpi": 240,
+    "maxDpi": 300
+  },
+  "encoding": {
+    "jpegQuality": 88,
+    "chromaSubsampling": "4:2:0"
+  },
+  "provenance": {
+    "source": "Profibereich Fotobücher, Gruppe „Fotobuch Hardcover\", Reiter „21×15\", Einheit mm bzw. Pixel bei angegebener Auflösung; Cover glänzend, unwattiert, Innenseiten Fotopapier glänzend, ohne Barcode, ohne Logo, keine Spezialveredelung.",
+    "verifiedAt": "2026-08-05",
+    "notes": "Endformat je Seite 199×144 mm, hergeleitet aus dem Rohformat der Doppelseite (4788×1778 px bei 301 dpi) abzüglich zweimal Beschnitt. Der Produktname des Anbieters ist gerundet. Umschlagformel trifft seine Tabelle auf 1.34 mm genau — er gibt die Werte in ganzen Pixeln an und stuft den Rücken, seine eigenen Zeilen sind untereinander um bis zu 1,2 mm inkonsistent; das liegt innerhalb seines Beschnitts von 7.4 mm. safetyMm=10 aus der InDesign-Anleitung („etwa 1 cm zur Beschnittlinie\"), gutterSafeMm=7 ist dagegen Gestaltungsreserve dieses Projekts: Für die Innenseiten weist der Anbieter bei Layflat keinen Falzbereich aus. resolution.minDpi=240 und encoding sind Projektentscheidungen, siehe docs/spikes/bestandsanalyse.md und Issue #3. Der Umschlag wird beim Anbieter mit 300–302 dpi geführt; wir rechnen durchgehend in mm."
+  }
+}

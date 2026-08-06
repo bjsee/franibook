@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
-import type { PrintProfile } from '../print/profile.js';
+import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
+import { type PrintProfile, spineWidthMm } from '../print/profile.js';
 import type { Photo } from '../model/photo.js';
 import { coverGeometry, overlapsHinge, safeArea } from './geometry.js';
 import { MAX_SPINE_TEXT_HEIGHT_MM, renderCover } from './render-cover.js';
@@ -47,7 +47,7 @@ describe('Cover rendern', () => {
     const geo = coverGeometry(profile, SEITEN);
     expect(cover.widthMm).toBe(geo.widthMm);
     expect(cover.heightMm).toBe(geo.heightMm);
-    expect(cover.geometry.spineMm).toBeCloseTo(24.8, 6);
+    expect(cover.geometry.spineMm).toBeCloseTo(spineWidthMm(profile, SEITEN), 9);
   });
 
   it('lässt das Titelbild über die Gelenkzone bis zur Blattkante laufen', () => {
@@ -75,7 +75,7 @@ describe('Cover rendern', () => {
     const cover = renderCover(VOLL, ctx);
     const geo = cover.geometry;
     const ruecken = cover.boxes.find(
-      (b) => b.kind === 'rect' && b.hMm === geo.heightMm && b.wMm < 50,
+      (b) => b.kind === 'rect' && b.hMm === geo.heightMm && b.wMm < 80,
     );
     expect(ruecken).toBeDefined();
     expect(ruecken?.xMm).toBeCloseTo(geo.panels.spine.xMm - geo.spineToleranceMm, 9);
@@ -163,19 +163,20 @@ describe('Cover rendern', () => {
     expect(cover.warnings.some((w) => w.code === 'photo-missing')).toBe(true);
   });
 
-  it('weist auf das unverifizierte Druckprofil hin', () => {
+  it('weist auf ein unverifiziertes Druckprofil hin', () => {
+    // Die mitgelieferten Profile sind gegen die Angaben des Anbieters geprüft,
+    // also schweigt der Hinweis. Er greift für ein von Hand ergänztes Format.
     const cover = renderCover(VOLL, ctx);
-    const befund = cover.warnings.find((w) => w.code === 'profile-unverified');
+    expect(cover.warnings.some((w) => w.code === 'profile-unverified')).toBe(false);
+
+    const ungeprueft: PrintProfile = {
+      ...profile,
+      provenance: { ...profile.provenance, verifiedAt: null },
+    };
+    const mit = renderCover(VOLL, { ...ctx, profile: ungeprueft });
+    const befund = mit.warnings.find((w) => w.code === 'profile-unverified');
     expect(befund).toBeDefined();
     expect(coverWarningText(befund!)).toContain('unverifizierten');
-
-    // Umgekehrt: Ist das Profil geprüft, entfällt der Hinweis.
-    const geprueft: PrintProfile = {
-      ...profile,
-      provenance: { ...profile.provenance, verifiedAt: '2026-08-02' },
-    };
-    const ohne = renderCover(VOLL, { ...ctx, profile: geprueft });
-    expect(ohne.warnings.some((w) => w.code === 'profile-unverified')).toBe(false);
   });
 
   it('ist deterministisch', () => {

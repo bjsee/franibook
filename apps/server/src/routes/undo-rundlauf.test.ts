@@ -175,6 +175,14 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     payload: { tilt: 3, timeline: false },
   }),
 
+  // Ein anderes Format als die Vorgabe, sonst änderte der Aufruf nichts und
+  // der Rundlauf prüfte eine Zustandsgleichheit, die schon vorher galt.
+  'PATCH /api/format': () => ({
+    method: 'PATCH',
+    url: '/api/format',
+    payload: { printProfileId: 'saal-19x19' },
+  }),
+
   'PUT /api/chapters/:year/events': () => ({
     method: 'PUT',
     url: '/api/chapters/2017/events',
