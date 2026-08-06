@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { PhotoId } from '../model/photo.js';
+import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
+import { defaultProfile } from '../print/profiles/index.js';
 import { HALF_BLANK_ID, HALF_ONE_ID, halvesOfTemplate } from '../templates/halves.js';
 import { requireTemplate } from '../templates/index.js';
-import { insertSinglePage, removeSinglePage, zerlegbar } from './single-page.js';
+import { insertSinglePage, removeSinglePage, setHalfPage, zerlegbar } from './single-page.js';
 
 const AUTO = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
 
@@ -416,5 +417,138 @@ describe('Wirkungslose Löschversuche', () => {
     expect(r.ok).toBe(true);
     expect(r.spreads).toHaveLength(1);
     expect(fotos(r.spreads)).toEqual(['p0', 'p1']);
+  });
+});
+
+describe('setHalfPage', () => {
+  const profile = defaultProfile();
+
+  /** Ein Foto im Querformat; die Maße reichen für jeden Platz dieser Vorlagen. */
+  const foto = (id: string): Photo =>
+    ({ id, relPath: id, fileName: id, bytes: 1_000_000, width: 4000, height: 3000 }) as Photo;
+
+  /** Ein Viererraster mit Handarbeit an jedem Bild. */
+  function raster(): Spread {
+    const s = blatt('s0', 'spread.4up.grid', 0);
+    s.slots = s.slots.map((slot, i) => ({
+      ...slot,
+      crop: { x: 0.1 * i, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' as const },
+      rotateDeg: 3 + i,
+      frame: 'polaroid' as const,
+      caption: `Bild ${i}`,
+      layer: i,
+    }));
+    return s;
+  }
+
+  /** Die Zuweisungen einer Buchhälfte, an ihrer Geometrie erkannt. */
+  function haelfte(spread: Spread, which: 'left' | 'right') {
+    const geo = new Map(requireTemplate(spread.templateId).slots.map((s) => [s.id, s]));
+    return spread.slots
+      .filter((s) => {
+        const platz = s.rect ?? geo.get(s.slotId);
+        if (!platz) return false;
+        const rechts = platz.x + platz.w / 2 >= 0.5;
+        return which === 'left' ? !rechts : rechts;
+      })
+      .map((s) => ({ ...s, platz: geo.get(s.slotId)! }));
+  }
+
+  it('lässt die Gegenseite Bild für Bild stehen', () => {
+    // Der Bug: Vorher lief der Griff über die zusammengesetzte Paarkennung und
+    // damit über `layoutSpread` – die Zuordnung wurde für beide Seiten neu
+    // gerechnet, und links lagen hinterher andere Bilder in anderen Plätzen.
+    const vorher = raster();
+    const links = haelfte(vorher, 'left');
+
+    const r = setHalfPage(vorher, {
+      side: 'right',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    const nachher = haelfte(r.spread!, 'left');
+    expect(nachher.map((s) => s.photoId)).toEqual(links.map((s) => s.photoId));
+    // Und zwar in denselben Plätzen: Die Slotkennung wechselt beim Umpaaren
+    // (`a` wird zu `l-a`), die Geometrie darf es nicht.
+    expect(nachher.map((s) => s.platz.x)).toEqual(links.map((s) => s.platz.x));
+    expect(nachher.map((s) => s.platz.w)).toEqual(links.map((s) => s.platz.w));
+  });
+
+  it('behält Ausschnitt, Neigung, Rahmen, Unterschrift und Ebene der Gegenseite', () => {
+    // Handarbeit an einem Bild links ist keine Aussage über die rechte Seite.
+    const vorher = raster();
+    const links = haelfte(vorher, 'left');
+
+    const r = setHalfPage(vorher, {
+      side: 'right',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    // Ohne die Kennungen: Beim Umpaaren wird `a` zu `l-a`, und das ist der
+    // Zweck der Sache. Verglichen wird, was am Bild hängt.
+    const ohneKennung = (s: { slotId: string; platz: { id: string } }) => {
+      const { slotId: _weg, platz, ...rest } = s;
+      const { id: _auch, ...geometrie } = platz;
+      return { ...rest, platz: geometrie };
+    };
+    expect(haelfte(r.spread!, 'left').map(ohneKennung)).toEqual(links.map(ohneKennung));
+  });
+
+  it('ordnet die gewählte Seite neu an und meldet, was keinen Platz fand', () => {
+    // Zwei Bilder rechts, eine Halbseite mit einem Platz: Das zweite Bild geht
+    // in den Pool, und das gehört gemeldet.
+    const r = setHalfPage(raster(), {
+      side: 'right',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(haelfte(r.spread!, 'right')).toHaveLength(1);
+    expect(r.leftover).toHaveLength(1);
+    // Was übrig bleibt, kam von der gewählten Seite – links wird nichts genommen.
+    expect(['p2', 'p3']).toContain(r.leftover[0]);
+  });
+
+  it('behält Kennung, Schloss und Anker der Doppelseite', () => {
+    // `paare` baut ein neues Blatt und vergibt ihm eine neue Kennung. Hier wird
+    // ein bestehendes umgestellt: `keep` und `anchor` zeigen weiter auf dasselbe.
+    const vorher: Spread = {
+      ...raster(),
+      id: 'eigen-1',
+      index: 4,
+      locked: true,
+      anchor: { photoId: 'p9', where: 'before' },
+    };
+
+    const r = setHalfPage(vorher, {
+      side: 'left',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.spread!.id).toBe('eigen-1');
+    expect(r.spread!.index).toBe(4);
+    expect(r.spread!.locked).toBe(true);
+    expect(r.spread!.anchor).toEqual({ photoId: 'p9', where: 'before' });
+  });
+
+  it('lehnt ab, was sich nicht an der Falzachse trennen lässt', () => {
+    // Auftakt und justierte Zeilen: Der Aufrufer muss dann die ganze
+    // Doppelseite anordnen, und das soll er entscheiden statt es geraten zu
+    // bekommen.
+    const nein = (spread: Spread) =>
+      setHalfPage(spread, { side: 'right', halfId: HALF_ONE_ID, photos: [], profile });
+
+    expect(nein(auftakt('a0')).ok).toBe(false);
+    expect(nein({ ...raster(), templateId: 'justiert.4' }).ok).toBe(false);
+    expect(nein({ ...raster(), backgroundPhotoId: 'p99' }).ok).toBe(false);
   });
 });

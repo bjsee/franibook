@@ -11,7 +11,7 @@ import type { PhotoOverride, PhotoWeight } from '../model/date.js';
 import { effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { SlotAssignment, Spread } from '../model/spread.js';
-import type { Template } from '../model/template.js';
+import type { Template, TemplateSlot } from '../model/template.js';
 import type { TemplateId } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import { templateById, templatesWithSlotCount, templatesWithoutTitle } from '../templates/index.js';
@@ -107,20 +107,12 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   let bestScore = Number.POSITIVE_INFINITY;
 
   for (const template of candidates) {
-    const geometries = template.slots.map((s) => slotGeometry(s, profile));
-    const cost = photos.map((photo) =>
-      template.slots.map(
-        (slot, j) => slotCost(photo, slot, geometries[j]!, { profile, weightOf }).total,
-      ),
-    );
+    const cost = kostenmatrix(photos, template.slots, profile, weightOf);
     const assignment = assign(cost);
     const score = assignment.reduce((sum, slotIndex, photoIndex) => {
-      const slot = template.slots[slotIndex];
-      if (!slot) return sum;
-      return (
-        sum +
-        slotCost(photos[photoIndex]!, slot, geometries[slotIndex]!, { profile, weightOf }).total
-      );
+      // Ein Foto ohne Platz kostet nichts – es steht hinterher in `leftover`.
+      if (slotIndex < 0 || slotIndex >= template.slots.length) return sum;
+      return sum + cost[photoIndex]![slotIndex]!;
     }, 0);
 
     if (score < bestScore) {
@@ -139,8 +131,40 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   }
 
   const template = templateById(bestTemplateId)!;
-  const slots = template.slots.map((slot, slotIndex) => {
-    const photoIndex = bestAssignment.indexOf(slotIndex);
+  const { slots, leftover } = zuweisungen(photos, template.slots, bestAssignment, profile);
+  return { templateId: bestTemplateId, slots, leftover };
+}
+
+const FULL_AUTO_CROP = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
+
+/** Kosten jedes Fotos in jedem Platz – die Matrix, die `assign` löst. */
+function kostenmatrix(
+  photos: readonly Photo[],
+  slots: readonly TemplateSlot[],
+  profile: PrintProfile,
+  weightOf: (photoId: PhotoId) => PhotoWeight,
+): number[][] {
+  const geometries = slots.map((s) => slotGeometry(s, profile));
+  return photos.map((photo) =>
+    slots.map((slot, j) => slotCost(photo, slot, geometries[j]!, { profile, weightOf }).total),
+  );
+}
+
+/**
+ * Aus einer Zuordnung die Slotzuweisungen samt Ausschnitten.
+ *
+ * Geteilt zwischen ganzer Doppelseite und einzelner Buchseite (`layoutHalf`):
+ * Welches Bild in welchen Platz und mit welchem Ausschnitt, ist dieselbe Frage –
+ * verschieden ist nur, woher die Plätze kommen.
+ */
+function zuweisungen(
+  photos: readonly Photo[],
+  slots: readonly TemplateSlot[],
+  assignment: readonly number[],
+  profile: PrintProfile,
+): { slots: SlotAssignment[]; leftover: PhotoId[] } {
+  const belegt: SlotAssignment[] = slots.map((slot, slotIndex) => {
+    const photoIndex = assignment.indexOf(slotIndex);
     const photo = photoIndex >= 0 ? photos[photoIndex] : undefined;
     if (!photo) {
       return { slotId: slot.id, photoId: null, crop: { ...FULL_AUTO_CROP } };
@@ -153,20 +177,42 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
     };
   });
 
-  // Bei einer festen Vorlage mit zu wenig Plätzen bleiben Fotos übrig. `assign`
-  // lässt sie unzugeordnet; erkennbar sind sie daran, dass kein Slot auf ihren
-  // Index zeigt.
+  // Bei zu wenig Plätzen bleiben Fotos übrig. `assign` lässt sie unzugeordnet;
+  // erkennbar sind sie daran, dass kein Slot auf ihren Index zeigt.
   const leftover = photos
     .filter((_, photoIndex) => {
-      const slotIndex = bestAssignment[photoIndex];
-      return slotIndex === undefined || slotIndex < 0 || slotIndex >= template.slots.length;
+      const slotIndex = assignment[photoIndex];
+      return slotIndex === undefined || slotIndex < 0 || slotIndex >= slots.length;
     })
     .map((p) => p.id);
 
-  return { templateId: bestTemplateId, slots, leftover };
+  return { slots: belegt, leftover };
 }
 
-const FULL_AUTO_CROP = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
+/**
+ * Ordnet die Fotos **einer Buchseite** auf den Plätzen einer Halbseite an.
+ *
+ * Die halbe Schwester von `layoutSpread`: dieselbe Zuordnungsrechnung, aber
+ * ohne Vorlagenwahl – die Halbseite ist gewählt, und was auf der Gegenseite
+ * derselben Doppelseite liegt, geht die Rechnung nichts an. Genau das braucht
+ * der seitenweise Anordnungswechsel (`setHalfPage`): Wer die rechte Seite
+ * umstellt, will die linke unverändert wiederfinden.
+ *
+ * Die Plätze stehen in Linksform und auf die ganze Doppelseite normiert, wie
+ * jede Halbseite (`templates/halves.ts`). Für die Kosten ist das gleichgültig:
+ * `slotCost` liest Breite, Höhe, Vorliebe und Prominenz, nicht die Lage auf dem
+ * Papier.
+ */
+export function layoutHalf(opts: {
+  photos: readonly Photo[];
+  slots: readonly TemplateSlot[];
+  profile: PrintProfile;
+  weightOf?: (photoId: PhotoId) => PhotoWeight;
+}): { slots: SlotAssignment[]; leftover: PhotoId[] } {
+  const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
+  const assignment = assign(kostenmatrix(opts.photos, opts.slots, opts.profile, weightOf));
+  return zuweisungen(opts.photos, opts.slots, assignment, opts.profile);
+}
 
 /**
  * Die Doppelseite, die eine gewählte Halbseite mit der besten Gegenseite paart.
