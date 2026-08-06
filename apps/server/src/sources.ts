@@ -4,15 +4,17 @@
  * Das Buch entsteht nicht aus einem Ordner, sondern aus einer Liste von
  * Ordnern: Der Grundbestand liegt auf dem NAS, die Nachzügler kommen aus einem
  * Handy-Export, von der Kamera, aus einem geteilten Album. Kopiert wird dabei
- * nichts – jede Quelle bleibt, wo sie ist, und wird ausschließlich gelesen.
+ * nichts – jede Quelle bleibt, wo sie ist, und wird **ausschließlich gelesen**.
+ * Auch das Aussortieren schreibt nichts mehr: Es vermerkt die Kennung im
+ * Projekt, statt die Datei zu verschieben (`project/bestand.ts`).
  *
  * Die Kennung einer Quelle leitet sich aus ihrem Pfad ab. Dieselbe Quelle
  * zweimal hinzuzufügen ist damit folgenlos statt doppelt, und die Kennung
  * überlebt einen Serverstart ohne eigene Verwaltung.
  */
 import { createHash } from 'node:crypto';
-import { access, mkdir, rename, stat } from 'node:fs/promises';
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { basename, isAbsolute, relative, resolve } from 'node:path';
 
 export interface PhotoSource {
   /** Aus dem Pfad abgeleitet, siehe `quellenId`. */
@@ -51,34 +53,8 @@ export interface PathResolver {
   pfad(photo: PhotoRef): string;
 }
 
-/**
- * Papierkorb innerhalb der Quelle.
- *
- * Der Punkt am Anfang ist der ganze Trick: `sammleDateien` überspringt
- * versteckte Einträge ohnehin, ein gelöschtes Foto kommt also bei keinem
- * Reimport zurück – ohne dass irgendwo eine Liste gelöschter Dateien gepflegt
- * werden müsste. Und weil der Ordner in derselben Quelle liegt, ist das
- * Löschen ein `rename` auf demselben Datenträger: augenblicklich und atomar,
- * auch wenn die Quelle auf dem Netzlaufwerk liegt.
- */
-export const PAPIERKORB = '.franibook-geloescht';
-
 export function quellenId(root: string): string {
   return createHash('sha256').update(resolve(root)).digest('hex').slice(0, 8);
-}
-
-/** `foto.jpg` → `foto-2.jpg` → `foto-3.jpg`, bis der Name frei ist. */
-async function freierName(pfad: string): Promise<string> {
-  const ext = extname(pfad);
-  const stamm = pfad.slice(0, pfad.length - ext.length);
-  for (let n = 2; ; n++) {
-    const kandidat = `${stamm}-${n}${ext}`;
-    try {
-      await access(kandidat);
-    } catch {
-      return kandidat;
-    }
-  }
 }
 
 /** Liegt `kind` unterhalb von `eltern`? */
@@ -198,41 +174,6 @@ export class Sources implements PathResolver {
       throw new Error(`relPath verlässt die Quelle „${quelle.label}": ${photo.relPath}`);
     }
     return ergebnis;
-  }
-
-  /**
-   * Legt die Datei eines Fotos in den Papierkorb seiner Quelle.
-   *
-   * Der einzige Schreibzugriff auf eine Bildquelle, und auch er löscht nichts:
-   * Die Datei behält ihren Namen und ihre Lage unterhalb von `PAPIERKORB`, wird
-   * also im Finder gefunden und von Hand zurückgelegt. Ein echtes `unlink`
-   * wäre für ein Fotobuch die falsche Zusage – wer beim Aussortieren danebengreift,
-   * merkt es erst zwei Doppelseiten später.
-   *
-   * @returns Pfad im Papierkorb.
-   * @throws wenn die Quelle unbekannt oder gerade nicht erreichbar ist.
-   */
-  async inDenPapierkorb(photo: PhotoRef): Promise<string> {
-    const quelle = photo.sourceId ? this.get(photo.sourceId) : this.primary();
-    if (!quelle) throw new Error(`Quelle ${photo.sourceId ?? '(keine)'} unbekannt`);
-    if (!(await this.erreichbar(quelle.id))) {
-      throw new Error(`Quelle „${quelle.label}" ist nicht erreichbar`);
-    }
-
-    const von = join(quelle.root, photo.relPath);
-    // Die Ordnerstruktur der Quelle bleibt erhalten: Zwei gleichnamige Dateien
-    // aus verschiedenen Unterordnern sollen sich im Papierkorb nicht begegnen.
-    let nach = join(quelle.root, PAPIERKORB, photo.relPath);
-    await mkdir(dirname(nach), { recursive: true });
-    try {
-      await access(nach);
-      nach = await freierName(nach);
-    } catch {
-      // frei
-    }
-
-    await rename(von, nach);
-    return nach;
   }
 
   /**

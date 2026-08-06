@@ -15,7 +15,7 @@ import {
   requireTemplate,
 } from '@franibook/core';
 import { Project, migriere } from './project.js';
-import { quellenId } from './sources.js';
+import { quellenId, Sources } from './sources.js';
 
 /**
  * Ein gespeichertes Projekt im alten Schema, auf das Nötigste gekürzt.
@@ -1136,5 +1136,88 @@ describe('Eigene Einzelseiten', () => {
     const p = projektMitVier();
     const r = p.insertSinglePage(2);
     expect(p.spreads[r.index]!.templateId).toContain(HALF_BLANK_ID);
+  });
+});
+
+describe('Aussortieren', () => {
+  /** Drei Fotos, drei Tage – ohne Caches, denn es wird keine Datei angefasst. */
+  function projektMitDrei(): Project {
+    // Mit leerer Quellenliste, weil der Verlauf sie in den Stand liest.
+    const p = new Project(new Sources([]), null as never, null as never, '');
+    for (const [i, id] of ['p1', 'p2', 'p3'].entries()) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        orientation: 1,
+        takenAt: `2020-01-0${i + 1}T12:00:00`,
+      } as never);
+    }
+    return p;
+  }
+
+  it('vergisst das Foto und merkt es sich als aussortiert', () => {
+    const p = projektMitDrei();
+
+    const ergebnis = p.deletePhoto('p2');
+
+    expect(ergebnis?.fileName).toBe('p2.jpg');
+    expect(p.photos.has('p2')).toBe(false);
+    expect(p.aussortierte().map((a) => a.photo.id)).toEqual(['p2']);
+  });
+
+  it('nimmt ein aussortiertes Foto an seinen Tag zurück, nicht ans Ende', () => {
+    const p = projektMitDrei();
+    p.deletePhoto('p2');
+
+    const photo = p.wiederAufnehmen('p2');
+
+    expect(photo?.id).toBe('p2');
+    // Die Reihenfolge der Map ist die Reihenfolge des Fotopools.
+    expect([...p.photos.keys()]).toEqual(['p1', 'p2', 'p3']);
+    expect(p.aussortierte()).toEqual([]);
+  });
+
+  it('meldet eine Kennung, die gar nicht aussortiert ist', () => {
+    const p = projektMitDrei();
+    expect(p.wiederAufnehmen('p1')).toBeNull();
+  });
+
+  it('nimmt das Aussortieren mit einem Schritt zurück, samt Merkliste', async () => {
+    const p = projektMitDrei();
+    p.verlauf.punkt('Foto aussortiert');
+    p.deletePhoto('p2');
+
+    await p.zurueck();
+
+    expect(p.photos.has('p2')).toBe(true);
+    expect(p.aussortierte()).toEqual([]);
+  });
+
+  it('überlebt das Speichern und Laden', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-aussortiert-'));
+    const p = new Project(new Sources([]), null as never, null as never, dir);
+    p.photos.set('p1', {
+      id: 'p1',
+      sourceId: 'q',
+      relPath: 'p1.jpg',
+      fileName: 'p1.jpg',
+      bytes: 1,
+      width: 4000,
+      height: 3000,
+    } as never);
+    p.deletePhoto('p1');
+    await p.save();
+
+    const geladen = new Project(new Sources([]), null as never, null as never, dir);
+    await geladen.load();
+
+    // Der ganze Zweck der Merkliste: Sie muss einen Serverneustart überstehen,
+    // sonst holt der erste Import danach alles zurück.
+    expect(geladen.aussortierte().map((a) => a.photo.fileName)).toEqual(['p1.jpg']);
   });
 });

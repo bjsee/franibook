@@ -233,10 +233,11 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   'POST /api/groups/ungroup': { label: 'Fotos aus Gruppen genommen' },
 
   // ------------------------------------------------- Bestand und Bildquellen
-  // Die einzige Aktion mit einer Wirkung außerhalb des Projektzustands: Der
-  // Verlauf merkt sich beide Pfade und legt die Datei beim Zurücknehmen zurück
-  // (`Project.deletePhoto`).
+  // Beide sind gewöhnliche Zustandsänderungen: Aussortieren trägt eine Kennung
+  // in die Merkliste ein, Wiederaufnehmen nimmt sie heraus und liest die Datei.
+  // Die Datei selbst bewegt sich nicht (`project/bestand.ts`, `Aussortiert`).
   'DELETE /api/photos/:id': { label: 'Foto aussortiert' },
+  'DELETE /api/photos/aussortiert/:id': { label: 'Foto wieder aufgenommen' },
   // Kein Verschmelzschlüssel: Eine Korrektur ist eine Anfrage über die ganze
   // Auswahl, kein Regler. Ein Anker fällt bei einer Serie – wer vierzig Bilder
   // eines Kamera-Resets verschiebt und sich vertut, soll das auch nach einem

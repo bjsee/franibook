@@ -1330,7 +1330,8 @@ export function useSpreadEditor({
   // -------------------------------------------------------- Aussortieren
 
   /**
-   * Legt die Datei in den Papierkorb ihrer Quelle.
+   * Sortiert das Foto aus: Es verlässt das Projekt und kommt bei keinem
+   * Einlesen zurück – die Datei bleibt dabei unangetastet liegen.
    *
    * Anders als „Aus dem Buch nehmen": Dort bleibt das Foto im Projekt und
    * wandert in den Pool, hier verlässt es beides.

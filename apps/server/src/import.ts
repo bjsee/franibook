@@ -7,6 +7,7 @@
  * Die Originaldateien werden ausschließlich gelesen.
  */
 import { createHash } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { open, readdir, stat } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { basename, extname, join } from 'node:path';
@@ -26,6 +27,15 @@ export interface ImportResult {
   /** Übersprungene Videos – werden gemeldet, damit nichts unbemerkt fehlt. */
   skippedVideos: string[];
   skippedOther: string[];
+  /**
+   * Dateien, die als aussortiert vermerkt sind.
+   *
+   * Sie liegen im Ordner und werden trotzdem nicht aufgenommen – das ist der
+   * ganze Sinn der Merkliste. Gezählt wird trotzdem, damit „6 aussortierte
+   * übersprungen" in der Meldung steht und niemand nach den fehlenden Bildern
+   * sucht.
+   */
+  aussortiert: string[];
   failed: { file: string; reason: string }[];
 }
 
@@ -153,98 +163,130 @@ export async function sammleDateien(root: string): Promise<{
 }
 
 /**
+ * Kennung und Dateistatus – was vor dem teuren Teil feststehen muss.
+ *
+ * Der Inhaltshash muss vor den Pixeln bekannt sein: Er benennt das Konvertat im
+ * Decode-Cache, und er entscheidet, ob die Datei überhaupt gelesen wird
+ * (Aussortierliste). Die verlorene Nebenläufigkeit sind 128 KB Lesen je Datei,
+ * gegen 2,4 s Metadatenlauf über den ganzen Bestand nicht messbar.
+ */
+async function kennung(path: string): Promise<{ id: string; st: Stats }> {
+  const st = await stat(path);
+  return { id: await contentHash(path, st.size), st };
+}
+
+/**
+ * Liest eine Bilddatei zu einem `Photo`.
+ *
+ * @param vorab Kennung und Status – der Aufrufer hat sie schon, weil er an der
+ * Kennung entscheidet, ob die Datei überhaupt gelesen wird.
+ * @throws wenn die Datei unlesbar ist oder keine Pixelmaße hergibt.
+ */
+async function leseFoto(
+  source: PhotoSource,
+  relPath: string,
+  decodes: DecodeCache,
+  vorab: { id: string; st: Stats },
+): Promise<Photo> {
+  const path = join(source.root, relPath);
+  const fileName = basename(relPath);
+  const { id, st } = vorab;
+
+  const [tags, meta] = await Promise.all([
+    exiftool.read(path),
+    // Metadaten liest exiftool immer aus dem Original – die Konvertierung
+    // betrifft nur die Pixel. Nur die Pixelmaße kommen bei einer für
+    // libvips unlesbaren Datei aus dem Konvertat, und `sips` ist maßhaltig.
+    decodes.withFallback({ id, relPath, sourceId: source.id }, (p) => sharp(p).metadata()),
+  ]);
+
+  // Pixelmaße sofort orientierungsnormalisieren. Alles Nachgelagerte –
+  // Seitenverhältnis, Layoutwahl, Auflösungsrechnung – arbeitet damit
+  // ohne Sonderfälle.
+  const orientation = meta.orientation ?? 1;
+  const swap = orientation >= 5 && orientation <= 8;
+  const rawW = meta.width ?? 0;
+  const rawH = meta.height ?? 0;
+  if (rawW === 0 || rawH === 0) throw new Error('keine Pixelmaße');
+
+  // Alle Quellen der Datumskaskade füllen, nicht nur die erste – sonst
+  // fällt sie bei fehlendem DateTimeOriginal sofort auf das Dateidatum
+  // zurück, obwohl noch bessere Angaben in der Datei stehen.
+  const takenAt = toNaiveDateTime(tags.DateTimeOriginal);
+  const secondaryDate = toNaiveDateTime(tags.CreateDate) ?? toNaiveDateTime(tags.SubSecCreateDate);
+  const gpsDate = toNaiveDateTime(tags.GPSDateTime);
+  const nameDate = dateFromFileName(fileName);
+
+  const gps =
+    typeof tags.GPSLatitude === 'number' && typeof tags.GPSLongitude === 'number'
+      ? { lat: tags.GPSLatitude, lon: tags.GPSLongitude }
+      : undefined;
+
+  // Ort direkt beim Import auflösen. Die Ortsdatenbank ist 2,4 MB groß
+  // und hat im Browser nichts zu suchen; das Ergebnis dagegen ist ein
+  // kurzer String und wandert mit ins Projekt.
+  const place = gps ? lookupPlace(gps.lat, gps.lon) : undefined;
+
+  const camera = [tags.Make, tags.Model]
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+    .join(' ')
+    .replace(/\b(\w+)\s+\1\b/i, '$1') // "Canon Canon EOS" → "Canon EOS"
+    .trim();
+
+  return {
+    id,
+    relPath,
+    sourceId: source.id,
+    fileName,
+    bytes: st.size,
+    width: swap ? rawH : rawW,
+    height: swap ? rawW : rawH,
+    orientation,
+    ...(takenAt ? { takenAt } : {}),
+    ...(secondaryDate ? { secondaryDate } : {}),
+    ...(gpsDate ? { gpsDate } : {}),
+    ...(nameDate ? { nameDate } : {}),
+    fileMtime: toNaive(st.mtime),
+    ...(st.birthtime && st.birthtime.getTime() > 0 ? { fileBirthtime: toNaive(st.birthtime) } : {}),
+    ...(gps ? { gps } : {}),
+    ...(place ? { place: { key: `${place.kind}:${place.label}`, label: place.label } } : {}),
+    ...(camera ? { camera } : {}),
+  };
+}
+
+/**
  * Liest eine Bildquelle ein.
  *
  * @param limit Höchstzahl einzulesender Fotos. Bei mehreren Quellen gibt der
  * Aufrufer das Restkontingent weiter, damit `FRANIBOOK_LIMIT` weiterhin die
  * Gesamtzahl begrenzt und nicht die je Ordner.
+ * @param aussortiert Kennungen, die nicht ins Projekt zurückkehren sollen.
+ * Geprüft wird direkt nach dem Hash: EXIF und Pixelmaße einer Datei zu lesen,
+ * die man gleich wegwirft, ist die Arbeit, die man sich hier spart.
  */
 export async function importSource(
   source: PhotoSource,
   decodes: DecodeCache,
   limit?: number,
+  aussortiert: ReadonlySet<string> = new Set(),
 ): Promise<ImportResult> {
   const root = source.root;
   const { images, skippedVideos, skippedOther } = await sammleDateien(root);
 
   const selected = limit ? images.slice(0, limit) : images;
   const failed: { file: string; reason: string }[] = [];
+  const uebersprungen: string[] = [];
   const concurrency = Math.max(1, availableParallelism() - 1);
 
   const results = await mapLimit(selected, concurrency, async (relPath): Promise<Photo | null> => {
     const path = join(root, relPath);
-    const fileName = basename(relPath);
     try {
-      // Der Inhaltshash muss vor den Pixeln bekannt sein: Er benennt das
-      // Konvertat im Decode-Cache. Die verlorene Nebenläufigkeit sind 128 KB
-      // Lesen je Datei, gegen 2,4 s Metadatenlauf über den ganzen Bestand
-      // nicht messbar.
-      const st = await stat(path);
-      const id = await contentHash(path, st.size);
-
-      const [tags, meta] = await Promise.all([
-        exiftool.read(path),
-        // Metadaten liest exiftool immer aus dem Original – die Konvertierung
-        // betrifft nur die Pixel. Nur die Pixelmaße kommen bei einer für
-        // libvips unlesbaren Datei aus dem Konvertat, und `sips` ist maßhaltig.
-        decodes.withFallback({ id, relPath, sourceId: source.id }, (p) => sharp(p).metadata()),
-      ]);
-
-      // Pixelmaße sofort orientierungsnormalisieren. Alles Nachgelagerte –
-      // Seitenverhältnis, Layoutwahl, Auflösungsrechnung – arbeitet damit
-      // ohne Sonderfälle.
-      const orientation = meta.orientation ?? 1;
-      const swap = orientation >= 5 && orientation <= 8;
-      const rawW = meta.width ?? 0;
-      const rawH = meta.height ?? 0;
-      if (rawW === 0 || rawH === 0) throw new Error('keine Pixelmaße');
-
-      // Alle Quellen der Datumskaskade füllen, nicht nur die erste – sonst
-      // fällt sie bei fehlendem DateTimeOriginal sofort auf das Dateidatum
-      // zurück, obwohl noch bessere Angaben in der Datei stehen.
-      const takenAt = toNaiveDateTime(tags.DateTimeOriginal);
-      const secondaryDate =
-        toNaiveDateTime(tags.CreateDate) ?? toNaiveDateTime(tags.SubSecCreateDate);
-      const gpsDate = toNaiveDateTime(tags.GPSDateTime);
-      const nameDate = dateFromFileName(fileName);
-
-      const gps =
-        typeof tags.GPSLatitude === 'number' && typeof tags.GPSLongitude === 'number'
-          ? { lat: tags.GPSLatitude, lon: tags.GPSLongitude }
-          : undefined;
-
-      // Ort direkt beim Import auflösen. Die Ortsdatenbank ist 2,4 MB groß
-      // und hat im Browser nichts zu suchen; das Ergebnis dagegen ist ein
-      // kurzer String und wandert mit ins Projekt.
-      const place = gps ? lookupPlace(gps.lat, gps.lon) : undefined;
-
-      const camera = [tags.Make, tags.Model]
-        .filter((v): v is string => typeof v === 'string' && v.length > 0)
-        .join(' ')
-        .replace(/\b(\w+)\s+\1\b/i, '$1') // "Canon Canon EOS" → "Canon EOS"
-        .trim();
-
-      return {
-        id,
-        relPath,
-        sourceId: source.id,
-        fileName,
-        bytes: st.size,
-        width: swap ? rawH : rawW,
-        height: swap ? rawW : rawH,
-        orientation,
-        ...(takenAt ? { takenAt } : {}),
-        ...(secondaryDate ? { secondaryDate } : {}),
-        ...(gpsDate ? { gpsDate } : {}),
-        ...(nameDate ? { nameDate } : {}),
-        fileMtime: toNaive(st.mtime),
-        ...(st.birthtime && st.birthtime.getTime() > 0
-          ? { fileBirthtime: toNaive(st.birthtime) }
-          : {}),
-        ...(gps ? { gps } : {}),
-        ...(place ? { place: { key: `${place.kind}:${place.label}`, label: place.label } } : {}),
-        ...(camera ? { camera } : {}),
-      };
+      const vorab = await kennung(path);
+      if (aussortiert.has(vorab.id)) {
+        uebersprungen.push(relPath);
+        return null;
+      }
+      return await leseFoto(source, relPath, decodes, vorab);
     } catch (err) {
       failed.push({ file: relPath, reason: err instanceof Error ? err.message : String(err) });
       return null;
@@ -265,7 +307,7 @@ export async function importSource(
     return a.relPath.localeCompare(b.relPath);
   });
 
-  return { photos, skippedVideos, skippedOther, failed };
+  return { photos, skippedVideos, skippedOther, aussortiert: uebersprungen, failed };
 }
 
 export async function shutdownImport(): Promise<void> {

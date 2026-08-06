@@ -114,7 +114,7 @@ export function PhotoGroups({
   }, [filter, onGruppeGewaehlt]);
 
   /**
-   * Legt die Datei in den Papierkorb ihrer Quelle.
+   * Sortiert das Foto aus – die Datei bleibt dabei liegen.
    *
    * Von hier aus ist nicht erkennbar, ob das Foto im Buch steht – die Liste
    * kennt die Doppelseiten nicht. Die Rückmeldung sagt es hinterher.

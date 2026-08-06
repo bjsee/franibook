@@ -208,11 +208,14 @@ export function fotoRouten(
   });
 
   /**
-   * Legt die Datei eines Fotos in den Papierkorb seiner Quelle.
+   * Sortiert ein Foto aus.
    *
-   * Der einzige schreibende Zugriff auf eine Bildquelle im ganzen Programm – und
-   * auch er löscht nicht, sondern verschiebt nach `.franibook-geloescht`. Steht
-   * das Foto noch im Buch, bleibt der Platz leer, statt die Doppelseite
+   * **Die Datei wird nicht angefasst.** Aussortieren heißt: aus dem Projekt
+   * vergessen und die Kennung vermerken, damit kein Einlesen sie zurückholt
+   * (`project/bestand.ts`, `Aussortiert`). Damit hat der Server keinen
+   * schreibenden Zugriff auf eine Bildquelle mehr.
+   *
+   * Steht das Foto noch im Buch, bleibt der Platz leer, statt die Doppelseite
    * umzubauen; die betroffenen Doppelseiten stehen in der Antwort, damit die
    * Oberfläche sie neu holen kann.
    */
@@ -222,21 +225,40 @@ export function fotoRouten(
     if (project.importLaufend()) {
       return reply.code(409).send({ error: 'Es läuft noch ein Import' });
     }
-    try {
-      const ergebnis = await project.deletePhoto(req.params.id);
-      if (!ergebnis) return reply.code(404).send({ error: 'Foto nicht gefunden' });
-      await project.save();
-      return {
-        ...ergebnis,
-        photoCount: project.photos.size,
-        // Fertig gerendert wie bei `/api/book/move`: Die Oberfläche zeigt die
-        // Lücke sofort, ohne nachzufragen.
-        rendered: ergebnis.spreads.map((i) => ({ index: i, spread: spreadAntwort(project, i) })),
-      };
-    } catch (err) {
-      // Etwa: die Quelle ist gerade nicht eingehängt. Dann ist nichts geschehen –
-      // das Foto bleibt im Projekt, die Datei liegt, wo sie lag.
-      return reply.code(409).send({ error: err instanceof Error ? err.message : String(err) });
+    const ergebnis = project.deletePhoto(req.params.id);
+    if (!ergebnis) return reply.code(404).send({ error: 'Foto nicht gefunden' });
+    await project.save();
+    return {
+      ...ergebnis,
+      photoCount: project.photos.size,
+      // Fertig gerendert wie bei `/api/book/move`: Die Oberfläche zeigt die
+      // Lücke sofort, ohne nachzufragen.
+      rendered: ergebnis.spreads.map((i) => ({ index: i, spread: spreadAntwort(project, i) })),
+    };
+  });
+
+  /**
+   * Die Merkliste: was aussortiert ist und deshalb draußen bleibt.
+   *
+   * Sie muss sichtbar sein, seit das Zurücklegen im Finder nicht mehr genügt –
+   * sonst wäre Aussortieren die einzige Handlung im Programm ohne Weg zurück.
+   */
+  app.get('/api/photos/aussortiert', () => ({ aussortiert: project.aussortierte() }));
+
+  /**
+   * Nimmt ein aussortiertes Foto zurück ins Projekt.
+   *
+   * Seinen alten Platz im Buch bekommt es nicht zurück, seine Korrekturen
+   * schon. Ob die Datei noch liegt, wo sie lag, prüft niemand – das sagt der
+   * nächste Reimport.
+   */
+  app.delete<{ Params: { id: string } }>('/api/photos/aussortiert/:id', async (req, reply) => {
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
     }
+    const photo = project.wiederAufnehmen(req.params.id);
+    if (!photo) return reply.code(404).send({ error: 'Dieses Foto ist nicht aussortiert' });
+    await project.save();
+    return { photo: project.photoViewsOf([photo.id])[0], photoCount: project.photos.size };
   });
 }
