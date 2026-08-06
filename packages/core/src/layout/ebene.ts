@@ -19,7 +19,7 @@
  * Nach dem Neunummerieren ist `layer` genau das: die Ebene, von hinten gezählt.
  */
 import type { SlotAssignment, Spread } from '../model/spread.js';
-import { slotReihenfolge } from '../model/spread.js';
+import { slotReihenfolge, wirksamePlaetze } from '../model/spread.js';
 import type { Template } from '../model/template.js';
 
 /** Wohin ein Bild im Stapel wandert. */
@@ -44,7 +44,7 @@ export function moveSlotLayer(
   slotId: string,
   zug: Ebenenzug,
 ): Spread | undefined {
-  const stapel = slotReihenfolge(template.slots, spread).map((s) => s.id);
+  const stapel = slotReihenfolge(wirksamePlaetze(template, spread), spread).map((s) => s.id);
   const von = stapel.indexOf(slotId);
   if (von < 0) return undefined;
 
@@ -64,9 +64,10 @@ export function moveSlotLayer(
     ...spread,
     slots: spread.slots.map((slot) => {
       const wert = ebene.get(slot.slotId);
-      // Plätze, die die Vorlage nicht kennt, bleiben unangetastet: Sie werden
-      // ohnehin nicht gezeichnet, und ein erfundener Wert wäre eine Aussage
-      // über etwas, das es nicht gibt.
+      // Plätze, die es auf dieser Seite nicht gibt, bleiben unangetastet – ein
+      // erfundener Wert wäre eine Aussage über etwas, das nicht gezeichnet wird.
+      // Freie Plätze (eingeworfene Bilder) sind dabei mitgezählt: Sie stehen in
+      // `wirksamePlaetze` und liegen damit im selben Stapel wie alle anderen.
       return wert === undefined ? slot : ({ ...slot, layer: wert } satisfies SlotAssignment);
     }),
   };
@@ -84,7 +85,7 @@ export function slotEbene(
   template: Template,
   slotId: string,
 ): { ebene: number; von: number } | undefined {
-  const stapel = slotReihenfolge(template.slots, spread).map((s) => s.id);
+  const stapel = slotReihenfolge(wirksamePlaetze(template, spread), spread).map((s) => s.id);
   const i = stapel.indexOf(slotId);
   if (i < 0) return undefined;
   return { ebene: stapel.length - i, von: stapel.length };

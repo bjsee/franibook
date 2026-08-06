@@ -207,6 +207,19 @@ export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Pro
   );
 }
 
+/**
+ * Ob dieser Zug Dateien aus dem Dateisystem trägt.
+ *
+ * Der Unterschied entscheidet über alles Weitere: Ein Bild aus dem Baum ist ein
+ * Umhängen (Quelle bekannt, Auswahl möglich), eine Datei ein Einwurf – sie muss
+ * erst in den Bestand. `types` und nicht `files`: Während des Ziehens gibt der
+ * Browser die Dateien aus Sicherheitsgründen nicht heraus, die Art des Inhalts
+ * schon.
+ */
+function istDateizug(e: React.DragEvent): boolean {
+  return e.dataTransfer.types.includes('Files');
+}
+
 /** Eine Doppelseite: Kopfzeile mit Marken, darunter das Bilderband. */
 function Seitenzeile({
   seite,
@@ -245,13 +258,24 @@ function Seitenzeile({
   return (
     <div
       onDragOver={(e) => {
-        if (!zieht || !nimmtAn) return;
+        // Eine Datei aus dem Dateisystem: dieselbe Zeile, dasselbe Ziel. Sie
+        // hängt an keinem Zug im Baum, also entscheidet allein, ob die Seite
+        // überhaupt Bilder annimmt.
+        if (istDateizug(e) ? model.busy || !nimmtAn : !zieht || !nimmtAn) return;
         // Ohne preventDefault lehnt der Browser das Fallenlassen ab.
         e.preventDefault();
         setUeber(true);
       }}
       onDragLeave={() => setUeber(false)}
       onDrop={(e) => {
+        if (istDateizug(e)) {
+          if (model.busy || !nimmtAn) return;
+          e.preventDefault();
+          setUeber(false);
+          const datei = e.dataTransfer.files.item(0);
+          if (datei) void model.dateiEinwerfen(datei, ziel);
+          return;
+        }
         if (!zieht || !nimmtAn) return;
         e.preventDefault();
         setUeber(false);
@@ -348,12 +372,20 @@ function Poolspalte({
   return (
     <aside
       onDragOver={(e) => {
-        if (!zieht) return;
+        if (istDateizug(e) ? model.busy : !zieht) return;
         e.preventDefault();
         setUeber(true);
       }}
       onDragLeave={() => setUeber(false)}
       onDrop={(e) => {
+        if (istDateizug(e)) {
+          if (model.busy) return;
+          e.preventDefault();
+          setUeber(false);
+          const datei = e.dataTransfer.files.item(0);
+          if (datei) void model.dateiEinwerfen(datei, { kind: 'pool' });
+          return;
+        }
         if (!zieht) return;
         e.preventDefault();
         setUeber(false);
@@ -365,7 +397,10 @@ function Poolspalte({
         <strong style={B.titel}>Außerhalb</strong>
         <span style={B.leiser}>{pool.length}</span>
       </div>
-      <p style={B.leiser}>Hierher gezogen fällt ein Bild aus dem Buch – verloren geht es nicht.</p>
+      <p style={B.leiser}>
+        Hierher gezogen fällt ein Bild aus dem Buch – verloren geht es nicht. Eine Datei aus dem
+        Finder kommt hier in den Bestand, ohne im Buch zu landen.
+      </p>
 
       {bilderAn && (
         <div style={S.poolgitter}>

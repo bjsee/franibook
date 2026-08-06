@@ -107,6 +107,26 @@ function nachAufnahme(a: Photo, b: Photo): number {
   return a.relPath.localeCompare(b.relPath);
 }
 
+/**
+ * Nimmt ein Foto in den Bestand auf, an seinen Tag.
+ *
+ * Neu einsortieren statt hinten anhängen: Die Reihenfolge der Map ist die
+ * Reihenfolge des Fotopools, und ein zurückgeholtes oder eingeworfenes Bild
+ * gehört an seinen Tag und nicht ans Ende des Bestands.
+ *
+ * Exportiert, weil zwei Wege ein einzelnes Foto aufnehmen – das Wiederaufnehmen
+ * eines aussortierten und der Einwurf (`project/einwurf.ts`).
+ */
+export function einsortieren(
+  z: Pick<Bestandstand, 'photos' | 'rebuildStructure'>,
+  photo: Photo,
+): void {
+  const alle = [...z.photos.values(), photo].sort(nachAufnahme);
+  z.photos.clear();
+  for (const p of alle) z.photos.set(p.id, p);
+  z.rebuildStructure();
+}
+
 /** Zu welcher Quelle ein Foto gehört – ohne Angabe zur ersten. */
 function quelleVon(z: Bestandstand, photo: Photo): string | undefined {
   return photo.sourceId ?? z.sources.primary()?.id;
@@ -252,14 +272,7 @@ export function wiederAufnehmen(z: Bestandstand, id: PhotoId): Photo | null {
   if (!eintrag) return null;
   delete z.aussortiert[id];
 
-  // Neu einsortieren statt hinten anhängen: Die Reihenfolge der Map ist die
-  // Reihenfolge des Fotopools, und ein zurückgeholtes Bild gehört an seinen Tag
-  // und nicht ans Ende des Bestands.
-  const alle = [...z.photos.values(), eintrag.photo].sort(nachAufnahme);
-  z.photos.clear();
-  for (const p of alle) z.photos.set(p.id, p);
-
-  z.rebuildStructure();
+  einsortieren(z, eintrag.photo);
   return eintrag.photo;
 }
 

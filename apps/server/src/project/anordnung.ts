@@ -31,6 +31,7 @@ import {
   rotateCrop,
   templateById,
   templateMeta,
+  wirksamePlaetze,
 } from '@franibook/core';
 
 /** Was diese Funktionen vom Projekt brauchen. */
@@ -265,8 +266,15 @@ export function halfChoices(
   }
 
   const template = templateById(spread.templateId);
+  // Über die wirksamen Plätze und ihre Geometrie, nicht über den Index in der
+  // Vorlage: Ein eingeworfenes Bild hat einen freien Platz, den die Vorlage nicht
+  // kennt (`wirksamePlaetze`). Gezählt wurde es damit auf keiner Seite – die
+  // Oberfläche schrieb „1 Bild" an eine Seite mit zwei, und die seitenweise
+  // Anordnung schickte das zweite unangekündigt in den Pool.
+  const plaetze = template ? wirksamePlaetze(template, spread) : [];
+  const belegtVon = new Set(spread.slots.filter((s) => s.photoId).map((s) => s.slotId));
   const belegt = (pruefe: (x: number, w: number) => boolean) =>
-    (template?.slots ?? []).filter((s, i) => pruefe(s.x, s.w) && spread.slots[i]?.photoId).length;
+    plaetze.filter((s) => pruefe(s.x, s.w) && belegtVon.has(s.id)).length;
 
   return {
     halves: halfPages().map((h) => ({

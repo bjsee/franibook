@@ -9,7 +9,7 @@
  * Header (curl, Playwright, `same-origin`) und ein Header vom selben Rechner
  * durchgelassen werden.
  */
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -90,6 +90,40 @@ describe('Origin-Schutz', () => {
     });
 
     expect(project.verlauf.auskunft().zurueck).toBeNull();
+  });
+
+  it('weist einen Einwurf mit fremdem Origin ab, ohne eine Datei anzulegen', async () => {
+    // Die schwerste Folge, die dieser Schutz verhindert: Der Einwurf ist die
+    // einzige Route, die in eine Bildquelle **schreibt**. Ohne Eintrag in
+    // `UNDO_ROUTEN` – und damit ohne Origin-Prüfung – könnte jede im selben
+    // Browser offene Seite Dateien in den Fotobestand legen.
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-ursprung-quelle-'));
+    const quelle = join(dir, 'bilder');
+    await mkdir(quelle, { recursive: true });
+
+    const sources = new Sources();
+    await sources.add(quelle, 'Probe');
+    const project = new Project(sources, null as never, null as never, dir);
+    const kontext = {
+      project,
+      sources,
+      previews: null as never,
+      decodes: null as never,
+      outDir: dir,
+    } as Kontext;
+    const { app } = baueApp({ kontext, anlauf: () => null, logger: false });
+
+    const antwort = await app.inject({
+      method: 'POST',
+      url: '/api/photos/einwurf?name=fremd.png',
+      payload: Buffer.from('was auch immer'),
+      headers: { origin: 'https://boesartig.example', 'content-type': 'image/png' },
+    });
+
+    expect(antwort.statusCode).toBe(403);
+    expect(project.photos.size).toBe(0);
+    // Kein Ordner, keine Datei – der Haken läuft vor dem Handler.
+    await expect(readdir(join(quelle, 'eingeworfen'))).rejects.toThrow();
   });
 
   it('rührt eine lesende Route nicht an, egal welcher Origin', async () => {

@@ -48,6 +48,7 @@ import {
   ausschnittSetzen,
   ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
+  bildEinwerfen,
   datumKorrigieren,
   ebeneSetzen,
   fehlertext,
@@ -1295,6 +1296,183 @@ export function useSpreadEditor({
     }
   }, [index, onSpread, onSelect, onChanged, poolLaden]);
 
+  // ---------------------------------------------------------------- Einwurf
+
+  /**
+   * Was nach einem Einwurf zur Entscheidung steht.
+   *
+   * Das Bild liegt schon auf der Seite – dort, wo es fallen gelassen wurde – und
+   * bleibt dort, solange niemand etwas sagt. Die Frage ist nur, ob die Seite
+   * dafür neu angeordnet werden soll: Das rechnet alle Plätze neu und verwirft
+   * die Ausschnitte der Seite, also darf es nicht von selbst geschehen. Sie
+   * steht als eigener Zustand und nicht als `note`, weil sie zwei Knöpfe trägt
+   * und eine Meldung keine hat.
+   */
+  const [einwurfFrage, setEinwurfFrage] = useState<{ slotId: string; name: string } | null>(null);
+
+  /** Der Einwurf ist unterwegs – das Papier zeigt es, und ein zweiter wartet. */
+  const [einwurfLaeuft, setEinwurfLaeuft] = useState(false);
+  /** Die Fallstelle, solange eine Datei über dem Papier hängt. */
+  const [dateiUeber, setDateiUeber] = useState<{ x: number; y: number } | null>(null);
+
+  // Die Frage gilt für **diese** Doppelseite. Blieb sie beim Blättern stehen,
+  // ordnete „Neu anordnen" die Seite neu, auf der man gerade gelandet ist – und
+  // verwürfe deren Ausschnitte, ohne dass jemand danach gefragt hätte.
+  useEffect(() => {
+    setEinwurfFrage(null);
+    setDateiUeber(null);
+  }, [index]);
+
+  /**
+   * Die erste Datei eines Zuges, oder nichts.
+   *
+   * Nur die erste: Ein Einwurf ist eine Stelle auf dem Papier, und fünf Bilder
+   * an dieselbe Stelle zu legen ergäbe einen Stapel, in dem man vier davon nicht
+   * mehr findet. Wer viele Bilder nachlegt, legt sie in den Ordner und liest neu
+   * ein – dafür ist der Reimport da. Gesagt wird es unten trotzdem.
+   */
+  function ersteDatei(e: React.DragEvent): File | null {
+    return e.dataTransfer.files.item(0);
+  }
+
+  /** Ob dieser Zug Dateien trägt (und nicht ein Bild aus dem Buch). */
+  function zieltDatei(e: React.DragEvent): boolean {
+    return e.dataTransfer.types.includes('Files');
+  }
+
+  /**
+   * Die Fallstelle in normierten Koordinaten des Endformats.
+   *
+   * Dieselbe Einheit, in der auch die Vorlagen stehen – die Umrechnung von
+   * Bildschirmpixeln geschieht über `zeigerMm`, also über den einen Faktor
+   * `pxPerMm`, den die Bühne kennt.
+   */
+  function fallstelle(e: React.DragEvent): { x: number; y: number } {
+    const p = zeigerMm(e);
+    const klemme = (v: number) => Math.min(1, Math.max(0, v));
+    return {
+      x: klemme((p.xMm - beschnittMm) / trimBreiteMm),
+      y: klemme((p.yMm - beschnittMm) / trimHoeheMm),
+    };
+  }
+
+  /**
+   * Nimmt eine Datei auf, die auf das Papier gefallen ist.
+   *
+   * Das Bild kommt an die Fallstelle und die Anordnung bleibt, wie sie ist
+   * (`layout/einwurf.ts`); ob die Seite neu angeordnet wird, fragt danach
+   * `einwurfFrage`. Der Platz wird ausgewählt, damit die Griffe gleich am neuen
+   * Bild liegen – man hat es eben hingelegt, es ist das gemeinte Bild.
+   */
+  async function dateiEinwerfen(datei: File, punkt: { x: number; y: number }) {
+    // Ohne `setNote(null)`: Der Aufrufer hat die Meldung schon geleert und
+    // vielleicht eine gesetzt, die gilt – etwa „von fünf Dateien kommt eine".
+    // Hier würde sie überschrieben, bevor jemand sie gelesen hat.
+    setEinwurfLaeuft(true);
+    try {
+      const data = await bildEinwerfen(datei, { kind: 'spread', index, punkt });
+      if (data.spread) onSpread(data.spread);
+      setPendingCrop(null);
+      setBuchVersion((v) => v + 1);
+      poolLaden();
+      onChanged();
+      if (data.slotId) {
+        onSelect(data.slotId);
+        setGriffModus('keine');
+        setEinwurfFrage({ slotId: data.slotId, name: datei.name });
+      }
+      if (data.dupliziert) {
+        setNote(
+          `„${datei.name}" liegt inhaltlich schon im Bestand – es wurde keine Datei angelegt.`,
+        );
+      } else if (data.zurueckgeholt) {
+        setNote(`„${datei.name}" war aussortiert und ist wieder aufgenommen.`);
+      }
+    } catch (e) {
+      setNote(`„${datei.name}" ließ sich nicht einwerfen: ${fehlertext(e)}`);
+    } finally {
+      setEinwurfLaeuft(false);
+    }
+  }
+
+  /**
+   * Ereignisse, die aus dem Papier eine Ablage für Dateien machen.
+   *
+   * Liegen sie auf der Bühne und nicht am Slot, gilt sie auch zwischen den
+   * Bildern – und der Slot lässt sein `onDrop` durchblubbern, weil er nur
+   * `preventDefault` ruft. Ein eigener Handler je Platz hätte dieselbe Handlung
+   * an fünfzehn Stellen wiederholt.
+   */
+  const dateiAblage = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!zieltDatei(e)) return;
+      // Ohne preventDefault lehnt der Browser das Fallenlassen ab – und öffnet
+      // das Bild stattdessen im Tab, was die Arbeit des Abends beendet.
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      setUeberSlot(null);
+      setDateiUeber(fallstelle(e));
+    },
+    onDragLeave: () => setDateiUeber(null),
+    onDrop: (e: React.DragEvent) => {
+      if (!zieltDatei(e)) return;
+      e.preventDefault();
+      setDateiUeber(null);
+      const datei = ersteDatei(e);
+      if (!datei) return;
+      // Kein zweiter Wurf, solange der erste unterwegs ist: Beide träfen
+      // denselben Ordner mit demselben Namen, und die Antwort des zweiten
+      // überschriebe die Doppelseite, die der erste gerade verändert hat.
+      // Dieselbe Sperre wie im Baum (`model.busy`).
+      if (einwurfLaeuft) {
+        setNote('Ein Einwurf läuft noch – kurz warten.');
+        return;
+      }
+      setNote(
+        e.dataTransfer.files.length > 1
+          ? `Ein Einwurf ist eine Stelle auf dem Papier – von ${e.dataTransfer.files.length} Dateien ` +
+              `kommt „${datei.name}" ins Buch. Viele Bilder auf einmal legt man in den Ordner und liest neu ein.`
+          : null,
+      );
+      void dateiEinwerfen(datei, fallstelle(e));
+    },
+  };
+
+  /**
+   * Nimmt eine Datei in den Bestand, ohne sie einzusetzen.
+   *
+   * Für den Fotopool als Abwurfstelle: „Das gehört ins Buch, ich weiß noch nicht
+   * wohin." Keine Frage nach dem Neuanordnen – es ist nichts angeordnet worden.
+   */
+  async function dateiInPool(datei: File) {
+    setEinwurfLaeuft(true);
+    try {
+      const data = await bildEinwerfen(datei, { kind: 'pool' });
+      poolLaden();
+      setPoolOffen(true);
+      onChanged();
+      setNote(
+        data.dupliziert
+          ? `„${datei.name}" liegt inhaltlich schon im Bestand – es wurde keine Datei angelegt.`
+          : `„${datei.name}" liegt im Fotopool.`,
+      );
+    } catch (e) {
+      setNote(`„${datei.name}" ließ sich nicht einwerfen: ${fehlertext(e)}`);
+    } finally {
+      setEinwurfLaeuft(false);
+    }
+  }
+
+  /** Die Seite doch neu anordnen – die Antwort „ja" auf `einwurfFrage`. */
+  const einwurfAnordnen = useCallback(async () => {
+    setEinwurfFrage(null);
+    await neuAnordnen();
+  }, [neuAnordnen]);
+
+  function einwurfBelassen() {
+    setEinwurfFrage(null);
+  }
+
   function slotDragStart(slotId: string) {
     const box = bildBox(slotId);
     if (!box) return;
@@ -1540,14 +1718,29 @@ export function useSpreadEditor({
    */
   const poolAblage = {
     onDragOver: (e: React.DragEvent) => {
-      if (zug?.source.kind === 'slot') e.preventDefault();
+      if (zug?.source.kind === 'slot' || zieltDatei(e)) e.preventDefault();
+      if (zieltDatei(e)) e.dataTransfer.dropEffect = 'copy';
       // Der Zeiger hat das Blatt verlassen – sonst bliebe die Marke auf dem
       // zuletzt überfahrenen Platz stehen und verspräche einen Tausch, der
       // hier gar nicht mehr zur Wahl steht.
       setUeberSlot(null);
+      setDateiUeber(null);
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
+      // Eine Datei in den Pool: Sie kommt in den Bestand, aber auf keine Seite.
+      // Das ist die Ablage für „gehört ins Buch, ich weiß noch nicht wohin".
+      if (zieltDatei(e)) {
+        const datei = ersteDatei(e);
+        if (!datei) return;
+        if (einwurfLaeuft) {
+          setNote('Ein Einwurf läuft noch – kurz warten.');
+          return;
+        }
+        setNote(null);
+        void dateiInPool(datei);
+        return;
+      }
       if (zug?.source.kind !== 'slot') return;
       void verschieben(zug.source, { kind: 'pool' });
       setZug(null);
@@ -1653,6 +1846,14 @@ export function useSpreadEditor({
     poolAblage,
     /** Ob gerade ein Bild aus der Doppelseite gezogen wird – der Pool wird dann Ziel. */
     poolIstZiel: zug?.source.kind === 'slot',
+
+    // Einwurf
+    dateiAblage,
+    dateiUeber,
+    einwurfLaeuft,
+    einwurfFrage,
+    einwurfAnordnen,
+    einwurfBelassen,
     buchVersion,
 
     // Anzeige

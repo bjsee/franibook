@@ -178,6 +178,26 @@ dichten Seiten unvermeidlich). Blätter, die durch das Umpaaren ganz leer wären
 entstehen nicht. `DELETE /api/spreads/page/:atPage` ist das Gegenstück: dieselbe
 Rechnung, die Seite fällt heraus, ihre Bilder gehen in den Fotopool.
 
+**Eine Datei lässt sich ins Buch werfen** (`project/einwurf.ts`,
+`layout/einwurf.ts`): aus dem Finder auf das Papier, in den Fotopool oder auf eine
+Zeile im Baum. Auf dem Papier bleibt die Anordnung, wie sie ist — das Bild bekommt
+einen **freien Platz** (`SlotAssignment` mit `rect`, dessen `slotId` in keiner
+Vorlage steht, aufgelöst über `wirksamePlaetze`) an der Fallstelle, ein Drittel
+Seitenhöhe hoch und im Seitenverhältnis des Fotos. Ob die Seite dafür neu
+angeordnet wird, **fragt** eine Karte auf der Bühne; von selbst geschieht es
+nicht, denn das verwürfe die Ausschnitte der ganzen Seite. Im Baum wird dagegen
+neu angeordnet — eine Zeile hat keine Stelle im Millimeterraster.
+
+**Der Einwurf ist die einzige Stelle, die in eine Bildquelle schreibt**
+(`<erste Quelle>/eingeworfen/`), und damit die einzige Ausnahme von der Regel in
+`.claude/rules/server.md`. Der Unterschied zum Synology-Vorfall ist die Richtung:
+Eine neue Datei kann ein Sync-Dienst nicht als Löschung missdeuten. Die Kennung
+wird **vor** dem Schreiben aus den Bytes gerechnet (`inhaltsKennung`), also legt
+dasselbe Bild zweimal eingeworfen keine zweite Datei an und ein aussortiertes wird
+zurückgeholt. Ein Cmd+Z nimmt das Foto aus Buch und Bestand, **nicht** die Datei —
+sie kommt beim nächsten Einlesen wieder. Begründung und verworfene Fassungen:
+`docs/konzept.md`, Abschnitt „Bilder einwerfen".
+
 **Die Bilder verteilt man im Baum** (`/aufteilung`, `apps/web/src/baum/`): das ganze
 Buch als Liste, Jahr → Doppelseite → Bilder, jede Zeile ein Ziel. Der Zug dahinter
 ist **mengenwertig** (`movePhotos` in `layout/move.ts`, `POST /api/book/move` mit
@@ -379,11 +399,15 @@ er darf nicht ins Netz.
 Foto-Kennung ist `contentHash`: Dateigröße + SHA-256 über die ersten und letzten 64 KB.
 Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
 
+**Geschrieben wird in eine Bildquelle nur beim Einwurf** (siehe oben,
+`POST /api/photos/einwurf` und `POST /api/spreads/:index/einwurf`), und nur als
+neue Datei. Alles andere liest ausschließlich.
+
 **Aussortieren** (`DELETE /api/photos/:id`) **fasst keine Datei an.** Es nimmt das Foto
 aus dem Projekt und trägt es in eine Merkliste ein (`aussortiert`, ein ganzes `Photo` je
 Eintrag), und der Import übergeht jede Datei, deren Kennung dort steht — geprüft direkt
-nach dem Hash, vor EXIF und Pixeln. Damit hat der Server **keinen schreibenden Zugriff
-auf eine Bildquelle mehr**.
+nach dem Hash, vor EXIF und Pixeln. Damit **verändert der Server keine fremde Datei
+mehr** — er legt nur noch neue an, beim Einwurf.
 
 Vorher wanderte die Datei nach `<quelle>/.franibook-geloescht/`, und der Punkt im Namen
 sollte genügen, weil der Scan versteckte Ordner überspringt. Das hielt bis zu dem Tag,
@@ -400,8 +424,9 @@ Umschlagbilder auf, lässt aber Slots und `PhotoOverride` stehen.
 
 **Bildquellen** (`sources.ts`) sind eine Liste von Ordnern im Projekt, nicht ein
 einzelner Pfad: Der Grundbestand liegt auf dem NAS, Nachzügler kommen als weiterer
-Ordner dazu. Kopiert wird nichts, jede Quelle wird ausschließlich gelesen und rekursiv
-gescannt. Die Kennung einer Quelle leitet sich aus ihrem Pfad ab (`quellenId`), jedes
+Ordner dazu. Kopiert wird nichts, keine bestehende Datei wird verändert, jede Quelle
+wird rekursiv gescannt (das Einzige, was entsteht, ist die eingeworfene Datei unter
+`eingeworfen/`). Die Kennung einer Quelle leitet sich aus ihrem Pfad ab (`quellenId`), jedes
 `Photo` trägt eine `sourceId`, und `Sources.pfad()` ist die einzige Stelle, an der aus
 einem Foto ein Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen
 Resolver. Eine gerade nicht lesbare Quelle wird beim Einlesen übersprungen und
