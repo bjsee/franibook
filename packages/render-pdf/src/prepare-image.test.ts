@@ -70,6 +70,110 @@ describe('prepareImage — Zielauflösung', () => {
   });
 });
 
+/**
+ * Dasselbe Testbild, aber mit weitem Farbraum: `withIccProfile('p3')` wandelt
+ * die Pixel nach Display P3 und hängt das Profil an — genau die Machart der
+ * 224 von 973 Dateien im Bestand, die „Apple Wide Color Sharing Profile"
+ * tragen.
+ */
+async function weitfarbigesTestbild(kante = 600): Promise<Buffer> {
+  return sharp(await testbild(kante))
+    .withIccProfile('p3')
+    .png()
+    .toBuffer();
+}
+
+/** Mittlerer und größter Lab-Abstand zweier gleich großer JPEGs. */
+async function farbabstand(a: Buffer, b: Buffer): Promise<{ mittel: number; max: number }> {
+  const [pa, pb] = await Promise.all([
+    sharp(a).raw().toBuffer({ resolveWithObject: true }),
+    sharp(b).raw().toBuffer({ resolveWithObject: true }),
+  ]);
+  const nachLab = (r: number, g: number, bl: number): [number, number, number] => {
+    const lin = (v: number) => {
+      const c = v / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const [R, G, B] = [lin(r), lin(g), lin(bl)];
+    const X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.9505;
+    const Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+    const Z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.089;
+    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+
+  let summe = 0;
+  let max = 0;
+  let zahl = 0;
+  const kanaele = pa.info.channels;
+  for (let i = 0; i + kanaele <= Math.min(pa.data.length, pb.data.length); i += kanaele * 17) {
+    const [l1, a1, b1] = nachLab(pa.data[i]!, pa.data[i + 1]!, pa.data[i + 2]!);
+    const [l2, a2, b2] = nachLab(pb.data[i]!, pb.data[i + 1]!, pb.data[i + 2]!);
+    const dE = Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+    summe += dE;
+    if (dE > max) max = dE;
+    zahl++;
+  }
+  return { mittel: summe / zahl, max };
+}
+
+describe('prepareImage — Farbraum', () => {
+  const opts = { orientation: 1 as const, crop, widthMm: SLOT_MM, heightMm: SLOT_MM, profile };
+
+  it('bringt ein weitfarbiges Bild nach sRGB', async () => {
+    // Der Vergleich läuft gegen dasselbe Bild ohne Farbmanagement: `ignoreIcc`
+    // lässt das eingebettete Profil liegen, die Pixel bleiben also im weiten
+    // Farbraum und werden anschließend als sRGB gelesen. Genau dieser Abstand
+    // ist der Fehler, den der Export nicht macht — am Bestand ΔE 0,9–2,3 im
+    // Mittel und bis 11,7 im Maximum, am synthetischen Bild hier größer, weil
+    // es sehr gesättigte Flächen enthält.
+    const weit = await weitfarbigesTestbild();
+    const gewandelt = await prepareImage(weit, opts);
+    const unbehandelt = await sharp(weit, { ignoreIcc: true })
+      .extract({ left: 0, top: 0, width: 600, height: 600 })
+      .resize({ width: gewandelt.widthPx, height: gewandelt.heightPx, fit: 'fill' })
+      .jpeg({ quality: profile.encoding.jpegQuality })
+      .toBuffer();
+
+    const abstand = await farbabstand(gewandelt.buffer, unbehandelt);
+    expect(abstand.mittel).toBeGreaterThan(1);
+  });
+
+  it('lässt ein sRGB-Bild unverändert', async () => {
+    // Gegenprobe: Die Wandlung darf nichts tun, wo nichts zu tun ist. 748 der
+    // 973 Dateien im Bestand sind sRGB — an ihnen wäre jede Verschiebung ein
+    // Schaden.
+    const srgb = await testbild(600);
+    const einmal = await prepareImage(srgb, opts);
+    const nochmal = await prepareImage(await sharp(srgb).withIccProfile('srgb').png().toBuffer(), {
+      ...opts,
+    });
+    const abstand = await farbabstand(einmal.buffer, nochmal.buffer);
+    expect(abstand.max).toBeLessThan(1);
+  });
+
+  it('verweigert ein Druckprofil, dessen Farbraum der Export nicht liefert', async () => {
+    // Die drei Felder unter `color` waren deklariert und wurden von niemandem
+    // gelesen — ein Profil mit `adobe-rgb` hätte stillschweigend sRGB bekommen.
+    // Lieber ein Wurf beim ersten Bild als ein Buch im falschen Farbraum.
+    const adobe: PrintProfile = {
+      ...profile,
+      color: { ...profile.color, workingSpace: 'adobe-rgb' },
+    };
+    await expect(prepareImage(await testbild(200), { ...opts, profile: adobe })).rejects.toThrow(
+      /adobe-rgb/,
+    );
+
+    const relativ: PrintProfile = {
+      ...profile,
+      color: { ...profile.color, renderingIntent: 'relative' },
+    };
+    await expect(prepareImage(await testbild(200), { ...opts, profile: relativ })).rejects.toThrow(
+      /relative/,
+    );
+  });
+});
+
 describe('prepareImage — Kodierung', () => {
   it('bettet Baseline-JPEG ein, nicht progressives', async () => {
     // Progressive JPEGs sparen weitere 2 %, aber wie ein Druck-RIP sie im

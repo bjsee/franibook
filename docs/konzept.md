@@ -1650,7 +1650,13 @@ Die erste und die letzte Innenseite stehen jeweils allein (rechts bzw. links); d
 
 ### Farbe
 
-Der Standardweg ist ein **RGB-Workflow**: Die Bilder werden mit sharp in den im Profil hinterlegten Arbeitsfarbraum konvertiert (Vorgabe sRGB, alternativ Adobe RGB), das ICC-Profil wird als OutputIntent des Dokuments eingebettet, und die eingebetteten JPEGs tragen dasselbe Profil. Für Fotobücher bei PrintPartner ist das der vom Dienstleister vorgesehene und robusteste Weg.
+Der Standardweg ist ein **RGB-Workflow**: Die Bilder werden mit sharp in den im Profil hinterlegten Arbeitsfarbraum konvertiert (Vorgabe sRGB), und das ICC-Profil wird als OutputIntent des Dokuments eingebettet. Für Fotobücher bei PrintPartner ist das der vom Dienstleister vorgesehene und robusteste Weg.
+
+Die Wandlung selbst leistet sharp von sich aus: Ein Bild mit eingebettetem Profil wird beim Einlesen nach sRGB transformiert. Am Bestand ist das keine Formalie — 224 von 973 Dateien (23 %) tragen „Apple Wide Color Sharing Profile", und ohne die Wandlung lägen sie um ΔE 0,9–2,3 im Mittel und bis 11,7 im Maximum daneben, in Richtung flauer. Was die Umsetzung deshalb hinzufügt, ist nicht die Wandlung, sondern ihre **Absicherung**: Ein `keepIccProfile()` würde die Pixel weitfarbig liegen lassen, ein `withMetadata()` sie wandeln und trotzdem das alte Profil anhängen — beides sieht nach Metadatenpflege aus und wäre ein Farbfehler, der erst auf Papier auffällt. Ein genanntes Ausgabeprofil (`withIccProfile`, in jeder Ausgabekette, geprüft in `tests/architektur/`) schließt beide Wege aus; es kostet 1,6 % Laufzeit und ändert kein Byte.
+
+**Die JPEGs im PDF tragen kein eigenes Profil** (`attach: false`). Der OutputIntent trifft die Aussage für alle Bilder auf einmal; eingebettet wären es 3 KB je Bild und bei 819 Bildern 2,5 MB für dieselbe Auskunft. Der Intent wird ohne PDF/A- oder PDF/X-Kennzeichnung gesetzt: pdfkit kann PDF/A, das zieht aber eine Konformitätszusage nach sich, die dieses Dokument nicht einlöst und die niemand verlangt.
+
+Die drei Felder unter `color` sind damit **durchgesetzt statt deklariert**. Ein Profil, das `adobe-rgb`, `cmyk` oder den Intent `relative` verlangt, lässt den Export mit einem Satz abbrechen, statt stillschweigend sRGB und perzeptiv zu liefern — libvips wandelt fest perzeptiv, und ein Feld, das gelesen und ignoriert wird, ist schlimmer als keines.
 
 Ein CMYK-Workflow ist als Ausbaustufe vorgesehen: sharp kann nach CMYK konvertieren, pdfkit bettet CMYK-JPEGs jedoch nicht zuverlässig ein. Der Weg dorthin führt über einen Ghostscript-Nachlauf mit `-dProcessColorModel=/DeviceCMYK` und einem Ziel-ICC-Profil. Das ist bewusst nicht Teil des MVP, weil es für den konkreten Anwendungsfall keinen Nutzen bringt.
 

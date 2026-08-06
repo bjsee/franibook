@@ -15,6 +15,7 @@
  */
 import sharp from 'sharp';
 import { type Crop, type PrintProfile, cropToPixels, targetPx } from '@franibook/core';
+import { sharpFarbraum } from './farbe.js';
 
 export interface PreparedImage {
   buffer: Buffer;
@@ -95,6 +96,21 @@ export async function prepareImage(
   const buffer = await sharp(input)
     .extract(region)
     .resize({ width: outWidth, height: outHeight, fit: 'fill' })
+    // Der Farbraum, den das Druckprofil ansagt – und die Absicherung, dass er
+    // nicht unbemerkt verlorengeht. sharp wandelt ein Bild mit eingebettetem
+    // Profil schon beim Einlesen selbst um; das hier ist danach ein zweiter,
+    // wirkungsloser Durchgang: ΔE 0,00 über zwölf weitfarbige Dateien des
+    // Bestands, Dateigröße 0,00 % und Laufzeit 1,6 % mehr (182 statt 179 ms je
+    // Bild bei 1748 px Kante). Sein Zweck ist, was es
+    // ausschließt: Ein `keepIccProfile()` würde die Pixel weitfarbig liegen
+    // lassen, ein `withMetadata()` sie wandeln und trotzdem das alte Profil
+    // anhängen. Beides sähe nach Metadatenpflege aus und wäre ein Farbfehler
+    // im gedruckten Buch. Messtabelle und Begründung in `farbe.ts`.
+    //
+    // `attach: false`, weil der Ausgabe-Intent des PDFs die Aussage für alle
+    // Bilder auf einmal trifft; eingebettet wären es 3 KB je Bild, bei 819
+    // Bildern 2,5 MB für dieselbe Auskunft.
+    .withIccProfile(sharpFarbraum(profile), { attach: false })
     .jpeg({
       quality: profile.encoding.jpegQuality,
       chromaSubsampling: profile.encoding.chromaSubsampling,
