@@ -147,7 +147,9 @@ describe('justifiedRects', () => {
       ...profile,
       page: { ...profile.page, trimWidthMm: 210, trimHeightMm: 210 },
     });
-    expect(gross.marginMm).toBeCloseTo(22, 5);
+    // Der Bezug ist die 300 mm hohe Referenzseite der Bibliothek, nicht das
+    // gerade gewählte Format: 270 mm ergeben 19,8 mm Rand.
+    expect(gross.marginMm).toBeCloseTo(22 * (profile.page.trimHeightMm / 300), 5);
     expect(klein.marginMm).toBeCloseTo(22 * (210 / 300), 5);
   });
 });

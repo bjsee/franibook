@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import { buildStructure } from '../structure/segment.js';
 import { requireTemplate, supportedSlotCounts, templateById } from '../templates/index.js';

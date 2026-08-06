@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { Photo } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
@@ -147,7 +147,9 @@ describe('withTextBlock', () => {
     expect(verschoben.boxes.length).toBe(mitBlock.boxes.length);
     expect(imageBoxes(verschoben)).toEqual(imageBoxes(mitBlock));
 
-    expect(ersteZeile(verschoben).xMm - ersteZeile(mitBlock).xMm).toBeCloseTo(0.4 * 600, 6);
+    // 0,4 der Doppelseitenbreite – im Standardformat 540 mm.
+    const spreadW = 2 * profile.page.trimWidthMm;
+    expect(ersteZeile(verschoben).xMm - ersteZeile(mitBlock).xMm).toBeCloseTo(0.4 * spreadW, 6);
   });
 
   it('behält die Zeichenreihenfolge – Text bleibt über den Bildern', () => {

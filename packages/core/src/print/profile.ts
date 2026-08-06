@@ -31,16 +31,33 @@ export interface PrintProfile {
 
   cover: {
     kind: 'wrap' | 'flush';
-    /** Umschlag auf die Innenseite. */
-    wrapMm: number;
+    /**
+     * Überstand des Bezugs über das Endformat, je Außenkante.
+     *
+     * Seitlich und oben/unten getrennt, weil sie es beim Anbieter sind: Am
+     * gemessenen 28×28 sind es oben/unten 1,95 mm, seitlich zusätzlich die
+     * Zugabe um den Rücken herum. Ein gemeinsamer Wert traf die Umschlagbreite
+     * um 4 mm daneben.
+     */
+    overhang: { sideMm: number; topMm: number };
     /** Gelenkzone neben dem Rücken – dort verschwindet bei der Bindung Fläche. */
     hingeMm: number;
+    /**
+     * Falzbereich des Anbieters: die Zone links und rechts des Rückens, in der
+     * kein Text und nichts Wesentliches stehen darf.
+     *
+     * Breiter als `hingeMm` und beim Anbieter von der Seitenzahl abhängig
+     * (28×28: 9 mm bei 26 Seiten, 17 mm bei 160). Hier steht der größte Wert –
+     * eine Warnzone darf zu groß sein, zu klein wäre sie wertlos.
+     */
+    hingeSafeMm: number;
     spine: {
       pageThicknessMm: number;
       baseMm: number;
       minMm: number;
     };
-    bleedMm: number;
+    /** Beschnittzugabe des Umschlagbogens, seitlich und oben/unten getrennt. */
+    bleed: { sideMm: number; topMm: number };
     safetyMm: number;
   };
 
@@ -84,17 +101,28 @@ export function spineWidthMm(profile: PrintProfile, pageCount: number): number {
 
 /**
  * Gesamtbreite des Coverbogens: Rückseite + Rücken + Vorderseite, jeweils
- * einschließlich Umschlag, Gelenkzonen und Beschnitt.
+ * einschließlich Überstand, Gelenkzonen und Beschnitt.
+ *
+ * Die Seitenzahl geht nur über den Rücken ein. Beim gemessenen Anbieter weicht
+ * das von seiner Tabelle um bis zu 1,2 mm ab, weil er die Werte in ganzen
+ * Pixeln bei 300 dpi angibt und der Rücken dort in Stufen springt – das liegt
+ * innerhalb seines eigenen Beschnitts von 9,3 mm. Siehe `provenance.notes`.
  */
 export function coverWidthMm(profile: PrintProfile, pageCount: number): number {
   const { trimWidthMm } = profile.page;
-  const { wrapMm, hingeMm, bleedMm } = profile.cover;
-  return 2 * (trimWidthMm + wrapMm) + spineWidthMm(profile, pageCount) + 2 * hingeMm + 2 * bleedMm;
+  const { overhang, hingeMm, bleed } = profile.cover;
+  return (
+    2 * (trimWidthMm + overhang.sideMm) +
+    spineWidthMm(profile, pageCount) +
+    2 * hingeMm +
+    2 * bleed.sideMm
+  );
 }
 
 /** Gesamthöhe des Coverbogens. */
 export function coverHeightMm(profile: PrintProfile): number {
-  return profile.page.trimHeightMm + 2 * profile.cover.wrapMm + 2 * profile.cover.bleedMm;
+  const { overhang, bleed } = profile.cover;
+  return profile.page.trimHeightMm + 2 * overhang.topMm + 2 * bleed.topMm;
 }
 
 /** Breite einer Doppelseite einschließlich Beschnitt. */

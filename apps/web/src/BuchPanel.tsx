@@ -41,6 +41,20 @@ export interface BuchEinstellungen {
   tilt: number;
   frame: FrameId;
   seed: number;
+  /** Kennung des Druckprofils, also das Buchformat. */
+  printProfileId: string;
+}
+
+/** Ein wählbares Buchformat. */
+export interface Buchformat {
+  id: string;
+  /** Der Druckdienstleister. Gruppiert die Auswahl, sobald es mehr als einen gibt. */
+  vendor: string;
+  product: string;
+  trimWidthMm: number;
+  trimHeightMm: number;
+  minPages: number;
+  maxPages: number;
 }
 
 /**
@@ -96,10 +110,14 @@ export interface Handarbeit {
 
 interface Props {
   settings: BuchEinstellungen;
+  /** Die wählbaren Buchformate; das gewählte steht in `settings.printProfileId`. */
+  formate: Buchformat[];
   handwork: Handarbeit;
   busy: boolean;
   /** Baut das Buch neu – verwirft Handarbeit. */
   onNeuAnordnen: (patch: Record<string, unknown>) => void;
+  /** Wechselt das Format. Ordnet nichts neu, klemmt aber die Seitenzahl. */
+  onFormat: (printProfileId: string) => void;
   /** Ändert nur die Darstellung. */
   onDarstellung: (patch: {
     timeline?: boolean;
@@ -115,15 +133,46 @@ interface Props {
   onNotankerZurueck: (satz: string) => void;
 }
 
+/**
+ * Der Name eines Formats in der Auswahl.
+ *
+ * Der Produktname des Anbieters, wie er ihn schreibt, und dahinter das echte
+ * Endformat: Wer „28 × 28" bestellt, bekommt 270 × 270 mm, und genau diese Zahl
+ * braucht, wer eine Doppelseite gestaltet.
+ *
+ * Der Name wird **nicht** gekürzt. Eine Regel wie „streiche ‚Fotobuch
+ * Hardcover'" wäre das Wissen über einen bestimmten Anbieter an der einen
+ * Stelle, an der es nicht hingehört – beim nächsten stünde dort eine zweite
+ * Regel. Kurz halten kann nur, wer das Feld schreibt: das Profil selbst.
+ */
+function formatName(f: Buchformat): string {
+  return `${f.product} — ${f.trimWidthMm} × ${f.trimHeightMm} mm`;
+}
+
+/** Die Formate nach Anbieter, in der Reihenfolge ihres ersten Auftretens. */
+function nachAnbieter(formate: Buchformat[]): { vendor: string; formate: Buchformat[] }[] {
+  const gruppen: { vendor: string; formate: Buchformat[] }[] = [];
+  for (const f of formate) {
+    const treffer = gruppen.find((g) => g.vendor === f.vendor);
+    if (treffer) treffer.formate.push(f);
+    else gruppen.push({ vendor: f.vendor, formate: [f] });
+  }
+  return gruppen;
+}
+
 export function BuchPanel({
   settings,
+  formate,
   handwork,
   busy,
   onNeuAnordnen,
+  onFormat,
   onDarstellung,
   onNeuEinlesen,
   onNotankerZurueck,
 }: Props) {
+  const gewaehlt = formate.find((f) => f.id === settings.printProfileId);
+  const gruppen = nachAnbieter(formate);
   /** Was ein Neuaufbau kosten würde, in Stücken. */
   const verlust = [
     handwork.crops > 0 ? `${handwork.crops} Ausschnitte` : null,
@@ -173,12 +222,53 @@ export function BuchPanel({
 
       <div style={B.abschnitt}>
         <label style={{ ...B.haken, justifyContent: 'space-between' }}>
+          Format
+          <select
+            value={settings.printProfileId}
+            onChange={(e) => onFormat(e.target.value)}
+            disabled={busy}
+            style={B.auswahl}
+          >
+            {/*
+              Ein Anbieter: eine flache Liste, denn die Überschrift wäre auf
+              jeder Zeile dieselbe. Mehrere: nach Anbieter gruppiert, weil dann
+              der Name die erste Unterscheidung ist und nicht das Maß.
+            */}
+            {gruppen.length === 1
+              ? formate.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {formatName(f)}
+                  </option>
+                ))
+              : gruppen.map((g) => (
+                  <optgroup key={g.vendor} label={g.vendor}>
+                    {g.formate.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {formatName(f)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+          </select>
+        </label>
+        {/*
+          Der Satz steht hier, weil die Frage beim Wechseln aufkommt: Ein
+          Formatwechsel verwirft nichts – jede Vorlage ist normiert, die
+          Aufteilung übersteht ihn. Was er ändert, ist die Größe jedes Bildes
+          auf dem Papier und damit seine Auflösung.
+        */}
+        <p style={B.leiser}>
+          {gewaehlt
+            ? `${gewaehlt.trimWidthMm} × ${gewaehlt.trimHeightMm} mm je Seite, ${gewaehlt.minPages} bis ${gewaehlt.maxPages} Seiten. Ein Wechsel behält die Aufteilung.`
+            : 'Ein Wechsel behält die Aufteilung.'}
+        </p>
+        <label style={{ ...B.haken, justifyContent: 'space-between' }}>
           Seiten
           <input
             key={settings.targetPages}
             type="number"
-            min={24}
-            max={400}
+            min={gewaehlt?.minPages ?? 24}
+            max={gewaehlt?.maxPages ?? 400}
             step={2}
             defaultValue={settings.targetPages}
             onBlur={(e) => {
@@ -310,6 +400,7 @@ export function BuchPanel({
                   >
                     {name}
                     <ZeitleisteMini
+                      printProfileId={settings.printProfileId}
                       ort="foot"
                       fassung={id}
                       background={settings.background}
@@ -327,6 +418,7 @@ export function BuchPanel({
                     }}
                   >
                     <ZeitleisteMini
+                      printProfileId={settings.printProfileId}
                       ort="side"
                       fassung={id}
                       background={settings.background}

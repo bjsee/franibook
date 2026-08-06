@@ -27,6 +27,7 @@ import {
   doppelseiteLaden,
   doppelseiteLoeschen,
   einstellungenAendern,
+  formatWechseln,
   fehlertext,
   neuEinlesen,
   pdfExportieren,
@@ -384,6 +385,22 @@ export function App() {
     await einstellungenAendern(patch);
     loadInfo();
     neuRendern();
+  }
+
+  /**
+   * Wechselt das Buchformat.
+   *
+   * Wie `setSetting` ohne Neuanordnen – die Vorlagen sind normiert, die
+   * Aufteilung übersteht den Wechsel. Neu gezeichnet werden muss trotzdem
+   * alles: Jede Doppelseite hat danach ein anderes Maß, und die Auflösung je
+   * Bild bewertet der Server neu. Was der Wechsel nach sich zieht, sagen die
+   * Sätze des Servers – sie werden unverändert angezeigt.
+   */
+  async function setFormat(printProfileId: string) {
+    const antwort = await formatWechseln(printProfileId);
+    loadInfo();
+    neuRendern();
+    if (antwort.hinweise.length > 0) setNote(antwort.hinweise.join(' '));
   }
 
   /**
@@ -778,9 +795,11 @@ export function App() {
           </div>
           <BuchPanel
             settings={info.settings}
+            formate={info.profiles}
             handwork={info.handwork}
             busy={!!busy}
             onNeuAnordnen={(patch) => void regenerate(patch)}
+            onFormat={(id) => void setFormat(id)}
             onDarstellung={(patch) => void setSetting(patch)}
             onNeuEinlesen={() => void reimport()}
             onNotankerZurueck={(satz) => {

@@ -101,6 +101,9 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // Ein Schlüssel, weil die Neigung und der Rahmen an Reglern hängen: eine
   // Anfrage je Reglerstellung, und alle bedeuten eine Entscheidung.
   'PATCH /api/settings': { label: 'Einstellung geändert', schluessel: () => 'einstellungen' },
+  // Kein Verschmelzschlüssel: Zwei Formatwechsel hintereinander sind zwei
+  // Entscheidungen, und die zweite soll die erste nicht verschlucken.
+  'PATCH /api/format': { label: 'Buchformat gewechselt' },
   'PUT /api/chapters/:year/events': {
     label: 'Jahresereignisse geändert',
     schluessel: (p) => `ereignisse:${p['year'] ?? '?'}`,

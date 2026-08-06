@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
-import saal from '../print/profiles/saal-30x30.json' with { type: 'json' };
+import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import {
   BACKGROUND_COLORS,
   BACKGROUND_MIN_DPI,
@@ -28,17 +28,17 @@ function photo(width: number, height: number): Photo {
 
 describe('Hintergrundbild', () => {
   it('rechnet auf die Beschnittfläche, nicht auf das Endformat', () => {
-    // 606 × 306 mm brauchen bei 150 dpi 3579 px lange Kante.
-    const fit = backgroundFit(photo(3579, 1808), profile);
-    expect(fit.benoetigtPx).toBe(3579);
+    // 546 × 276 mm brauchen bei 150 dpi 3225 px lange Kante.
+    const fit = backgroundFit(photo(3225, 1630), profile);
+    expect(fit.benoetigtPx).toBe(3225);
     expect(fit.dpi).toBeGreaterThanOrEqual(BACKGROUND_MIN_DPI);
     expect(fit.taugt).toBe(true);
   });
 
   it('verwirft die Bilder des Zielbestands – 2048 px reichen nicht', () => {
-    // Der Median des Bestands. Formatfüllend auf 606 mm ergibt das 86 dpi.
+    // Der Median des Bestands. Formatfüllend auf 546 mm ergibt das 95 dpi.
     const fit = backgroundFit(photo(2048, 1536), profile);
-    expect(Math.round(fit.dpi)).toBe(86);
+    expect(Math.round(fit.dpi)).toBe(95);
     expect(fit.taugt).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe('Hintergrundbild', () => {
     // Ein Panorama hat die Breite, scheitert aber an der Höhe.
     const panorama = backgroundFit(photo(6000, 1200), profile);
     expect(panorama.taugt).toBe(false);
-    expect(Math.round(panorama.dpi)).toBe(Math.round((1200 / 306) * 25.4));
+    expect(Math.round(panorama.dpi)).toBe(Math.round((1200 / 276) * 25.4));
   });
 });
 

@@ -46,6 +46,8 @@ import {
   normalizeRotation,
   backgroundFit,
   defaultProfile,
+  DEFAULT_PROFILE_ID,
+  profileById,
   effectivePhoto,
   findBulkSeconds,
   FULL_CROP,
@@ -175,6 +177,20 @@ export interface ProjectSettings {
    */
   frame: FrameId;
   seed: number;
+  /**
+   * Das Buchformat, als Kennung eines Druckprofils.
+   *
+   * Die Kennung und nicht das Profil selbst: Sonst läge eine Kopie der Maße im
+   * gespeicherten Projekt und eine korrigierte Zahl im Profil erreichte sie
+   * nie. Fehlt das Feld – jedes vor der Formatwahl gespeicherte Projekt –,
+   * gilt `DEFAULT_PROFILE_ID`.
+   *
+   * Ein Wechsel ändert Seitenmaß, Seitenverhältnis und die zulässige
+   * Seitenzahl. Die Doppelseiten überstehen ihn, weil jede Vorlage normiert
+   * ist; was sich ändert, ist die Auflösung je Bild und – bei einem anderen
+   * Seitenverhältnis – der Zuschnitt.
+   */
+  printProfileId: string;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
   subjectName?: string;
@@ -333,7 +349,17 @@ export interface PhotoView extends Photo {
 }
 
 export class Project {
-  readonly profile: PrintProfile = defaultProfile();
+  /**
+   * Das Druckprofil zur gewählten Formatkennung.
+   *
+   * Eine Ableitung und kein Feld: Sonst gäbe es zwei Wahrheiten – die Kennung
+   * in den Einstellungen und das Profil daneben –, und ein Formatwechsel
+   * müsste beide treffen. Eine unbekannte Kennung fällt auf die Vorgabe
+   * zurück, statt den Server beim Laden eines fremden Projekts zu stoppen.
+   */
+  get profile(): PrintProfile {
+    return profileById(this.settings.printProfileId) ?? defaultProfile();
+  }
   readonly photos = new Map<PhotoId, Photo>();
   overrides: Record<PhotoId, PhotoOverride> = {};
   groups: PhotoGroup[] = [];
@@ -392,6 +418,10 @@ export class Project {
     // vorher – siehe render/frame.ts.
     frame: DEFAULT_FRAME,
     seed: 1,
+    // Das gewählte Buchformat. Ein geladenes Projekt ohne dieses Feld bekommt
+    // es hier – die Vorgabe ist dasselbe Format, mit dem vorher gerechnet
+    // wurde, also ändert sich für einen bestehenden Stand nichts.
+    printProfileId: DEFAULT_PROFILE_ID,
     // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
     // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
     birthDate: '1999-09-11',
