@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sammleDateien } from './import.js';
-import { PAPIERKORB, quellenId, Sources } from './sources.js';
+import { quellenId, Sources } from './sources.js';
 
 let dir: string;
 
@@ -125,83 +125,6 @@ describe('Sources', () => {
     await rm(dir, { recursive: true, force: true });
     // Der Fall, der zählt: ein nicht eingehängtes Netzlaufwerk.
     expect(await quellen.erreichbar(source.id)).toBe(false);
-  });
-});
-
-describe('Papierkorb', () => {
-  it('verschiebt die Datei, statt sie zu löschen', async () => {
-    const quellen = new Sources();
-    const { source } = await quellen.add(dir);
-    await writeFile(join(dir, 'foto.jpg'), 'pixel');
-
-    const ziel = await quellen.inDenPapierkorb({
-      id: 'a1',
-      relPath: 'foto.jpg',
-      sourceId: source.id,
-    });
-
-    expect(ziel).toBe(join(dir, PAPIERKORB, 'foto.jpg'));
-    expect(await readFile(ziel, 'utf8')).toBe('pixel');
-    await expect(stat(join(dir, 'foto.jpg'))).rejects.toThrow();
-  });
-
-  it('versteckt das Aussortierte vor dem nächsten Import', async () => {
-    const quellen = new Sources();
-    const { source } = await quellen.add(dir);
-    await writeFile(join(dir, 'foto.jpg'), '');
-    await quellen.inDenPapierkorb({ id: 'a1', relPath: 'foto.jpg', sourceId: source.id });
-
-    // Der ganze Trick des Punktordners: Kein Reimport holt die Datei zurück,
-    // ohne dass irgendwo eine Liste gelöschter Fotos gepflegt werden müsste.
-    const { images } = await sammleDateien(dir);
-    expect(images).toEqual([]);
-  });
-
-  it('behält die Ordnerstruktur der Quelle bei', async () => {
-    const quellen = new Sources();
-    const { source } = await quellen.add(dir);
-    await mkdir(join(dir, 'kamera'));
-    await writeFile(join(dir, 'kamera', 'foto.jpg'), '');
-
-    const ziel = await quellen.inDenPapierkorb({
-      id: 'a1',
-      relPath: join('kamera', 'foto.jpg'),
-      sourceId: source.id,
-    });
-
-    expect(ziel).toBe(join(dir, PAPIERKORB, 'kamera', 'foto.jpg'));
-  });
-
-  it('überschreibt eine gleichnamige Datei im Papierkorb nicht', async () => {
-    const quellen = new Sources();
-    const { source } = await quellen.add(dir);
-    await mkdir(join(dir, PAPIERKORB));
-    await writeFile(join(dir, PAPIERKORB, 'foto.jpg'), 'die erste');
-    await writeFile(join(dir, 'foto.jpg'), 'die zweite');
-
-    const ziel = await quellen.inDenPapierkorb({
-      id: 'a1',
-      relPath: 'foto.jpg',
-      sourceId: source.id,
-    });
-
-    expect(ziel).toBe(join(dir, PAPIERKORB, 'foto-2.jpg'));
-    expect(await readFile(join(dir, PAPIERKORB, 'foto.jpg'), 'utf8')).toBe('die erste');
-  });
-
-  it('rührt nichts an, wenn die Quelle nicht erreichbar ist', async () => {
-    const quellen = new Sources();
-    const { source } = await quellen.add(dir);
-    const weg = `${dir}-verschoben`;
-    await rename(dir, weg);
-
-    try {
-      await expect(
-        quellen.inDenPapierkorb({ id: 'a1', relPath: 'foto.jpg', sourceId: source.id }),
-      ).rejects.toThrow('nicht erreichbar');
-    } finally {
-      await rename(weg, dir);
-    }
   });
 });
 

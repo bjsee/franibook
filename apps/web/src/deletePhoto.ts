@@ -11,9 +11,6 @@ import { type AussortierErgebnis, fehlertext, fotoAussortieren } from './api.js'
 
 export type { AussortierErgebnis as DeleteResult };
 
-/** Der Ordner, in dem gelöschte Bilder landen – wortgleich zum Server. */
-export const PAPIERKORB = '.franibook-geloescht';
-
 interface Optionen {
   /** Für den Bestätigungstext: was der Benutzer gerade vor sich sieht. */
   name: string;
@@ -43,8 +40,10 @@ export async function fotoLoeschen(
   if (
     !window.confirm(
       `„${name}" aussortieren?${folge}\n\n` +
-        `Die Datei wandert in den versteckten Ordner ${PAPIERKORB} in ihrer Bildquelle. ` +
-        'Gelöscht ist sie damit nicht: Im Finder lässt sie sich von dort zurücklegen.',
+        'Die Datei bleibt unangetastet in ihrer Bildquelle liegen; das Foto wird nur aus dem ' +
+        'Projekt genommen und kommt bei keinem Einlesen zurück. ' +
+        'Unter „Bildquellen" steht es weiter in der Liste der aussortierten Fotos und lässt ' +
+        'sich von dort wieder aufnehmen.',
     )
   ) {
     return null;
@@ -59,7 +58,7 @@ export async function fotoLoeschen(
 
 /** Was passiert ist, in einem Satz. */
 export function loeschMeldung(d: AussortierErgebnis): string {
-  const teile = [`„${d.fileName}" liegt jetzt in ${PAPIERKORB}`];
+  const teile = [`„${d.fileName}" ist aussortiert`];
   if (d.imBuch === 1) teile.push('ein Platz im Buch bleibt leer');
   else if (d.imBuch > 1) teile.push(`${d.imBuch} Plätze im Buch bleiben leer`);
   teile.push(`${d.photoCount} Fotos übrig`);

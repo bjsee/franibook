@@ -238,6 +238,8 @@ export interface ImportDiff {
   unveraendert: number;
   imBuchVerschwunden: string[];
   offline: { label: string; photoCount: number }[];
+  /** Dateien, die als aussortiert übergangen wurden. */
+  aussortiert: number;
   photoCount: number;
 }
 
@@ -662,8 +664,6 @@ export const ausrichtungKippen = (ids: string[], orientation: 1 | 2 | 3 | null) 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {
   fileName: string;
-  /** Wohin die Datei verschoben wurde. */
-  papierkorb: string;
   /** Slots im Buch, die dadurch leer stehen. */
   imBuch: number;
   spreads: number[];
@@ -671,6 +671,40 @@ export interface AussortierErgebnis {
   /** Die betroffenen Doppelseiten, fertig gerendert. */
   rendered: { index: number; spread: RenderedSpread }[];
 }
+
+/**
+ * Ein aussortiertes Foto – `Aussortiert` aus `project/bestand.ts`.
+ *
+ * Die Datei liegt weiter in ihrer Bildquelle; was das Foto draußen hält, ist
+ * dieser Vermerk. Deshalb muss er sichtbar sein und sich aufheben lassen.
+ */
+export interface AussortiertesFoto {
+  /**
+   * Das rohe Importergebnis, nicht die aufgelöste `FotoInfo`: Es ist genau das,
+   * was beim Aussortieren aus dem Bestand genommen wurde.
+   */
+  photo: {
+    id: string;
+    fileName: string;
+    relPath: string;
+    width: number;
+    height: number;
+    bytes: number;
+    takenAt?: string;
+  };
+  /** Wann aussortiert, als ISO-Zeitstempel. */
+  at: string;
+}
+
+export const aussortierteLaden = () =>
+  hole<{ aussortiert: AussortiertesFoto[] }>('/api/photos/aussortiert');
+
+/** Hebt den Vermerk auf: Das Foto steht danach wieder im Fotopool. */
+export const fotoWiederAufnehmen = (photoId: string) =>
+  sende<{ photo: FotoInfo; photoCount: number }>(
+    'DELETE',
+    `/api/photos/aussortiert/${encodeURIComponent(photoId)}`,
+  );
 
 export const fotopoolLaden = () => hole<{ photos: PoolFoto[] }>('/api/book/unplaced');
 

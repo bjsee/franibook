@@ -77,7 +77,7 @@ import type { PreviewCache } from './previews.js';
 import * as anordnung from './project/anordnung.js';
 import { type BaumSeite, baum } from './project/baum.js';
 import * as bestand from './project/bestand.js';
-import type { ImportDiff, QuellenBericht } from './project/bestand.js';
+import type { Aussortiert, ImportDiff, QuellenBericht } from './project/bestand.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
 import * as layoutDokument from './project/layout-dokument.js';
@@ -103,8 +103,8 @@ import { type PhotoSource, quellenId, Sources } from './sources.js';
  */
 const SCHEMA_VERSION = 3;
 
-/** Beides beschreibt einen Einlesevorgang und steht deshalb bei ihm. */
-export type { ImportDiff, QuellenBericht };
+/** Alle drei beschreiben den Bestand und stehen deshalb bei ihm. */
+export type { Aussortiert, ImportDiff, QuellenBericht };
 
 export interface ProjectSettings {
   targetPages: number;
@@ -204,6 +204,11 @@ interface PersistedProject {
   sourceRoot?: string;
   settings: ProjectSettings;
   photos: Photo[];
+  /**
+   * Aussortierte Fotos. Fehlt in Projekten aus der Zeit des Papierkorbs – die
+   * hatten ihre Merkliste im Dateisystem, und die hat nicht gehalten.
+   */
+  aussortiert?: Aussortiert[];
   overrides: Record<PhotoId, PhotoOverride>;
   book: { spreads: Spread[] };
   groups: PhotoGroup[];
@@ -328,6 +333,15 @@ function zuSchema3(data: PersistedProject): PersistedProject {
 export interface Stand {
   quellen: PhotoSource[];
   photos: Map<PhotoId, Photo>;
+  /**
+   * Mit im Stand, und damit nimmt ein Cmd+Z das Aussortieren zurück.
+   *
+   * Vorher hing daran ein `Dateizug` am Schritt, der das `rename` umkehrte –
+   * die einzige Wirkung außerhalb des Projektzustands und die einzige, die
+   * scheitern konnte. Jetzt ist das Aussortieren ein Eintrag in einem Objekt
+   * wie jede andere Änderung auch.
+   */
+  aussortiert: Record<PhotoId, Aussortiert>;
   overrides: Record<PhotoId, PhotoOverride>;
   groups: PhotoGroup[];
   groupStamp: string | undefined;
@@ -361,6 +375,13 @@ export class Project {
     return profileById(this.settings.printProfileId) ?? defaultProfile();
   }
   readonly photos = new Map<PhotoId, Photo>();
+  /**
+   * Aussortierte Fotos, nach Kennung.
+   *
+   * Was hier steht, kommt bei keinem Einlesen zurück – auch dann nicht, wenn
+   * die Datei noch in ihrer Quelle liegt. Begründung an `Aussortiert`.
+   */
+  aussortiert: Record<PhotoId, Aussortiert> = {};
   overrides: Record<PhotoId, PhotoOverride> = {};
   groups: PhotoGroup[] = [];
   spreads: Spread[] = [];
@@ -462,8 +483,8 @@ export class Project {
    *
    * Der Verlauf hält ganze Stände und rührt sie über zwei Funktionen an: Der
    * Stand ist eine Kopie (`stand()`), das Setzen bildet die Kalendergliederung
-   * neu (`setzeStand()`). Dass die Bewegung einer Datei mitgeht, ist die dritte
-   * — und einzige, die scheitern kann.
+   * neu (`setzeStand()`). Mehr braucht er nicht — seit das Aussortieren keine
+   * Datei mehr bewegt, wirkt keine Aktion außerhalb des Projektzustands.
    */
   readonly verlauf: Verlauf<Stand>;
 
@@ -476,19 +497,6 @@ export class Project {
     this.verlauf = new Verlauf<Stand>({
       lies: () => this.stand(),
       schreib: (stand) => this.setzeStand(stand),
-      verschiebe: async (zug, richtung) => {
-        const [von, nach] = richtung === 'zurueck' ? [zug.nach, zug.von] : [zug.von, zug.nach];
-        try {
-          await rename(von, nach);
-        } catch (fehler) {
-          // Ein deutscher Satz, kein Code: Die Oberfläche zeigt ihn unverändert.
-          // Etwa, wenn die Quelle gerade nicht eingehängt ist oder jemand die
-          // Datei im Finder selbst zurückgelegt hat.
-          throw new Error(`Die Datei ${basename(nach)} lässt sich nicht bewegen`, {
-            cause: fehler,
-          });
-        }
-      },
     });
   }
 
@@ -506,6 +514,7 @@ export class Project {
     return structuredClone({
       quellen: [...this.sources.list()],
       photos: this.photos,
+      aussortiert: this.aussortiert,
       overrides: this.overrides,
       groups: this.groups,
       groupStamp: this.groupStamp,
@@ -525,6 +534,7 @@ export class Project {
     // gehalten – also austauschen, nicht ersetzen.
     this.photos.clear();
     for (const [id, photo] of stand.photos) this.photos.set(id, photo);
+    this.aussortiert = stand.aussortiert;
     this.overrides = stand.overrides;
     this.groups = stand.groups;
     this.groupStamp = stand.groupStamp;
@@ -541,18 +551,16 @@ export class Project {
    * Nimmt den letzten Schritt zurück und speichert.
    *
    * @returns der zurückgenommene Schritt, oder `null` bei leerem Verlauf.
-   * @throws wenn eine Datei nicht zurückgelegt werden kann — dann ist nichts
-   * geschehen.
    */
   async zurueck(): Promise<Schritt<Stand> | null> {
-    const schritt = await this.verlauf.zurueck();
+    const schritt = this.verlauf.zurueck();
     if (schritt) await this.save();
     return schritt;
   }
 
   /** Das Gegenstück: wiederholt den zuletzt zurückgenommenen Schritt. */
   async vor(): Promise<Schritt<Stand> | null> {
-    const schritt = await this.verlauf.vor();
+    const schritt = this.verlauf.vor();
     if (schritt) await this.save();
     return schritt;
   }
@@ -576,25 +584,29 @@ export class Project {
   }
 
   /**
-   * Sortiert ein Foto aus – und merkt sich den Weg zurück.
+   * Sortiert ein Foto aus: vergisst es und merkt sich, dass es draußen bleibt.
    *
-   * Die einzige Aktion mit einer Wirkung außerhalb des Projektzustands. Der
-   * Verlauf hält deshalb nicht nur den Stand von vorher, sondern auch die beiden
-   * Pfade: Zurücknehmen heißt hier, die Datei aus `.franibook-geloescht` zu
-   * holen. Der Pfad wird nicht mit nach draußen gegeben – die Antwort nennt den
-   * Papierkorb, das genügt der Oberfläche.
+   * Die Datei bleibt unangetastet in ihrer Quelle – gegen den Import steht die
+   * Merkliste, nicht das Dateisystem (Begründung an `Aussortiert`). Damit ist
+   * auch der Verlauf wieder eine reine Sache des Projektzustands.
    */
-  async deletePhoto(id: PhotoId): Promise<{
-    fileName: string;
-    papierkorb: string;
-    imBuch: number;
-    spreads: number[];
-  } | null> {
-    const ergebnis = await bestand.deletePhoto(this, id);
-    if (!ergebnis) return null;
-    const { von, ...antwort } = ergebnis;
-    this.verlauf.merkeDateizug({ von, nach: antwort.papierkorb });
-    return antwort;
+  deletePhoto(id: PhotoId): { fileName: string; imBuch: number; spreads: number[] } | null {
+    return bestand.deletePhoto(this, id);
+  }
+
+  /**
+   * Die aussortierten Fotos, zuletzt aussortierte zuerst.
+   *
+   * Diese Reihenfolge und nicht die des Buches: Wer hier nachsieht, sucht in
+   * aller Regel den Fehlgriff von eben.
+   */
+  aussortierte(): Aussortiert[] {
+    return Object.values(this.aussortiert).sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  /** Nimmt ein aussortiertes Foto zurück ins Projekt. */
+  wiederAufnehmen(id: PhotoId): Photo | null {
+    return bestand.wiederAufnehmen(this, id);
   }
 
   importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
@@ -1869,7 +1881,10 @@ export class Project {
    * `sources.pfad()`.
    */
   photo(id: PhotoId): Photo | undefined {
-    const roh = this.photos.get(id);
+    // Auch aussortierte Fotos: Die Liste in der Oberfläche zeigt Vorschauen,
+    // und ohne Bild ist „046_46.jpeg" keine Auskunft darüber, was man da
+    // aussortiert hat. Die Datei liegt ja noch in ihrer Quelle.
+    const roh = this.photos.get(id) ?? this.aussortiert[id]?.photo;
     return roh && effectivePhoto(roh, this.overrides[id]);
   }
 
@@ -2106,6 +2121,7 @@ export class Project {
       sources: [...this.sources.list()],
       settings: this.settings,
       photos: [...this.photos.values()],
+      aussortiert: Object.values(this.aussortiert),
       overrides: this.overrides,
       groups: this.groups,
       ...(this.groupStamp !== undefined ? { groupStamp: this.groupStamp } : {}),
@@ -2190,6 +2206,7 @@ export class Project {
     if (data.sources?.length) this.sources.restore(data.sources);
     this.photos.clear();
     for (const p of data.photos) this.photos.set(p.id, p);
+    this.aussortiert = Object.fromEntries((data.aussortiert ?? []).map((a) => [a.photo.id, a]));
     this.overrides = data.overrides ?? {};
     this.groups = data.groups ?? [];
     this.groupStamp = data.groupStamp;
@@ -2229,6 +2246,7 @@ export class Project {
 
       this.photos.clear();
       for (const p of data.photos) this.photos.set(p.id, p);
+      this.aussortiert = Object.fromEntries((data.aussortiert ?? []).map((a) => [a.photo.id, a]));
       this.overrides = data.overrides ?? {};
       this.groups = data.groups ?? [];
       this.groupStamp = data.groupStamp;

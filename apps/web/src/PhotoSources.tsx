@@ -13,11 +13,19 @@
  * Der Grundbestand liegt auf einem Netzlaufwerk, und der Unterschied zwischen
  * „der Ordner ist leer" und „der Ordner ist nicht eingehängt" ist die ganze
  * Auskunft dieser Ansicht.
+ *
+ * Hier steht auch die Liste der aussortierten Fotos, und zwar aus demselben
+ * Grund: Sie beantwortet die Frage „warum sind im Ordner mehr Bilder als im
+ * Buch?". Ein eigener Reiter wäre für eine Liste, die man selten braucht, zu
+ * viel Navigation – und sie gehört zum Bestand, nicht zum Buch.
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
+  aussortierteLaden,
+  type AussortiertesFoto,
   type Bildquelle as Source,
   fehlertext,
+  fotoWiederAufnehmen,
   type ImportDiff,
   neuEinlesen,
   quelleEntfernen,
@@ -36,6 +44,7 @@ interface PhotoSourcesProps {
 
 export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
   const [sources, setSources] = useState<Source[] | null>(null);
+  const [aussortiert, setAussortiert] = useState<AussortiertesFoto[]>([]);
   const [pfad, setPfad] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -45,6 +54,9 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
   const laden = useCallback(() => {
     quellenLaden()
       .then((d) => setSources(d.sources))
+      .catch((e: unknown) => setFehler(fehlertext(e)));
+    aussortierteLaden()
+      .then((d) => setAussortiert(d.aussortiert))
       .catch((e: unknown) => setFehler(fehlertext(e)));
   }, []);
 
@@ -57,6 +69,8 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
     if (d.imBuchVerschwunden.length > 0) {
       teile.push(`davon ${d.imBuchVerschwunden.length} noch im Buch – dort bleibt der Platz leer`);
     }
+    // Ohne diesen Halbsatz sucht man nach Bildern, die absichtlich fehlen.
+    if (d.aussortiert > 0) teile.push(`${d.aussortiert} aussortierte übergangen`);
     for (const q of d.offline) {
       teile.push(`„${q.label}" nicht erreichbar, ${q.photoCount} Fotos daraus bleiben unberührt`);
     }
@@ -130,6 +144,15 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
   async function umbenennen(source: Source, label: string) {
     if (label.trim() === source.label || !label.trim()) return;
     await anfrage('Benenne um …', () => quelleUmbenennen(source.id, label));
+  }
+
+  async function wiederAufnehmen(eintrag: AussortiertesFoto) {
+    const d = await anfrage(`Nehme „${eintrag.photo.fileName}" wieder auf …`, () =>
+      fotoWiederAufnehmen(eintrag.photo.id),
+    );
+    // Den alten Platz im Buch bekommt es nicht zurück – das gehört in die
+    // Meldung, sonst sucht man das Bild auf seiner früheren Doppelseite.
+    if (d) setNote(`„${eintrag.photo.fileName}" liegt wieder im Fotopool, ${d.photoCount} Fotos`);
   }
 
   const gesamt = (sources ?? []).reduce((n, q) => n + q.photoCount, 0);
@@ -230,6 +253,48 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
             Alle Quellen neu einlesen
           </button>
         </div>
+
+        {aussortiert.length > 0 && (
+          <div style={{ marginTop: 34 }}>
+            <h3 style={{ ...B.titel, fontSize: 17, marginBottom: 6 }}>
+              Aussortiert ({aussortiert.length})
+            </h3>
+            <p style={{ ...B.leise, marginBottom: 14, lineHeight: 1.55 }}>
+              Diese Fotos bleiben aus dem Projekt heraus, auch wenn ihre Dateien noch in der
+              Bildquelle liegen — kein Einlesen holt sie zurück. Wer sich vergriffen hat, nimmt sie
+              hier wieder auf; sie landen dann im Fotopool, nicht auf ihrer alten Doppelseite.
+            </p>
+            <div style={S.gitter}>
+              {aussortiert.map((a) => (
+                <div key={a.photo.id} style={S.kachel}>
+                  <img
+                    src={`/api/photos/${a.photo.id}/preview?size=thumb`}
+                    alt=""
+                    style={S.bild}
+                    loading="lazy"
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={S.dateiname} title={a.photo.relPath}>
+                      {a.photo.fileName}
+                    </p>
+                    <p style={{ ...B.leise, margin: '2px 0 0' }}>
+                      {a.photo.takenAt ? a.photo.takenAt.slice(0, 10) : 'ohne Datum'} · aussortiert{' '}
+                      {a.at.slice(0, 10)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void wiederAufnehmen(a)}
+                    disabled={!!busy}
+                    style={B.knopf}
+                    title="Nimmt das Foto zurück ins Projekt – es liegt danach im Fotopool."
+                  >
+                    Wieder aufnehmen
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -283,6 +348,19 @@ const S = {
     wordBreak: 'break-all' as const,
   },
   aus: { color: T.fg4, cursor: 'not-allowed' },
+  gitter: { display: 'flex', flexDirection: 'column' as const, gap: 8 },
+  kachel: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr auto',
+    gap: 12,
+    alignItems: 'center',
+    padding: '8px 12px',
+    background: T.bg1,
+    border: `1px solid ${T.line}`,
+    borderRadius: T.rLg,
+  },
+  bild: { width: 56, height: 42, objectFit: 'cover' as const, borderRadius: T.rMd },
+  dateiname: { margin: 0, fontSize: 14, color: T.fg1, wordBreak: 'break-all' as const },
   eingaben: { display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 12 },
   fuss: {
     marginTop: 20,
