@@ -18,7 +18,7 @@
 import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import { dpiInSlot } from '@franibook/core';
-import { T, dpiFarbe } from '../theme.js';
+import { B, T, dpiFarbe } from '../theme.js';
 import { ABSICHT_WORT, absichtVon } from './absicht.js';
 import { textName } from './bewegtext.js';
 import { Bildgriffe } from './Bildgriffe.js';
@@ -193,7 +193,7 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
   }
 
   return (
-    <div ref={stageRef} style={S.wrap}>
+    <div ref={stageRef} style={S.wrap} {...model.dateiAblage}>
       <SpreadView
         spread={angezeigt}
         widthPx={stageBreite}
@@ -246,6 +246,64 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
         Leere, wo man eine Ecke sieht.
       */}
       <Griffe model={model} />
+
+      {/*
+        Eine Datei hängt über dem Papier: Das Blatt bekommt einen Rand, und an
+        der Fallstelle steht ein Kreuz. Beides ist Rückmeldung und keine
+        Vorschau – wie groß das Bild wird, weiß erst der Server, der seine
+        Pixelmaße gelesen hat.
+      */}
+      {model.dateiUeber && (
+        <div style={S.dateiZone}>
+          <span
+            style={{
+              ...S.fallstelle,
+              left: `${(beschnittMm + model.dateiUeber.x * trimBreiteMm) * pxPerMm}px`,
+              top: `${(beschnittMm + model.dateiUeber.y * trimHoeheMm) * pxPerMm}px`,
+            }}
+          >
+            <span style={S.fallmarke}>hier einwerfen</span>
+          </span>
+        </div>
+      )}
+
+      {model.einwurfLaeuft && (
+        <div style={S.dateiZone}>
+          <span style={S.dropAbsicht}>Bild wird aufgenommen …</span>
+        </div>
+      )}
+
+      {/*
+        Die Frage nach dem Neuanordnen liegt auf der Bühne und nicht im Rahmen:
+        Sie gehört zu dem Bild, das gerade gefallen ist, und gilt damit in allen
+        drei Fassungen gleich. Sie verschwindet nur durch eine Antwort – ein
+        Hinweis, der von selbst wegblendet, wäre bei zwei Knöpfen eine Falle.
+      */}
+      {model.einwurfFrage && (
+        <div style={S.einwurfKarte}>
+          <span style={S.einwurfText}>
+            „{model.einwurfFrage.name}" liegt an der Fallstelle. Seite dafür neu anordnen?
+          </span>
+          <span style={S.einwurfKnoepfe}>
+            <button
+              type="button"
+              onClick={() => void model.einwurfAnordnen()}
+              style={B.knopfPrimaer}
+              title="Alle Plätze der Doppelseite neu rechnen – Ausschnitte dieser Seite entstehen neu"
+            >
+              Neu anordnen
+            </button>
+            <button
+              type="button"
+              onClick={model.einwurfBelassen}
+              style={B.knopf}
+              title="Das Bild bleibt, wo es liegt"
+            >
+              So lassen
+            </button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -379,6 +437,60 @@ const S = {
     background: T.fehler,
     pointerEvents: 'none' as const,
   },
+  /**
+   * Das ganze Blatt als Abwurffläche.
+   *
+   * `pointerEvents: none`, sonst fängt die Einblendung das Fallenlassen ab,
+   * statt es an die Bühne zu geben – dieselbe Sorge wie bei `dropZiel`.
+   */
+  dateiZone: {
+    position: 'absolute' as const,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(0, 175, 203, 0.08)',
+    outline: `3px dashed ${T.cyan}`,
+    outlineOffset: '-4px',
+    pointerEvents: 'none' as const,
+  },
+  /** Die Fallstelle selbst – der Punkt, um den das Bild entsteht. */
+  fallstelle: {
+    position: 'absolute' as const,
+    display: 'block',
+    width: 0,
+    height: 0,
+  },
+  fallmarke: {
+    position: 'absolute' as const,
+    // Um den Punkt herum, wie der Kasten, der daraus entsteht.
+    transform: 'translate(-50%, -50%)',
+    padding: '4px 9px',
+    borderRadius: T.rMd,
+    background: T.cyan,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 600,
+    whiteSpace: 'nowrap' as const,
+  },
+  /** Die Frage nach dem Neuanordnen, unten mittig auf dem Papier. */
+  einwurfKarte: {
+    position: 'absolute' as const,
+    left: '50%',
+    bottom: 16,
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '10px 14px',
+    borderRadius: T.rMd,
+    background: T.bg1,
+    border: `1px solid ${T.line2}`,
+    boxShadow: T.schattenBuehne,
+    maxWidth: '80%',
+  },
+  einwurfText: { fontSize: 13, color: T.fg1, lineHeight: 1.35 },
+  einwurfKnoepfe: { display: 'flex', gap: 8, flexShrink: 0 },
   /** Kompakt über dem Bild: nur, was man im Vorbeisehen liest. */
   infoOverlay: {
     position: 'absolute' as const,

@@ -12,7 +12,7 @@ import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio, orientationOf } from '../model/photo.js';
 import type { SlotAssignment, Spread, TextBlock, TextElement } from '../model/spread.js';
-import { slotReihenfolge } from '../model/spread.js';
+import { slotReihenfolge, wirksamePlaetze } from '../model/spread.js';
 import type { Template, TemplateSlot, TemplateTextSlot } from '../model/template.js';
 import { crossesGutter } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -433,7 +433,11 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
   // Bildkästen frei gezogen werden, überlappen sich Bilder, und dann ist die
   // Zeichenreihenfolge eine Aussage (`SlotAssignment.layer`). Ohne `layer`
   // liefert `slotReihenfolge` genau die Reihenfolge der Vorlage.
-  for (const slot of slotReihenfolge(template.slots, spread)) {
+  //
+  // `wirksamePlaetze` statt `template.slots`: Ein eingeworfenes Bild hat einen
+  // Platz, den keine Vorlage kennt – und der gezeichnet werden muss, sonst wäre
+  // das Bild im Projekt und nicht auf dem Papier.
+  for (const slot of slotReihenfolge(wirksamePlaetze(template, spread), spread)) {
     const assignment = bySlotId.get(slot.id);
     const rect = toMm(slot, profile);
 

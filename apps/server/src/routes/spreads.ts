@@ -6,7 +6,25 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { BACKGROUND_COLORS, BACKGROUND_MIN_DPI } from '@franibook/core';
-import { type Kontext, spreadAntwort } from './kontext.js';
+import { type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
+
+/**
+ * Die Fallstelle eines Einwurfs, normiert auf das Endformat.
+ *
+ * Drei Ergebnisse und nicht zwei: Fehlt sie ganz, ist das die Ansage „ordne die
+ * Seite neu an" (so wirft der Baum ein Bild ein). Steht dort etwas Unbrauchbares,
+ * ist es ein Fehler – stillschweigend als „keine Stelle" zu lesen hieße, aus
+ * einem Tippfehler ein Neuanordnen zu machen.
+ */
+function lesePunkt(
+  x: string | undefined,
+  y: string | undefined,
+): { x: number; y: number } | undefined | 'unbrauchbar' {
+  if (x === undefined && y === undefined) return undefined;
+  const zahlen = [Number(x), Number(y)];
+  if (!zahlen.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) return 'unbrauchbar';
+  return { x: zahlen[0]!, y: zahlen[1]! };
+}
 
 export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
   app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {
@@ -107,6 +125,62 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
       };
     },
   );
+
+  // ------------------------------------------------------------------ Einwurf
+
+  /**
+   * Wirft eine Datei auf diese Doppelseite.
+   *
+   * Der Rumpf ist das Bild selbst (roher Buffer, Parser in `app.ts`), Name und
+   * Fallstelle stehen in der Query. **`x` und `y` sind normiert auf den
+   * Endformatbereich der Doppelseite**, wie ein Templateslot – die Oberfläche
+   * rechnet die Zeigerlage dort hin um, weil nur sie weiß, wie groß das Papier
+   * am Bildschirm ist.
+   *
+   * Mit Fallstelle bleibt die Anordnung, wie sie ist: Das Bild bekommt einen
+   * freien Platz an dieser Stelle (`layout/einwurf.ts`), und ob die Seite danach
+   * neu angeordnet wird, entscheidet der Benutzer über
+   * `PATCH /api/spreads/:index/template` mit `auto`. Ohne Fallstelle – aus dem
+   * Baum, wo eine Zeile keine Stelle im Millimeterraster hat – wird die Seite
+   * gleich neu angeordnet, wie bei jedem anderen Zug dorthin.
+   */
+  app.post<{
+    Params: { index: string };
+    Querystring: { name?: string; x?: string; y?: string };
+    Body: Buffer;
+  }>('/api/spreads/:index/einwurf', async (req, reply) => {
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+    }
+    const gelesen = leseEinwurf(req.body, req.query.name);
+    if ('error' in gelesen) return reply.code(400).send({ error: gelesen.error });
+
+    const punkt = lesePunkt(req.query.x, req.query.y);
+    if (punkt === 'unbrauchbar') {
+      return reply.code(400).send({ error: 'Die Fallstelle ist keine Zahl zwischen 0 und 1' });
+    }
+
+    const index = Number(req.params.index);
+    const ergebnis = await project.einwerfen(gelesen.datei, {
+      kind: 'spread',
+      index,
+      ...(punkt ? { punkt } : {}),
+    });
+    // 409 und nicht 400: Der Einwurf war brauchbar, nur der Platz gab ihn nicht
+    // her – eine festgehaltene Seite, ein Auftakt ohne Fassung für die neue
+    // Bilderzahl. Das Foto liegt dann im Pool, und die Antwort sagt es.
+    if (!ergebnis.ok) {
+      return reply.code(ergebnis.photo ? 409 : 400).send({ ok: false, error: ergebnis.error });
+    }
+
+    await project.save();
+    return {
+      ...ergebnis,
+      photo: ergebnis.photo ? project.photoViewsOf([ergebnis.photo.id])[0] : undefined,
+      spread: spreadAntwort(project, index),
+      report: project.lastReport,
+    };
+  });
 
   // -------------------------------------------------------------- Eigene Seiten
 

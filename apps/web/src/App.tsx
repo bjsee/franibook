@@ -275,6 +275,33 @@ export function App() {
   // sich zwar von Doppelseite zu Doppelseite, gemeint war aber dieses Bild.
   useEffect(() => setSelectedSlotId(null), [index]);
 
+  /**
+   * Eine Datei, die *neben* eine Abwurfstelle fällt, darf die Arbeit nicht beenden.
+   *
+   * Ohne diesen Wächter deutet der Browser den Zug als Navigation und zeigt das
+   * Bild statt des Buches – samt Auswahl, Griffen und allem, was noch nicht
+   * gespeichert war. Hier und nicht in den Ansichten: Es geht um das Fenster, und
+   * eingeworfen wird an mehreren Stellen (Doppelseite, Fotopool, Baum). Nur
+   * Dateizüge; das Ziehen von Bildern innerhalb der Oberfläche stört das nicht.
+   */
+  useEffect(() => {
+    const halte = (ev: DragEvent) => {
+      if (!ev.dataTransfer?.types.includes('Files')) return;
+      // Ein Dateifeld nimmt Drops selbst an, und `preventDefault` wirkt auch aus
+      // der Bubble-Phase: Ohne diese Ausnahme wäre jedes künftige `<input
+      // type="file">` als Ablage tot, ohne dass der Grund am Feld zu sehen wäre.
+      const ziel = ev.target;
+      if (ziel instanceof HTMLInputElement && ziel.type === 'file') return;
+      ev.preventDefault();
+    };
+    window.addEventListener('dragover', halte);
+    window.addEventListener('drop', halte);
+    return () => {
+      window.removeEventListener('dragover', halte);
+      window.removeEventListener('drop', halte);
+    };
+  }, []);
+
   /** Die Doppelseite verwerfen und neu holen. */
   const neuRendern = useCallback(() => {
     setSpread(null);

@@ -21,6 +21,7 @@ import {
   type FotoInfo,
   type PoolFoto,
   baumLaden,
+  bildEinwerfen,
   fehlertext,
   fotopoolLaden,
   fotosLaden,
@@ -55,6 +56,18 @@ export interface BaumModell {
   fallenlassen: (ziel: Herkunft) => Promise<void>;
   /** Nimmt die ausgewählten Bilder aus dem Buch. */
   auswahlInDenPool: () => Promise<void>;
+
+  /**
+   * Wirft eine Datei aus dem Dateisystem ins Buch.
+   *
+   * **Auf eine Zeile geworfen wird die Seite neu angeordnet** – anders als in der
+   * Doppelseitenansicht, wo das Bild an der Fallstelle liegen bleibt. Der
+   * Unterschied ist keine Inkonsequenz, sondern die Arbeitshöhe: Eine Zeile im
+   * Baum hat keine Stelle im Millimeterraster, auf die man zielen könnte, und wer
+   * hier arbeitet, verteilt Bilder auf Seiten. Es ist damit derselbe Zug wie
+   * jeder andere in dieser Ansicht, nur mit einer Datei als Quelle.
+   */
+  dateiEinwerfen: (datei: File, ziel: Herkunft) => Promise<void>;
 }
 
 /**
@@ -212,6 +225,37 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
     [zug, zugBeenden, quelleVon, schicken],
   );
 
+  const dateiEinwerfen = useCallback(
+    async (datei: File, ziel: Herkunft) => {
+      setBusy(true);
+      try {
+        const ergebnis = await bildEinwerfen(
+          datei,
+          ziel.kind === 'pool' ? { kind: 'pool' } : { kind: 'spread', index: ziel.spreadIndex },
+        );
+        const stand = await laden();
+        onChanged();
+        const wohin =
+          ziel.kind === 'pool'
+            ? 'liegt außerhalb des Buches'
+            : `liegt auf Doppelseite ${ziel.spreadIndex + 1}`;
+        const satz = ergebnis.dupliziert
+          ? `„${datei.name}" lag inhaltlich schon im Bestand und ${wohin} – es wurde keine Datei angelegt.`
+          : `„${datei.name}" ${wohin}.`;
+        setNote(
+          stand.ok
+            ? satz
+            : `${satz} Aber: Der Baum ließ sich danach nicht neu laden (${stand.fehler}) — der angezeigte Stand ist veraltet.`,
+        );
+      } catch (e: unknown) {
+        setNote(`„${datei.name}" ließ sich nicht einwerfen: ${fehlertext(e)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [laden, onChanged],
+  );
+
   const auswahlInDenPool = useCallback(async () => {
     // Nur was im Buch liegt: Ein Bild aus dem Pool in den Pool zu ziehen wäre
     // kein Zug, und der Server lehnte den ganzen Stapel dafür ab.
@@ -239,5 +283,6 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
     zugBeenden,
     fallenlassen,
     auswahlInDenPool,
+    dateiEinwerfen,
   };
 }

@@ -593,6 +593,74 @@ export interface FotoInfo {
   quarterTurns?: 1 | 2 | 3;
 }
 
+// ─── Einwurf ────────────────────────────────────────────────────────────────
+
+/**
+ * Was ein Einwurf hinterlassen hat.
+ *
+ * `dupliziert` heißt: Dasselbe Bild lag schon im Bestand, es ist keine zweite
+ * Datei entstanden – die Kennung eines Fotos ist sein Inhalt. `zurueckgeholt`
+ * heißt: Es war aussortiert und ist von der Merkliste genommen worden.
+ * `spread` fehlt bei einem Einwurf in den Fotopool.
+ */
+export interface Einwurfergebnis {
+  ok: boolean;
+  photo?: FotoInfo;
+  /** Wohin die Datei geschrieben wurde, relativ zur Bildquelle. */
+  relPath?: string;
+  dupliziert?: boolean;
+  zurueckgeholt?: boolean;
+  /** Der Platz, an dem das Bild liegt – nur mit Fallstelle. */
+  slotId?: string;
+  touched?: number[];
+  spread?: SpreadResponse;
+  report?: Report | null;
+  photoCount?: number;
+}
+
+/**
+ * Wirft eine Datei ins Buch.
+ *
+ * Der Rumpf ist die Datei selbst und nicht ein `FormData`: Ein Einwurf ist genau
+ * ein Bild, und der Server braucht dafür keinen Multipart-Leser (Begründung am
+ * Parser in `app.ts`). Der Name geht als Query mit, weil ein
+ * `Content-Disposition` mit Umlauten nur mit Sonderregeln zu schreiben ist – und
+ * der Bestand ist voller Umlaute.
+ *
+ * `ziel`:
+ * - `{ kind: 'pool' }` – nur in den Bestand, das Bild liegt danach im Fotopool.
+ * - `{ kind: 'spread', index, punkt }` – auf die Doppelseite, an die Fallstelle.
+ *   Der Punkt ist normiert auf den Endformatbereich der Doppelseite.
+ * - `{ kind: 'spread', index }` – auf die Doppelseite, die danach neu angeordnet
+ *   wird (aus dem Baum, wo eine Zeile keine Stelle im Millimeterraster hat).
+ */
+export function bildEinwerfen(
+  datei: File,
+  ziel: { kind: 'pool' } | { kind: 'spread'; index: number; punkt?: { x: number; y: number } },
+): Promise<Einwurfergebnis> {
+  const frage = new URLSearchParams({ name: datei.name });
+  if (ziel.kind === 'spread' && ziel.punkt) {
+    frage.set('x', String(ziel.punkt.x));
+    frage.set('y', String(ziel.punkt.y));
+  }
+  const pfad =
+    ziel.kind === 'pool'
+      ? `/api/photos/einwurf?${frage}`
+      : `/api/spreads/${ziel.index}/einwurf?${frage}`;
+
+  return ruf<Einwurfergebnis>(pfad, {
+    method: 'POST',
+    // **Immer** `octet-stream` und nicht `datei.type`: Der Medientyp entscheidet,
+    // ob Fastify die Anfrage überhaupt annimmt. Der Browser schickt für eine
+    // `.webp` oder `.gif` einen Typ, für den kein Parser angemeldet ist – die
+    // Antwort wäre ein englischer `415` aus dem Rahmenwerk statt des deutschen
+    // Satzes, der sagt, welche Endungen ins Buch kommen. Was die Datei ist,
+    // entscheidet ohnehin ihre Endung und ihr Inhalt, nicht ihr Kopf.
+    headers: { 'content-type': 'application/octet-stream' },
+    body: datei,
+  });
+}
+
 /**
  * Eine Datumskorrektur, wie der Server sie annimmt.
  *

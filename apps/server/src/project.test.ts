@@ -450,6 +450,56 @@ describe('Anordnungen einer Jahresseite', () => {
   });
 });
 
+describe('Bildzahl je Buchseite', () => {
+  /** Zwei Bilder im Raster, eines davon links, eines rechts. */
+  function projektMitZwei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const id of ['p1', 'p2', 'p3']) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: '2020-01-01T12:00:00',
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.2up.pair',
+        slots: [
+          { slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } },
+          { slotId: 'b', photoId: 'p2', crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  it('zählt ein eingeworfenes Bild auf der Seite mit, auf der es liegt', () => {
+    // Der freie Platz steht in keiner Vorlage. Gezählt wurde vorher über den
+    // Index in der Vorlage, also gar nicht: Die Oberfläche schrieb „1 Bild" an
+    // eine Seite mit zwei, und die seitenweise Anordnung schickte das zweite
+    // unangekündigt in den Pool.
+    const p = projektMitZwei();
+    expect(p.halfChoices(0).counts).toEqual({ left: 1, right: 1 });
+
+    // Ein freier Platz rechts der Falzachse.
+    p.spreads[0]!.slots.push({
+      slotId: 'frei.1',
+      photoId: 'p3',
+      crop: { ...FULL_CROP },
+      rect: { x: 0.6, y: 0.3, w: 0.2, h: 0.3 },
+    });
+
+    expect(p.halfChoices(0).counts).toEqual({ left: 1, right: 2 });
+  });
+});
+
 describe('movePhotos', () => {
   /** Zwei Doppelseiten: vier Bilder auf der ersten, zwei auf der zweiten. */
   function projektMitVierUndZwei(): Project {

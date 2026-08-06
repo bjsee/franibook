@@ -11,6 +11,7 @@
  * `main.ts` bleibt, was es war: Umgebung lesen, die vier Objekte bauen, starten.
  */
 import Fastify, { type FastifyInstance } from 'fastify';
+import { EINWURF_MAX_BYTES } from './project/einwurf.js';
 import { buchRouten } from './routes/buch.js';
 import { fotoRouten } from './routes/fotos.js';
 import { gruppenRouten } from './routes/gruppen.js';
@@ -51,6 +52,33 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
 } {
   const app = Fastify({ logger });
   const routen: RoutenEintrag[] = [];
+
+  /**
+   * Eingeworfene Bilder kommen als rohe Bytes, nicht als Formular.
+   *
+   * `@fastify/multipart` wäre die naheliegende Abhängigkeit und leistet hier
+   * nichts: Ein Einwurf ist genau **eine** Datei, ihr Name steht in der Query,
+   * und mehr trägt ein Multipart-Rumpf auch nicht. Der Parser hängt am
+   * Medientyp, den der Browser aus der Datei selbst mitschickt;
+   * `application/octet-stream` ist der Rückfall für Endungen, für die er keinen
+   * kennt (bei HEIC aus dem Finder kommt das vor).
+   *
+   * Die Grenze gilt am Parser und nicht in der Route: Ohne sie liest Fastify ein
+   * versehentlich fallen gelassenes Videoarchiv erst vollständig in den
+   * Speicher, um es danach wegen der Endung abzulehnen.
+   */
+  app.addContentTypeParser(
+    [
+      'image/jpeg',
+      'image/png',
+      'image/heic',
+      'image/heif',
+      'image/tiff',
+      'application/octet-stream',
+    ],
+    { parseAs: 'buffer', bodyLimit: EINWURF_MAX_BYTES },
+    (_req, body, done) => done(null, body),
+  );
 
   app.addHook('onRoute', (route) => {
     const methoden = Array.isArray(route.method) ? route.method : [route.method];
