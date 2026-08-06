@@ -228,7 +228,12 @@ describe('Jeder Bildpfad liefert sRGB', () => {
   it('nennt in jeder Ausgabekette ein Ausgabeprofil', () => {
     // Die Gegenrichtung: Wer ein Bild schreibt, sagt den Farbraum an. Sonst
     // hängt die Farbe an einer Vorgabe von sharp, die niemand geprüft hat.
-    const schreibend = BILDPFADE.filter((q) => /\.(jpeg|webp|png)\(\s*\{/.test(q.text));
+    //
+    // Ohne `\s*\{`: Ein `.jpeg()` ohne Optionen wäre demselben Fehler
+    // ausgesetzt und entkäme der Prüfung. Im Produktionscode gibt es heute nur
+    // die zwei Ketten mit Optionsobjekt (`prepare-image.ts`, `previews.ts`),
+    // also kostet die strengere Fassung nichts.
+    const schreibend = BILDPFADE.filter((q) => /\.(jpeg|webp|png|avif|tiff)\(/.test(q.text));
     expect(schreibend.length).toBeGreaterThan(0);
     expect(schreibend.filter((q) => !/\.withIccProfile\(/.test(q.text)).map((q) => q.pfad)).toEqual(
       [],
