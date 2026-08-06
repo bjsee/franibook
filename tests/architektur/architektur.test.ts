@@ -197,6 +197,50 @@ describe('Die Adapter treffen keine Layoutentscheidung', () => {
   });
 });
 
+describe('Jeder Bildpfad liefert sRGB', () => {
+  /**
+   * Alle Stellen, die mit sharp ein Bild ausgeben: der PDF-Export und die
+   * Vorschauen. Beide müssen denselben Farbraum liefern, sonst ist die Parität
+   * von Vorschau und Druck an der Farbe aufgehoben — und der Parity-Test würde
+   * es nicht melden, weil er beide Wege gegen dieselbe Quelle rastert.
+   */
+  const BILDPFADE = [...RENDER_PDF, ...quellen('apps/server/src')].filter(
+    (q) => !q.pfad.endsWith('.test.ts'),
+  );
+
+  it('behält Bildmetadaten nur zusammen mit einem Ausgabeprofil', () => {
+    // sharp wandelt ein Bild mit eingebettetem Profil beim Einlesen nach sRGB —
+    // aber nicht mehr, wenn ein Aufrufer die Metadaten behalten will. Gemessen
+    // an einem P3-getaggten Bild (Tabelle in `render-pdf/src/farbe.ts`):
+    // `keepIccProfile()` lässt die Pixel weitfarbig, `withMetadata()` wandelt
+    // sie und hängt trotzdem das alte Profil an. Am Bestand betrifft das 224 von
+    // 973 Dateien (23 %), und sichtbar wird es erst auf Papier.
+    //
+    // Erlaubt ist beides, sobald in derselben Datei ein Ausgabeprofil genannt
+    // wird (`withIccProfile`) — das holt die Wandlung zurück.
+    const behalten = /\.(withMetadata|keepMetadata|keepIccProfile)\(/;
+    const verdaechtig = BILDPFADE.filter(
+      (q) => behalten.test(q.text) && !/\.withIccProfile\(/.test(q.text),
+    );
+    expect(fundstellen(verdaechtig, behalten)).toEqual([]);
+  });
+
+  it('nennt in jeder Ausgabekette ein Ausgabeprofil', () => {
+    // Die Gegenrichtung: Wer ein Bild schreibt, sagt den Farbraum an. Sonst
+    // hängt die Farbe an einer Vorgabe von sharp, die niemand geprüft hat.
+    //
+    // Ohne `\s*\{`: Ein `.jpeg()` ohne Optionen wäre demselben Fehler
+    // ausgesetzt und entkäme der Prüfung. Im Produktionscode gibt es heute nur
+    // die zwei Ketten mit Optionsobjekt (`prepare-image.ts`, `previews.ts`),
+    // also kostet die strengere Fassung nichts.
+    const schreibend = BILDPFADE.filter((q) => /\.(jpeg|webp|png|avif|tiff)\(/.test(q.text));
+    expect(schreibend.length).toBeGreaterThan(0);
+    expect(schreibend.filter((q) => !/\.withIccProfile\(/.test(q.text)).map((q) => q.pfad)).toEqual(
+      [],
+    );
+  });
+});
+
 describe('Die Oberfläche baut kein Buch', () => {
   it('bindet keine Serverbibliothek ein', () => {
     expect(fundstellen(WEB, /from '(node:|sharp|pdfkit|fastify)/)).toEqual([]);
