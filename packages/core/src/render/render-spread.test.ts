@@ -47,6 +47,51 @@ function spreadWith(photoIds: (string | null)[]): Spread {
 
 const ctx = { profile, template, photos: PHOTOS };
 
+describe('Fokuspunkt aus Gesichtern', () => {
+  /** Dasselbe Hochformat wie `p2`, aber mit einem Gesicht am oberen Rand. */
+  const mitGesicht = new Map<string, Photo>([
+    ['p2', { ...photo('p2', 1536, 2048), faces: [{ x: 0.45, y: 0.06, w: 0.1, h: 0.08 }] }],
+  ]);
+
+  function ausschnittVon(photos: Map<string, Photo>) {
+    const gerendert = renderSpread(spreadWith([null, 'p2', null, null]), { ...ctx, photos });
+    return imageBoxes(gerendert)[0]!.crop;
+  }
+
+  it('verschiebt den Ausschnitt nach oben, statt ihn zu verkleinern', () => {
+    const ohne = ausschnittVon(PHOTOS);
+    const mit = ausschnittVon(mitGesicht);
+
+    expect(mit.y).toBeLessThan(ohne.y);
+    // Die Größe bleibt gleich — daran hängt, dass `bookStats` und `slotCost`
+    // weiter ohne Fokuspunkt rechnen dürfen und dieselbe Auflösung bekommen.
+    expect(mit.w).toBeCloseTo(ohne.w, 12);
+    expect(mit.h).toBeCloseTo(ohne.h, 12);
+  });
+
+  it('lässt ein Foto ohne erkannte Gesichter unverändert', () => {
+    // Jedes Foto aus einem Projekt von vor der Erkennung: bitgleich wie vorher.
+    const gerendert = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    for (const box of imageBoxes(gerendert)) {
+      expect(box.crop.y).toBeCloseTo(box.crop.h < 1 ? (1 - box.crop.h) / 2 : 0, 12);
+      expect(box.crop.x).toBeCloseTo(box.crop.w < 1 ? (1 - box.crop.w) / 2 : 0, 12);
+    }
+  });
+
+  it('lässt einen von Hand gesetzten Ausschnitt in Ruhe', () => {
+    // `manual` schlägt jede Automatik — auch die Gesichtserkennung. Sonst
+    // sprang ein gezogener Ausschnitt beim nächsten Rendern zurück.
+    const seite = spreadWith([null, 'p2', null, null]);
+    seite.slots[1] = {
+      slotId: seite.slots[1]!.slotId,
+      photoId: 'p2',
+      crop: { x: 0.3, y: 0.6, w: 0.4, h: 0.3, mode: 'manual' },
+    };
+    const box = imageBoxes(renderSpread(seite, { ...ctx, photos: mitGesicht }))[0]!;
+    expect(box.crop.y).toBeGreaterThan(0.5);
+  });
+});
+
 describe('Doppelseitengeometrie', () => {
   it('hat die Maße des Druckprofils einschließlich Beschnitt', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
