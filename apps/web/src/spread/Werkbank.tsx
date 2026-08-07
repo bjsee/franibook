@@ -55,6 +55,12 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
   const zuKlein = spread.boxes.filter(
     (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'below-min-dpi'),
   ).length;
+  // Gesichter, die der Beschnitt oder der Bund erwischt. Als Chip wie die zu
+  // kleinen Bilder: Das Panel des Inspektors sagt, welches Bild es betrifft —
+  // hier zählt nur, ob auf dieser Doppelseite etwas zu prüfen ist.
+  const amRand = spread.boxes.filter(
+    (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'face-at-edge'),
+  ).length;
   const gruppe = aussen.gruppen.find((g) => g.active);
 
   return (
@@ -73,6 +79,11 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
           {zuKlein > 0 && (
             <span style={S.warnChip}>
               {zuKlein === 1 ? '1 Bild' : `${zuKlein} Bilder`} zu klein für ihren Platz
+            </span>
+          )}
+          {amRand > 0 && (
+            <span style={S.warnChip} title="Im Beschnitt oder in der Falzzone">
+              {amRand === 1 ? '1 Bild' : `${amRand} Bilder`} mit Gesicht am Rand
             </span>
           )}
           <span style={B.dehner} />

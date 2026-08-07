@@ -62,6 +62,12 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
   const zuKlein = spread.boxes.filter(
     (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'below-min-dpi'),
   ).length;
+  // Wie in der Werkbank: nur die Zahl. Welches Bild betroffen ist, sagt das
+  // Panel des Inspektors — der Lesetisch ist zum Durchsehen da, nicht zum
+  // Nachbessern.
+  const amRand = spread.boxes.filter(
+    (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'face-at-edge'),
+  ).length;
   const gruppe = aussen.gruppen.find((g) => g.active);
 
   return (
@@ -74,6 +80,11 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
         <span style={B.dehner} />
         {zuKlein > 0 && (
           <span style={S.warnChip}>{zuKlein === 1 ? '1 Bild' : `${zuKlein} Bilder`} zu klein</span>
+        )}
+        {amRand > 0 && (
+          <span style={S.warnChip} title="Im Beschnitt oder in der Falzzone">
+            {amRand === 1 ? '1 Gesicht' : `${amRand} Gesichter`} am Rand
+          </span>
         )}
         <label style={S.hakenDunkel} title="Diese Doppelseite beim Neuanordnen unverändert lassen">
           <input
