@@ -1,13 +1,13 @@
 # Spike: Fokuspunkt aus Gesichtern
 
 Gemessen am 6. August 2026, macOS 26.5.2, Vision-Framework über ein
-Swift-Werkzeug (`spikes/vision/bildmerkmale.swift`), 150 Dateien aus dem echten
+Swift-Werkzeug (`apps/server/vision/bildmerkmale.swift`), 150 Dateien aus dem echten
 Bestand.
 
 Reproduzierbar über:
 
 ```shell
-swiftc -O -o spikes/vision/bildmerkmale spikes/vision/bildmerkmale.swift
+swiftc -O -o apps/server/vision/bildmerkmale apps/server/vision/bildmerkmale.swift
 pnpm --filter @franibook/spikes gesichter 150
 ```
 

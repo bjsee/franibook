@@ -49,6 +49,13 @@ export default defineConfig({
         // würde dann verschobene statt automatischer Ausschnitte vergleichen.
         FRANIBOOK_PROJECT: PROJECT,
         FRANIBOOK_FRESH: '1',
+        // Keine Bildmerkmale: Die Erkennung läuft nach dem Anlauf im
+        // Hintergrund und verschiebt danach die automatischen Ausschnitte.
+        // Fiele der Screenshot davor und das PDF danach, verglichen die beiden
+        // Seiten zwei verschiedene Stände — ein sporadischer Fehlschlag im
+        // Test, der Geometrie messen soll. An den Fixtures findet Vision keine
+        // Gesichter, aber Salienzobjekte, die Verschiebung wäre also real.
+        FRANIBOOK_NO_VISION: '1',
         PORT: '5174',
       },
     },

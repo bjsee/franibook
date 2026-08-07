@@ -84,6 +84,9 @@ import type { Aussortiert, ImportDiff, QuellenBericht } from './project/bestand.
 import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
+import * as merkmale from './project/merkmale.js';
+import type { MerkmaleBericht } from './project/merkmale.js';
+import type { VisionErkennung } from './vision.js';
 import * as layoutDokument from './project/layout-dokument.js';
 import {
   type Anker,
@@ -1887,6 +1890,24 @@ export class Project {
    */
   effectivePhotoList(): Photo[] {
     return [...this.photos.values()].map((p) => effectivePhoto(p, this.overrides[p.id]));
+  }
+
+  /**
+   * Zieht fehlende Bildmerkmale nach — Gesichter und Aufmerksamkeitsschwerpunkt.
+   *
+   * Läuft im Hintergrund nach dem Anlauf (`main.ts`), nicht im Import: Das Buch
+   * ist ohne die Rechtecke vollständig, und sie wirken beim Rendern. Nach dem
+   * Durchlauf sind die Ausschnitte besser, ohne dass etwas neu angeordnet wird.
+   *
+   * Kein Eintrag in `UNDO_ROUTEN`: Es ist keine Route und keine Handlung des
+   * Benutzers, sondern eine nachgereichte Auskunft über die Dateien — wie ein
+   * später gelesenes EXIF-Feld.
+   */
+  async merkmaleNachziehen(
+    vision: VisionErkennung,
+    onProgress?: (fertig: number, gesamt: number) => void,
+  ): Promise<MerkmaleBericht> {
+    return merkmale.merkmaleNachziehen(this, this.sources, vision, onProgress);
   }
 
   /**

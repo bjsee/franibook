@@ -63,15 +63,16 @@ ein bereits laufender `pnpm dev` muss dafür beendet sein (`reuseExistingServer:
 
 ### Umgebungsvariablen des Servers
 
-| Variable            | Vorgabe                                   | Wirkung                                           |
-| ------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `FRANIBOOK_SOURCE`  | `/Users/nutzer/fotos/buch` | Erste Bildquelle beim allerersten Start           |
-| `FRANIBOOK_PROJECT` | `.franibook-project`                      | Persistiertes Projekt (JSON)                      |
-| `FRANIBOOK_CACHE`   | `.franibook-cache`                        | WebP-Vorschauen                                   |
-| `FRANIBOOK_OUT`     | `.franibook-out`                          | PDF-Ausgabe                                       |
-| `FRANIBOOK_LIMIT`   | —                                         | Import auf n Fotos begrenzen (schneller Start)    |
-| `FRANIBOOK_FRESH`   | —                                         | Gespeichertes Projekt ignorieren, neu importieren |
-| `PORT`              | `5174`                                    | Serverport                                        |
+| Variable              | Vorgabe                                   | Wirkung                                           |
+| --------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `FRANIBOOK_SOURCE`    | `/Users/nutzer/fotos/buch` | Erste Bildquelle beim allerersten Start           |
+| `FRANIBOOK_PROJECT`   | `.franibook-project`                      | Persistiertes Projekt (JSON)                      |
+| `FRANIBOOK_CACHE`     | `.franibook-cache`                        | WebP-Vorschauen                                   |
+| `FRANIBOOK_OUT`       | `.franibook-out`                          | PDF-Ausgabe                                       |
+| `FRANIBOOK_LIMIT`     | —                                         | Import auf n Fotos begrenzen (schneller Start)    |
+| `FRANIBOOK_FRESH`     | —                                         | Gespeichertes Projekt ignorieren, neu importieren |
+| `FRANIBOOK_NO_VISION` | —                                         | Keine Bildmerkmale erkennen (Gesichter, Salienz)  |
+| `PORT`                | `5174`                                    | Serverport                                        |
 
 Ohne `FRANIBOOK_LIMIT` importiert ein Kaltstart den vollen Bestand (~830 Fotos) und
 erzeugt anschließend alle Vorschauen — beim Entwickeln lohnt ein Limit.
@@ -336,6 +337,28 @@ vorhandene mit, frei getippt entsteht `manual:<Name>`. Ein gesetzter Ort wird in
 Die Gliederung ändert er nicht, also kein `structurePending`. Dieselbe Route
 `PATCH /api/photos` nimmt Datum **oder** Ort, nie beides — deshalb darf
 `UndoEintrag.label` eine Funktion sein.
+
+**Der automatische Ausschnitt zielt auf Gesichter, nicht auf die Bildmitte**
+(`model/focal.ts`, `focalForCrop`). Die Mitte schnitt am Bestand 16 % der Köpfe
+in querformatigen Plätzen an und 30 % in Panoramaplätzen — daran erkennt man
+automatisch gesetzte Fotobücher. **Nicht der Flächenschwerpunkt:** Der landet bei
+verteilten Gruppen zwischen den Gesichtern und verlor mehr Köpfe, als er rettete;
+stattdessen eine Suche über Kandidatenlagen, eindimensional, weil `coverCrop`
+immer nur eine Achse beschneidet. Gesichter schlagen den
+Aufmerksamkeitsschwerpunkt (für Landschaft, Torte, Hund), der schlägt die Mitte,
+ein von Hand gesetzter Ausschnitt schlägt alles.
+
+Erkannt wird über Apples Vision-Framework (`apps/server/src/vision.ts`, Swift-
+Werkzeug in `apps/server/vision/`, beim ersten Bedarf nach `<cache>/bin/`
+kompiliert) — Bordmittel wie `sips`, kein Modell im Repo. **Gerechnet wird beim
+Rendern, nicht beim Anordnen**, wie Neigung und Rahmen: Ein bestehendes Buch
+bekommt die besseren Ausschnitte ohne Neuaufbau, und die beste Lage hängt an der
+Slotform. Die Slot-Zuordnung (`layout/scoring.ts`) bleibt außen vor, weil der
+Fokus nur verschiebt und nicht verkleinert — die Bildverteilung des Buchs ändert
+sich also nicht. Die Erkennung läuft nach dem Anlauf im Hintergrund
+(`project/merkmale.ts`); fehlt `swiftc`, entfällt sie stillschweigend.
+`faces: []` heißt „nachgesehen, nichts gefunden" und nicht „noch nicht
+nachgesehen". Messwerte und verworfene Fassung: `docs/spikes/gesichter.md`.
 
 **Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** Der Ausschnitt hat
 immer die Form des Platzes, also sieht man von einem Hochformat im Querformatplatz

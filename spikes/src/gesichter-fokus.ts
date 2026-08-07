@@ -7,7 +7,9 @@
  * Bildmitte einen Kopf anschneidet, den ein Fokuspunkt gerettet hätte**. Nur
  * diese Zahl rechtfertigt Modell, Import und Kernrechnung.
  *
- * Aufruf: pnpm --filter @franibook/spikes gesichter [anzahl]
+ * Aufruf:
+ *   swiftc -O -o apps/server/vision/bildmerkmale apps/server/vision/bildmerkmale.swift
+ *   pnpm --filter @franibook/spikes gesichter [anzahl]
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -16,7 +18,18 @@ import { fileURLToPath } from 'node:url';
 import { coverCrop } from '@franibook/core';
 
 const QUELLE = process.env.FRANIBOOK_SOURCE ?? '/Users/nutzer/fotos/buch';
-const WERKZEUG = join(dirname(fileURLToPath(import.meta.url)), '..', 'vision', 'bildmerkmale');
+// Das Werkzeug des Servers, nicht eine zweite Kopie: Der Spike misst, was
+// später auch läuft. Gebaut wird es vom Server nach `<cache>/bin/`; für einen
+// Lauf ohne Server genügt der `swiftc`-Aufruf aus dem Kopf dieser Datei.
+const WERKZEUG = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'apps',
+  'server',
+  'vision',
+  'bildmerkmale',
+);
 const ANZAHL = Number(process.argv[2] ?? 150);
 
 /** Seitenverhältnisse, die in der Templatebibliothek wirklich vorkommen. */
@@ -175,7 +188,7 @@ function lese(pfade: readonly string[]): Befund[] {
 function main(): void {
   if (!existsSync(WERKZEUG)) {
     console.error(`Werkzeug fehlt. Vorher bauen:
-  swiftc -O -o spikes/vision/bildmerkmale spikes/vision/bildmerkmale.swift`);
+  swiftc -O -o apps/server/vision/bildmerkmale apps/server/vision/bildmerkmale.swift`);
     process.exit(1);
   }
 
