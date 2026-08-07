@@ -360,6 +360,15 @@ sich also nicht. Die Erkennung läuft nach dem Anlauf im Hintergrund
 `faces: []` heißt „nachgesehen, nichts gefunden" und nicht „noch nicht
 nachgesehen". Messwerte und verworfene Fassung: `docs/spikes/gesichter.md`.
 
+**Liegt ein Gesicht im Beschnitt oder in der Falzzone, sagt das RSM es**
+(`face-at-edge`, Beschnitt schlägt Falz, weil dort der Kopf ganz wegfällt statt
+nur halb im Bund zu verschwinden). Eine Auskunft und keine Korrektur: Ein
+randabfallendes Bild reicht definitionsgemäß in den Beschnitt, und je nach Motiv
+ist das gewollt. In der Automatik ist sie selten — genau eine der 112 Vorlagen
+hat einen randabfallenden Slot (`spread.group.opener-full`) und keine einen über
+dem Falz, weil die Flussvorlagen an der Achse zerfallen müssen. Ihr Fall ist der
+Handbetrieb: ein Kasten, der über den Falz oder über die Kante gezogen wurde.
+
 **Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** Der Ausschnitt hat
 immer die Form des Platzes, also sieht man von einem Hochformat im Querformatplatz
 nur einen Streifen, und der Zoom sitzt am Anschlag. Das meldet `renderSpread` als
