@@ -241,7 +241,22 @@ export type RenderWarning =
    * Die Engine bewertet dasselbe beim Anordnen als `orientationClash`
    * (`layout/scoring.ts`); dort ist es ein Kostenzuschlag, hier eine Auskunft.
    */
-  | { code: 'orientation-mismatch'; sichtbar: number };
+  | { code: 'orientation-mismatch'; sichtbar: number }
+  /**
+   * Ein erkanntes Gesicht liegt dort, wo es im gebundenen Buch nicht mehr ganz
+   * zu sehen ist — in der Falzzone oder jenseits der Endformatkante.
+   *
+   * Der Fokuspunkt (`model/focal.ts`) hält Gesichter im Ausschnitt, über ihre
+   * Lage auf dem Papier entscheidet er nicht: Ein randabfallendes Bild reicht
+   * definitionsgemäß in den Beschnitt, und ein Bild über dem Falz hat dort eine
+   * Zone, in der nichts Wesentliches stehen soll. Beides ist erlaubt und je
+   * nach Motiv gewollt — deshalb eine Auskunft und keine Korrektur.
+   *
+   * `wo` nennt den schwerwiegenderen Fall, wenn beide zutreffen: Was im
+   * Beschnitt liegt, ist ganz weg; was im Falz liegt, verschwindet nur zum Teil
+   * im Bund.
+   */
+  | { code: 'face-at-edge'; wo: 'beschnitt' | 'falz'; anzahl: number };
 
 /** Hilfslinien. Ausschließlich für die Vorschau – nie Teil des PDFs. */
 export interface Guide {

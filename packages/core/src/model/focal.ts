@@ -109,6 +109,34 @@ export function focalForCrop(
 }
 
 /**
+ * Wo ein Bildbereich auf dem Papier landet, in Millimetern.
+ *
+ * Die Umkehrung des Ausschnitts: Was im sichtbaren Rechteck liegt, wird auf den
+ * Kasten abgebildet. Bereiche außerhalb des Ausschnitts ergeben Rechtecke
+ * außerhalb des Kastens — der Aufrufer prüft das über `visibleShare`, statt hier
+ * eine zweite Sichtbarkeitsregel zu haben.
+ *
+ * **Ohne Neigung.** Ein geneigtes Bild kippt um bis zu 4°, das verschiebt eine
+ * Ecke bei 120 mm Kantenlänge um wenige Millimeter. Für eine Warnung über die
+ * Lage im Falz ist das innerhalb der Zone, die ohnehin großzügig bemessen ist;
+ * randabfallende Bilder — der andere Fall — werden nie geneigt.
+ */
+export function focusRectOnPage(
+  r: FocusRect,
+  crop: { x: number; y: number; w: number; h: number },
+  rect: { xMm: number; yMm: number; wMm: number; hMm: number },
+): { xMm: number; yMm: number; wMm: number; hMm: number } {
+  const u = (r.x - crop.x) / crop.w;
+  const v = (r.y - crop.y) / crop.h;
+  return {
+    xMm: rect.xMm + u * rect.wMm,
+    yMm: rect.yMm + v * rect.hMm,
+    wMm: (r.w / crop.w) * rect.wMm,
+    hMm: (r.h / crop.h) * rect.hMm,
+  };
+}
+
+/**
  * Die Bereiche, auf die gezielt wird.
  *
  * Gesichter, sonst der Aufmerksamkeitsschwerpunkt. **Nicht beides zusammen:**

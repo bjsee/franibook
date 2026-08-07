@@ -7,7 +7,7 @@
  */
 import { effectiveDpi, ptToMm } from '../geometry/units.js';
 import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
-import { focalForCrop } from '../model/focal.js';
+import { focalForCrop, focusRectOnPage, visibleShare } from '../model/focal.js';
 import type { EffectiveDate, PhotoOverride } from '../model/date.js';
 import { effectivePhotos } from '../model/effective-photo.js';
 import type { NaiveDateTime, Photo, PhotoId } from '../model/photo.js';
@@ -197,6 +197,58 @@ function tiltOf(assignment: SlotAssignment, rect: Rect, photoId: PhotoId, ctx: R
   return tiltDeg(`${assignment.slotId}:${photoId}`, ctx.tilt.seed, ctx.tilt.maxDeg);
 }
 
+/**
+ * Liegt ein erkanntes Gesicht dort, wo das gebundene Buch es beschneidet?
+ *
+ * Zwei Zonen, in dieser Rangfolge: der Beschnitt jenseits der Endformatkante —
+ * was dort liegt, ist nach dem Schneiden weg — und die Falzzone links und
+ * rechts der Achse, in der ein Motiv teilweise im Bund verschwindet.
+ *
+ * Geprüft wird nur, was auch zu sehen ist: Ein Gesicht außerhalb des
+ * Ausschnitts ist kein Fall für diese Warnung, es ist ohnehin nicht im Buch.
+ * Und nur `faces` — ein Salienzobjekt umfasst oft die halbe Fläche und läge
+ * damit fast immer irgendwo am Rand.
+ */
+function gesichterAmRand(
+  photo: Photo,
+  crop: { x: number; y: number; w: number; h: number },
+  rect: Rect,
+  profile: PrintProfile,
+): RenderWarning | undefined {
+  const gesichter = photo.faces;
+  if (!gesichter?.length) return undefined;
+
+  const { trimWidthMm, trimHeightMm, bleedMm, gutterSafeMm } = profile.page;
+  const gutterX = bleedMm + trimWidthMm;
+  const rechts = bleedMm + 2 * trimWidthMm;
+  const unten = bleedMm + trimHeightMm;
+
+  let imBeschnitt = 0;
+  let imFalz = 0;
+
+  for (const gesicht of gesichter) {
+    // Ein Gesicht, das nur zu einem Zehntel im Ausschnitt liegt, ist kein
+    // Gesicht im Buch — dieselbe Schwelle wie bei der Fokuspunktsuche.
+    if (visibleShare(gesicht, crop) < 0.5) continue;
+    const auf = focusRectOnPage(gesicht, crop, rect);
+
+    if (
+      auf.xMm < bleedMm ||
+      auf.yMm < bleedMm ||
+      auf.xMm + auf.wMm > rechts ||
+      auf.yMm + auf.hMm > unten
+    ) {
+      imBeschnitt++;
+    } else if (auf.xMm < gutterX + gutterSafeMm && auf.xMm + auf.wMm > gutterX - gutterSafeMm) {
+      imFalz++;
+    }
+  }
+
+  if (imBeschnitt > 0) return { code: 'face-at-edge', wo: 'beschnitt', anzahl: imBeschnitt };
+  if (imFalz > 0) return { code: 'face-at-edge', wo: 'falz', anzahl: imFalz };
+  return undefined;
+}
+
 function buildGuides(profile: PrintProfile): Guide[] {
   const { trimWidthMm, trimHeightMm, bleedMm, safetyMm, gutterSafeMm } = profile.page;
   const spreadW = spreadWidthMm(profile);
@@ -361,6 +413,9 @@ function buildImageBox(
   if (bildLage !== 'square' && platzLage !== 'square' && bildLage !== platzLage) {
     warnings.push({ code: 'orientation-mismatch', sichtbar: crop.w * crop.h });
   }
+
+  const amRand = gesichterAmRand(photo, crop, rect, profile);
+  if (amRand) warnings.push(amRand);
 
   // Der Drehpunkt nur dann ausdrücklich, wenn der Rahmen ihn verschiebt: Beim
   // Polaroid liegt die Mitte des Kartons unter der des Bildes, und beide müssen
