@@ -146,6 +146,10 @@ Mechanismus wieder auf — und sollte vorher prüfen, ob es einen Weg über den
 Projektzustand gibt. Was sich nicht sinnvoll zurücknehmen lässt (Import,
 Quellenwechsel), ist eine `barriere` und leert den Verlauf.
 
+Vor den großen Griffen fällt zusätzlich ein **Notanker** nach `<projekt>/history/`
+(`project/notanker.ts`, die letzten zehn) — der Verlauf lebt im Speicher, ein
+Absturz mitten im Neuaufbau nähme ihn mit.
+
 Der **Einwurf** ist die eine Route, die trotzdem eine Datei anlegt, und sie tut es
 ohne Dateizug: Zurückgenommen wird nur der Projektzustand, die Datei bleibt liegen
 und kommt beim nächsten Einlesen als neues Foto zurück. Das ist die ehrlichere
@@ -160,28 +164,60 @@ gescannt. `Sources.pfad()` ist die einzige Stelle, an der aus einem Foto ein
 Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen Resolver, nie
 einen Pfad.
 
-**Die einzige Ausnahme ist der Einwurf** (`project/einwurf.ts`): Er legt eine
+Quellen sind eine **Liste** von Ordnern im Projekt, nicht ein einzelner Pfad: Der
+Grundbestand liegt auf dem NAS, Nachzügler kommen als weiterer Ordner dazu. Die
+Kennung einer Quelle leitet sich aus ihrem Pfad ab (`quellenId`), jedes `Photo`
+trägt eine `sourceId`.
+
+**Die einzige Ausnahme ist der Einwurf** (`project/einwurf.ts`,
+`POST /api/photos/einwurf` und `POST /api/spreads/:index/einwurf`): Er legt eine
 **neue** Datei unter `<erste Quelle>/eingeworfen/` an. Der Unterschied zum Fall,
 der diese Regel aufgestellt hat, ist die Richtung — eine neue Datei kann ein
 Sync-Dienst nicht missverstehen, er kopiert sie auf den Server, und genau das ist
 gewollt. Wer eine zweite schreibende Stelle bauen will, liest vorher den
 Modulkopf dort und den Abschnitt „Bilder einwerfen" in `docs/konzept.md`.
 
+Die Kennung wird **vor** dem Schreiben aus den Bytes gerechnet (`inhaltsKennung`),
+also legt dasselbe Bild zweimal eingeworfen keine zweite Datei an und ein
+aussortiertes wird zurückgeholt.
+
 **Auch Aussortieren schreibt nichts.** `DELETE /api/photos/:id` nimmt das Foto aus
-dem Projekt und vermerkt es in der Merkliste `aussortiert`; der Import übergeht
-jede Datei, deren Kennung dort steht. Die Datei bleibt liegen, wo sie liegt.
+dem Projekt und vermerkt es in der Merkliste `aussortiert` (ein ganzes `Photo` je
+Eintrag); der Import übergeht jede Datei, deren Kennung dort steht — geprüft direkt
+nach dem Hash, vor EXIF und Pixeln. Die Datei bleibt liegen, wo sie liegt.
+`Project.vergessen()` räumt dabei Gruppen, Hintergrund- und Umschlagbilder auf,
+lässt aber Slots und `PhotoOverride` stehen.
 
 Vorher wanderte sie nach `<quelle>/.franibook-geloescht/` — versteckter Ordner,
 also übergeht der Scan sie ohnehin. Das war der einzige schreibende Zugriff auf
 eine Bildquelle, und er hielt nicht: Synology Drive bewirtschaftet den
 Quellordner, ignoriert Ordner mit führendem Punkt und spielte alle 968 Dateien
 samt der aussortierten zurück. **Wer eine Zusage an das Verhalten fremder
-Werkzeuge hängt, hat keine Zusage.** Der Weg zurück liegt jetzt in der
-Oberfläche (`DELETE /api/photos/aussortiert/:id`).
+Werkzeuge hängt, hat keine Zusage.** Der Weg zurück liegt jetzt in der Oberfläche
+(`GET /api/photos/aussortiert` für die Liste, `DELETE /api/photos/aussortiert/:id`
+zum Zurückholen) — das Foto landet dabei im Fotopool, nicht auf seiner alten
+Doppelseite.
 
 **Eine unlesbare Quelle ist kein leerer Ordner.** Sie wird beim Einlesen
 übersprungen und gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu
 gelten. Ein nicht eingehängtes Netzlaufwerk darf kein Buch leeren.
+
+## Bilder ausliefern
+
+Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. **Die
+Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.** Eine Ansicht,
+die für ein Original nur eine Vorschau braucht, hält den Server unnötig am Decoder
+fest — und eine, die für den Druck eine Vorschau nähme, druckt Kompression.
+
+Der Vorschau-Cache trägt die Fassung eines Fotos im Namen (Drehung), und die
+Oberfläche hängt eine Bildversion als `?v=` an jede Adresse — ohne das bliebe ein
+gedrehtes Bild hinter `immutable` unsichtbar.
+
+**Bildmerkmale erkennt der Server, nicht der Kern** (`vision.ts`, Swift-Werkzeug in
+`apps/server/vision/`, beim ersten Bedarf nach `<cache>/bin/` kompiliert). Der Lauf
+liegt nach dem Anlauf im Hintergrund (`project/merkmale.ts`), damit ein Kaltstart
+nicht darauf wartet; fehlt `swiftc`, entfällt er stillschweigend. `FRANIBOOK_NO_VISION`
+schaltet ihn ab.
 
 ## Sicherheit
 
