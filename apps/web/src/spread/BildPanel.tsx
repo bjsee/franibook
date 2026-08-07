@@ -103,6 +103,7 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
         </p>
         <MaxFlaeche model={model} />
         <LageWarnung model={model} />
+        <RandWarnung model={model} />
       </div>
 
       {/*
@@ -359,6 +360,32 @@ function LageWarnung({ model }: { model: SpreadEditorModel }) {
       <button onClick={() => void model.neuAnordnen()} style={B.knopf}>
         Doppelseite neu anordnen
       </button>
+    </div>
+  );
+}
+
+/**
+ * Ein Gesicht liegt dort, wo das gebundene Buch es beschneidet.
+ *
+ * Kein Knopf darunter, anders als bei der Lagewarnung: Beides ist erlaubt und
+ * je nach Motiv gewollt — ein randabfallendes Bild reicht definitionsgemäß in
+ * den Beschnitt. Was hilft, ist der Kasten oder der Ausschnitt, und beides
+ * liegt eine Handbewegung weiter. Die Warnung sagt deshalb, was zu sehen sein
+ * wird, und überlässt die Entscheidung.
+ */
+function RandWarnung({ model }: { model: SpreadEditorModel }) {
+  const warnung = model.gewaehlteBox?.warnings.find((w) => w.code === 'face-at-edge');
+  if (!warnung || warnung.code !== 'face-at-edge') return null;
+
+  const mehrere = warnung.anzahl > 1;
+  return (
+    <div style={S.lage}>
+      <p style={{ margin: 0 }}>
+        {mehrere ? `${warnung.anzahl} Gesichter liegen` : 'Ein Gesicht liegt'}{' '}
+        {warnung.wo === 'beschnitt'
+          ? 'außerhalb der Endformatkante und wird beim Schneiden abgetrennt.'
+          : 'in der Falzzone und verschwindet beim Binden zum Teil im Bund.'}
+      </p>
     </div>
   );
 }

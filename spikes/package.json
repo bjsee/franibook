@@ -9,7 +9,8 @@
     "heic": "tsx src/heic-decode.ts",
     "pdf": "tsx src/pdf-memory.ts",
     "exif": "tsx src/exif-throughput.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gesichter": "tsx src/gesichter-fokus.ts"
   },
   "dependencies": {
     "@franibook/core": "workspace:*",

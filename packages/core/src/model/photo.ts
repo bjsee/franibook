@@ -76,6 +76,62 @@ export interface Photo {
    */
   place?: { key: string; label: string };
   camera?: string;
+
+  /**
+   * Wo im Bild etwas Wichtiges ist — Gesichter und, wenn keines gefunden wurde,
+   * der Aufmerksamkeitsschwerpunkt.
+   *
+   * Beim Import erkannt und gespeichert, nicht bei Bedarf gerechnet: Der Kern
+   * hat keine Pixel (`.claude/rules/kern-rein.md`), und eine Erkennung je
+   * Anordnung wäre 55 s je Lauf statt 55 s je Bestand. Beide Rechtecke sind
+   * **relativ zur angezeigten Bildkante, Ursprung oben links** — dasselbe
+   * System wie `Crop` und wie `width`/`height`, die der Import bei
+   * Orientierung 5–8 tauscht.
+   *
+   * Verwendet wird das ausschließlich für den Fokuspunkt des automatischen
+   * Ausschnitts (`focalForCrop`). Wer Personen benennen oder zählen will,
+   * braucht mehr als ein Rechteck; das ist ausdrücklich nicht der Zweck.
+   *
+   * Fehlt bei Fotos, die vor der Erkennung eingelesen wurden, und wenn auf dem
+   * Rechner kein Erkenner verfügbar ist. Dann bleibt es bei der Bildmitte.
+   */
+  faces?: FocusRect[];
+  salience?: FocusRect;
+}
+
+/**
+ * Ein Bereich im Bild, relativ zur angezeigten Kante, Ursprung oben links.
+ *
+ * Absichtlich nicht `Rect` aus `geometry/`: Das rechnet in Millimetern auf dem
+ * Papier, das hier in Anteilen des Bildes. Ein gemeinsamer Typ hätte die
+ * Verwechslung eher gestiftet als verhindert.
+ */
+export interface FocusRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Dreht einen Bildbereich um Vierteldrehungen im Uhrzeigersinn.
+ *
+ * Das Gegenstück zu `rotateCrop` (`model/crop.ts`) für Gesichter und Salienz:
+ * Sie stehen in Bildkoordinaten und zeigten nach einer Ausrichtungskorrektur
+ * sonst auf eine andere Stelle. Bei 90° und 270° tauschen Breite und Höhe, wie
+ * `effectivePhoto` es für das Foto selbst tut.
+ */
+export function rotateFocusRect(r: FocusRect, turns: 0 | 1 | 2 | 3): FocusRect {
+  switch (turns) {
+    case 1:
+      return { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w };
+    case 2:
+      return { x: 1 - (r.x + r.w), y: 1 - (r.y + r.h), w: r.w, h: r.h };
+    case 3:
+      return { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
+    default:
+      return r;
+  }
 }
 
 /** Seitenverhältnis, orientierungskorrigiert. */

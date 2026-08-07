@@ -47,6 +47,153 @@ function spreadWith(photoIds: (string | null)[]): Spread {
 
 const ctx = { profile, template, photos: PHOTOS };
 
+describe('Fokuspunkt aus Gesichtern', () => {
+  /** Dasselbe Hochformat wie `p2`, aber mit einem Gesicht am oberen Rand. */
+  const mitGesicht = new Map<string, Photo>([
+    ['p2', { ...photo('p2', 1536, 2048), faces: [{ x: 0.45, y: 0.06, w: 0.1, h: 0.08 }] }],
+  ]);
+
+  function ausschnittVon(photos: Map<string, Photo>) {
+    const gerendert = renderSpread(spreadWith([null, 'p2', null, null]), { ...ctx, photos });
+    return imageBoxes(gerendert)[0]!.crop;
+  }
+
+  it('verschiebt den Ausschnitt nach oben, statt ihn zu verkleinern', () => {
+    const ohne = ausschnittVon(PHOTOS);
+    const mit = ausschnittVon(mitGesicht);
+
+    expect(mit.y).toBeLessThan(ohne.y);
+    // Die Größe bleibt gleich — daran hängt, dass `bookStats` und `slotCost`
+    // weiter ohne Fokuspunkt rechnen dürfen und dieselbe Auflösung bekommen.
+    expect(mit.w).toBeCloseTo(ohne.w, 12);
+    expect(mit.h).toBeCloseTo(ohne.h, 12);
+  });
+
+  it('lässt ein Foto ohne erkannte Gesichter unverändert', () => {
+    // Jedes Foto aus einem Projekt von vor der Erkennung: bitgleich wie vorher.
+    const gerendert = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
+    for (const box of imageBoxes(gerendert)) {
+      expect(box.crop.y).toBeCloseTo(box.crop.h < 1 ? (1 - box.crop.h) / 2 : 0, 12);
+      expect(box.crop.x).toBeCloseTo(box.crop.w < 1 ? (1 - box.crop.w) / 2 : 0, 12);
+    }
+  });
+
+  it('lässt einen von Hand gesetzten Ausschnitt in Ruhe', () => {
+    // `manual` schlägt jede Automatik — auch die Gesichtserkennung. Sonst
+    // sprang ein gezogener Ausschnitt beim nächsten Rendern zurück.
+    const seite = spreadWith([null, 'p2', null, null]);
+    seite.slots[1] = {
+      slotId: seite.slots[1]!.slotId,
+      photoId: 'p2',
+      crop: { x: 0.3, y: 0.6, w: 0.4, h: 0.3, mode: 'manual' },
+    };
+    const box = imageBoxes(renderSpread(seite, { ...ctx, photos: mitGesicht }))[0]!;
+    expect(box.crop.y).toBeGreaterThan(0.5);
+  });
+});
+
+describe('Gesichter am Rand und im Falz', () => {
+  /** Die Warnung dieses Bildes, wenn es eine gibt. */
+  function warnung(seite: Spread, photos: Map<string, Photo>) {
+    const boxen = imageBoxes(renderSpread(seite, { ...ctx, photos }));
+    return boxen[0]?.warnings.find((w) => w.code === 'face-at-edge');
+  }
+
+  /** Ein Slot, der die Falzachse überspannt — wie ein Bild über beide Seiten. */
+  function ueberDenFalz(): Spread {
+    const seite = spreadWith(['p1', null, null, null]);
+    seite.slots[0] = {
+      slotId: seite.slots[0]!.slotId,
+      photoId: 'p1',
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' },
+      rect: { x: 0.35, y: 0.3, w: 0.3, h: 0.3 },
+    };
+    return seite;
+  }
+
+  it('meldet ein Gesicht in der Falzzone', () => {
+    // Gesicht in der Bildmitte, Kasten mittig über der Achse: Genau der Fall,
+    // in dem im gebundenen Buch ein Teil des Kopfes im Bund verschwindet.
+    const photos = new Map([
+      ['p1', { ...photo('p1', 2048, 2048), faces: [{ x: 0.45, y: 0.45, w: 0.1, h: 0.1 }] }],
+    ]);
+    expect(warnung(ueberDenFalz(), photos)).toEqual({
+      code: 'face-at-edge',
+      wo: 'falz',
+      anzahl: 1,
+    });
+  });
+
+  it('schweigt, wenn das Gesicht neben der Falzzone liegt', () => {
+    const photos = new Map([
+      ['p1', { ...photo('p1', 2048, 2048), faces: [{ x: 0.02, y: 0.45, w: 0.08, h: 0.08 }] }],
+    ]);
+    expect(warnung(ueberDenFalz(), photos)).toBeUndefined();
+  });
+
+  it('meldet den Beschnitt und nicht den Falz, wenn beides zutrifft', () => {
+    // Was über die Endformatkante ragt, ist nach dem Schneiden ganz weg — das
+    // wiegt schwerer als ein teilweise im Bund verschwundener Kopf.
+    const seite = spreadWith(['p1', null, null, null]);
+    seite.slots[0] = {
+      slotId: seite.slots[0]!.slotId,
+      photoId: 'p1',
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' },
+      // Randabfallend über die linke obere Ecke hinaus.
+      rect: { x: -0.02, y: -0.02, w: 0.5, h: 0.4 },
+    };
+    const photos = new Map([
+      ['p1', { ...photo('p1', 2048, 2048), faces: [{ x: 0, y: 0, w: 0.06, h: 0.06 }] }],
+    ]);
+    expect(warnung(seite, photos)).toMatchObject({ wo: 'beschnitt' });
+  });
+
+  it('übergeht ein Gesicht, das der Ausschnitt ohnehin abschneidet', () => {
+    // Es ist nicht im Buch, also ist seine Lage auf dem Papier keine Auskunft.
+    const seite = ueberDenFalz();
+    seite.slots[0] = { ...seite.slots[0]!, crop: { x: 0.5, y: 0, w: 0.5, h: 0.5, mode: 'manual' } };
+    const photos = new Map([
+      ['p1', { ...photo('p1', 2048, 2048), faces: [{ x: 0.0, y: 0.8, w: 0.08, h: 0.08 }] }],
+    ]);
+    expect(warnung(seite, photos)).toBeUndefined();
+  });
+
+  it('meldet den Beschnitt am vollflächigen Gruppenauftakt', () => {
+    // Die einzige Vorlage der Bibliothek mit randabfallendem Slot (geprüft: 1
+    // von 112) und damit die einzige Stelle, an der die Automatik diese Warnung
+    // überhaupt auslösen kann. Sonst entsteht sie nur an von Hand gezogenen
+    // Kästen — deswegen dieser Test mit der echten Vorlage statt einem
+    // konstruierten Rechteck.
+    const auftakt = requireTemplate('spread.group.opener-full');
+    const seite: Spread = {
+      id: 's1',
+      index: 0,
+      templateId: auftakt.id,
+      slots: [{ slotId: 'a', photoId: 'p1', crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' } }],
+    };
+    const photos = new Map([
+      // Gesicht am rechten Bildrand: Der Slot ragt dort über die Endformatkante
+      // hinaus, also wird der Kopf beim Schneiden angeschnitten.
+      ['p1', { ...photo('p1', 2048, 2048), faces: [{ x: 0.94, y: 0.4, w: 0.06, h: 0.06 }] }],
+    ]);
+    const boxen = imageBoxes(renderSpread(seite, { ...ctx, template: auftakt, photos }));
+    expect(boxen[0]!.warnings).toContainEqual({
+      code: 'face-at-edge',
+      wo: 'beschnitt',
+      anzahl: 1,
+    });
+  });
+
+  it('schweigt bei einem Salienzobjekt', () => {
+    // Ein Aufmerksamkeitsbereich umfasst oft die halbe Fläche und läge damit
+    // fast immer irgendwo am Rand — als Warnung wäre er Rauschen.
+    const photos = new Map([
+      ['p1', { ...photo('p1', 2048, 2048), salience: { x: 0.2, y: 0.2, w: 0.6, h: 0.6 } }],
+    ]);
+    expect(warnung(ueberDenFalz(), photos)).toBeUndefined();
+  });
+});
+
 describe('Doppelseitengeometrie', () => {
   it('hat die Maße des Druckprofils einschließlich Beschnitt', () => {
     const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx);
