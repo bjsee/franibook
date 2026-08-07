@@ -378,13 +378,23 @@ function RandWarnung({ model }: { model: SpreadEditorModel }) {
   if (!warnung || warnung.code !== 'face-at-edge') return null;
 
   const mehrere = warnung.anzahl > 1;
+  // Beide Satzhälften müssen mitzählen — „2 Gesichter liegen … und
+  // verschwindet" stand hier, bis ein Blick in die Oberfläche es zeigte.
+  const wer = mehrere ? `${warnung.anzahl} Gesichter liegen` : 'Ein Gesicht liegt';
+  const folge =
+    warnung.wo === 'beschnitt'
+      ? mehrere
+        ? 'werden beim Schneiden abgetrennt'
+        : 'wird beim Schneiden abgetrennt'
+      : mehrere
+        ? 'verschwinden beim Binden zum Teil im Bund'
+        : 'verschwindet beim Binden zum Teil im Bund';
+  const wo = warnung.wo === 'beschnitt' ? 'außerhalb der Endformatkante' : 'in der Falzzone';
+
   return (
     <div style={S.lage}>
       <p style={{ margin: 0 }}>
-        {mehrere ? `${warnung.anzahl} Gesichter liegen` : 'Ein Gesicht liegt'}{' '}
-        {warnung.wo === 'beschnitt'
-          ? 'außerhalb der Endformatkante und wird beim Schneiden abgetrennt.'
-          : 'in der Falzzone und verschwindet beim Binden zum Teil im Bund.'}
+        {wer} {wo} und {folge}.
       </p>
     </div>
   );
