@@ -52,6 +52,11 @@ wechselt dann nicht, weil eine Anordnung besser liegt, sondern weil man etwas
 braucht. Wer eine Funktion ergänzt, ergänzt sie **dreimal** und sieht sie
 dreimal an (`?ui=a`, `?ui=b`, `?ui=c`).
 
+Der Reiter `Fotodaten` ist die Gegenprobe dazu: Er korrigiert Datum und Ort im
+**Stapel**, und er ist der einzige Ort, an dem undatierte Fotos erreichbar sind —
+sie stehen in keiner Doppelseite. Am einzelnen Bild geht dasselbe über
+`spread/Bilddaten.tsx`, und zwar in allen drei Rahmen.
+
 Daraus folgen zwei Handgriffe:
 
 **Das Verhalten liegt in `useSpreadEditor`, nie im Rahmen.** Der Rahmen
@@ -70,12 +75,51 @@ tot: Griffe, Drehen, Position, Ausschnitt, Textkästen. Der Rahmen sagt jetzt nu
 noch, _wo_ die Bühne steht (`model.platzRef`); wie breit sie ist, weiß sie selbst
 (`model.stageBreite`).
 
+## Griffe: der Ort des Griffs entscheidet, was sich bewegt
+
+**Am Bild bewegt der Griff im Bild den Ausschnitt, der Griff am Rand den Kasten auf
+der Seite** (`spread/Bildgriffe.tsx`). Kein Umschalter „Ausschnitt | Position" mehr
+— der Kasten hat einen Rand, und der sagt dasselbe dort, wo die Hand liegt. Gebaut
+als zwei ineinanderliegende Kästen, der äußere mit durchsichtigem Rand: Die
+Randfläche eines Elements fängt Zeigerereignisse, also trägt jede Fläche ihren
+eigenen Cursor. Deshalb gibt es auch kein `onSlotPointerDown` in `render-dom` mehr;
+der Renderer liefert das Rechteck (`slotOverlay`), die Flächen darin baut die
+Oberfläche.
+
+**Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
+`spread/Griffe.tsx` — für Bilder **und** Texte). Am Bild drei Stufen
+(`spread/griffmodus.ts`): Klick wählt nur (blauer Rand, keine Griffe, Zoomknöpfe
+unten rechts im Bild), der nächste legt Größengriffe an, der nächste Drehgriffe, der
+nächste schließt den Kreis; randabfallende Bilder überspringen die Drehung. Am Text
+zwei Stufen, denn er hat keinen Ausschnitt. Umschalt hält das Seitenverhältnis bzw.
+rastet auf 15°.
+
+Ein frei aufgezogener Bildkasten verzerrt nicht: `fitCropToAspect` dreht beim
+Rendern einen manuellen Ausschnitt in die Form des Kastens. Am Textblock wächst an
+den Ecken die Schriftgröße mit, an den Kanten nur der Kasten; die Vorschau des
+offenen Stands baut `withTextBlock` mit `textBlockBoxes`, also mit der Funktion des
+Renderers — nicht mit eigener Rechnung.
+
+**Auch die Texte aus der Vorlage sind beweglich** — Jahreszahl, Überschrift,
+Ereigniszeilen (`TextElement.rect`, `.rotateDeg`, `.content`). Block und
+Vorlagentext werden auf einen Begriff abgebildet (`spread/bewegtext.ts`), damit
+Bühne und Griffe nicht zwei fast gleiche Listen führen. Zwei Unterschiede bleiben
+und sind begründet: Ein Vorlagentext wählt **keine Schrift und keine Farbe** (das
+sind Aussagen über das Buch, nicht über eine Seite), und er hat **keine
+Punktgröße** — die Schriftgröße ist die Versalhöhe im Kasten, also zieht die
+Höhenkante sie mit. Ein Neuaufbau stellt ihn an den Platz der Vorlage zurück;
+`handwork().textplaetze` sagt vorher, wie viel das kostet, `locked` bewahrt es. Weil
+die Jahreszahl damit umbenennbar ist, steht das Jahr einer Seite in
+`Spread.chapterYear` und nicht mehr in ihrem Anzeigetext. Begründung und verworfene
+Fassungen: `docs/konzept.md`, Abschnitt „Vorlagentexte von Hand setzen".
+
 ## Navigation: die Adresse ist der Zustand
 
 Welche Ansicht offen ist und welche Doppelseite gezeigt wird, steht im Pfad und
 kommt aus `useRoute` (`router.tsx`) — nicht aus `useState` in `App.tsx`. Nur so
 gibt es Browser-Zurück, einen zweiten Tab und einen Link, den man verschicken
-kann.
+kann. Der Haken ist selbst geschrieben und keine Router-Bibliothek: acht flache
+Routen, und die Oberfläche kommt sonst mit `useState` aus.
 
 **Im Pfad steht, _was_ man ansieht; in der Query bleibt, _wie_ es dargestellt
 wird.** `/doppelseite/12`, `/gruppen/<id>`, `/umschlag` sind Stationen im
@@ -92,9 +136,17 @@ Drei Regeln folgen daraus:
   Wechsel zurück — sonst zeigt die Adresse etwas anderes als die Ansicht.
   Zurückgemeldet wird mit `ersetzen: true`: eine Verfeinerung ist keine Station.
 - **Eine Folge gleichartiger Sprünge ist eine Station.** Blättern nutzt
-  `verschmelzen: 'blaettern'`, damit achtzig Pfeiltastenanschläge nicht achtzig
-  Verlaufseinträge sind. Ein Sprung aus der Übersicht bekommt dagegen seinen
+  `verschmelzen: 'blaettern'` (1,5 s, wie beim Zurücknehmen am Server), damit
+  achtzig Pfeiltastenanschläge nicht achtzig Verlaufseinträge sind — sonst wäre die
+  Zurück-Taste eine Kurbel. Ein Sprung aus der Übersicht bekommt dagegen seinen
   eigenen Eintrag.
+- **Auch die Query gehört dem Router.** Ein Darstellungsparameter, der sich zur
+  Laufzeit ändert (`?bild=` im Baum), geht über `queryErsetzen` und nicht über einen
+  eigenen `replaceState`.
+
+Die alten Adressen `?spread=n` und `?cover` gelten weiter und werden beim Start in
+ihre Normalform ersetzt — der Parity-Test ruft die Doppelseite so auf. Begründung
+und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Adressen".
 
 Ein Ziel, das man auch in einem neuen Tab öffnen will — Reiter, Kachel der
 Übersicht —, ist ein `Link` aus `router.tsx` und kein `<button>`: nur ein `href`
