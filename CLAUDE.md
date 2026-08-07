@@ -117,31 +117,13 @@ Regel 2 sichert der Parity-Test, die Regeln 1, 3 und 4 sichert
 keine Prosa mehr. Wer eine davon bewusst bricht, ändert den Test mit und begründet
 es dort.
 
-### Regeln je Bereich
-
-Die ausführlichen Konventionen stehen in `.claude/rules/` und werden beim Arbeiten an
-den jeweiligen Dateien automatisch geladen:
-
-| Datei                             | gilt für                       | Inhalt                                                               |
-| --------------------------------- | ------------------------------ | -------------------------------------------------------------------- |
-| `.claude/rules/kern-rein.md`      | `packages/core/**`             | I/O-Freiheit, Determinismus, Druckprofil, Datum, Modellgrenzen       |
-| `.claude/rules/adapter-parity.md` | `packages/render-{dom,pdf}/**` | was ein Renderer aus dem Kern beziehen darf, Schrift, Parity-Pflicht |
-| `.claude/rules/server.md`         | `apps/server/**`               | Routenzuschnitt, Antwortform, Persistenz, Umgang mit fremden Dateien |
-| `.claude/rules/web.md`            | `apps/web/**`                  | Bausteine aus `theme.ts`, Ansichten, Serverzugriff über `api.ts`     |
-
-### Datenfluss beim Generieren
+### Der Weg durch die Engine
 
 `buildStructure` (structure/segment.ts) → Kalendergliederung (Jahr → Kapitel, Monat →
 Segment, Tag → Serie) → `distributeBudget` (layout/grouping.ts) verteilt das
 Seitenbudget → `generateBook` (layout/generate.ts) wählt Templates, ordnet Slots zu,
 berechnet Ausschnitte → `renderSpread` (render/render-spread.ts) erzeugt das RSM →
 `SpreadView` bzw. `renderPdf`.
-
-Zeitliche Lücken gliedern das Buch bewusst **nicht** (der Bestand ist vorausgewählt,
-Mediangap 1,2 Tage → 502 Zerfallsgruppen). Stattdessen gliedert der Kalender, ergänzt
-um vom Benutzer bestätigte `PhotoGroup`s aus Kalenderanlässen, der Ortsauflösung und
-Tagesballungen — in dieser Rangfolge, denn ein Anlass ist belegt, ein Ort erschlossen,
-ein dichter Tag nur vermutet (`structure/suggest-groups.ts`).
 
 **Was das Buch beschriftet, ist immer eine `PhotoGroup`.** Doppelseiten im Fluss tragen
 keine Überschrift; der Name steht im Zeitstrahl an ihrem Fuß und entsteht beim Rendern
@@ -151,491 +133,49 @@ ohne Neuanordnen — nur Fotoverteilung und Auftaktseiten warten darauf, gemelde
 Grund Gruppen und keine Segmenttitel: Was gedruckt wird, muss in der Gruppenansicht
 auffindbar sein.
 
-`rebuild.ts` ist das Gegenstück zu `generate.ts`: Die Fotoverteilung steht schon fest
-(bearbeitetes Layout-Dokument), nur Vorlage, Slots und Ausschnitte werden neu bestimmt.
+**Zwei Zeitpunkte, an denen etwas gerechnet wird, und der Unterschied trägt weit:**
+Was in `layout/` entschieden wird (Verteilung, Vorlage, Slotzuordnung), braucht eine
+Neuanordnung; was in `render/` gerechnet wird (Neigung, Rahmen, Bildfokus, Ebenen),
+bekommt ein bestehendes Buch allein durch erneutes Rendern. `handwork()` sagt vor
+einem Neuaufbau, was er kostet, `locked` bewahrt eine Doppelseite ganz.
 
-**Nicht jede Doppelseite kommt aus der Automatik.** `POST /api/spreads` fügt eine
-selbst gestaltete Seite ein – leer (`spread.leer`) oder mit einem Gruppenauftakt als
-Ausgangsform. Sie ist `locked` und geht damit als `kept` durch `generateBook`
-(`layout/keep.ts`): unverändert übernommen, Bilder als vergeben, zwei Seiten vom
-Budget. Ihren Platz findet sie über `Spread.anchor` – ein Foto und eine Richtung,
-nicht einen Index, denn der stimmt nach einem Neuaufbau nicht mehr. Im
-Layout-Dokument steht sie als `keep: "<Kennung>"` ohne Inhalt. Begründung:
-`docs/konzept.md`, Abschnitt „Eigene Doppelseiten".
+**Und das Buch ordnet sich nie hinter dem Rücken um.** Ein gekipptes Bild, ein
+veraltetes Datum, ein Gesicht im Beschnitt — all das wird als Auskunft gemeldet
+(`orientation-mismatch`, `structurePending`, `face-at-edge`) und auf Anfrage
+behoben. Sofort neu anzuordnen verwürfe die Ausschnitte einer ganzen Seite.
 
-**Auch eine einzelne Buchseite lässt sich einfügen** (`POST /api/spreads/page`,
-`layout/single-page.ts`). Das kippt die Parität: Was rechts stand, steht danach
-links. Verlustfrei möglich ist es, weil kein Slot der Flussvorlagen über dem Falz
-liegt – die Blätter zerfallen in Buchseiten (`templates/halves.ts`), die neue Seite
-wird eingeschoben, und die Folge wird neu gepaart. **Kein Foto wechselt dabei seinen
-Platz im Buch, nur seine Blattzugehörigkeit.** Auftakte, justierte Zeilen und
-festgehaltene Blätter bleiben ganz; vor einem solchen stellt eine leere Halbseite
-die Parität wieder her, und dahinter ist das Buch unverändert. Am echten Buch sind
-davon 1–2 Blätter betroffen, weil 57 von 80 unzerlegbar sind.
+### Wo die Regeln stehen
 
-Für die zusätzliche Seite wird eine schon leere Halbseite verbraucht, wenn eine vor
-dem nächsten unzerlegbaren Blatt liegt – sonst wächst das Buch um ein Blatt (bei
-dichten Seiten unvermeidlich). Blätter, die durch das Umpaaren ganz leer wären,
-entstehen nicht. `DELETE /api/spreads/page/:atPage` ist das Gegenstück: dieselbe
-Rechnung, die Seite fällt heraus, ihre Bilder gehen in den Fotopool.
+Die ausführlichen Konventionen und Entwurfsentscheidungen stehen in `.claude/rules/`
+und werden beim Arbeiten an den jeweiligen Dateien automatisch geladen. Wer eine
+Entscheidung sucht, ohne die passende Datei offen zu haben, liest sie direkt:
 
-**Eine Datei lässt sich ins Buch werfen** (`project/einwurf.ts`,
-`layout/einwurf.ts`): aus dem Finder auf das Papier, in den Fotopool oder auf eine
-Zeile im Baum. Auf dem Papier bleibt die Anordnung, wie sie ist — das Bild bekommt
-einen **freien Platz** (`SlotAssignment` mit `rect`, dessen `slotId` in keiner
-Vorlage steht, aufgelöst über `wirksamePlaetze`) an der Fallstelle, ein Drittel
-Seitenhöhe hoch und im Seitenverhältnis des Fotos. Ob die Seite dafür neu
-angeordnet wird, **fragt** eine Karte auf der Bühne; von selbst geschieht es
-nicht, denn das verwürfe die Ausschnitte der ganzen Seite. Im Baum wird dagegen
-neu angeordnet — eine Zeile hat keine Stelle im Millimeterraster.
+| Datei                             | gilt für                                   | Inhalt                                                                      |
+| --------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| `.claude/rules/kern-rein.md`      | `packages/core/**`                         | I/O-Freiheit, Determinismus, Druckprofil, Modellgrenzen                     |
+| `.claude/rules/anordnen.md`       | `core/src/{layout,structure,templates}/**` | Gliederung, Seitenbudget, Vorlagenwahl, eigene Seiten, Einwurf, Auftakte    |
+| `.claude/rules/foto-datum-ort.md` | `core/src/model/**`                        | Datumskaskade und -korrektur, Ort, Ausrichtung, Bildfokus, `effectivePhoto` |
+| `.claude/rules/rendern.md`        | `core/src/render/**`                       | RSM, Schrift, Neigung, Rahmen, Ebenen, Warnungen                            |
+| `.claude/rules/format-druck.md`   | `core/src/print/**`                        | Druckprofile, Formatwechsel, Umschlagmaße                                   |
 
-**Der Einwurf ist die einzige Stelle, die in eine Bildquelle schreibt**
-(`<erste Quelle>/eingeworfen/`), und damit die einzige Ausnahme von der Regel in
-`.claude/rules/server.md`. Der Unterschied zum Synology-Vorfall ist die Richtung:
-Eine neue Datei kann ein Sync-Dienst nicht als Löschung missdeuten. Die Kennung
-wird **vor** dem Schreiben aus den Bytes gerechnet (`inhaltsKennung`), also legt
-dasselbe Bild zweimal eingeworfen keine zweite Datei an und ein aussortiertes wird
-zurückgeholt. Ein Cmd+Z nimmt das Foto aus Buch und Bestand, **nicht** die Datei —
-sie kommt beim nächsten Einlesen wieder. Begründung und verworfene Fassungen:
-`docs/konzept.md`, Abschnitt „Bilder einwerfen".
-
-**Die Bilder verteilt man im Baum** (`/aufteilung`, `apps/web/src/baum/`): das ganze
-Buch als Liste, Jahr → Doppelseite → Bilder, jede Zeile ein Ziel. Der Zug dahinter
-ist **mengenwertig** (`movePhotos` in `layout/move.ts`, `POST /api/book/move` mit
-`moves`) — zwei Bilder von einer Achterseite auf eine Viererseite ergeben in einem
-Zug 6 und 6 und **ein** Cmd+Z, statt zweier Anordnungen und zweier Schritte; dieselbe
-Begründung wie bei `PATCH /api/photos`. Zwei Regeln stehen quer zum Einzelzug und
-sind Absicht: Eine leer gezogene Seite **bleibt stehen** (leere Vorlage, gemeldet
-über `leer`) statt den Stapel abzulehnen, und **festgehaltene Seiten sind weder
-Ziel noch Quelle** – sie verlören, wofür sie festgehalten wurden. **Ein Auftakt
-nimmt Bilder an**, wechselt dabei innerhalb seiner Familie (`chapterChoices`,
-Textplätze bleiben) und lehnt nur die Zahlen ab, für die es keine Fassung
-gibt – beim Jahresauftakt alles über zwölf, entschieden in `anordnen`. Die
-Auskunft je Seite liefert `GET /api/book/tree` (`project/baum.ts`), die Bilddaten
-kommen weiter über `GET /api/photos`. Der Texteditor der Aufteilung liegt jetzt
-unter `/aufteilung/json`. Begründung und verworfene Fassungen: `docs/konzept.md`,
-Abschnitt „Aufteilung im Baum".
-
-**Nicht jede Doppelseite kommt aus der Bibliothek.** Ab zehn Bildern rechnet
-`layout/justify.ts` die Plätze aus den Bildern: Zeilen, die die Satzbreite füllen,
-jedes Bild in seinem eigenen Seitenverhältnis. Übernommen wird das nur, wenn es die
-beste Vorlage um 0,1 je Bild unterbietet (`justifySpread`) — die Bibliothek gestaltet,
-die Rechnung rettet. Kennung `justiert.<n>`, aufgelöst über `templateById` wie eine
-Paarkennung; die Rechtecke stehen als `SlotAssignment.rect` und zählen in `handwork()`
-nicht als Handarbeit, weil der Neuaufbau sie wiederherstellt. Am echten Buch senkt das
-die Bilder in falsch ausgerichteten Plätzen von 108 auf 32, bei gleicher Bilddeckung.
-Begründung und Messwerte: `docs/konzept.md`, Abschnitt „Justierte Zeilen".
-
-**Der Jahresauftakt kann auch auf der Jahresseite Bilder tragen**
-(`settings.chapterOpenersDense`, Vorgabe aus). Aus: sechs Bilder rechts, links nur
-die Jahreszahl und fünf Ereigniszeilen. An: neun Bilder über beide Seiten
-(`spread.chapter.dicht.*`), die Jahreszahl größer und in einem Band, das kein Bild
-berührt — der Freiraum ist die Auszeichnung, nicht eine Farbfläche und nicht ein
-Bild darunter. Alle dichten Fassungen **der Automatik** haben dieselbe Platzzahl,
-weil der Auftakt zuerst über die Bilderzahl gewählt wird und erst danach über die
-Passung; sonst entschiede die Platzzahl statt der Ausrichtung. Ein Jahrgang mit
-weniger als achtzehn übrigen Bildern behält die schlanke Fassung. Am echten
-Bestand sind das 57 Bilder mehr in den Auftakten, rund vier Doppelseiten.
-Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
-
-**Von Hand steht der Jahresauftakt für jede Bilderzahl von 1 bis 12 zur Wahl**, je
-drei Fassungen (hochkant, quer, gemischt) — `chapterChoices()` gegen
-`chapterTemplates()`. Der Unterschied ist das Tag **`nur-wahl`**: Die Automatik
-nimmt die größte Fassung, für die ein Jahrgang genug Bilder hat, und füllte mit
-allen zusammen jeden Auftakt mit acht statt sechs Bildern — Seitenzahl und
-Bildverteilung des Buchs wären andere, ungefragt. Wer die Wahl von Hand erweitert,
-schreibt `nur-wahl` dazu; wer die Automatik ändern will, ändert den Test in
-`library.test.ts` mit. **Seitenweise geht eine Jahresseite nicht** (`halfChoices`
-meldet `auftakt`, `setSpreadHalf` lehnt ab): Die Hälften des Flusses tragen keinen
-Textplatz, die Seite verlöre Jahreszahl und Ereigniszeilen.
-
-**Eine Buchseite umstellen lässt die andere stehen** (`setHalfPage` in
-`layout/single-page.ts`): Das Blatt zerfällt an der Falzachse, nur die gewählte
-Seite wird neu angeordnet (`layoutHalf` — dieselbe Zuordnungsrechnung wie
-`layoutSpread`, ohne Vorlagenwahl), dann wird umgepaart. Die Gegenseite behält
-jedes Bild in seinem Platz, samt Ausschnitt, Rahmen, Neigung, Ebene und
-Bildunterschrift. Vorher setzte `setSpreadHalf` die Paarkennung zusammen und
-gab sie an `setSpreadTemplate` weiter, und **der ordnet die ganze Doppelseite
-neu an** — wer die rechte Seite umstellte, fand links andere Bilder in anderen
-Plätzen.
-
-**Auch was in keine zwei Halbseiten zerfällt, wird getrennt** (`alsFreieKaesten`).
-Justierte Zeilen haben keine Halbseitenkennung, wohl aber je Rechteck eine
-Buchseite: Die Gegenseite wird dann **wörtlich übernommen** — jeder Kasten trägt
-seine Lage selbst (`SlotAssignment.rect`, wie ein eingeworfenes Bild), die
-Doppelseite heißt danach `paar:<gewählt>+halb:leer`. Der Preis steht in
-`handwork().positionen`: Eine gerechnete Zeile stellt der Neuaufbau wieder her,
-einen gesetzten Kasten nicht. Ganz bleibt nur, was als Doppelseite gedacht ist
-(Auftakt, Hintergrundbild über beide Seiten, ein Kasten über dem Falz); dort
-rechnet `choosePairFor` die Gegenseite wie bisher. Begründung:
-`docs/konzept.md`, Abschnitt „Anordnung von Hand wählen".
-
-**Die Anordnungswahl zeigt die eigene Bilderzahl zuerst** (`Faecher` in
-`TemplatePicker.tsx`), die übrigen darunter nach Abstand. Und für **jede**
-Bilderzahl von 1 bis 14 gibt es mindestens drei Halbseiten: Was die Zerlegung der
-Vorlagen nicht hergibt — sieben, acht, dreizehn, vierzehn —, steht als eigens
-entworfene Halbseite unter `halves` in `library.json` (`libraryHalves`), hinten
-angehängt, damit keine abgeleitete ihre Kennung verliert.
-
-### Buchformat
-
-**Das Format ist eine Wahl im Buchpanel**, keine Konstante: acht Druckprofile
-(`print/profiles/*.json`), am 05.08.2026 aus dem Profibereich des Anbieters
-abgelesen und mit `provenance.verifiedAt` als geprüft markiert. Vorgabe ist
-`saal-28x28` — 160 Seiten, das größte quadratische Format.
-
-**Die Produktnamen des Anbieters sind gerundet.** „28 × 28" heißt 270 × 270 mm
-Endformat: Die Doppelseite wird als eine Datei von 546 × 276 mm abgegeben, davon
-3 mm Beschnitt ringsum. Wer in Millimetern rechnet, nimmt `page.trimWidthMm` und
-nie die Zahl aus dem Namen.
-
-Gewechselt wird über `PATCH /api/format` (`settings.printProfileId`), und die
-Route **ordnet nichts neu**: Jede Vorlage ist auf ihre Referenz-Doppelseite von
-600 × 300 mm normiert, also übersteht die Aufteilung samt Handarbeit den
-Wechsel. Was sich ändert, ist die Größe jedes Bildes auf dem Papier — und damit
-seine Auflösung. Eine Seitenzahl, die das neue Format nicht hergibt (160 gibt es
-nur in drei der acht), wird geklemmt und das als Satz gemeldet.
-
-**Der Umschlag misst seitlich anders als oben und unten.** `cover.bleed` und
-`cover.overhang` sind deshalb Paare aus `sideMm`/`topMm`; ein gemeinsamer Wert
-traf die Umschlagbreite um 4 mm daneben. `cover.hingeSafeMm` ist der Falzbereich
-des Anbieters — die Zone links und rechts des Rückens, in der kein Text stehen
-darf. Sie ist breiter als das Gelenkfeld und ragt in die Deckelflächen hinein,
-weshalb `safeArea()` Vorder- und Rückseite zur Rückenseite hin stärker einrückt
-als zum Papierrand.
-
-### Zeit und Datum
-
-Alle Zeitangaben sind **naive lokale Zeit** (`YYYY-MM-DDTHH:mm:ss`) ohne Offset — ein
-Fotobuch ist chronologisch im Sinne des Erlebens, nicht im Sinne von UTC. Das effektive
-Datum entsteht in `model/date.ts` über eine Kaskade
-(`manual → interpolated → exif → exifSecondary → filename → file → unknown`) mit
-`confidence` und `issues`; die Quelle wird in der Oberfläche als Badge angezeigt.
-
-`Photo` (Importergebnis) und `PhotoOverride` (Benutzerkorrektur) sind strikt getrennt:
-Ein erneuter Import überschreibt `Photo`, niemals `PhotoOverride`.
-
-**Das Datum lässt sich korrigieren, das Buch folgt aber nicht von selbst.**
-`model/date-correction.ts` rechnet drei Arten — Zeitpunkt setzen, um einen Betrag
-verschieben (Kamera-Reset: die Abstände bleiben, der Nullpunkt wandert), über einen
-Zeitraum verteilen (Ergebnis gilt als `dateEstimated` und damit als Quelle
-`interpolated`). Jahre und Monate werden kalendarisch addiert und auf den
-Monatsletzten geklemmt, sonst verrutschen elf Schalttage einen geradegerichteten
-Reset um elf Tage. Geschrieben wird über **eine mengenwertige Route**
-(`PATCH /api/photos`), damit vierzig korrigierte Fotos ein Cmd+Z sind und nicht
-vierzig; **die Reihenfolge der Liste ist die Reihenfolge der Verteilung**.
-
-Ob das Buch danach veraltet ist, sagt `structurePending()` — gebaut wie
-`groupsPending()`, über einen Abdruck der Gliederung (`structureFingerprint`).
-Erfasst sind Segment, Reihenfolge, Serienschnitt und die undatierten Fotos, **nicht**
-die Zeitpunkte: Eine Korrektur um fünf Minuten, die nichts umstellt, meldet nichts,
-denn Fehlalarme entwerten den Hinweis. Korrigiert wird im Reiter `Fotodaten`
-(Stapel; undatierte Fotos stehen in keiner Doppelseite und sind sonst unerreichbar)
-und am Bild selbst (`spread/Bilddaten.tsx`, in allen drei Rahmen). Begründung und
-verworfene Fassungen (sofort neu anordnen, chirurgisch einsetzen, Nachbar-Anker):
-`docs/konzept.md`, Abschnitt „Reparaturwerkzeuge".
-
-**Auch der Ort lässt sich setzen** (`placeOverride`, aufgelöst in
-`effectivePhoto` — `model/effective-photo.ts`): der Ortsname, nicht die Koordinate,
-denn nach dem Import liest nichts mehr `gps`. Entscheidend ist die Kennung
-`<art>:<name>`, denn daran hängt, welche Fotos zu _einem_ Gruppenvorschlag
-zusammenfallen: Aus der Vervollständigung (`GET /api/photos/places`) kommt die
-vorhandene mit, frei getippt entsteht `manual:<Name>`. Ein gesetzter Ort wird in
-`suggestGroups` zum Anker für `propagatePlaces` und zieht Nachbarn ohne GPS mit.
-Die Gliederung ändert er nicht, also kein `structurePending`. Dieselbe Route
-`PATCH /api/photos` nimmt Datum **oder** Ort, nie beides — deshalb darf
-`UndoEintrag.label` eine Funktion sein.
-
-**Der automatische Ausschnitt zielt auf Gesichter, nicht auf die Bildmitte**
-(`model/focal.ts`, `focalForCrop`). Die Mitte schnitt am Bestand 16 % der Köpfe
-in querformatigen Plätzen an und 30 % in Panoramaplätzen — daran erkennt man
-automatisch gesetzte Fotobücher. **Nicht der Flächenschwerpunkt:** Der landet bei
-verteilten Gruppen zwischen den Gesichtern und verlor mehr Köpfe, als er rettete;
-stattdessen eine Suche über Kandidatenlagen, eindimensional, weil `coverCrop`
-immer nur eine Achse beschneidet. Gesichter schlagen den
-Aufmerksamkeitsschwerpunkt (für Landschaft, Torte, Hund), der schlägt die Mitte,
-ein von Hand gesetzter Ausschnitt schlägt alles.
-
-Erkannt wird über Apples Vision-Framework (`apps/server/src/vision.ts`, Swift-
-Werkzeug in `apps/server/vision/`, beim ersten Bedarf nach `<cache>/bin/`
-kompiliert) — Bordmittel wie `sips`, kein Modell im Repo. **Gerechnet wird beim
-Rendern, nicht beim Anordnen**, wie Neigung und Rahmen: Ein bestehendes Buch
-bekommt die besseren Ausschnitte ohne Neuaufbau, und die beste Lage hängt an der
-Slotform. Die Slot-Zuordnung (`layout/scoring.ts`) bleibt außen vor, weil der
-Fokus nur verschiebt und nicht verkleinert — die Bildverteilung des Buchs ändert
-sich also nicht. Die Erkennung läuft nach dem Anlauf im Hintergrund
-(`project/merkmale.ts`); fehlt `swiftc`, entfällt sie stillschweigend.
-`faces: []` heißt „nachgesehen, nichts gefunden" und nicht „noch nicht
-nachgesehen". Messwerte und verworfene Fassung: `docs/spikes/gesichter.md`.
-
-**Liegt ein Gesicht im Beschnitt oder in der Falzzone, sagt das RSM es**
-(`face-at-edge`, Beschnitt schlägt Falz, weil dort der Kopf ganz wegfällt statt
-nur halb im Bund zu verschwinden). Eine Auskunft und keine Korrektur: Ein
-randabfallendes Bild reicht definitionsgemäß in den Beschnitt, und je nach Motiv
-ist das gewollt. In der Automatik ist sie selten — genau eine der 112 Vorlagen
-hat einen randabfallenden Slot (`spread.group.opener-full`) und keine einen über
-dem Falz, weil die Flussvorlagen an der Achse zerfallen müssen. Ihr Fall ist der
-Handbetrieb: ein Kasten, der über den Falz oder über die Kante gezogen wurde.
-
-**Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** Der Ausschnitt hat
-immer die Form des Platzes, also sieht man von einem Hochformat im Querformatplatz
-nur einen Streifen, und der Zoom sitzt am Anschlag. Das meldet `renderSpread` als
-`orientation-mismatch` mit dem sichtbaren Flächenanteil – gezeigt im Bildpanel und
-als Marke im Baum –, und `PATCH /api/spreads/:index/template` mit
-`templateId: "auto"` ordnet diese eine Doppelseite neu an (Auftakte bleiben unter
-sich). Nicht automatisch beim Kippen: Das verwürfe die Ausschnitte der ganzen Seite.
-**Der Ausschnitt selbst dreht dagegen mit** (`rotateCrop`, angewandt in
-`dreheAusschnitte`) – er steht in Bildkoordinaten und zeigte sonst nach der Drehung
-auf eine andere Stelle, mit einer Kante am Bildrand, an der `zoomCrop` klemmt.
-Begründung: `docs/konzept.md`, Abschnitt „Wenn Bild und Platz quer zueinander stehen".
-
-**Auch die Ausrichtung lässt sich kippen** (`orientationTurns`, 1–3
-Vierteldrehungen, sie addieren sich). Bei 90° und 270° tauscht `effectivePhoto`
-Breite und Höhe — sonst wählt `orientationClash` für einen Scan die falsche
-Vorlage. **Nicht** als geänderte `orientation`: Die Bildaufbereitung liest daraus
-nur _ob_, und `.rotate()` nimmt die Orientierung aus der Datei. Sie steht deshalb
-als `Photo.quarterTurns`, das nur `effectivePhoto` setzt; Vorschau und PDF drehen
-zusätzlich (eine sharp-Kette genügt, gemessen). Der Vorschau-Cache trägt die
-Fassung im Namen, und die Oberfläche hängt eine **Bildversion** als `?v=` an jede
-Vorschau-Adresse — ohne das bliebe das gedrehte Bild hinter `immutable` unsichtbar.
-
-**`effectivePhoto` löst die Korrekturen am Foto auf, das Datum aber nicht:**
-`resolveEffectiveDate` liefert Quelle, Konfidenz und Befunde, und das lässt sich
-nicht in ein `Photo` pressen. `takenAt` bleibt also „EXIF DateTimeOriginal".
-
-**Aufgelöst wird an den Eintrittsstellen des Kerns**, nicht an den zwanzig Stellen
-im Inneren, die `width`/`height` lesen: Jede öffentliche Funktion mit
-`photos: ReadonlyMap` nimmt auch `overrides` und ruft `effectivePhotos` beim
-Eintritt. `tests/architektur/architektur.test.ts` erzwingt das — eine neue solche
-Funktion ohne `overrides` lässt ihn fallen.
-
-### Text und Schrift
-
-Die Buchschrift ist **Franibook Sans** (abgeleitet von Source Sans 3, OFL 1.1), zwei
-Schnitte in `packages/fonts/files/`. Dieselben Dateien werden ins PDF eingebettet
-(`doc.registerFont`) und in der Vorschau per `@font-face` geladen
-(`apps/web/src/fonts.css`) — eine zweite Fassung wäre eine Parity-Abweichung mit
-Ansage. Herkunft und verworfene Alternativen: `packages/fonts/HERKUNFT.md`.
-
-Schnitt, Farbe und Größe kommen aus `core/render/typography.ts`
-(`TEXT_STYLES`, Versalhöhe als Anteil der Kastenhöhe), die Grundlinie aus
-`textBaselineOffsetMm`. Kein Renderer bestimmt Schrift, Größe oder Zeilenlage
-selbst: pdfkit setzt mit `baseline: 'alphabetic'`, die Vorschau als SVG-`<text>`.
-
-### Server
-
-**Der Server lauscht vor dem Import.** Bis er auskunftsfähig ist, beantwortet ein
-`onRequest`-Hook jede Anfrage mit `503` und dem Satz, was gerade läuft (`anlauf`
-in `main.ts`); die Oberfläche zeigt ihn und fragt weiter. Vorher lauschte er erst
-nach dem Import, und ein Kaltstart quittierte jede Anfrage mit `ECONNREFUSED`.
-
-**Zurücknehmen hält ganze Stände.** Ein Undo-Schritt (`project/verlauf.ts`) ist
-eine tiefe Kopie des veränderbaren Projektzustands von vorher, keine Umkehrung
-einer Aktion: Bei ~680 KB je Stand und Tiefe 50 kostet das ~30 MB Speicher, und
-dafür gibt es keine Umkehrfunktion, die falsch sein kann — „Buch neu anordnen"
-ist so rückholbar wie ein Ausschnitt. Den Stand hält ein `preHandler`-Haken fest,
-**welche Route etwas ändert, steht in `UNDO_ROUTEN`** (`routes/undo.ts`) mit
-Bezeichnung, Verschmelzschlüssel und Seitenbezug. **Eine neue mutierende Route
-gehört dort eingetragen** — sonst fällt `routes/undo.test.ts`. Gleicher Schlüssel
-innerhalb 1,5 s verschmilzt zu einem Schritt. Import und Quellenwechsel sind
-Barrieren (`barriere`), weil ein zurückgesetzter Stand ihre halbe Wirkung stehen
-ließe; vor den großen Griffen fällt zusätzlich ein Notanker nach
-`<projekt>/history/` (`project/notanker.ts`, die letzten zehn). Begründung und
-verworfene Fassungen (Immer-Patches, inverse Kommandos): `docs/konzept.md`,
-Abschnitt „Zurücknehmen".
-
-`apps/server/src/project.ts` hält genau ein Projekt im Speicher (Fotos, Overrides,
-Gruppen, Spreads) und schreibt es atomar als JSON (`rename`) nach `FRANIBOOK_PROJECT`.
-Keine Datenbank. Der Server bindet nur an `127.0.0.1` und hat keine Authentifizierung —
-er darf nicht ins Netz.
-
-Foto-Kennung ist `contentHash`: Dateigröße + SHA-256 über die ersten und letzten 64 KB.
-Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
-
-**Geschrieben wird in eine Bildquelle nur beim Einwurf** (siehe oben,
-`POST /api/photos/einwurf` und `POST /api/spreads/:index/einwurf`), und nur als
-neue Datei. Alles andere liest ausschließlich.
-
-**Aussortieren** (`DELETE /api/photos/:id`) **fasst keine Datei an.** Es nimmt das Foto
-aus dem Projekt und trägt es in eine Merkliste ein (`aussortiert`, ein ganzes `Photo` je
-Eintrag), und der Import übergeht jede Datei, deren Kennung dort steht — geprüft direkt
-nach dem Hash, vor EXIF und Pixeln. Damit **verändert der Server keine fremde Datei
-mehr** — er legt nur noch neue an, beim Einwurf.
-
-Vorher wanderte die Datei nach `<quelle>/.franibook-geloescht/`, und der Punkt im Namen
-sollte genügen, weil der Scan versteckte Ordner überspringt. Das hielt bis zu dem Tag,
-an dem Synology Drive den Quellordner zurückspielte: Der Client ignoriert Ordner mit
-führendem Punkt, deutete das Verschieben als Löschung und schrieb alle 968 Dateien neu —
-samt der sechs aussortierten, die danach wieder im Buch standen. Eine Merkliste im
-Projekt kann kein fremdes Werkzeug rückgängig machen.
-
-Der Weg zurück führt deshalb nicht mehr durch den Finder, sondern durch die Oberfläche:
-`GET /api/photos/aussortiert` und `DELETE /api/photos/aussortiert/:id` (Liste und Knopf
-in der Bildquellenansicht). Das Foto landet dabei im Fotopool, nicht auf seiner alten
-Doppelseite. `Project.vergessen()` räumt beim Aussortieren Gruppen, Hintergrund- und
-Umschlagbilder auf, lässt aber Slots und `PhotoOverride` stehen.
-
-**Bildquellen** (`sources.ts`) sind eine Liste von Ordnern im Projekt, nicht ein
-einzelner Pfad: Der Grundbestand liegt auf dem NAS, Nachzügler kommen als weiterer
-Ordner dazu. Kopiert wird nichts, keine bestehende Datei wird verändert, jede Quelle
-wird rekursiv gescannt (das Einzige, was entsteht, ist die eingeworfene Datei unter
-`eingeworfen/`). Die Kennung einer Quelle leitet sich aus ihrem Pfad ab (`quellenId`), jedes
-`Photo` trägt eine `sourceId`, und `Sources.pfad()` ist die einzige Stelle, an der aus
-einem Foto ein Dateipfad wird — `DecodeCache` und `PreviewCache` kennen nur diesen
-Resolver. Eine gerade nicht lesbare Quelle wird beim Einlesen übersprungen und
-gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu gelten (ein nicht
-eingehängtes Netzlaufwerk sieht sonst aus wie ein leerer Ordner).
-
-**Neigung** (`core/render/tilt.ts`) dreht jedes Bild leicht aus der Waagerechten,
-damit das Raster nicht gezeichnet wirkt. Der Winkel ist eine reine Funktion aus
-Slot, Foto und Seed — nicht gewürfelt und nirgends gespeichert, damit die
-Generierung deterministisch bleibt und ein bestehendes Buch die Neigung ohne
-Neuaufbau bekommt. `SlotAssignment.rotateDeg` schlägt sie; `undefined` heißt
-„automatisch", `0` heißt „ausdrücklich geradestellt". Randabfallende Bilder
-bleiben immer gerade — geneigt entstünden weiße Zwickel an der Papierkante.
-
-Die 4° (`MAX_TILT_DEG`) begrenzen **die Automatik**, nicht die Absicht: Von Hand
-darf bis `MAX_MANUAL_ROTATION_DEG` (180°) gedreht werden, weil ein Winkel am
-Drehgriff eine Aussage ist und keine Beiläufigkeit. Gespeichert wird er über
-`normalizeRotation` als Wert zwischen -180 und 180.
-
-**Rahmen** (`core/render/frame.ts`) hinterlegt ein Bild als Polaroid, Passepartout,
-Kontur oder mit Klebestreifen. Im RSM ist das kein neuer Begriff, sondern **mehr
-Boxen um dieselbe Bildbox** – Karton als `RectBox` dahinter, Streifen als
-`PolygonBox` davor –, damit die Rechnung im Kern bleibt und kein Renderer eine
-Form selbst zeichnet. Wie die Neigung wirkt der Rahmen allein beim Rendern:
-`settings.frame` als Buchvorgabe, `SlotAssignment.frame` schlägt sie
-(`undefined` = wie das Buch, `'keiner'` = ausdrücklich ohne). Kein Neuaufbau
-nötig.
-
-Das Außenmaß bleibt der Platz aus der Vorlage, **das Bild schrumpft nach innen** –
-Ausschnitt, Auflösung und Warnungen rechnen danach mit dem kleineren Kasten.
-Randabfallende Bilder bekommen keinen Rahmen (dieselbe `randabfallend`-Prüfung
-wie bei der Neigung). Kein weicher Schatten: pdfkit kann keine Weichzeichnung,
-also ein harter Versatzschatten mit Deckkraft. Alle Boxen eines Rahmens tragen
-denselben `rotateAboutMm` – beim Polaroid ist die Kartonmitte nicht die
-Bildmitte.
-
-**Die Bildunterschrift steht im Fuß des Polaroids** (`SlotAssignment.caption`),
-in Handschrift und mittig. Sie ist am Slot und kein freier `TextBlock`, weil sie
-zum Bild gehört und mit ihm wandert – ein Block bliebe liegen. Nur das Polaroid
-hat einen Fuß; bei anderen Rahmen bleibt der Text gespeichert und unsichtbar.
-Passt der Satz nicht in die Breite, wird die Schrift kleiner statt der Text
-umgebrochen. Messwerte und verworfene Fassungen: `docs/konzept.md`, Abschnitt
-„Rahmen um die Bilder".
-
-**Überlappende Bilder haben eine Ebene** (`SlotAssignment.layer`, `layout/ebene.ts`).
-Im Raster der Vorlage berührt sich kein Slot; seit die Kästen frei gezogen werden,
-ist „wer liegt vorn" eine Frage. `undefined` heißt `0` und damit die Reihenfolge
-der Vorlage — eine unangetastete Doppelseite zeichnet bitidentisch wie vorher.
-**Die Reihenfolge bestimmt genau eine Funktion** (`slotReihenfolge` in
-`model/spread.ts`), benutzt von `renderSpread` beim Zeichnen und von
-`moveSlotLayer` beim Umstellen; kein Renderer sortiert, die Boxenfolge im RSM
-_ist_ die Zeichenreihenfolge. Vier Züge statt einer Ebenennummer (`vorn`, `vor`,
-`zurueck`, `hinten`, `PATCH /api/spreads/:i/slots/:slot/layer`), und jeder
-nummeriert den Stapel neu — fortlaufend von 0, sonst driften die Zahlen. Texte
-und Zeitstrahl bleiben darüber. Wirkt beim Rendern wie Neigung und Rahmen, wird
-vom Neuaufbau aber verworfen (`handwork().ebenen`). Begründung:
-`docs/konzept.md`, Abschnitt „Ebenen: wer liegt vor wem".
-
-**Am Bild entscheidet der Ort des Griffs, was das Ziehen bewegt**
-(`spread/Bildgriffe.tsx`): im Bild der Ausschnitt, am Rand der Kasten auf der
-Seite. Kein Umschalter „Ausschnitt | Position" mehr — der Kasten hat einen
-Rand, und der sagt dasselbe dort, wo die Hand liegt. Zwei ineinanderliegende
-Kästen, der äußere mit durchsichtigem Rand: Die Randfläche eines Elements fängt
-Zeigerereignisse, also trägt jede Fläche ihren eigenen Cursor. Deshalb gibt es
-auch kein `onSlotPointerDown` in `render-dom` mehr; der Renderer liefert das
-Rechteck (`slotOverlay`), die Flächen darin baut die Oberfläche.
-
-**Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
-`apps/web/src/spread/Griffe.tsx` — für Bilder **und** Texte): Am Bild drei
-Stufen (`spread/griffmodus.ts`) — Klick wählt nur (blauer Rand, keine Griffe,
-Zoomknöpfe unten rechts im Bild), der nächste legt Größengriffe an, der nächste
-Drehgriffe, der nächste schließt den Kreis; randabfallende Bilder überspringen
-die Drehung. Am Text zwei Stufen, denn er hat keinen Ausschnitt. Umschalt hält
-das Seitenverhältnis bzw. rastet auf 15°. Ein frei aufgezogener Bildkasten verzerrt
-nicht, weil ein manueller Ausschnitt beim Rendern in die Form des Kastens gedreht
-wird (`fitCropToAspect` in `renderSpread`, Fläche bleibt gleich) — der
-gespeicherte Ausschnitt selbst bleibt unangetastet. Am Textblock wächst dagegen an
-den Ecken die Schriftgröße mit, an den Kanten nur der Kasten; die Vorschau des
-offenen Stands baut `withTextBlock` mit `textBlockBoxes`, also mit der Funktion
-des Renderers.
-
-**Auch die Texte aus der Vorlage sind beweglich** — Jahreszahl, Überschrift,
-Ereigniszeilen (`TextElement.rect`, `.rotateDeg`, `.content`). Block und
-Vorlagentext werden in der Oberfläche auf einen Begriff abgebildet
-(`spread/bewegtext.ts`), damit Bühne und Griffe nicht zwei fast gleiche Listen
-führen. Zwei Unterschiede bleiben und sind begründet: Ein Vorlagentext wählt
-**keine Schrift und keine Farbe** (das sind Aussagen über das Buch, nicht über
-eine Seite), und er hat **keine Punktgröße** — die Schriftgröße ist die
-Versalhöhe im Kasten, also zieht die Höhenkante sie mit. Passt der Wortlaut nicht
-in die Breite, wird die Schrift kleiner statt zu überlaufen, wie im Fuß des
-Polaroids. Ein Neuaufbau stellt ihn
-an den Platz der Vorlage zurück; `handwork().textplaetze` sagt vorher, wie viel
-das kostet, `locked` bewahrt es. Weil die Jahreszahl damit umbenennbar ist, steht
-das Jahr einer Seite in `Spread.chapterYear` und nicht mehr in ihrem Anzeigetext.
-Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Vorlagentexte
-von Hand setzen".
-
-**Die Adresse ist der Zustand der Navigation** (`apps/web/src/router.tsx`, ein
-eigener Haken statt einer Router-Bibliothek: acht flache Routen, und die
-Oberfläche kommt sonst mit `useState` aus). **Im Pfad steht, _was_ man ansieht
-— das ist die Station im Verlauf; in der Query bleibt, _wie_ es dargestellt
-wird**: `?ui=a|b|c`, `?bare`, `?original`, `?width` überdauern jede Navigation.
-Pfade sind deutsch wie die Reiterbeschriftungen (`/doppelseite/12`,
-`/gruppen/<id>`, `/umschlag`) und zählen die Doppelseite ab 1; der Index im Code
-bleibt bei 0. Die alten Adressen `?spread=n` und `?cover` gelten weiter und
-werden beim Start in ihre Normalform ersetzt — der Parity-Test ruft die
-Doppelseite so auf. Blättern **verschmilzt** zu einer Station (1,5 s, wie beim
-Zurücknehmen am Server), sonst wäre die Zurück-Taste nach achtzig
-Pfeiltastenanschlägen eine Kurbel. `history.pushState` steht nur dort, geprüft
-in `tests/architektur/architektur.test.ts`; ein Darstellungsparameter, der sich
-zur Laufzeit ändert (`?bild=` im Baum), geht über `queryErsetzen` — auch die
-Query gehört dem Router. Begründung und verworfene Fassungen: `docs/konzept.md`,
-Abschnitt „Adressen".
-
-Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. Die
-Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.
-
-HEIC: `sharp` scheitert reproduzierbar an Apple-erzeugten HEICs (Kachelzahl > libheifs
-Grenze von 16). Primärpfad ist deshalb macOS `sips`. Details in
-`docs/spikes/phase-0.md`.
+Die vier Zeilen mit `core/…` meinen `packages/core/…`; die genauen Muster stehen im
+Frontmatter jeder Regeldatei.
+| `.claude/rules/adapter-parity.md` | `packages/render-{dom,pdf}/**` | was ein Renderer aus dem Kern beziehen darf, Schrift, Parity-Pflicht |
+| `.claude/rules/parity.md` | `tests/parity/**` | wie der Parity-Test rechnet: Schwellen, Vergleichsbreite, Ausgangslage |
+| `.claude/rules/server.md` | `apps/server/**` | Routenzuschnitt, Antwortform, Persistenz, Zurücknehmen, fremde Dateien |
+| `.claude/rules/web.md` | `apps/web/**` | Bausteine aus `theme.ts`, die drei Rahmen, Griffe, Adressen, Serverzugriff |
 
 ## Parity-Test
 
 `tests/parity/parity.spec.ts` ist der wichtigste Test des Projekts: Playwright
 screenshottet eine Doppelseite (`?bare&original=1`), exportiert denselben Spread als
-PDF, rastert ihn mit `pdftoppm` und vergleicht mit `pixelmatch`.
+PDF, rastert ihn mit `pdftoppm` und vergleicht mit `pixelmatch`. Die Schwelle liegt
+bei 0,5 % und ist gemessen, nicht geraten — ein roter Lauf wird behoben, nicht
+gelockert.
 
-Die Schwellen sind gemessen, nicht geraten: korrekt 0,157 %, mit manuellen Crops
-0,153 %, bei 1 mm eingebautem Versatz 1,018 % bzw. 1,388 % — Schwelle 0,5 %. Wer sie
-anfasst, hebt die Empfindlichkeit auf, die den Test überhaupt wertvoll macht.
-Überschreibbar über `PARITY_WIDTH`, `PARITY_THRESHOLD`, `PARITY_MAX_DIFF`.
-
-**Die Vergleichsbreite kommt aus dem Profil** (4,25 px je Millimeter
-Doppelseitenbreite), nicht als feste Pixelzahl. Sonst rastert der Test das PDF
-mit einer anderen Auflösung als den Screenshot, `fit: 'fill'` zwingt beide
-aufeinander, und die Skalierungsunschärfe zählt als Abweichung — beim Wechsel
-auf 28×28 waren das 0,58 % statt 0,16 %. Die 4,25 statt glatter 4 sind ebenfalls
-gemessen: Bei genau vier Pixeln je Millimeter fällt die Zeitstrahlachse auf eine
-Pixelgrenze, und Browser und `pdftoppm` verteilen das Antialiasing verschieden.
-
-Seit der Bildneigung deckt der Test sie mit ab: Ohne sie liegt derselbe Lauf bei
-0,242 % — die schrägen Kanten sind weichgezeichnet, wo das Millimeterraster der
-Fixtures sonst harte Ein-Pixel-Versätze erzeugt.
-
-Verglichen wird gegen die Originale (`/api/photos/:id/original`), nicht gegen die
-WebP-Vorschauen — sonst misst der Test Kompression statt Geometrie.
-
-Die Ausgangslage stellt der Test selbst her: eigenes Projektverzeichnis,
-`FRANIBOOK_FRESH` und ein `POST /api/generate` mit `targetPages: 2` ohne
-Jahresauftakte ergeben reproduzierbar die eine Doppelseite mit den Slots `a` bis
-`d`. Vorher hing das an einem gespeicherten Projekt aus einem früheren Lauf —
-seit der Ausschnitt-Editor jede Änderung speichert, wäre das keine Grundlage
-mehr.
-
-Jede Änderung an Templates, Geometrie oder einem der beiden Renderer gehört mit
-`pnpm test:parity` abgesichert.
+**Jede Änderung an Templates, Geometrie oder einem der beiden Renderer gehört mit
+`pnpm test:parity` abgesichert.** Wie der Test rechnet und woher seine Zahlen
+kommen, steht in `.claude/rules/parity.md`.
 
 ## Konventionen
 
@@ -653,11 +193,12 @@ Jede Änderung an Templates, Geometrie oder einem der beiden Renderer gehört mi
 
 ## Dokumentation
 
-`docs/konzept.md` (rund 1050 Zeilen) ist die maßgebliche Quelle für Architektur,
+`docs/konzept.md` (rund 3000 Zeilen) ist die maßgebliche Quelle für Architektur,
 Datenmodell, Layout-Engine, Druckprofil und Teststrategie — bei Entwurfsfragen dort
-nachsehen, bevor etwas neu erfunden wird. `docs/implementierungsphasen.md` hält den
-Fortschritt (Phase 0 und 1 abgeschlossen); `docs/spikes/` enthält die Messwerte, auf
-denen die Technologieentscheidungen beruhen.
+nachsehen, bevor etwas neu erfunden wird. Die Regeldateien nennen den jeweiligen
+Abschnitt. `docs/implementierungsphasen.md` hält den Fortschritt (Phase 0 und 1
+abgeschlossen); `docs/spikes/` enthält die Messwerte, auf denen die
+Technologieentscheidungen beruhen.
 
 Die Dokumente sind Markdown. Die Codebeispiele darin sind von Hand gesetzt (ausgerichtete
 Kommentare, kompakte Union-Typen); `.prettierrc.json` schaltet für `docs/**/*.md` deshalb
