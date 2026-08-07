@@ -22,6 +22,7 @@ sources.ts          Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad 
 import.ts           Scan und EXIF-Auswertung
 decode.ts           HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
 previews.ts         WebP-Vorschauen (320 px / 1600 px lange Kante)
+vision.ts           Gesichter und Salienz (macOS Vision über ein Swift-Werkzeug)
 ```
 
 **Eine Route entscheidet nichts Fachliches.** Sie liest Parameter, prüft sie,
