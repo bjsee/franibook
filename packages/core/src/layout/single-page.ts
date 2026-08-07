@@ -29,6 +29,7 @@ import type { Template, TemplateSlot } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import {
   HALF_BLANK_ID,
+  type HalfPage,
   halfPageById,
   halvesOfTemplate,
   pairId,
@@ -36,6 +37,7 @@ import {
 } from '../templates/halves.js';
 import { isJustified } from '../templates/justified.js';
 import { templateById, templateMeta } from '../templates/index.js';
+import { einwurfPlatzId } from './einwurf.js';
 import { layoutHalf } from './rebuild.js';
 
 /**
@@ -179,6 +181,19 @@ function zerlege(spread: Spread): [BookPage, BookPage] | undefined {
       });
     }
 
+    // Frei gesetzte Kästen kennt die Vorlage nicht, also findet die Schleife
+    // darüber sie nicht – sie fielen bei der Zerlegung stumm heraus, und ein
+    // eingeworfenes Bild war nach dem Einschieben einer Seite verschwunden.
+    // Sie gehören der Buchseite, über der ihre Mitte liegt, und behalten ihre
+    // Kennung: An ihr hängen Ausschnitt, Neigung und Ebene.
+    const ausVorlage = new Set(template.slots.map((s) => s.id));
+    for (const slot of spread.slots) {
+      if (!slot.rect || ausVorlage.has(slot.slotId)) continue;
+      const liegtLinks = slot.rect.x + slot.rect.w / 2 < 0.5;
+      if (liegtLinks !== (which === 'left')) continue;
+      slots.push({ ...slot, rect: which === 'left' ? slot.rect : spiegel(slot.rect) });
+    }
+
     // Textblöcke gehören der Seite, auf der ihre Mitte liegt. Geteilt wird
     // keiner: Ein Block über dem Falz ist eine Gestaltungsabsicht, und eine
     // halbe Zeile auf jeder Seite wäre keine.
@@ -212,12 +227,26 @@ function paare(links: BookPage, rechts: BookPage, index: number): Spread | undef
   const template = templateById(id);
   if (!template) return undefined;
 
+  const bekannt = new Set(template.slots.map((s) => s.id));
   const slots: SlotAssignment[] = [];
   const zuweisen = (seite: BookPage, prefix: 'l' | 'r'): void => {
+    const half = halfPageById(seite.halfId ?? HALF_BLANK_ID);
+    const ausHalbseite = new Set((half?.slots ?? []).map((s) => s.id));
     for (const s of seite.slots ?? []) {
+      // Ein Platz aus der Halbseite bekommt das Präfix der Buchseite; ein frei
+      // gesetzter Kasten behält seine Kennung, denn er steht in keiner Vorlage
+      // und `l-frei.1` wäre nur ein längerer Name für dasselbe. Kollidieren
+      // zwei – beide Buchseiten brachten ein `frei.1` von verschiedenen
+      // Blättern mit –, bekommt der zweite die nächste freie Zahl.
+      const frei = !ausHalbseite.has(s.slotId);
+      const kennung = frei
+        ? slots.some((v) => v.slotId === s.slotId)
+          ? einwurfPlatzId({ slots })
+          : s.slotId
+        : `${prefix}-${s.slotId}`;
       slots.push({
         ...s,
-        slotId: `${prefix}-${s.slotId}`,
+        slotId: kennung,
         // Eine frei gesetzte Position trägt eigene Koordinaten und wird
         // zurückgespiegelt, während die Slotgeometrie aus der Paarvorlage
         // kommt. Der Ausschnitt bleibt: Er beschreibt den Bildinhalt, nicht
@@ -231,9 +260,9 @@ function paare(links: BookPage, rechts: BookPage, index: number): Spread | undef
 
   // Zuweisungen, die es in der Paarvorlage nicht gibt, fielen beim Rendern
   // stumm heraus. Es sind dieselben Slots, nur anders benannt – trifft der Fall
-  // trotzdem ein, gehört er gemeldet und nicht verschwiegen.
-  const bekannt = new Set(template.slots.map((s) => s.id));
-  if (slots.some((s) => !bekannt.has(s.slotId))) return undefined;
+  // trotzdem ein, gehört er gemeldet und nicht verschwiegen. Freie Kästen sind
+  // davon ausgenommen: Sie tragen ihre Geometrie selbst (`wirksamePlaetze`).
+  if (slots.some((s) => !bekannt.has(s.slotId) && !s.rect)) return undefined;
 
   const blocks = [
     ...(links.blocks ?? []),
@@ -278,6 +307,114 @@ export interface SetHalfPageOptions {
 }
 
 /**
+ * Ordnet eine Buchseite neu an, wo das Blatt in keine zwei Halbseiten zerfällt.
+ *
+ * Der übliche Weg (`zerlege` + `paare`) braucht für beide Seiten eine
+ * Halbseitenkennung. Justierte Zeilen haben keine – ihre Rechtecke sind aus den
+ * Bildern gerechnet und stehen in keiner Vorlage –, und ein frei gezogener
+ * Kasten ebenso wenig. Trotzdem liegt jedes dieser Rechtecke auf genau einer
+ * Buchseite, und damit ist die Frage „lass die Gegenseite stehen" sehr wohl
+ * beantwortbar: **Ihre Kästen werden wörtlich übernommen**, mit derselben
+ * Geometrie, demselben Ausschnitt, Rahmen, Winkel und Ebene. Was keine Vorlage
+ * kennt, trägt seine Lage selbst (`SlotAssignment.rect`, aufgelöst über
+ * `wirksamePlaetze`) – derselbe Mechanismus wie beim eingeworfenen Bild.
+ *
+ * Die Doppelseite heißt danach `paar:<gewählt>+halb:leer`: Nur die gewählte
+ * Seite steht in der Vorlage, die Gegenseite besteht aus freien Kästen. Der
+ * Preis dafür steht in `handwork().positionen` – ein Neuaufbau stellt gerechnete
+ * Zeilen wieder her, frei gesetzte Kästen nicht. Das ist der ehrlichere Handel
+ * als die Alternative, die es vorher gab: die ganze Doppelseite neu anordnen und
+ * dabei die Gegenseite verlieren, um die es gar nicht ging.
+ *
+ * Nicht getrennt wird, was als Doppelseite gedacht ist: ein Auftakt (sein Text
+ * hängt an Textplätzen der Vorlage), ein Hintergrundbild über beide Seiten, ein
+ * Kasten über dem Falz.
+ */
+function alsFreieKaesten(
+  spread: Spread,
+  half: HalfPage,
+  opts: SetHalfPageOptions,
+): { ok: boolean; error?: string; spread?: Spread; leftover: PhotoId[] } {
+  const nein = (error: string) => ({ ok: false, error, leftover: [] as PhotoId[] });
+
+  const template = templateById(spread.templateId);
+  if (!template) return nein(`Die Vorlage ${spread.templateId} gibt es nicht`);
+  if (
+    templateMeta(template.id).chapterOnly ||
+    template.tags?.includes('gruppenauftakt') ||
+    (spread.texts ?? []).length > 0
+  ) {
+    return nein(
+      'Eine Seite mit Vorlagentext lässt sich nur als ganze Doppelseite anordnen – ' +
+        'seitenweise verlöre sie ihre Textplätze',
+    );
+  }
+  if (spread.backgroundPhotoId) {
+    return nein(
+      'Auf dieser Doppelseite liegt ein Bild über beide Seiten – sie lässt sich nur als Ganzes anordnen',
+    );
+  }
+
+  const geo = new Map(template.slots.map((s) => [s.id, s]));
+  const eigene: SlotAssignment[] = [];
+  const gegen: SlotAssignment[] = [];
+  for (const slot of spread.slots) {
+    const platz = slot.rect ?? geo.get(slot.slotId);
+    if (!platz) return nein(`Der Platz ${slot.slotId} hat keine Geometrie`);
+    // Ein Kasten über der Falzachse gehört keiner der beiden Buchseiten ganz.
+    // Ihn der näheren zuzuschlagen hieße, die Gegenseite doch anzufassen – und
+    // genau das soll der Griff nicht.
+    if (platz.x < 0.4999 && platz.x + platz.w > 0.5001) {
+      return nein(
+        'Auf dieser Doppelseite liegt ein Bild über dem Falz – sie lässt sich nur als Ganzes anordnen',
+      );
+    }
+    const liegtRechts = platz.x + platz.w / 2 >= 0.5;
+    if (liegtRechts === (opts.side === 'right')) eigene.push(slot);
+    else {
+      // Die Gegenseite bekommt ihre Lage als eigenes Rechteck – auch die Slots,
+      // die sie bisher aus der Vorlage bezogen: Die neue Vorlage kennt dort
+      // keinen Platz mehr, an dem sie hängen könnten.
+      gegen.push(
+        slot.rect ? slot : { ...slot, rect: { x: platz.x, y: platz.y, w: platz.w, h: platz.h } },
+      );
+    }
+  }
+
+  const nachKennung = new Map(opts.photos.map((p) => [p.id, p]));
+  const angeordnet = layoutHalf({
+    photos: eigene
+      .map((s) => (s.photoId ? nachKennung.get(s.photoId) : undefined))
+      .filter((p): p is Photo => p !== undefined),
+    slots: half.slots,
+    profile: opts.profile,
+    ...(opts.weightOf ? { weightOf: opts.weightOf } : {}),
+  });
+
+  const templateId =
+    opts.side === 'left' ? pairId(opts.halfId, HALF_BLANK_ID) : pairId(HALF_BLANK_ID, opts.halfId);
+  if (!templateById(templateId)) {
+    return nein(`Die Anordnung ${opts.halfId} lässt sich hier nicht einsetzen`);
+  }
+
+  const prefix = opts.side === 'left' ? 'l' : 'r';
+  const slots: SlotAssignment[] = angeordnet.slots.map((s) => ({
+    ...s,
+    slotId: `${prefix}-${s.slotId}`,
+  }));
+  for (const s of gegen) {
+    // Die Kennung bleibt, woran Ausschnitt und Neigung hängen – sie ist nur
+    // innerhalb des Blattes eindeutig, und die neue Vorlage benennt ihre Plätze
+    // mit Präfix. Trifft sie doch zusammen, bekommt der Kasten die nächste freie.
+    slots.push(
+      slots.some((v) => v.slotId === s.slotId) ? { ...s, slotId: einwurfPlatzId({ slots }) } : s,
+    );
+  }
+
+  return { ok: true, spread: { ...spread, templateId, slots }, leftover: angeordnet.leftover };
+}
+
+/**
  * Ordnet **eine** Buchseite neu an; die gegenüberliegende bleibt, wie sie ist.
  *
  * Der Weg dahin ist derselbe wie beim Einschieben einer Seite: Das Blatt
@@ -292,10 +429,14 @@ export interface SetHalfPageOptions {
  * eine Zuordnung über beide Seiten hinweg ist gültig und trifft trotzdem nicht,
  * was verlangt war.
  *
- * @returns `ok: false`, wenn das Blatt sich nicht an der Falzachse trennen
- * lässt – ein Auftakt, justierte Zeilen, ein randabfallendes Bild über dem Falz.
- * Der Aufrufer muss dann die ganze Doppelseite anordnen; hier wird nichts
- * geraten.
+ * **Was in keine Halbseite zerfällt, wird trotzdem getrennt** – über
+ * `alsFreieKaesten` (siehe dort). Justierte Zeilen etwa haben keine
+ * Halbseitenkennung, aber sehr wohl eine Buchseite, auf der jedes ihrer
+ * Rechtecke liegt.
+ *
+ * @returns `ok: false`, wenn die Doppelseite als Ganzes gedacht ist – ein
+ * Auftakt, ein Bild über dem Falz, ein Hintergrundbild über beide Seiten. Der
+ * Aufrufer muss dann die ganze Doppelseite anordnen; hier wird nichts geraten.
  */
 export function setHalfPage(
   spread: Spread,
@@ -309,13 +450,7 @@ export function setHalfPage(
   // diese Trennung. Das Schloss schützt die Handarbeit vor der Umpaarung, nicht
   // vor dem Benutzer.
   const teile = teilbar(spread) ? zerlege(spread) : undefined;
-  if (!teile) {
-    return {
-      ok: false,
-      error: 'Diese Doppelseite lässt sich nicht in einzelne Buchseiten trennen',
-      leftover: [],
-    };
-  }
+  if (!teile) return alsFreieKaesten(spread, half, opts);
 
   const [links, rechts] = teile;
   const alt = opts.side === 'left' ? links : rechts;
@@ -541,7 +676,13 @@ export function insertSinglePage(
   for (let i = einfuegeIndex + 1; i < folge.length; i++) {
     const eintrag = folge[i]!;
     if (eintrag.span === 2) break;
-    if (eintrag.halfId === HALF_BLANK_ID && (eintrag.blocks ?? []).length === 0) {
+    // Leer heißt: trägt nichts – nicht „hat keinen Platz aus der Vorlage".
+    // Eine Buchseite mit der Kennung `halb:leer` kann sehr wohl ein Bild
+    // tragen: ein eingeworfenes, oder die Gegenseite eines seitenweisen
+    // Anordnungswechsels (`alsFreieKaesten`). Über die Kennung gesucht, fiel
+    // sie samt Bild aus dem Buch.
+    const traegt = (eintrag.slots ?? []).length > 0 || (eintrag.blocks ?? []).length > 0;
+    if (eintrag.halfId === HALF_BLANK_ID && !traegt) {
       folge.splice(i, 1);
       verbraucht = true;
       break;
