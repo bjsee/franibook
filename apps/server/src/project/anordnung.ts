@@ -158,14 +158,21 @@ export function setSpreadTemplate(
  * an: Wer die rechte Seite umstellte, fand links andere Bilder in anderen
  * Plätzen.
  *
- * **Nicht jedes Blatt zerfällt.** Bei justierten Zeilen liegen die Rechtecke
- * über die ganze Satzbreite, es gibt dort keine Halbseite, die die Gegenseite
- * beschreibt. Dann bleibt nur die ganze Doppelseite, und für die Gegenseite wird
- * eine Anordnung gerechnet: die Halbseite, die ihre Bilder am besten trägt
- * (`choosePairFor`). Das ist eine Layoutentscheidung, aber die verlangte – wer
- * eine Seite neu anordnet, will die andere nicht verlieren. Vorher scheiterte
- * der Griff daran, und die Oberfläche sagte, die Doppelseite reiche über den
- * Falz.
+ * **Auch was in keine zwei Halbseiten zerfällt, wird getrennt.** Justierte
+ * Zeilen haben keine Halbseitenkennung, wohl aber je Rechteck eine Buchseite:
+ * `setHalfPage` übernimmt die Gegenseite dann als freie Kästen. Das war der
+ * zweite Anlauf – vorher fiel dieser Fall in den Zweig darunter, und wer bei
+ * justierten Zeilen die linke Seite wählte, bekam die ganze Doppelseite neu
+ * angeordnet. Sie sind kein Randfall: Ab zehn Bildern rechnet `justify.ts` die
+ * Plätze, und gerade dort will man nachbessern.
+ *
+ * **Der Rest bleibt die ganze Doppelseite.** Ein Bild über dem Falz, ein
+ * Hintergrundbild über beide Seiten – dort ist die Doppelseite die Einheit. Für
+ * die Gegenseite wird dann eine Anordnung gerechnet: die Halbseite, die ihre
+ * Bilder am besten trägt (`choosePairFor`). Das ist eine Layoutentscheidung,
+ * aber die verlangte – wer eine Seite neu anordnet, will die andere nicht
+ * verlieren. Vorher scheiterte der Griff daran, und die Oberfläche sagte, die
+ * Doppelseite reiche über den Falz.
  */
 export function setSpreadHalf(
   z: Bestand,

@@ -257,9 +257,17 @@ jedes Bild in seinem Platz, samt Ausschnitt, Rahmen, Neigung, Ebene und
 Bildunterschrift. Vorher setzte `setSpreadHalf` die Paarkennung zusammen und
 gab sie an `setSpreadTemplate` weiter, und **der ordnet die ganze Doppelseite
 neu an** — wer die rechte Seite umstellte, fand links andere Bilder in anderen
-Plätzen. Wo sich ein Blatt nicht trennen lässt (justierte Zeilen, Auftakte, ein
-randabfallendes Bild über dem Falz), bleibt es beim alten Weg: Für die
-Gegenseite wird eine Anordnung gerechnet (`choosePairFor`). Begründung:
+Plätzen.
+
+**Auch was in keine zwei Halbseiten zerfällt, wird getrennt** (`alsFreieKaesten`).
+Justierte Zeilen haben keine Halbseitenkennung, wohl aber je Rechteck eine
+Buchseite: Die Gegenseite wird dann **wörtlich übernommen** — jeder Kasten trägt
+seine Lage selbst (`SlotAssignment.rect`, wie ein eingeworfenes Bild), die
+Doppelseite heißt danach `paar:<gewählt>+halb:leer`. Der Preis steht in
+`handwork().positionen`: Eine gerechnete Zeile stellt der Neuaufbau wieder her,
+einen gesetzten Kasten nicht. Ganz bleibt nur, was als Doppelseite gedacht ist
+(Auftakt, Hintergrundbild über beide Seiten, ein Kasten über dem Falz); dort
+rechnet `choosePairFor` die Gegenseite wie bisher. Begründung:
 `docs/konzept.md`, Abschnitt „Anordnung von Hand wählen".
 
 **Die Anordnungswahl zeigt die eigene Bilderzahl zuerst** (`Faecher` in

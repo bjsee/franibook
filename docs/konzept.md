@@ -2507,6 +2507,59 @@ auf derselben Doppelseite wären für einen Ausschnitt nicht auseinanderzuhalten
 > Doppelseite wäre damit wieder die, an der sich keine Seite ändern lässt, und
 > genau das war der Mangel, den `choosePairFor` behoben hat.
 
+> **Korrektur (7. August 2026): auch justierte Zeilen lassen ihre Gegenseite
+> stehen**
+>
+> „Zweitens bleibt der alte Weg für die Blätter, die sich nicht trennen lassen" —
+> bei justierten Zeilen war das der falsche Schluss aus einer richtigen
+> Beobachtung. Richtig ist, dass sie keine **Halbseitenkennung** haben. Falsch
+> ist, dass sich daraus nichts **trennen** ließe: Jedes ihrer Rechtecke liegt auf
+> genau einer Buchseite, und mehr braucht die Zusage „die andere bleibt, wie sie
+> ist" nicht. Am echten Buch traf es Doppelseite 38 — sechs Bilder links, fünf
+> rechts, kein Kasten über dem Falz —, und wer dort links eine andere Anordnung
+> wählte, bekam beide Seiten neu. Ein Randfall ist das nicht: Ab zehn Bildern
+> rechnet `justify.ts` die Plätze, und gerade auf einer dichten Seite will man
+> nachbessern.
+>
+> `alsFreieKaesten` (`layout/single-page.ts`) ist deshalb der zweite Weg neben
+> `zerlege`/`paare`. Die Gegenseite wird **wörtlich übernommen**: jeder Kasten mit
+> seinem Rechteck, Ausschnitt, Winkel, Rahmen, seiner Unterschrift und Ebene. Weil
+> ihn danach keine Vorlage mehr beschreibt, trägt er seine Lage selbst
+> (`SlotAssignment.rect`, aufgelöst über `wirksamePlaetze`) — derselbe
+> Mechanismus, mit dem ein eingeworfenes Bild auf dem Papier steht. Die
+> Doppelseite heißt danach `paar:<gewählt>+halb:leer`: In der Vorlage steht nur
+> noch die Seite, die neu angeordnet wurde.
+>
+> Der Preis steht in `handwork().positionen`. Eine **gerechnete** justierte Zeile
+> stellt der Neuaufbau wieder her, einen **gesetzten** Kasten nicht — die
+> Gegenseite wird also von einer Rechnung zu Handarbeit. Das ist der bessere
+> Handel als die Alternative, die vorher galt: die ganze Doppelseite neu anordnen
+> und dabei die Seite verlieren, um die es gar nicht ging.
+>
+> Ganz bleibt, was als Doppelseite gedacht ist — ein Auftakt (sein Text hängt an
+> Textplätzen der Vorlage), ein Hintergrundbild über beide Seiten, ein Kasten über
+> dem Falz. Der gehört keiner Buchseite ganz, und ihn der näheren zuzuschlagen
+> hieße, die Gegenseite doch anzufassen. Dort rechnet `choosePairFor` weiter wie
+> bisher.
+>
+> Ein dritter Mangel fiel dabei auf: `zerlege` ging über die Slots der Vorlage,
+> also fielen frei gesetzte Kästen bei **jeder** Zerlegung stumm heraus — ein
+> eingeworfenes Bild war nach dem Einschieben einer einzelnen Seite verschwunden.
+> Sie gehören jetzt der Buchseite, über der ihre Mitte liegt, und `paare` lässt
+> sie durch, statt die Paarung abzulehnen. Ihre Kennung behalten sie dabei; nur
+> wenn zwei Buchseiten verschiedener Blätter dasselbe `frei.1` mitbringen, bekommt
+> der zweite die nächste freie Zahl. Die Kennung ist kein Formalismus: An ihr
+> hängen Ausschnitt, Ebene und der Neigungswinkel (`tilt.ts` rechnet ihn aus Slot,
+> Foto und Seed) — ein umbenannter Kasten stünde schief.
+>
+> Und ein vierter, den erst das Code-Review fand: Das Einfügen einer Seite sucht
+> hinter der Einfügestelle eine schon leere Halbseite, um das Buch nicht um ein
+> ganzes Blatt zu verlängern — **erkannt an ihrer Kennung** (`halb:leer`), nicht
+> an ihrem Inhalt. Seit die Gegenseite eines seitenweisen Wechsels genau so heißt
+> und trotzdem Bilder trägt, hätte das ihre Bilder aus dem Buch geworfen; mit
+> einem eingeworfenen Bild auf einer sonst leeren Seite ging es schon vorher
+> schief. Leer heißt jetzt: trägt weder Kasten noch Textblock.
+
 ### Zustandsmodell
 
 Der Frontend-Store hält das gesamte Projekt. Jede Mutation läuft über `produceWithPatches` von Immer und liefert dabei zwei Dinge gleichzeitig:
