@@ -208,6 +208,31 @@ describe('Eine Seite einfügen macht keine Doppelseite', () => {
     expect(fotos(r.spreads)).toEqual(['p0', 'p1', 'p2']);
   });
 
+  it('verbraucht keine Halbseite, auf der ein frei gesetzter Kasten liegt', () => {
+    // Eine Buchseite ohne Platz aus der Vorlage kann trotzdem ein Bild tragen:
+    // ein eingeworfenes, oder die Gegenseite eines seitenweisen
+    // Anordnungswechsels. Gesucht wurde die leere Seite aber über ihre Kennung
+    // (`halb:leer`) statt über ihren Inhalt – und dann fiel sie samt Bild aus
+    // dem Buch.
+    const mitEinwurf = einBild('s1', 'p1');
+    mitEinwurf.slots.push({
+      slotId: 'frei.1',
+      photoId: 'p9',
+      crop: { ...AUTO },
+      // Auf der Buchseite, die keinen Platz aus der Vorlage hat: Bei
+      // `hero-left.mirrored` steht das Bild rechts, links ist `halb:leer`.
+      rect: { x: 0.15, y: 0.1, w: 0.2, h: 0.2 },
+    });
+    // Das erste Blatt trägt beidseitig ein Bild, damit die Suche nach einer
+    // leeren Halbseite genau auf die mit dem Kasten trifft.
+    const buch = [blatt('s0', 'spread.2up.pair', 0), mitEinwurf, einBild('s2', 'p2')];
+
+    const r = insertSinglePage(buch, { atPage: 0, halfId: HALF_BLANK_ID, id: 'eigen-1' });
+
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toContain('p9');
+  });
+
   it('lässt dabei kein Blatt ganz ohne Bild zurück', () => {
     const buch = [einBild('s0', 'p0'), einBild('s1', 'p1')];
     const r = insertSinglePage(buch, { atPage: 0, halfId: HALF_BLANK_ID, id: 'eigen-1' });
@@ -540,15 +565,110 @@ describe('setHalfPage', () => {
     expect(r.spread!.anchor).toEqual({ photoId: 'p9', where: 'before' });
   });
 
-  it('lehnt ab, was sich nicht an der Falzachse trennen lässt', () => {
-    // Auftakt und justierte Zeilen: Der Aufrufer muss dann die ganze
-    // Doppelseite anordnen, und das soll er entscheiden statt es geraten zu
-    // bekommen.
+  it('lehnt ab, was als ganze Doppelseite gedacht ist', () => {
+    // Ein Auftakt hängt an Textplätzen, ein Hintergrundbild reicht über beide
+    // Seiten: Der Aufrufer muss dann die ganze Doppelseite anordnen, und das
+    // soll er entscheiden statt es geraten zu bekommen.
     const nein = (spread: Spread) =>
       setHalfPage(spread, { side: 'right', halfId: HALF_ONE_ID, photos: [], profile });
 
     expect(nein(auftakt('a0')).ok).toBe(false);
-    expect(nein({ ...raster(), templateId: 'justiert.4' }).ok).toBe(false);
     expect(nein({ ...raster(), backgroundPhotoId: 'p99' }).ok).toBe(false);
+  });
+
+  /** Justierte Zeilen: vier Rechtecke, zwei je Buchseite, keines über dem Falz. */
+  function justiert(): Spread {
+    const rects = [
+      { x: 0.04, y: 0.2, w: 0.2, h: 0.3 },
+      { x: 0.26, y: 0.2, w: 0.2, h: 0.3 },
+      { x: 0.54, y: 0.2, w: 0.2, h: 0.3 },
+      { x: 0.76, y: 0.2, w: 0.2, h: 0.3 },
+    ];
+    return {
+      id: 's0',
+      index: 0,
+      templateId: 'justiert.4',
+      slots: rects.map((rect, i) => ({
+        slotId: `j${i}`,
+        photoId: `p${i}`,
+        crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.5, mode: 'manual' as const },
+        rect,
+        rotateDeg: 2 + i,
+        frame: 'polaroid' as const,
+        caption: `Bild ${i}`,
+        layer: i,
+      })),
+    };
+  }
+
+  it('trennt auch justierte Zeilen und lässt die Gegenseite Kasten für Kasten stehen', () => {
+    // Der Bug: Justierte Zeilen haben keine Halbseitenkennung, also scheiterte
+    // die Trennung – und der Server ordnete daraufhin die ganze Doppelseite neu
+    // an. Wer links wählte, fand rechts andere Bilder. Ihre Rechtecke liegen
+    // aber sehr wohl je auf einer Buchseite.
+    const vorher = justiert();
+    const rechtsVorher = vorher.slots.slice(2);
+
+    const r = setHalfPage(vorher, {
+      side: 'left',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    // Wörtlich übernommen: Kennung, Rechteck, Ausschnitt, Winkel, Rahmen,
+    // Unterschrift und Ebene – nichts davon geht die linke Seite an.
+    const rechtsNachher = r.spread!.slots.filter((s) => (s.rect?.x ?? 0) >= 0.5);
+    expect(rechtsNachher).toEqual(rechtsVorher);
+    // Links steht die gewählte Halbseite: ein Platz, das zweite Bild in den Pool.
+    expect(r.spread!.templateId).toBe(`paar:${HALF_ONE_ID}+${HALF_BLANK_ID}`);
+    expect(r.spread!.slots.filter((s) => s.slotId.startsWith('l-'))).toHaveLength(1);
+    expect(r.leftover).toHaveLength(1);
+    expect(['p0', 'p1']).toContain(r.leftover[0]);
+  });
+
+  it('lehnt ab, wenn ein Kasten über dem Falz liegt', () => {
+    // Er gehört keiner der beiden Buchseiten ganz; ihn der näheren zuzuschlagen
+    // hieße, die Gegenseite doch anzufassen.
+    const ueberFalz = justiert();
+    ueberFalz.slots[1] = { ...ueberFalz.slots[1]!, rect: { x: 0.4, y: 0.2, w: 0.25, h: 0.3 } };
+
+    const r = setHalfPage(ueberFalz, {
+      side: 'left',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/über dem Falz/);
+  });
+
+  it('lässt einen frei gesetzten Kasten der Gegenseite stehen', () => {
+    // Ein eingeworfenes Bild steht in keiner Vorlage. Beim Zerlegen fiel es
+    // vorher stumm heraus – und war nach dem Griff verschwunden.
+    const mitEinwurf = raster();
+    mitEinwurf.slots.push({
+      slotId: 'frei.1',
+      photoId: 'p9',
+      crop: { ...AUTO },
+      rect: { x: 0.6, y: 0.1, w: 0.2, h: 0.2 },
+    });
+
+    const r = setHalfPage(mitEinwurf, {
+      side: 'left',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3', 'p9'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    // Nicht auf die letzte Stelle: Die rechte Seite wird zum Zerlegen in die
+    // Linksform gespiegelt und danach zurück, und das kostet ein Bit.
+    const kasten = r.spread!.slots.find((s) => s.photoId === 'p9')?.rect;
+    expect(kasten?.x).toBeCloseTo(0.6, 10);
+    expect(kasten?.y).toBe(0.1);
+    expect(kasten?.w).toBe(0.2);
   });
 });

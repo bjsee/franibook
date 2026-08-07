@@ -573,18 +573,78 @@ describe('Eine Buchseite anordnen', () => {
     expect(['p3', 'p4']).toContain(r.leftover[0]);
   });
 
-  it('ordnet bei justierten Zeilen weiter die ganze Doppelseite an', () => {
-    // Deren Rechtecke laufen über die ganze Satzbreite: Es gibt keine
-    // Halbseite, die die Gegenseite beschreibt, also lässt sich das Blatt nicht
-    // trennen. Der Rückfall auf die ganze Doppelseite ist dort keine Nachlässigkeit,
-    // sondern die einzige Rechnung, die aufgeht.
+  /** Dieselben vier Bilder als justierte Zeilen; `versatz` schiebt die Kästen. */
+  function projektJustiert(rects: readonly { x: number; w: number }[]): Project {
     const p = projektMitVier();
     p.spreads[0]!.templateId = justifiedTemplateId(4);
     p.spreads[0]!.slots = p.spreads[0]!.slots.map((s, i) => ({
       ...s,
-      crop: { ...FULL_CROP },
-      rect: { x: 0.05 + i * 0.22, y: 0.3, w: 0.2, h: 0.3 },
+      rect: { x: rects[i]!.x, y: 0.3, w: rects[i]!.w, h: 0.3 },
     }));
+    return p;
+  }
+
+  it('lässt auch bei justierten Zeilen die Gegenseite stehen', () => {
+    // Der Bug: Justierte Zeilen haben keine Halbseitenkennung, also scheiterte
+    // die Trennung und der Server ordnete die ganze Doppelseite neu an – wer
+    // links wählte, fand rechts andere Bilder. Ihre Rechtecke liegen aber je
+    // auf einer Buchseite, und damit lässt sich die Gegenseite übernehmen.
+    const p = projektJustiert([
+      { x: 0.04, w: 0.2 },
+      { x: 0.26, w: 0.2 },
+      { x: 0.54, w: 0.2 },
+      { x: 0.76, w: 0.2 },
+    ]);
+    const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
+
+    const r = p.setSpreadHalf(0, 'left', einPlatz.id);
+
+    expect(r.ok).toBe(true);
+    // Rechts steht Kasten für Kasten dasselbe – die Bilder in ihren Rechtecken.
+    const rechts = p.spreads[0]!.slots.filter((s) => (s.rect?.x ?? 0) >= 0.5);
+    expect(rechts.map((s) => s.photoId)).toEqual(['p3', 'p4']);
+    expect(rechts.map((s) => s.rect?.x)).toEqual([0.54, 0.76]);
+    // Links die gewählte Halbseite: ein Platz, das zweite Bild in den Pool.
+    expect(p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('l-'))).toHaveLength(1);
+    expect(['p1', 'p2']).toContain(r.leftover[0]);
+  });
+
+  it('lässt danach auch die andere Seite einzeln anordnen', () => {
+    // Der Ablauf beim Durcharbeiten: erst links, dann rechts. Nach dem ersten
+    // Griff steht rechts als freie Kästen da – die dürfen beim zweiten weder
+    // verschwinden noch die linke Seite mitreißen.
+    const p = projektJustiert([
+      { x: 0.04, w: 0.2 },
+      { x: 0.26, w: 0.2 },
+      { x: 0.54, w: 0.2 },
+      { x: 0.76, w: 0.2 },
+    ]);
+    const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
+    expect(p.setSpreadHalf(0, 'left', einPlatz.id).ok).toBe(true);
+    const linksVorher = p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('l-'));
+
+    const zweiPlaetze = p.halfChoices(0).halves.find((h) => h.slotCount === 2)!;
+    const r = p.setSpreadHalf(0, 'right', zweiPlaetze.id);
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('l-'))).toEqual(linksVorher);
+    // Rechts stehen die beiden Bilder jetzt in Plätzen der Vorlage, nicht mehr
+    // in eigenen Kästen.
+    const rechts = p.spreads[0]!.slots.filter((s) => s.slotId.startsWith('r-'));
+    expect(rechts.map((s) => s.photoId)).toEqual(['p3', 'p4']);
+    expect(rechts.every((s) => s.rect === undefined)).toBe(true);
+  });
+
+  it('ordnet die ganze Doppelseite an, wenn ein Kasten über dem Falz liegt', () => {
+    // Er gehört keiner der beiden Buchseiten ganz. Der Rückfall auf die ganze
+    // Doppelseite ist dort keine Nachlässigkeit, sondern die einzige Rechnung,
+    // die aufgeht.
+    const p = projektJustiert([
+      { x: 0.05, w: 0.2 },
+      { x: 0.27, w: 0.2 },
+      { x: 0.49, w: 0.2 },
+      { x: 0.71, w: 0.2 },
+    ]);
     const einPlatz = p.halfChoices(0).halves.find((h) => h.slotCount === 1)!;
 
     const r = p.setSpreadHalf(0, 'right', einPlatz.id);
