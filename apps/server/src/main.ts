@@ -20,6 +20,7 @@ import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
 import { Sources } from './sources.js';
+import { VisionErkennung } from './vision.js';
 import { shutdownImport } from './import.js';
 import type { Kontext } from './routes/kontext.js';
 
@@ -47,6 +48,13 @@ const sources = new Sources();
 const decodes = new DecodeCache(CACHE_DIR, sources);
 const previews = new PreviewCache(CACHE_DIR, decodes);
 const project = new Project(sources, previews, decodes, PROJECT_DIR);
+/**
+ * Gesichtserkennung über Apples Vision-Framework.
+ *
+ * Nicht im `Kontext`: Keine Route braucht sie. Sie läuft einmal nach dem
+ * Anlauf und trägt ihr Ergebnis in den Bestand ein.
+ */
+const vision = new VisionErkennung(CACHE_DIR);
 
 const kontext: Kontext = {
   project,
@@ -165,9 +173,47 @@ async function start(): Promise<void> {
 
   // Vorschauen im Hintergrund aufwärmen, damit die Oberfläche sofort nutzbar
   // ist. Wer schneller blättert, als der Cache füllt, erzeugt sie on demand.
+  //
+  // Danach die Bildmerkmale, nicht parallel: Beide lesen dieselben Dateien und
+  // dieselben Kerne, und die Vorschauen sind das, worauf jemand wartet.
   void previews
     .warm(project.effectivePhotoList(), 'preview', 6)
-    .then(() => process.stdout.write('Vorschaubilder vollständig\n'));
+    .then(() => process.stdout.write('Vorschaubilder vollständig\n'))
+    .then(() => merkmaleNachziehen());
+}
+
+/**
+ * Gesichter und Aufmerksamkeitsschwerpunkt für die Fotos, denen sie fehlen.
+ *
+ * Ganz am Ende des Anlaufs und ohne dass jemand darauf wartet: Das Buch steht
+ * ohne die Rechtecke, sie machen nur die Ausschnitte besser (`model/focal.ts`).
+ * Wer währenddessen blättert, sieht die alten Ausschnitte und beim nächsten
+ * Aufruf der Doppelseite die neuen — nichts wird dafür neu angeordnet.
+ *
+ * Gespeichert wird einmal am Ende. Ein Speichern je Block wäre bei 830 Fotos
+ * vier Schreibvorgänge über ein 680-KB-JSON für dieselbe Auskunft.
+ */
+async function merkmaleNachziehen(): Promise<void> {
+  // Abschaltbar, und der Parity-Test braucht das: Er startet einen echten
+  // Server, und ein Durchlauf, der mitten im Test die Ausschnitte verschiebt,
+  // ließe Screenshot und PDF aus zwei verschiedenen Ständen entstehen. An den
+  // Fixtures findet Vision zwar keine Gesichter, aber Salienzobjekte — die
+  // Verschiebung wäre also real und der Test schlüge sporadisch fehl.
+  if (process.env['FRANIBOOK_NO_VISION']) return;
+  try {
+    const bericht = await project.merkmaleNachziehen(vision);
+    if (bericht.geprueft === 0) return;
+    await project.save();
+    process.stdout.write(
+      `Bildmerkmale: ${bericht.geprueft} Fotos geprüft, ${bericht.mitGesicht} mit Gesicht, ` +
+        `${bericht.nurSalienz} nur mit Schwerpunkt (${bericht.millisekunden} ms)\n`,
+    );
+  } catch (err) {
+    // Ein fehlgeschlagener Durchlauf darf den Server nicht mitnehmen: Ohne
+    // Merkmale bleibt der Ausschnitt in der Bildmitte, und beim nächsten Start
+    // wird es erneut versucht.
+    process.stdout.write(`Bildmerkmale übersprungen: ${String(err)}\n`);
+  }
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
