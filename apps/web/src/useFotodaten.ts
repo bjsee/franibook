@@ -12,6 +12,7 @@
  * hinten an, und `nachDateinamen()` stellt die Vorgabe wieder her.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { PhotoWeight } from '@franibook/core';
 import {
   type Datumskorrektur,
   type FotoInfo,
@@ -21,6 +22,7 @@ import {
   datumKorrigieren,
   fehlertext,
   fotosLaden,
+  gewichtSetzen,
   ortSetzen,
   ortsListeLaden,
 } from './api.js';
@@ -53,6 +55,8 @@ export interface FotodatenModell {
   ortAnwenden: (ort: { label: string; key?: string } | null) => void;
   /** Kippt die Ausrichtung der Auswahl; `null` gibt sie an die Datei zurück. */
   ausrichtungAnwenden: (turns: 1 | 2 | 3 | null) => void;
+  /** Zeichnet die Auswahl aus; `'normal'` nimmt die Auszeichnung zurück. */
+  gewichtAnwenden: (gewicht: PhotoWeight) => void;
   busy: boolean;
   note: string | null;
   fehler: string | null;
@@ -201,9 +205,15 @@ export function useFotodaten(opts: {
     );
   }, [nachIndex]);
 
-  /** Was eine Korrektur bewirkt hat, in einem Satz. */
-  function meldung(e: Korrekturergebnis): string {
-    const teile = [`${e.geaendert} ${e.geaendert === 1 ? 'Foto' : 'Fotos'} korrigiert`];
+  /**
+   * Was eine Korrektur bewirkt hat, in einem Satz.
+   *
+   * Das Verb kommt vom Aufrufer, weil nicht jeder Griff hier eine Korrektur ist:
+   * Ein Gewicht zu setzen berichtigt nichts, es zeichnet aus — und „12 Fotos
+   * korrigiert" wäre an dieser Stelle eine falsche Auskunft über das eigene Tun.
+   */
+  function meldung(e: Korrekturergebnis, verb = 'korrigiert'): string {
+    const teile = [`${e.geaendert} ${e.geaendert === 1 ? 'Foto' : 'Fotos'} ${verb}`];
     if (e.uebersprungen.length > 0) {
       // Der Grund steht am ersten – bei einem Stapel ist er für alle derselbe.
       teile.push(`${e.uebersprungen.length} übersprungen (${e.uebersprungen[0]!.grund})`);
@@ -223,7 +233,7 @@ export function useFotodaten(opts: {
   const ausfuehren = useCallback(
     (
       aufruf: (ids: string[]) => Promise<Korrekturergebnis>,
-      nachher: { ort?: boolean; pixel?: boolean } = {},
+      nachher: { ort?: boolean; pixel?: boolean; verb?: string } = {},
     ) => {
       if (auswahl.length === 0) return;
       setBusy(true);
@@ -244,7 +254,7 @@ export function useFotodaten(opts: {
           // verschwunden, der Fehlgriff also unsichtbar.
           setAuswahl([]);
           setHandOrdnung(false);
-          setNote(meldung(e));
+          setNote(meldung(e, nachher.verb));
           // Ein neuer Ortsname gehört ab jetzt in die Vervollständigung.
           if (nachher.ort) orteLaden();
           if (nachher.pixel) onBildGeaendert();
@@ -273,6 +283,22 @@ export function useFotodaten(opts: {
     [ausfuehren],
   );
 
+  /**
+   * Zeichnet die Auswahl aus; `'normal'` nimmt es zurück.
+   *
+   * Mengenwertig wie alles hier, und dafür gibt es einen Fall: „Diese vierzig
+   * Serienbilder sollen keine Seite tragen" ist ein Griff und keine vierzig. Für
+   * das *einzelne* Hauptbild ist die Doppelseite der bessere Ort — dort sieht man
+   * es groß (`spread/BildPanel.tsx`).
+   */
+  const gewichtAnwenden = useCallback(
+    (gewicht: PhotoWeight) =>
+      ausfuehren((ids) => gewichtSetzen(ids, gewicht), {
+        verb: gewicht === 'normal' ? 'wieder ohne Auszeichnung' : 'ausgezeichnet',
+      }),
+    [ausfuehren],
+  );
+
   return {
     fotos,
     filter,
@@ -289,6 +315,7 @@ export function useFotodaten(opts: {
     orte,
     ortAnwenden,
     ausrichtungAnwenden,
+    gewichtAnwenden,
     busy,
     note,
     fehler,

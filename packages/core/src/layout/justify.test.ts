@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Photo } from '../model/photo.js';
 import { defaultProfile } from '../print/profiles/index.js';
-import { templatesWithoutTitle } from '../templates/index.js';
+import { requireTemplate, templatesWithoutTitle } from '../templates/index.js';
 import { isJustified, justifiedTemplateId } from '../templates/justified.js';
 import { justifiedRects, justifyBounds } from './justify.js';
 import { layoutSpread } from './rebuild.js';
@@ -205,6 +205,34 @@ describe('layoutSpread mit justierten Zeilen', () => {
     const gelegt = layoutSpread({ photos: weniger, profile, templateId: 'justiert.12' });
     expect(gelegt?.templateId).toBe('justiert.11');
     expect(gelegt?.slots.filter((sl) => sl.photoId !== null)).toHaveLength(11);
+  });
+
+  it('weicht der Bibliothek, wenn ein Bild als Hauptbild ausgezeichnet ist', () => {
+    // Justierte Plätze sind alle gleich gewichtet. Eine Auszeichnung bliebe hier
+    // wirkungslos, und zwar unsichtbar – am echten Buch auf einem Drittel der
+    // Doppelseiten. Also gestaltet dort die Bibliothek, die eine Hierarchie hat.
+    const gelegt = layoutSpread({
+      photos: gemischt,
+      profile,
+      weightOf: (id) => (id === 'q0' ? 'hero' : 'normal'),
+    });
+    expect(isJustified(gelegt?.templateId)).toBe(false);
+
+    // Und das Hauptbild steht im prominentesten Platz dieser Vorlage.
+    const vorlage = requireTemplate(gelegt!.templateId);
+    const anker = vorlage.slots.reduce((a, b) => (b.prominence > a.prominence ? b : a));
+    expect(gelegt?.slots.find((sl) => sl.slotId === anker.id)?.photoId).toBe('q0');
+  });
+
+  it('lässt eine von Hand gewählte justierte Vorlage trotz Hauptbild stehen', () => {
+    // Die Handauswahl schlägt die Automatik – wie überall sonst auch.
+    const gelegt = layoutSpread({
+      photos: gemischt,
+      profile,
+      templateId: justifiedTemplateId(gemischt.length),
+      weightOf: (id) => (id === 'q0' ? 'hero' : 'normal'),
+    });
+    expect(isJustified(gelegt?.templateId)).toBe(true);
   });
 
   it('fällt auf die Bibliothek zurück, wenn justierte Kennung nicht aufgeht', () => {

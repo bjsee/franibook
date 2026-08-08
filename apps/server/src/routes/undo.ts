@@ -267,8 +267,17 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // Serverneustart noch heilen können.
   'PATCH /api/photos': {
     label: (_p, body) => {
-      const b = (body ?? {}) as { place?: unknown; orientation?: unknown };
+      const b = (body ?? {}) as { place?: unknown; orientation?: unknown; weight?: unknown };
       if (b.orientation !== undefined) return 'Bild gekippt';
+      // Der Wortlaut nennt die Richtung, weil das Zurücknehmen sonst nicht sagt,
+      // *was* es zurücknimmt: „Gewicht gesetzt" gilt für alle drei Fälle.
+      if (b.weight !== undefined) {
+        return b.weight === 'hero'
+          ? 'Hauptbild ausgezeichnet'
+          : b.weight === 'filler'
+            ? 'Als Beifoto eingeordnet'
+            : 'Auszeichnung zurückgenommen';
+      }
       return b.place !== undefined ? 'Ort gesetzt' : 'Datum korrigiert';
     },
     anker: (_p, body) => {

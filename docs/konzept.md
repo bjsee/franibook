@@ -1067,6 +1067,38 @@ Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. A
 > (10,7 % Flächenfüllung auf 19 von 80 Doppelseiten), randabfallende Bilder,
 > falzüberspannende Slots und die fehlende Hero-Gewichtung.
 
+> **Nachtrag (8. August 2026): das Hauptbild wird gesetzt
+> ([#7](https://github.com/bjsee/franibook/issues/7))**
+>
+> Die Ankerslots der Mosaikvorlagen standen ein halbes Jahr leer im Sinne der
+> Absicht: `weightOf` lieferte für jedes Foto `normal`, also legte die Engine
+> dorthin das Bild, das dort am besten **passt**, nicht das, das die Seite tragen
+> soll. Das Feld `PhotoOverride.weight` gab es, die Route dafür nicht.
+>
+> Jetzt zeichnet man ein Bild von Hand aus — am Bild auf der Doppelseite
+> (`spread/BildPanel.tsx`, Abschnitt „Gewicht") und im Stapel über den Reiter
+> Fotodaten. Drei Stufen, weil `filler` die andere Hälfte derselben Aussage ist
+> und in `slotCost` längst gerechnet wird; `normal` löscht den Eintrag, statt ihn
+> zu speichern — die Vorgabe ist keine Entscheidung.
+>
+> **Der Befund dabei war die justierte Zeile.** 27 von 80 Doppelseiten rechnen
+> ihre Plätze aus den Bildern und haben deshalb lauter gleich gewichtete Slots
+> (`templates/justified.ts`); sie tragen 358 der 997 Bilder. Auf einem Drittel des
+> Buchs wäre die Auszeichnung ein Knopf ohne Folge geblieben, und zwar unsichtbar.
+> `layoutSpread` überspringt die justierte Fassung deshalb, sobald ein Bild der
+> Seite als Hauptbild gilt: Wer eine Hierarchie will, bekommt eine Vorlage. Eine
+> von Hand gewählte justierte Vorlage bleibt davon unberührt.
+>
+> Am echten Buch gemessen (Doppelseite 4, 13 Bilder): vorher `justiert.13` mit
+> dreizehn gleich hohen Streifen, das größte Bild 75 × 140 mm; nach der
+> Auszeichnung `spread.13up.mosaic-quer` mit dem gewählten Bild in 146 × 109 mm,
+> 28 % breiter als das nächstgrößte.
+>
+> Das Buch folgt **nicht von selbst** — das Gewicht wiegt in der Slotzuordnung und
+> wirkt beim nächsten Anordnen. Derselbe Grund wie beim Kippen: Sofort neu
+> anzuordnen verwürfe die Ausschnitte der ganzen Seite. Der Knopf dafür steht
+> neben der Auszeichnung.
+
 Bei 51,6 % Hochformat im Bestand braucht mindestens ein Template je Slotzahl eine hochformatorientierte Variante. Ein Vierer-Raster aus vier Querformaten ist bei diesem Bestand die Ausnahme, nicht die Regel.
 
 Zusätzlich existiert für den `subtle`-Fall kein eigenes Template: Jedes Template kann einen optionalen `year`-Textslot tragen. Ein Jahreswechsel braucht damit keine eigene Seite, wie gefordert.
