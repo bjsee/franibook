@@ -9,7 +9,7 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { type DateEdit, istDateEdit } from '@franibook/core';
+import { type DateEdit, type PhotoWeight, istDateEdit } from '@franibook/core';
 import { istDateiFehler, type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
 
 /**
@@ -57,6 +57,18 @@ function istOrtsbefehl(v: unknown): v is Ortsbefehl {
  */
 function istKippbefehl(v: unknown): v is 1 | 2 | 3 | null {
   return v === null || v === 1 || v === 2 || v === 3;
+}
+
+/**
+ * Das Gewicht eines Fotos, wie die Engine es kennt.
+ *
+ * Hier steht **kein** `null` für „zurück zur Vorgabe", anders als bei Ort und
+ * Ausrichtung: `'normal'` *ist* die Vorgabe und hat einen Namen, den die
+ * Oberfläche als Knopf beschriften kann. Aufgeräumt wird der Eintrag trotzdem
+ * (`setzeGewicht`).
+ */
+function istGewicht(v: unknown): v is PhotoWeight {
+  return v === 'hero' || v === 'normal' || v === 'filler';
 }
 
 export function fotoRouten(
@@ -160,7 +172,7 @@ export function fotoRouten(
   );
 
   /**
-   * Korrigiert Datum, Ort oder Ausrichtung mehrerer Fotos.
+   * Korrigiert Datum, Ort oder Ausrichtung mehrerer Fotos – oder zeichnet sie aus.
    *
    * Mengenwertig, auch für ein einzelnes Bild: Datumsfehler kommen in Serien –
    * ein Kamera-Reset trifft dutzende Aufnahmen –, und eine Route je Foto wäre
@@ -169,65 +181,78 @@ export function fotoRouten(
    * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung.** Sortiert
    * wird in der Oberfläche, nicht hier (`project/fotodaten.ts`).
    *
-   * Genau **eines** von `date`, `place` und `orientation` je Anfrage: Zwei
-   * zusammen wären ein Schritt, der zwei Dinge zurücknimmt, und die Meldung
+   * Genau **eines** von `date`, `place`, `orientation` und `weight` je Anfrage:
+   * Zwei zusammen wären ein Schritt, der zwei Dinge zurücknimmt, und die Meldung
    * könnte nicht sagen, welches davon gewirkt hat.
    *
    * Das Buch bleibt unangetastet. Ob ein Neuaufbau jetzt etwas ändern würde,
    * steht als `structurePending` in der Antwort – so muss die Oberfläche nach
    * einer Korrektur nicht das ganze Projekt nachladen, um es zu erfahren.
    */
-  app.patch<{ Body: { ids?: unknown; date?: unknown; place?: unknown; orientation?: unknown } }>(
-    '/api/photos',
-    async (req, reply) => {
-      // Ein laufender Import endet mit `z.photos.clear()` und einer
-      // Neubefüllung – eine Korrektur währenddessen träfe eine Kopie, die
-      // gleich verworfen wird.
-      if (project.importLaufend()) {
-        return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+  app.patch<{
+    Body: {
+      ids?: unknown;
+      date?: unknown;
+      place?: unknown;
+      orientation?: unknown;
+      weight?: unknown;
+    };
+  }>('/api/photos', async (req, reply) => {
+    // Ein laufender Import endet mit `z.photos.clear()` und einer
+    // Neubefüllung – eine Korrektur währenddessen träfe eine Kopie, die
+    // gleich verworfen wird.
+    if (project.importLaufend()) {
+      return reply.code(409).send({ error: 'Es läuft noch ein Import' });
+    }
+    const ids = leseIds(req.body?.ids);
+    if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
+
+    const datum = req.body?.date;
+    const ort = req.body?.place;
+    const kippen = req.body?.orientation;
+    const gewicht = req.body?.weight;
+    const genannt = [datum, ort, kippen, gewicht].filter((f) => f !== undefined).length;
+    if (genannt > 1) {
+      return reply
+        .code(400)
+        .send({ error: 'Datum, Ort, Ausrichtung und Gewicht bitte getrennt setzen' });
+    }
+
+    let ergebnis: Awaited<ReturnType<typeof project.korrigiereDaten>>;
+    if (gewicht !== undefined) {
+      if (!istGewicht(gewicht)) {
+        return reply.code(400).send({ error: 'Gewicht ist hero, normal oder filler' });
       }
-      const ids = leseIds(req.body?.ids);
-      if (!ids) return reply.code(400).send({ error: 'Keine Fotos angegeben' });
-
-      const datum = req.body?.date;
-      const ort = req.body?.place;
-      const kippen = req.body?.orientation;
-      const genannt = [datum, ort, kippen].filter((f) => f !== undefined).length;
-      if (genannt > 1) {
-        return reply.code(400).send({ error: 'Datum, Ort und Ausrichtung bitte getrennt setzen' });
+      ergebnis = project.setzeGewicht(ids, gewicht);
+    } else if (kippen !== undefined) {
+      if (!istKippbefehl(kippen)) {
+        return reply.code(400).send({ error: 'Kippen geht um 1, 2 oder 3 Vierteldrehungen' });
       }
+      ergebnis = project.kippeAusrichtung(ids, kippen);
+    } else if (ort !== undefined) {
+      if (!istOrtsbefehl(ort)) return reply.code(400).send({ error: 'Kein brauchbarer Ort' });
+      ergebnis = project.setzeOrte(ids, ort);
+    } else if (istDatumsbefehl(datum)) {
+      ergebnis =
+        datum.kind === 'clear'
+          ? project.verwirfDatumskorrektur(ids)
+          : project.korrigiereDaten(ids, datum);
+    } else {
+      return reply.code(400).send({ error: 'Keine brauchbare Korrektur angegeben' });
+    }
 
-      let ergebnis: Awaited<ReturnType<typeof project.korrigiereDaten>>;
-      if (kippen !== undefined) {
-        if (!istKippbefehl(kippen)) {
-          return reply.code(400).send({ error: 'Kippen geht um 1, 2 oder 3 Vierteldrehungen' });
-        }
-        ergebnis = project.kippeAusrichtung(ids, kippen);
-      } else if (ort !== undefined) {
-        if (!istOrtsbefehl(ort)) return reply.code(400).send({ error: 'Kein brauchbarer Ort' });
-        ergebnis = project.setzeOrte(ids, ort);
-      } else if (istDatumsbefehl(datum)) {
-        ergebnis =
-          datum.kind === 'clear'
-            ? project.verwirfDatumskorrektur(ids)
-            : project.korrigiereDaten(ids, datum);
-      } else {
-        return reply.code(400).send({ error: 'Keine brauchbare Korrektur angegeben' });
-      }
+    // Eine unausführbare Korrektur hat nichts angefasst – eine halb angewandte
+    // Stapelkorrektur wäre schlimmer als eine abgelehnte.
+    if ('fehler' in ergebnis) return reply.code(400).send({ error: ergebnis.fehler });
 
-      // Eine unausführbare Korrektur hat nichts angefasst – eine halb angewandte
-      // Stapelkorrektur wäre schlimmer als eine abgelehnte.
-      if ('fehler' in ergebnis) return reply.code(400).send({ error: ergebnis.fehler });
-
-      await project.save();
-      return {
-        ...ergebnis,
-        photos: project.photoViewsOf(ids),
-        structurePending: project.structurePending(),
-        undatedCount: project.structure.undated.length,
-      };
-    },
-  );
+    await project.save();
+    return {
+      ...ergebnis,
+      photos: project.photoViewsOf(ids),
+      structurePending: project.structurePending(),
+      undatedCount: project.structure.undated.length,
+    };
+  });
 
   /**
    * Wirft eine Datei in den Bestand, ohne sie einzusetzen.

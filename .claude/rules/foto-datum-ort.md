@@ -69,6 +69,15 @@ Bild hinter `immutable` unsichtbar.
 steht in Bildkoordinaten und zeigte sonst nach der Drehung auf eine andere Stelle,
 mit einer Kante am Bildrand, an der `zoomCrop` klemmt.
 
+## Das Gewicht zeichnet aus, statt zu korrigieren
+
+`weight` (`hero` | `normal` | `filler`) ist der eine `PhotoOverride`, der nichts
+berichtigt: Er sagt, welchen Platz ein Bild im Buch verdient. Am Foto und nicht am
+Slot, damit er eine Neuanordnung auf eine andere Doppelseite überlebt; `normal`
+**löscht** den Eintrag, weil die Vorgabe keine Entscheidung ist. Dieselbe
+mengenwertige Route wie Datum und Ort, ein Fall mehr in ihrem „genau eines je
+Anfrage". Was daraus im Layout wird, steht in `.claude/rules/anordnen.md`.
+
 ## Der Fokus zielt auf Gesichter
 
 `model/focal.ts`, `focalForCrop`. Die Bildmitte schnitt am Bestand 16 % der Köpfe

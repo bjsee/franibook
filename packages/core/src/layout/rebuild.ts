@@ -125,7 +125,17 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   // Passt keine Vorlage gut, rechnet die Seite ihre Plätze selbst. Nur im
   // Fluss: Bei gezielt angeforderten Vorlagen (Auftakte, Handauswahl) ist die
   // Gestaltung die Absicht und nicht die Formtreue.
-  if (!opts.candidates && !festeVorlage && !opts.withText) {
+  //
+  // **Und nicht, wenn ein Bild als Hauptbild ausgezeichnet ist.** Justierte
+  // Zeilen haben lauter gleich gewichtete Plätze (`templates/justified.ts`) —
+  // eine Auszeichnung bliebe dort ohne jede Wirkung, und zwar unsichtbar. Am
+  // echten Buch sind 27 von 80 Doppelseiten justiert und tragen 358 der 997
+  // Bilder: Ohne diese Zeile wäre das Hauptbild auf einem Drittel des Buchs ein
+  // Knopf ohne Folge. Wer eine Hierarchie will, bekommt eine Vorlage — der Satz
+  // stand schon in `justified.ts`, hier führt ihn die Automatik aus. Eine von
+  // Hand gewählte justierte Vorlage bleibt davon unberührt (oben, `isJustified`).
+  const hatHauptbild = photos.some((p) => weightOf(p.id) === 'hero');
+  if (!opts.candidates && !festeVorlage && !opts.withText && !hatHauptbild) {
     const justiert = justifySpread({ photos, profile, weightOf, beatScore: bestScore });
     if (justiert) return { templateId: justiert.templateId, slots: justiert.slots, leftover: [] };
   }

@@ -279,6 +279,101 @@ describe('Ausrichtung kippen', () => {
   });
 });
 
+describe('Hauptbild auszeichnen', () => {
+  it('legt das Gewicht in den Overrides ab', () => {
+    const p = projekt();
+    p.setzeGewicht(['a'], 'hero');
+    expect(p.overrides['a']).toEqual({ weight: 'hero' });
+  });
+
+  it('räumt den Eintrag mit „normal" wieder weg', () => {
+    // `normal` ist die Vorgabe und kein Wert: Ein gespeichertes
+    // `weight: 'normal'` wäre eine Entscheidung, die keine ist.
+    const p = projekt();
+    p.setzeGewicht(['a'], 'hero');
+    p.setzeGewicht(['a'], 'normal');
+    expect(p.overrides['a']).toBeUndefined();
+  });
+
+  it('lässt andere Korrekturen am selben Foto stehen', () => {
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Kreta' });
+    p.setzeGewicht(['a'], 'hero');
+    p.setzeGewicht(['a'], 'normal');
+    expect(p.overrides['a']).toEqual({ placeOverride: { key: 'manual:Kreta', label: 'Kreta' } });
+  });
+
+  it('meldet ein Foto ohne Auszeichnung, statt still nichts zu tun', () => {
+    const p = projekt();
+    const r = p.setzeGewicht(['a'], 'normal');
+    expect(r).toEqual({
+      geaendert: 0,
+      uebersprungen: [{ id: 'a', grund: 'Keine Auszeichnung vorhanden' }],
+      unbekannt: [],
+    });
+  });
+
+  it('nennt in der Meldung, was schon gilt', () => {
+    const p = projekt();
+    p.setzeGewicht(['a'], 'hero');
+    const r = p.setzeGewicht(['a'], 'hero');
+    expect(r).toMatchObject({ uebersprungen: [{ id: 'a', grund: 'Schon Hauptbild' }] });
+  });
+
+  it('ändert die Gliederung nicht – ein Hauptbild sagt nichts über die Zeit', () => {
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    p.setzeGewicht(['a'], 'hero');
+    expect(p.structurePending()).toBe(false);
+  });
+
+  it('steht in der Fotosicht, damit die Oberfläche es zeigen kann', () => {
+    const p = projekt();
+    p.setzeGewicht(['a'], 'filler');
+    expect(p.photoViewsOf(['a', 'b'])[0]?.weight).toBe('filler');
+    // Bei der Vorgabe fehlt das Feld – sonst wäre die Vorgabe ein Zustand.
+    expect(p.photoViewsOf(['a', 'b'])[1]).not.toHaveProperty('weight');
+  });
+
+  it('gibt dem Hauptbild beim Neuanordnen den prominentesten Platz', () => {
+    // Der Zweck der ganzen Kette: In den Ankerslot legte die Engine bisher das
+    // Bild, das dort am besten *passt*. Ausgezeichnet gehört dort das gewollte
+    // hin (`weightMismatch` in `layout/scoring.ts`).
+    //
+    // Geprüft am Neuanordnen einer Seite und nicht am ganzen Buch: Ein Gewicht
+    // verschiebt kein Bild zwischen Doppelseiten, es entscheidet nur innerhalb
+    // einer — und `spread.4up.hero-left` hat genau einen Platz mit Prominenz 3.
+    const p = projekt();
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.4up.hero-left',
+        slots: ['a', 'b', 'c', 'd'].map((id) => ({
+          slotId: id,
+          photoId: id,
+          crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+        })),
+      },
+    ];
+
+    const imAnker = (): string | null | undefined =>
+      p.spreads[0]!.slots.find((s) => s.slotId === 'a')?.photoId;
+
+    p.setzeGewicht(['d'], 'hero');
+    p.setSpreadTemplate(0, 'spread.4up.hero-left');
+    expect(imAnker()).toBe('d');
+
+    // Und die Gegenprobe: Zurückgenommen bekommt es den Platz nicht mehr
+    // zugesprochen — sonst hätte auch die Reihenfolge der Slots gereicht.
+    p.setzeGewicht(['d'], 'normal');
+    p.setzeGewicht(['b'], 'hero');
+    p.setSpreadTemplate(0, 'spread.4up.hero-left');
+    expect(imAnker()).toBe('b');
+  });
+});
+
 describe('Orte des Bestands', () => {
   it('zählt die vorkommenden Orte, häufigste zuerst', () => {
     const p = projekt();

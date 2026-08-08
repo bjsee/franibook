@@ -9,7 +9,7 @@
  * sie braucht, weil sie in diesem Bestand die häufigste Ursache für eine
  * Änderung ist.
  */
-import { FRAMES, photoPixelsOf } from '@franibook/core';
+import { FRAMES, photoPixelsOf, type PhotoWeight } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { Bilddaten } from './Bilddaten.js';
 import { AbnickKnopf, Bildbefunde } from './Bildbefunde.js';
@@ -162,6 +162,8 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
         </div>
       </div>
 
+      <Gewicht model={model} />
+
       <Ebene model={model} />
 
       {/*
@@ -311,6 +313,79 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
     </>
   );
 }
+
+/**
+ * Welchen Platz dieses Bild verdient.
+ *
+ * Die Gegenfrage zu allem anderen in dieser Spalte: Ausschnitt, Kasten und
+ * Neigung ändern *diese* Seite, das Gewicht sagt etwas über das **Foto** — und
+ * gilt darum weiter, wenn eine Neuanordnung es auf eine andere Doppelseite
+ * trägt. Deshalb steht es hier und nicht bei den Vorlagen.
+ *
+ * Es wirkt **nicht sofort**, und das steht als Satz da statt als Überraschung:
+ * Das Gewicht wiegt in der Slotzuordnung (`layout/scoring.ts`, bis 0,5 und damit
+ * knapp unter dem Orientierungsbruch), also erst beim nächsten Anordnen. Der
+ * Knopf dafür steht daneben — dieselbe Form wie bei der Lagewarnung, aus
+ * demselben Grund: Von selbst neu anzuordnen verwürfe die Ausschnitte der ganzen
+ * Seite.
+ *
+ * Drei Stufen und nicht ein Sternchen: `filler` ist die andere Hälfte derselben
+ * Aussage („dieses Bild soll die Seite *nicht* tragen") und in `slotCost` schon
+ * gerechnet. Ein Umschalter mit nur zwei Lagen hätte die Hälfte davon
+ * unerreichbar gelassen.
+ */
+function Gewicht({ model }: { model: SpreadEditorModel }) {
+  const box = model.gewaehlteBox;
+  const gewicht = box ? (model.infoVon(box.photoId)?.weight ?? 'normal') : 'normal';
+  if (!box) return null;
+
+  return (
+    <div style={B.abschnitt}>
+      <span style={B.marke}>Gewicht</span>
+      <div style={B.segRahmen}>
+        {STUFEN.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => void model.gewichtSetzen(s.id)}
+            style={gewicht === s.id ? B.segAn : B.segAus}
+            title={s.hinweis}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <p style={B.leiser}>{STUFEN.find((s) => s.id === gewicht)!.hinweis}</p>
+      {gewicht !== 'normal' && (
+        <button
+          onClick={() => void model.neuAnordnen()}
+          style={B.knopfKlein}
+          title="Die Plätze dieser Doppelseite neu vergeben"
+        >
+          Doppelseite neu anordnen
+        </button>
+      )}
+    </div>
+  );
+}
+
+const STUFEN: { id: PhotoWeight; label: string; hinweis: string }[] = [
+  {
+    id: 'hero',
+    label: 'Hauptbild',
+    hinweis: 'Bekommt den größten Platz der Seite, sobald sie neu angeordnet wird.',
+  },
+  {
+    id: 'normal',
+    label: 'normal',
+    hinweis: 'Die Vorgabe: Der Platz entscheidet sich nach Format, Auflösung und Schärfe.',
+  },
+  {
+    id: 'filler',
+    label: 'Beifoto',
+    hinweis: 'Rückt in einen kleinen Platz und lässt die Seite von anderen tragen.',
+  },
+];
 
 /**
  * Bis zu welcher Fläche dieses Bild noch die Mindestauflösung hält.

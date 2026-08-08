@@ -29,6 +29,7 @@ import type {
   PhotoGroup,
   PhotoMove,
   PhotoQuality,
+  PhotoWeight,
   RenderedCover,
   RenderedSpread,
   TextElement,
@@ -609,6 +610,13 @@ export interface FotoInfo {
    * dagegen sofort.
    */
   quality?: PhotoQuality;
+  /**
+   * Von Hand gesetztes Gewicht, sofern eines gesetzt ist.
+   *
+   * Fehlt bei der Vorgabe und ist dann nicht `'normal'`: Die Ansicht soll eine
+   * getroffene Auszeichnung zeigen, nicht die Vorgabe als Zustand.
+   */
+  weight?: PhotoWeight;
 }
 
 // ─── Doppel ─────────────────────────────────────────────────────────────────
@@ -802,6 +810,18 @@ export const ortSetzen = (ids: string[], place: { label: string; key?: string } 
  */
 export const ausrichtungKippen = (ids: string[], orientation: 1 | 2 | 3 | null) =>
   sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, orientation });
+
+/**
+ * Zeichnet Fotos als Hauptbild aus; `'normal'` nimmt es zurück.
+ *
+ * Anders als bei Ort und Ausrichtung kein `null` für die Vorgabe: `'normal'`
+ * ist die Vorgabe und hat einen Namen, mit dem sich ein Knopf beschriften lässt.
+ *
+ * **Das Buch folgt nicht von selbst** — das Gewicht wiegt in der Slotzuordnung
+ * und wirkt erst beim nächsten Anordnen dieser Doppelseite.
+ */
+export const gewichtSetzen = (ids: string[], weight: PhotoWeight) =>
+  sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, weight });
 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {
