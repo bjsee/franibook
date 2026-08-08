@@ -35,7 +35,7 @@ export type View =
   | 'sources'
   | 'edit'
   | 'cover'
-  | 'abnahme';
+  | 'pruefung';
 
 export type Route =
   | { view: 'overview' }
@@ -60,8 +60,16 @@ export type Route =
    */
   | { view: 'edit'; json?: true }
   | { view: 'cover' }
-  /** Der Abnahmebericht: was dem Druck im Weg steht. */
-  | { view: 'abnahme' };
+  /**
+   * Die Prüfung. Ohne `teil` der Abnahmebericht, mit `doppel` die
+   * Doppelvorschläge.
+   *
+   * Ein Reiter und zwei Bereiche, weil es dieselbe Frage ist — „was ist vor dem
+   * Druck noch zu tun?" —, nur einmal am Buch und einmal am Bestand. Als
+   * Unterpfad wie `/aufteilung/json`, damit ⌘-Klick den Bereich in einen zweiten
+   * Tab mitnimmt.
+   */
+  | { view: 'pruefung'; teil?: 'doppel' };
 
 /** Zeitfenster, in dem zwei Navigationen mit gleichem Schlüssel zu einer Station verschmelzen. */
 const VERSCHMELZ_MS = 1500;
@@ -76,7 +84,7 @@ const PFADE: Record<View, string> = {
   sources: '/bildquellen',
   edit: '/aufteilung',
   cover: '/umschlag',
-  abnahme: '/abnahme',
+  pruefung: '/pruefung',
 };
 
 /** Die Adresse zu einer Route — ohne Query, die hängt der Aufrufer daran. */
@@ -89,6 +97,7 @@ export function pfadVon(route: Route): string {
     return `/gruppen/${encodeURIComponent(route.groupId)}`;
   }
   if (route.view === 'edit' && route.json) return '/aufteilung/json';
+  if (route.view === 'pruefung' && route.teil) return `/pruefung/${route.teil}`;
   return PFADE[route.view];
 }
 
@@ -137,8 +146,12 @@ export function routeVon(pfad: string, suche = ''): Route {
     return teile[1] === 'json' ? { view: 'edit', json: true } : { view: 'edit' };
   }
 
+  if (erstes === 'pruefung') {
+    return teile[1] === 'doppel' ? { view: 'pruefung', teil: 'doppel' } : { view: 'pruefung' };
+  }
+
   // Die übrigen Ansichten tragen keine Kennung im Pfad.
-  for (const view of ['years', 'fotodaten', 'sources', 'cover', 'abnahme'] as const) {
+  for (const view of ['years', 'fotodaten', 'sources', 'cover'] as const) {
     if (PFADE[view] === `/${erstes}`) return { view };
   }
   return { view: 'overview' };
@@ -154,7 +167,7 @@ const WORTE: Record<View, string> = {
   sources: 'Bildquellen',
   edit: 'Aufteilung',
   cover: 'Umschlag',
-  abnahme: 'Abnahme',
+  pruefung: 'Prüfung',
 };
 
 /**
@@ -165,6 +178,10 @@ const WORTE: Record<View, string> = {
  */
 export function titelVon(route: Route): string {
   if (route.view === 'spread') return `Franibook — Doppelseite ${route.index + 1}`;
+  // Der Bereich gehört in den Titel: Beide Bereiche der Prüfung sind eigene
+  // Stationen, und zwei Einträge namens „Prüfung" wären in der Verlaufsliste
+  // genau die Auskunft, die sie sein sollen — keine.
+  if (route.view === 'pruefung' && route.teil === 'doppel') return 'Franibook — Prüfung: Doppel';
   return `Franibook — ${WORTE[route.view]}`;
 }
 

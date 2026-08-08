@@ -37,6 +37,8 @@ import {
   type SinglePageResult,
   type Spread,
   type Structure,
+  type DoppelKandidat,
+  type DoppelOptions,
   type TextBlock,
   type TimelineFootVariant,
   type TimelineSideVariant,
@@ -91,7 +93,11 @@ import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
 import * as merkmale from './project/merkmale.js';
 import type { MerkmaleBericht } from './project/merkmale.js';
-import type { VisionErkennung } from './vision.js';
+import * as qualitaet from './project/qualitaet.js';
+import type { QualitaetBericht } from './project/qualitaet.js';
+import * as doppel from './project/doppel.js';
+import type { DoppelBericht } from './project/doppel.js';
+import type { AbstandsErkennung, VisionErkennung } from './vision.js';
 import * as layoutDokument from './project/layout-dokument.js';
 import {
   type Anker,
@@ -237,19 +243,29 @@ interface PersistedProject {
    * darauf und kostet keine Schemaerhöhung.
    */
   abnahmen?: Record<string, string>;
+  /**
+   * Doppel, die ausdrücklich stehen bleiben. Fehlt in Projekten von vor der
+   * Doppel-Ansicht — wie bei `abnahmen` ist ein leeres Objekt die richtige
+   * Antwort darauf und kostet keine Schemaerhöhung.
+   */
+  doppelBehalten?: Record<string, string>;
   importedAt: string;
 }
 
 /**
- * Die abgenickten Befunde aus einem gespeicherten Projekt.
+ * Eine Merkkarte „Schlüssel → Zeitpunkt" aus einem gespeicherten Projekt.
  *
- * `istBrauchbareStruktur` prüft das Feld nicht mit — es ist optional und fehlt
- * in jedem älteren Stand. Ein von Hand verändertes `project.json` könnte dort
- * aber auch eine Liste oder eine Zeichenkette stehen haben, und `Object.keys`
- * darauf ergäbe Schlüssel wie `0`, `1`, `2`. Derselbe Grundsatz wie beim
- * Schema: lieber leer als falsch gedeutet.
+ * Zwei Felder haben diese Form und dieselbe Bedeutung — „das habe ich gesehen
+ * und für gut befunden": die abgenickten Befunde der Abnahme und die Doppel,
+ * die stehen bleiben sollen.
+ *
+ * `istBrauchbareStruktur` prüft die Felder nicht mit — sie sind optional und
+ * fehlen in jedem älteren Stand. Ein von Hand verändertes `project.json` könnte
+ * dort aber auch eine Liste oder eine Zeichenkette stehen haben, und
+ * `Object.keys` darauf ergäbe Schlüssel wie `0`, `1`, `2`. Derselbe Grundsatz
+ * wie beim Schema: lieber leer als falsch gedeutet.
  */
-function abnahmenAus(roh: unknown): Record<string, string> {
+function merkkarteAus(roh: unknown): Record<string, string> {
   if (typeof roh !== 'object' || roh === null || Array.isArray(roh)) return {};
   return Object.fromEntries(
     Object.entries(roh as Record<string, unknown>).filter(
@@ -391,6 +407,13 @@ export interface Stand {
    * zurück — es ist eine Entscheidung über das Buch wie jede andere.
    */
   abnahmen: Record<string, string>;
+  /**
+   * Doppel, die ausdrücklich stehen bleiben — Schlüssel → Zeitpunkt.
+   *
+   * Wie die Abnahmen mit im Stand: „Beide behalten" ist eine Entscheidung über
+   * das Buch und damit ein Cmd+Z wert.
+   */
+  doppelBehalten: Record<string, string>;
   lastReport: GenerateResult['report'] | null;
 }
 
@@ -434,6 +457,16 @@ export class Project {
    * achtzig Doppelseiten erledigt.
    */
   abnahmen: Record<string, string> = {};
+  /**
+   * Doppel, bei denen alle Bilder bleiben sollen — Schlüssel → Zeitpunkt.
+   *
+   * Gespeichert und nicht nur in der Ansicht gemerkt: Der Vorschlag entsteht
+   * bei jedem Aufruf neu (`project/doppel.ts`), und ein „beide behalten", das
+   * den nächsten Aufruf nicht überlebt, wäre keine Entscheidung, sondern eine
+   * Geste. Der Schlüssel hängt an den Fotos (`doppelSchluessel`), nicht an
+   * einer Nummer in der Liste.
+   */
+  doppelBehalten: Record<string, string> = {};
   groups: PhotoGroup[] = [];
   spreads: Spread[] = [];
   structure: Structure = { chapters: [], undated: [], photoCount: 0 };
@@ -575,6 +608,7 @@ export class Project {
       yearEvents: this.yearEvents,
       cover: this.cover,
       abnahmen: this.abnahmen,
+      doppelBehalten: this.doppelBehalten,
       lastReport: this.lastReport,
     });
   }
@@ -596,6 +630,7 @@ export class Project {
     this.yearEvents = stand.yearEvents;
     this.cover = stand.cover;
     this.abnahmen = stand.abnahmen;
+    this.doppelBehalten = stand.doppelBehalten;
     this.lastReport = stand.lastReport;
     this.rebuildStructure();
   }
@@ -2053,6 +2088,88 @@ export class Project {
   }
 
   /**
+   * Zieht die fehlende Bildqualität nach — Schärfe und Belichtung.
+   *
+   * Wie die Bildmerkmale im Hintergrund nach dem Anlauf, und aus demselben
+   * Grund: Das Buch steht ohne die Zahlen, sie gewichten nur den Slotplatz
+   * (`layout/scoring.ts`) und schlagen innerhalb eines Doppels das schärfere
+   * Bild vor. Gemessen wird auf der 320-px-Vorschau, die der Warmlauf ohnehin
+   * erzeugt hat.
+   */
+  async qualitaetNachziehen(
+    previews: PreviewCache,
+    onProgress?: (fertig: number, gesamt: number) => void,
+  ): Promise<QualitaetBericht> {
+    return qualitaet.qualitaetNachziehen(this, previews, onProgress);
+  }
+
+  /**
+   * Schlägt Doppel vor: mehrere Aufnahmen desselben Augenblicks.
+   *
+   * Bei jedem Aufruf frisch gerechnet und nirgends gespeichert — der Vorschlag
+   * hängt an den Datumskorrekturen, und ein gespeicherter wäre nach der
+   * nächsten falsch. Kein Eintrag in `UNDO_ROUTEN`: Es ändert nichts, es sagt
+   * nur etwas.
+   */
+  async doppelVorschlagen(
+    previews: PreviewCache,
+    abstaende: AbstandsErkennung,
+    opts: DoppelOptions = {},
+  ): Promise<DoppelBericht> {
+    const ctx = this.dateContext();
+    const datiert: DoppelKandidat[] = [];
+    for (const photo of this.photos.values()) {
+      const wert = resolveEffectiveDate(photo, this.overrides[photo.id], ctx).value;
+      // Undatierte bleiben draußen: Ohne Zeitpunkt gibt es keine zeitliche
+      // Nähe, und ein Doppel aus zwei undatierten Fotos wäre geraten.
+      if (wert) datiert.push({ id: photo.id, date: wert });
+    }
+    return doppel.doppelVorschlagen(datiert, this, previews, abstaende, opts);
+  }
+
+  /**
+   * „Beide behalten" — merkt ein Doppel als erledigt, ohne etwas zu löschen.
+   *
+   * Gebaut wie das Abnicken eines Befunds und aus demselben Grund: Der
+   * Vorschlag entsteht bei jedem Aufruf neu, also käme er sonst nach jedem
+   * „Neu rechnen" wieder. Ein Misserfolg statt eines stillen `ok`, damit der
+   * Haken in `routes/undo.ts` keinen Schritt anlegt, der nichts zurücknimmt.
+   *
+   * **Geprüft wird nicht, ob es das Doppel gerade gibt.** Anders als beim
+   * Abnahmebericht kostete das eine volle Doppelrechnung samt Bildvergleich
+   * (rund 1,5 s) für eine Auskunft, die die Oberfläche schon hat — sie zeigt ja
+   * die Zeile, auf die geklickt wurde. Ein Schlüssel, den nichts trifft, ist
+   * ein Eintrag ohne Wirkung und kein Schaden.
+   */
+  doppelMerken(schluessel: string): { ok: true } | { ok: false; error: string } {
+    // `Object.hasOwn` wie bei den Abnahmen: `doppelBehalten['toString']` wäre
+    // von der Prototypkette her wahr und meldete „schon gemerkt", ohne dass je
+    // etwas gespeichert wurde.
+    if (Object.hasOwn(this.doppelBehalten, schluessel)) {
+      return { ok: false, error: 'Dieses Doppel steht schon auf „beide behalten"' };
+    }
+    this.doppelBehalten[schluessel] = new Date().toISOString();
+    return { ok: true };
+  }
+
+  /**
+   * Nimmt ein „beide behalten" zurück — einzeln oder alle auf einmal.
+   *
+   * @returns wie viele Einträge aufgehoben wurden; `0` macht die Route zum
+   * Misserfolg, damit kein leerer Undo-Schritt stehen bleibt.
+   */
+  doppelMerkenZurueck(schluessel?: string): number {
+    if (schluessel === undefined) {
+      const anzahl = Object.keys(this.doppelBehalten).length;
+      this.doppelBehalten = {};
+      return anzahl;
+    }
+    if (!Object.hasOwn(this.doppelBehalten, schluessel)) return 0;
+    delete this.doppelBehalten[schluessel];
+    return 1;
+  }
+
+  /**
    * Kontext der Datumskaskade.
    *
    * Bewusst bei jedem Aufruf neu und ohne Zwischenspeicher: Der teure Teil ist
@@ -2282,6 +2399,7 @@ export class Project {
       book: { spreads: this.spreads },
       cover: this.cover,
       abnahmen: this.abnahmen,
+      doppelBehalten: this.doppelBehalten,
       importedAt: this.importedAt,
     };
   }
@@ -2367,7 +2485,8 @@ export class Project {
     this.yearEvents = data.yearEvents ?? {};
     this.spreads = data.book?.spreads ?? [];
     this.cover = data.cover ?? {};
-    this.abnahmen = abnahmenAus(data.abnahmen);
+    this.abnahmen = merkkarteAus(data.abnahmen);
+    this.doppelBehalten = merkkarteAus(data.doppelBehalten);
     this.settings = { ...this.settings, ...data.settings };
     this.importedAt = data.importedAt ?? this.importedAt;
     this.rebuildStructure();
@@ -2408,7 +2527,8 @@ export class Project {
       this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
       this.cover = data.cover ?? {};
-      this.abnahmen = abnahmenAus(data.abnahmen);
+      this.abnahmen = merkkarteAus(data.abnahmen);
+      this.doppelBehalten = merkkarteAus(data.doppelBehalten);
       this.settings = { ...this.settings, ...data.settings };
       this.importedAt = data.importedAt ?? this.importedAt;
       this.rebuildStructure();

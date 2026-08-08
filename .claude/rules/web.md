@@ -75,6 +75,30 @@ tot: Griffe, Drehen, Position, Ausschnitt, Textkästen. Der Rahmen sagt jetzt nu
 noch, _wo_ die Bühne steht (`model.platzRef`); wie breit sie ist, weiß sie selbst
 (`model.stageBreite`).
 
+## Ein Reiter je Frage, nicht je Ansicht
+
+`Prüfung` (`Pruefung.tsx`) ist der Fall, an dem das aufgefallen ist: Abnahme und
+Doppel waren zwei Reiter, obwohl sie **eine** Frage beantworten — was ist vor dem
+Druck noch offen? Als zwei standen sie nebeneinander, ohne dass etwas ihren
+Zusammenhang zeigte, und die Zahl offener Punkte hätte zweimal dagestanden.
+
+Jetzt ein Reiter mit zwei Bereichen (`Am Buch`, `Im Bestand`) als Unterpfad
+(`/pruefung`, `/pruefung/doppel`) — dasselbe Muster wie `/aufteilung/json`. Die
+Bereiche sind `Link` und keine Knöpfe, denn sie sind Stationen im Verlauf.
+
+**Die Zahl am Reiter zählt der Rahmen nicht selbst.** Jeder Bereich weiß, wie
+viele Punkte bei ihm offen sind, und meldet es nach oben (`onOffen`); `App.tsx`
+addiert. Eine eigene Rechnung im Rahmen wäre eine zweite Wahrheit über dieselbe
+Zahl — und für die Doppel eine zweite Anfrage, die anderthalb Sekunden
+Bildvergleich kostet. Beim Start zählt `App.tsx` einmal im Hintergrund; danach
+melden nur noch die geöffneten Bereiche. Der Preis ist eine Zahl, die nach einem
+Aussortieren in einer _anderen_ Ansicht erst beim nächsten Öffnen der Prüfung
+nachzieht — für eine Klammer am Reiter der richtige Tausch.
+
+Die Zahl steht in `T.fehler`, und das bricht die Farbregel nicht: Sie ist eine
+Aussage über das Buch, wie „3 zu klein" in den Kennzahlen, nicht über die
+Bedienung. Türkis bleibt der Auswahl.
+
 ## Griffe: der Ort des Griffs entscheidet, was sich bewegt
 
 **Am Bild bewegt der Griff im Bild den Ausschnitt, der Griff am Rand den Kasten auf

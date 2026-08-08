@@ -246,6 +246,19 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // Beide sind gewöhnliche Zustandsänderungen: Aussortieren trägt eine Kennung
   // in die Merkliste ein, Wiederaufnehmen nimmt sie heraus und liest die Datei.
   // Die Datei selbst bewegt sich nicht (`project/bestand.ts`, `Aussortiert`).
+  // „Beide behalten" ist eine Entscheidung über das Buch und gehört deshalb in
+  // den Verlauf — wie das Abnicken eines Befunds. Kein Verschmelzschlüssel:
+  // Zwei erledigte Doppel sind zwei Griffe, auch wenn sie schnell aufeinander
+  // folgen.
+  'POST /api/photos/doppel/behalten': { label: 'Doppel behalten' },
+  'DELETE /api/photos/doppel/behalten': {
+    // Ohne Schlüssel trifft es alle — das gehört am Knopf zu stehen, sonst
+    // klingt das Zurücknehmen harmloser, als es war.
+    label: (_p, body) =>
+      (body as { schluessel?: unknown } | null)?.schluessel === undefined
+        ? 'Alle Doppel wieder offen'
+        : 'Doppel wieder offen',
+  },
   'DELETE /api/photos/:id': { label: 'Foto aussortiert' },
   'DELETE /api/photos/aussortiert/:id': { label: 'Foto wieder aufgenommen' },
   // Kein Verschmelzschlüssel: Eine Korrektur ist eine Anfrage über die ganze

@@ -524,6 +524,120 @@ und die Meldung könnte nicht sagen, welches gewirkt hat. Daraus folgt, dass
 Undo-Knopf sonst die Hälfte der Zeit falsch, und ein Label, das lügt, ist
 schlimmer als kein Knopf.
 
+### Doppel: mehrere Aufnahmen desselben Augenblicks
+
+> **Nachtrag (8. August 2026)** — Messwerte in `docs/spikes/serien.md`.
+
+`contentHash` findet bitgleiche Dateien. Drei Aufnahmen derselben Szene im
+Abstand von Sekunden sind für ihn drei verschiedene Fotos, und sie landen zu
+dritt im Buch. Bei einem vorausgewählten Bestand ist „von diesen dreien das
+schärfste" der häufigste Handgriff überhaupt.
+
+**Der naheliegende Weg trägt nicht.** Ein Wahrnehmungshash (dHash, 8×8
+Graustufen) findet am echten Bestand nichts: Die Doppel liegen bei
+Hamming-Abstand 12–45, zwei zufällige Fotos im Median bei 28 — es gibt keine
+Lücke und damit keinen Schwellwert. Der Grund steht im Bestand selbst. Was hier
+„Doppel" heißt, sind keine bitnahen Serienbilder, sondern **verschiedene
+Aufnahmen desselben Moments**: einen Schritt zur Seite, Blitz an statt aus, HDR
+neben Normal. dHash kodiert Helligkeitsverläufe, und die kippen schon bei
+kleiner Kamerabewegung vollständig.
+
+Apples FeaturePrint (`VNGenerateImageFeaturePrintRequest`) beschreibt die Szene
+statt der Pixel und trennt brauchbar — Doppel im Median 0,73, fremde Paare 1,08.
+Allein genügt auch das nicht: Ohne Zeitfenster fängt Schwelle 0,6 mehr Fehlfunde
+als echte Funde, wiederkehrende Motive derselben Wohnung über fünf Jahre.
+
+**Also zwei Schritte, und der Schnitt liegt an der Paketgrenze:**
+
+1. **Die Zeit schlägt vor** (`core/structure/doppel.ts`,
+   `findeDoppelKandidaten`): aufeinanderfolgende Aufnahmen im 120-s-Fenster, das
+   Fenster gemessen zum jeweils letzten Foto und nicht zum ersten. Reine
+   Kalenderarithmetik, also im Kern — I/O-frei und deterministisch. Am Bestand
+   sind das 63 Gruppen mit 133 Fotos.
+2. **Der Bildvergleich bestätigt** (`server/project/doppel.ts` über
+   `bildabstand.swift`, dann `bestaetigeDoppel` im Kern): Nur die rund hundert
+   Kandidatenpaare werden gemessen, nicht die halbe Million des ganzen Bestands.
+   Zusammengehalten wird über Verbindungskomponenten — bei einem langsamen
+   Schwenk ist jedes Bild seinem Nachbarn nah und dem ersten fremd, und das ist
+   trotzdem ein Griff. Übrig bleiben 49 Doppel mit 103 Fotos, gerechnet in 1,5 s.
+
+**Der Merkmalsvektor wird nirgends gespeichert.** Er hat rund 2.048 Zahlen; für
+997 Fotos wäre das ein Vielfaches der ganzen `project.json`. Gebraucht wird er
+nur für den einen Vergleich, also entsteht er beim Rechnen und vergeht danach.
+Aus demselben Grund wird auch das _Ergebnis_ nicht gespeichert: Es hängt an den
+Datumskorrekturen und wäre nach der nächsten falsch.
+
+Fehlt `swiftc`, entfällt der zweite Schritt stillschweigend — wie bei den
+Gesichtern. Die Vorschläge stammen dann allein aus der Zeit, und die Antwort
+sagt das (`bestaetigt: false`), damit die Oberfläche eine ungeprüfte Liste nicht
+wie eine geprüfte ausgibt.
+
+**Aufgelöst wird von Hand.** `GET /api/photos/doppel` liefert die Liste samt
+einem Vorschlag, welches Foto zu behalten wäre (das schärfste); ausgeführt wird
+nichts. Welches der drei das gute ist, entscheidet kein Abstandsmaß — auf dem
+unschärferen lacht vielleicht das Kind.
+
+**Und jede Zeile sagt, warum sie da steht:** wie weit die Aufnahmen
+auseinanderliegen und welchen Bildabstand der Vergleich gemessen hat, gegen die
+geltende Schwelle gehalten („0,55 von höchstens 0,85"). Ohne diesen Satz bleibt
+einem Vorschlag gegenüber nur Glauben oder Ignorieren, und beides ist bei
+neunundvierzig Zeilen keine Arbeitsgrundlage.
+
+**Sortiert wird nach dieser Zahl und nicht nach dem Datum**, und ab 0,75 steht
+eine Marke in der Liste. Der Grund ist ein zweiter Messbefund
+(`docs/spikes/serien.md`, Nachtrag): Oberhalb von 0,75 mischen sich Aufnahmen
+desselben Augenblicks darunter, die verschiedene Motive zeigen — eine Taufe in
+der Kirche und ein Foto am Weihnachtsbaum, neunzig Sekunden auseinander,
+dieselbe Geste. **Eine strengere Schwelle löst das nicht:** Bei genau 0,77
+stehen vier echte Doppel neben diesem einen Fehlfund, und bei 0,70 bliebe nur
+die Hälfte aller richtigen Vorschläge übrig. FeaturePrint beschreibt die Szene,
+nicht das Motiv; was ein Mensch sofort sieht — anderer Ort —, steckt in der Zahl
+nicht drin. Was hilft, ist die Reihenfolge: die zweifelsfreien Fälle zuerst, der
+unsichere Rest als Block ans Ende.
+
+**„Beide behalten" ist die dritte Antwort** neben „dieses behalten" und
+Wegklicken: Nicht jeder Vorschlag ist einer. Gemerkt wird das im Projekt
+(`doppelBehalten`, `POST /api/photos/doppel/behalten`) und nicht nur in der
+Ansicht — der Vorschlag entsteht bei jedem Aufruf neu, also käme er sonst nach
+jedem „Neu rechnen" wieder. Das ist dieselbe Mechanik wie das Abnicken eines
+Befunds im Abnahmebericht, bis hin zur Umkehrbarkeit: Das Doppel bleibt in der
+Antwort, die Oberfläche blendet es aus, und im Kopf steht, wie viele es sind.
+
+### Bildqualität
+
+> **Nachtrag (8. August 2026)** — Messwerte in `docs/spikes/serien.md`.
+
+`layout/scoring.ts` bewertete Passung, Auflösung und Ausrichtung, nicht die
+Bildqualität: Ein unscharfes Foto bekam denselben großen Platz wie ein gutes,
+und gerade das große fällt im Buch auf.
+
+Gemessen wird beim Nachziehen im Hintergrund (`server/bildqualitaet.ts`), auf
+der **320-px-Vorschau** — und die feste Kantenlänge ist Teil der Definition, denn
+die Laplace-Varianz hängt an der Bildgröße. Am `Photo` stehen fünf Zahlen
+(`PhotoQuality`): Schärfe, Helligkeit, Kontrast, Anteil abgesoffener und
+ausgefressener Pixel. Kosten: 2,2 ms je Foto, kein Decodieren des Originals.
+
+Verwendet wird davon **nur die Schärfe**, und nur als Zuschlag in `slotCost`:
+Der große Platz gehört dem besseren Bild. Die Kennlinie läuft zwischen dem
+zehnten Perzentil des Bestands (316) und seinem Median (1.036) und ist mit
+höchstens 0,3 leichter gewichtet als der Orientierungsbruch (0,6) — ein
+Hochformat im Querformatslot bleibt der schwerere Fehler. Im kleinsten Platz
+entfällt der Zuschlag ganz: Ein verwackeltes Foto soll nicht aus dem Buch
+fallen, es soll nur nicht die Seite tragen.
+
+Drei Entscheidungen dazu:
+
+- **Die Belichtung geht nicht ein.** Am Bestand sind 14 % abgesoffene Pixel im
+  neunten Dezil ganz normal (Nacht, Gegenlicht); ein Zuschlag darauf
+  benachteiligte richtig belichtete dunkle Bilder.
+- **Ohne Messung kein Zuschlag.** Ein Foto ohne `quality` gilt als gutes — die
+  Umkehrung hieße, fehlende Auskunft als Mangel zu werten, und ein frisch
+  eingeworfenes Bild verlöre seinen Platz an ein gemessenes.
+- **Kein Aussortieren von selbst.** Eine Schwelle „unscharf" gibt der Bestand
+  ohnehin nicht her: Unterhalb von etwa 110 sind die Bilder wirklich verwackelt,
+  darüber geht es stetig weiter, und jeder Strich wäre gesetzt statt gemessen.
+  Die Zahl darf gewichten, nicht entscheiden.
+
 ## Layout-Engine
 
 > **Korrektur (2. August 2026): Kalender statt Ereignisse, Jahr statt Ereignis**
@@ -1675,7 +1789,9 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 >
 > Die Liste stimmt, der Ort nicht. Gebaut ist `pruefeBuch`
 > (`packages/core/src/pruefung/abnahme.ts`) hinter `GET /api/book/pruefung`, sichtbar
-> als eigener Reiter **Abnahme**. Kein Preflight vor dem Schreiben und kein
+> im Reiter **Prüfung** als Bereich „Am Buch" (seit dem 8. August 2026; vorher ein
+> eigener Reiter „Abnahme", daneben einer für die Doppel — zwei Reiter für dieselbe
+> Frage und zwei Zahlen, wo eine gefragt ist). Kein Preflight vor dem Schreiben und kein
 > `export-report.json`: Ein Bericht, der am Export hängt, ist genau dann zu spät, wenn
 > man ihn braucht — man will vor der Bestellung wissen, was noch offen ist, und nicht
 > beim Klick auf „Buch als PDF". Verhindern soll er ohnehin nichts (siehe DPI-Absatz

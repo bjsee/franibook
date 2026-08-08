@@ -97,6 +97,50 @@ export interface Photo {
    */
   faces?: FocusRect[];
   salience?: FocusRect;
+
+  /**
+   * Wie gut das Bild technisch ist — Schärfe und Belichtung.
+   *
+   * Wie `faces` beim Import nachgezogen und gespeichert, nicht bei Bedarf
+   * gerechnet: Der Kern hat keine Pixel (`.claude/rules/kern-rein.md`), und die
+   * Generierung soll deterministisch bleiben. Fehlt bei Fotos, die vor der
+   * Bewertung eingelesen wurden.
+   *
+   * Die Zahl darf **gewichten, nicht entscheiden** (Issue #19): Ein unscharfes
+   * Foto kann das einzige von einem Tag sein. Verwendet wird sie als Zuschlag
+   * in `slotCost` — der große Platz für das bessere Bild — und als Vorauswahl
+   * innerhalb eines Doppels (`structure/doppel.ts`).
+   */
+  quality?: PhotoQuality;
+}
+
+/**
+ * Technische Bildqualität, gemessen auf der 320-px-Vorschau.
+ *
+ * **Die feste Kantenlänge ist Teil der Definition.** Die Laplace-Varianz hängt
+ * an der Bildgröße; auf verschieden großen Bildern gerechnet wären zwei Zahlen
+ * nicht vergleichbar, und genau das Vergleichen ist ihr einziger Zweck.
+ *
+ * Wertebereiche am echten Bestand (`docs/spikes/serien.md`, 956 Fotos):
+ * Schärfe 20–6.346 (Median 1.036), Helligkeit 9–201, Kontrast 14–95.
+ */
+export interface PhotoQuality {
+  /**
+   * Varianz der Laplace-Antwort: klein heißt unscharf oder verwackelt.
+   *
+   * Eine Schwelle „unscharf" gibt der Bestand nicht her — unterhalb von etwa
+   * 110 sind die Bilder tatsächlich verwackelt, aber darüber geht es stetig
+   * weiter, und jeder Strich wäre gesetzt statt gemessen.
+   */
+  sharpness: number;
+  /** Mittlere Helligkeit, 0–255. */
+  brightness: number;
+  /** Streuung der Helligkeit: klein heißt flau, wie bei alten Scans. */
+  contrast: number;
+  /** Anteil abgesoffener Pixel (unter 16), 0–1. */
+  clippedDark: number;
+  /** Anteil ausgefressener Pixel (über 240), 0–1. */
+  clippedLight: number;
 }
 
 /**

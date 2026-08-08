@@ -121,6 +121,7 @@ async function probe(): Promise<Probe> {
     sources,
     previews: null as never,
     decodes,
+    abstaende: null as never,
     outDir: dir,
   } as Kontext;
 
@@ -161,6 +162,10 @@ async function abdruck(p: Probe): Promise<string> {
     // Die abgenickten Befunde stehen in keiner der Antworten oben – ohne sie
     // hier wäre ein Abnicken für diesen Test eine Aktion, die nichts ändert.
     abnahmen: p.project.abnahmen,
+    // Und dasselbe für „beide behalten". Nicht über `GET /api/photos/doppel`:
+    // Die Antwort kostet einen Bildvergleich über den ganzen Bestand, und der
+    // Abdruck läuft zweimal je Route.
+    doppelBehalten: p.project.doppelBehalten,
   });
 }
 
@@ -478,6 +483,26 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     method: 'DELETE',
     url: `/api/photos/${photoIds[2]}`,
   }),
+
+  // Der Schlüssel muss kein Doppel treffen, das es gerade gibt: Die Route prüft
+  // das bewusst nicht (eine volle Doppelrechnung samt Bildvergleich für eine
+  // Auskunft, die die Oberfläche schon hat). Für den Rundlauf zählt, dass der
+  // Eintrag entsteht und ein Cmd+Z ihn wieder wegnimmt.
+  'POST /api/photos/doppel/behalten': ({ photoIds }) => ({
+    method: 'POST',
+    url: '/api/photos/doppel/behalten',
+    payload: { schluessel: [photoIds[0], photoIds[1]].sort().join('+') },
+  }),
+
+  // Erst merken, dann die Route: Sie nimmt genau das zurück.
+  'DELETE /api/photos/doppel/behalten': ({ project, photoIds }) => {
+    project.doppelMerken([photoIds[0], photoIds[1]].sort().join('+'));
+    return {
+      method: 'DELETE',
+      url: '/api/photos/doppel/behalten',
+      payload: { schluessel: [photoIds[0], photoIds[1]].sort().join('+') },
+    };
+  },
 
   // Erst aussortieren, dann die Route: Sie nimmt genau das zurück, und der
   // Rundlauf prüft, dass ein Cmd+Z danach wieder den aussortierten Stand ergibt.
