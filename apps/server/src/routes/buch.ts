@@ -40,6 +40,82 @@ export function buchRouten(
    */
   app.get('/api/book/tree', async () => ({ spreads: project.baum() }));
 
+  /**
+   * Der Abnahmebericht: was dem Druck im Weg steht, an einer Stelle.
+   *
+   * Die Auskunft vor einer Bestellung. Sie sammelt nur, was die Engine beim
+   * Rendern ohnehin schon meldet — deshalb ein `GET`, deshalb kein Eintrag in
+   * `UNDO_ROUTEN` und deshalb kein Ergebnis, das etwas verhindert: Manche Funde
+   * nimmt man bewusst in Kauf.
+   *
+   * Das ganze Buch wird dafür gerendert, mitsamt Umschlag. Am echten Buch
+   * (80 Doppelseiten, 997 Bilder) sind das 21 ms, beim ersten Aufruf nach dem
+   * Start 46 ms — kein Grund für einen Zwischenspeicher, der nach jeder
+   * Änderung ungültig wäre.
+   */
+  app.get('/api/book/pruefung', async () => project.abnahme());
+
+  /**
+   * „Weiß ich, ist ok" — ein Befund wird abgenickt.
+   *
+   * Der Schlüssel hängt am Gegenstand des Funds und nicht an seiner Stelle
+   * (`Befund.schluessel`): Ein abgenicktes Foto darf quer stehen, wo immer eine
+   * Neuanordnung es hinträgt, und der Textplatz der Randachse ist mit einem
+   * Klick für alle achtzig Doppelseiten erledigt.
+   *
+   * Der Schlüssel steht im Rumpf und nicht im Pfad: Er enthält `#` und `:` und
+   * bei einem Foto dessen Inhaltskennung — in einer Adresse wäre das dreifach
+   * kodiert und in keinem Serverlog mehr zu lesen.
+   */
+  app.post<{ Body?: { schluessel?: string } }>(
+    '/api/book/pruefung/abnahmen',
+    async (req, reply) => {
+      const schluessel = req.body?.schluessel;
+      if (typeof schluessel !== 'string' || schluessel.length === 0) {
+        return reply.code(400).send({ error: 'schluessel fehlt' });
+      }
+
+      const ergebnis = project.abnicken(schluessel);
+      if (!ergebnis.ok) return reply.code(409).send(ergebnis);
+
+      void project.save();
+      return { ok: true, bericht: project.abnahme() };
+    },
+  );
+
+  /**
+   * Nimmt eine Abnahme zurück — mit `schluessel` eine, ohne alle.
+   *
+   * Ein `DELETE` mit Rumpf, aus demselben Grund wie oben. Ohne Schlüssel ist es
+   * der große Griff: die Abnahme von vorn durchgehen. Beides steht im Verlauf,
+   * ist also ein Cmd+Z wert und nicht endgültig.
+   */
+  app.delete<{ Body?: { schluessel?: string } }>(
+    '/api/book/pruefung/abnahmen',
+    async (req, reply) => {
+      const schluessel = req.body?.schluessel;
+      if (schluessel !== undefined && typeof schluessel !== 'string') {
+        return reply.code(400).send({ error: 'schluessel ist kein Text' });
+      }
+
+      const anzahl = project.abnahmeZurueck(schluessel);
+      if (anzahl === 0) {
+        // Ein wirkungsloser Versuch sagt, warum er wirkungslos ist — und der
+        // Haken in `routes/undo.ts` verwirft daraufhin den leeren Schritt.
+        return reply.code(409).send({
+          ok: false,
+          error:
+            schluessel === undefined
+              ? 'Es ist keine Abnahme gespeichert'
+              : 'Dieser Befund ist nicht abgenickt',
+        });
+      }
+
+      void project.save();
+      return { ok: true, anzahl, bericht: project.abnahme() };
+    },
+  );
+
   /** Fotos, die derzeit in keinem Slot liegen. */
   app.get('/api/book/unplaced', async () => {
     const photos = project.unplacedPhotos();

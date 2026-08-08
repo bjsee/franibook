@@ -19,6 +19,7 @@ import { BackgroundPicker } from '../BackgroundPicker.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage } from './SpreadStage.js';
@@ -305,6 +306,7 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         {info?.camera && ` · ${info.camera}`}
       </p>
       <Bilddaten model={model} />
+      <Bildbefunde model={model} />
 
       <div style={S.dpiZeile}>
         <span style={{ ...B.zahl, fontSize: 15, color: farbe }}>{dpi} dpi</span>

@@ -21,6 +21,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  Befund,
   Crop,
   Ebenenzug,
   FrameId,
@@ -30,6 +31,7 @@ import type {
   RenderedSpread,
 } from '@franibook/core';
 import {
+  BACKGROUND_SLOT_ID,
   coverCrop,
   fitCropToAspect,
   frameHatFuss,
@@ -45,7 +47,10 @@ import {
   zoomCrop,
 } from '@franibook/core';
 import {
+  abnahmeZuruecknehmen,
+  befundAbnicken,
   ausschnittSetzen,
+  doppelseiteLaden,
   ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
   bildEinwerfen,
@@ -353,7 +358,7 @@ export function useSpreadEditor({
    */
   const ebene = useMemo(() => {
     const stapel = imageBoxes(angezeigt)
-      .filter((b) => b.slotId !== 'background')
+      .filter((b) => b.slotId !== BACKGROUND_SLOT_ID)
       .map((b) => b.slotId);
     const i = selectedSlotId ? stapel.indexOf(selectedSlotId) : -1;
     if (i < 0) return null;
@@ -1748,6 +1753,33 @@ export function useSpreadEditor({
     },
   };
 
+  /**
+   * Was die Abnahme über einen Platz sagt.
+   *
+   * Die Befunde kommen mit der Doppelseite vom Server (`spreadAntwort`) und
+   * werden hier nur zugeordnet — gerechnet wird im Kern. Ein eigener Abruf wäre
+   * immer einen Handgriff hinterher: Ein Fund entsteht und verschwindet mit dem
+   * Ausschnitt, den man gerade zieht.
+   */
+  function befundeVon(slotId: string | null): Befund[] {
+    if (!slotId) return [];
+    return (spread.befunde ?? []).filter((b) => b.ort.kind === 'spread' && b.ort.slotId === slotId);
+  }
+
+  /**
+   * „Weiß ich, ist ok" am Bild — und zurück.
+   *
+   * Danach wird die Doppelseite neu geholt: Die Antwort trägt den Bericht des
+   * ganzen Buchs, hier gebraucht wird aber die Seite mit ihren markierten
+   * Befunden. Ein zweiter Weg, der die Marke lokal setzt, wäre die zweite
+   * Wahrheit darüber, was abgenickt ist.
+   */
+  async function abnicken(schluessel: string, zurueck = false): Promise<void> {
+    await (zurueck ? abnahmeZuruecknehmen(schluessel) : befundAbnicken(schluessel));
+    onSpread(await doppelseiteLaden(index));
+    onChanged?.();
+  }
+
   return {
     index,
 
@@ -1776,6 +1808,10 @@ export function useSpreadEditor({
     ausrichtungKippen,
     ausschnittHinweis,
     kastenHinweis,
+
+    // Abnahme
+    befundeVon,
+    abnicken,
 
     // Ebene im Stapel
     ebene,

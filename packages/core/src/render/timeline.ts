@@ -56,6 +56,18 @@ const LEAD_MONTHS = 3;
  */
 export const TIMELINE_FOOT_HEIGHT_MM = 14;
 
+/**
+ * Präfix aller Kennungen, die der Fußstrahl vergibt (`timeline-label`,
+ * `timeline-year-2017`).
+ *
+ * Steht hier neben den Kennungen und nicht bei den Lesern: Der Abnahmebericht
+ * entscheidet daran, ob ein Textfund eine Rechnung der Engine ist (und damit
+ * über alle Doppelseiten **ein** Fund) oder eine Handarbeit auf dieser einen
+ * Seite. Als Zeichenkette bei ihm nachgebaut wäre ein Umbenennen hier eine
+ * stille Bedeutungsänderung dort.
+ */
+export const TIMELINE_SLOT_PREFIX = 'timeline-';
+
 /** Oberkante des Fußraums in RSM-Koordinaten. */
 export function timelineFootTopMm(profile: PrintProfile): number {
   const { bleedMm, trimHeightMm, safetyMm } = profile.page;

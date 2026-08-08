@@ -122,8 +122,8 @@ kann. Der Haken ist selbst geschrieben und keine Router-Bibliothek: acht flache
 Routen, und die Oberfläche kommt sonst mit `useState` aus.
 
 **Im Pfad steht, _was_ man ansieht; in der Query bleibt, _wie_ es dargestellt
-wird.** `/doppelseite/12`, `/gruppen/<id>`, `/umschlag` sind Stationen im
-Verlauf; `?ui=a|b|c`, `?bare`, `?original`, `?width` sind Einstellungen und
+wird.** `/doppelseite/12`, `/doppelseite/12/platz/r2c`, `/gruppen/<id>`,
+`/umschlag` sind Stationen im Verlauf; `?ui=a|b|c`, `?bare`, `?original`, `?width` sind Einstellungen und
 überdauern jede Navigation. Die Pfade sind deutsch wie die Reiterbeschriftungen,
 und die Doppelseite zählt darin ab 1 — der Index im Code bleibt bei 0.
 
@@ -140,6 +140,10 @@ Drei Regeln folgen daraus:
   achtzig Pfeiltastenanschläge nicht achtzig Verlaufseinträge sind — sonst wäre die
   Zurück-Taste eine Kurbel. Ein Sprung aus der Übersicht bekommt dagegen seinen
   eigenen Eintrag.
+- **Der gewählte Platz steht in der Adresse, nicht in `useState`.** Die Abnahme
+  springt auf ein _Bild_, nicht auf ein Blatt; zwei Wahrheiten darüber, welches
+  gemeint ist, wären genau der Fall, in dem der Sprung ins Leere zeigt. Blättern
+  trägt keinen Platz mit, also fällt die Auswahl beim Seitenwechsel von selbst weg.
 - **Auch die Query gehört dem Router.** Ein Darstellungsparameter, der sich zur
   Laufzeit ändert (`?bild=` im Baum), geht über `queryErsetzen` und nicht über einen
   eigenen `replaceState`.

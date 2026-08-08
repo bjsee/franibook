@@ -45,6 +45,17 @@ import { randabfallend, tiltDeg } from './tilt.js';
 import { estimatedTextWidthMm, resolveWeight, textFontSizePt, textStyle } from './typography.js';
 
 /**
+ * Die Kennung der Hintergrundbildbox.
+ *
+ * Als Konstante, weil drei Stellen sie brauchen und keine von ihnen sie erraten
+ * soll: Der Renderer legt sie an, das Ebenenpanel nimmt sie aus dem Stapel
+ * (`useSpreadEditor.ts` — der Hintergrund ist keine Ebene), und der
+ * Abnahmebericht zählt sie nicht als Bild der Seite. Ein Tippfehler in einer der
+ * drei wäre stumm.
+ */
+export const BACKGROUND_SLOT_ID = 'background';
+
+/**
  * Was der Zeitstrahl über die Doppelseite hinaus wissen muss.
  *
  * Fehlt er im Kontext, entsteht kein Zeitstrahl – der globale Schalter lebt
@@ -481,7 +492,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     boxes.push({
       kind: 'image',
       ...flaeche,
-      slotId: 'background',
+      slotId: BACKGROUND_SLOT_ID,
       photoId: backgroundPhoto.id,
       crop: coverCrop(aspectRatio(backgroundPhoto), flaeche.wMm / flaeche.hMm),
       effectiveDpi: fit.dpi,

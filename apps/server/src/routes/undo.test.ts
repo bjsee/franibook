@@ -125,12 +125,79 @@ describe('Verlauf am Server', () => {
     expect(project.verlauf.auskunft().zurueck).toBeNull();
   });
 
+  it('legt für eine wirkungslose Abnahme keinen Schritt an', async () => {
+    // Der Fall, den der Haken abfangen muss: Ein zweites „ist ok" auf denselben
+    // Befund ändert nichts — bliebe der Schritt stehen, nähme ein Cmd+Z einen
+    // Stand zurück, der derselbe ist.
+    const { app, project } = await server();
+    const schluessel = project.abnahme().befunde[0]?.schluessel;
+    expect(schluessel, 'die Probe braucht einen Befund').toBeDefined();
+
+    const erste = await app.inject({
+      method: 'POST',
+      url: '/api/book/pruefung/abnahmen',
+      payload: { schluessel },
+    });
+    expect(erste.statusCode).toBe(200);
+    expect(project.verlauf.auskunft().zurueck).toBe('Befund abgenickt');
+
+    const zweite = await app.inject({
+      method: 'POST',
+      url: '/api/book/pruefung/abnahmen',
+      payload: { schluessel },
+    });
+    expect(zweite.statusCode).toBe(409);
+    expect(project.verlauf.auskunft().tiefe.zurueck).toBe(1);
+  });
+
+  it('weist eine Abnahme ohne brauchbaren Schlüssel ab', async () => {
+    const { app } = await server();
+
+    const ohne = await app.inject({ method: 'POST', url: '/api/book/pruefung/abnahmen' });
+    expect(ohne.statusCode).toBe(400);
+
+    const erfunden = await app.inject({
+      method: 'POST',
+      url: '/api/book/pruefung/abnahmen',
+      payload: { schluessel: 'ausgedacht#foto:xyz' },
+    });
+    expect(erfunden.statusCode).toBe(409);
+
+    // Und ein Zurücknehmen, das nichts vorfindet, ist ebenfalls ein Konflikt.
+    const leer = await app.inject({ method: 'DELETE', url: '/api/book/pruefung/abnahmen' });
+    expect(leer.statusCode).toBe(409);
+  });
+
   it('meldet einen leeren Verlauf als Konflikt, statt still nichts zu tun', async () => {
     const { app } = await server();
     const antwort = await app.inject({ method: 'POST', url: '/api/undo' });
 
     expect(antwort.statusCode).toBe(409);
     expect(antwort.json()).toEqual({ ok: false, error: 'Nichts zurückzunehmen' });
+  });
+
+  it('hängt die Befunde der Abnahme an jede Doppelseitenantwort', async () => {
+    // Die Bühne blendet sie am Bild ein. Käme `befunde` nicht mit, sähe man
+    // beim Bearbeiten nichts von dem, was die Liste meldet.
+    const { app, project } = await server();
+    // Eine Doppelseite ohne Bilder genügt: Sie meldet „ganz leer", und damit
+    // gibt es einen Befund an einer Seite, den die Antwort tragen muss.
+    project.spreads = [{ id: 's1', index: 0, templateId: 'spread.4up.grid', slots: [] }];
+    const schluessel = project.abnahme().befunde.find((b) => b.ort.kind === 'spread')?.schluessel;
+    expect(schluessel, 'die Probe braucht einen Befund an einer Doppelseite').toBeDefined();
+    await app.inject({
+      method: 'POST',
+      url: '/api/book/pruefung/abnahmen',
+      payload: { schluessel },
+    });
+
+    const antwort = await app.inject({ method: 'GET', url: '/api/spreads/0' });
+    const befunde = antwort.json<{ befunde?: { schluessel: string; abgenommen?: true }[] }>()
+      .befunde;
+
+    expect(befunde?.length).toBeGreaterThan(0);
+    // Und markiert: Die Bühne zeigt eine abgenickte Marke leise statt gar nicht.
+    expect(befunde?.find((b) => b.schluessel === schluessel)?.abgenommen).toBe(true);
   });
 
   it('schreibt die Auskunft für die beiden Knöpfe in /api/project', async () => {

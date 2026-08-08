@@ -7,9 +7,13 @@
  * beantwortet „wo im Leben stehe ich gerade". Für ein Buch über achtzehn Jahre
  * ist das die Frage, die man beim Blättern stellt.
  *
- * **Ort.** Senkrecht im äußeren Sicherheitsrand der linken Seite. Der ist
- * ohnehin frei, die Achse kostet also keinen Platz, den die Bilder brauchen –
- * anders als der Fußstrahl, der 14 mm belegt.
+ * **Ort.** Senkrecht am äußeren Rand der linken Seite, in einem 5,8 mm breiten
+ * Band **hinter** der Sicherheitslinie. Der ursprüngliche Entwurf setzte sie in
+ * den Sicherheitsrand — der ist ohnehin frei, die Achse kostete also keinen
+ * Platz, den die Bilder brauchen. Am gedruckten Buch war das ein Risiko, und
+ * der Abnahmebericht hat es gemeldet: siehe `sideAxisPasst`. Sie kostet jetzt
+ * den Platz, den die Vorlagen ohnehin freilassen — und wo der nicht reicht,
+ * gibt es sie nicht.
  *
  * **Maßstab.** Die Spanne des Buches, nicht ein festes Fenster: 2008 bis 2026
  * sind 19 Jahrgänge auf 248 mm, also gut 13 mm im Jahr. Zwei aufeinanderfolgende
@@ -19,20 +23,76 @@
  * **Vier Fassungen.** `classic` ist stumm: kein Gruppentitel, keine
  * Jahreszahlen, nur Ticks. Die Begründung dafür war, Beschriftung müsste am
  * äußeren Rand gedreht werden – das gilt aber nur vierstellig. Zweistellig
- * misst „17" bei 5 pt 1,8 mm und passt waagerecht in das 8 mm breite Band.
+ * misst „17" bei 5 pt 1,8 mm und passt waagerecht in das Band.
  * Darauf beruhen die drei anderen: `ladder` teilt die Achse in Jahrgänge,
  * `bar` macht sie zum Fortschrittsbalken, `column` lässt die Linie ganz weg und
  * behält nur die Zahlen. Maße in `docs/zeitleisten-fassungen.md`.
  */
 import type { NaiveDateTime } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
+import { libraryOuterMarginMm } from '../templates/index.js';
 import { DEFAULT_BACKGROUND, luminance, textColorOn } from './background.js';
 import type { RenderBox } from './rendered-spread.js';
 import type { FontWeight } from './typography.js';
 import { capHeightMm, estimatedTextWidthMm } from './typography.js';
 
-/** Abstand der Achse von der Beschnittkante, in Millimetern. */
+/**
+ * Einrückung der stummen Achse **innerhalb ihres Bandes**.
+ *
+ * Alle Fassungen rechnen so: Die Zahlen unten sind Abstände zur Außenkante des
+ * Bandes, nicht zum Papier. Wo das Band liegt, entscheidet `x()` — und das ist
+ * die eine Stelle, die sich geändert hat.
+ */
 const AXIS_INSET_MM = 4.5;
+
+/**
+ * Wo das Band der Randachse außen beginnt, gemessen wie die Einrückungen der
+ * Fassungen: als Abstand zur Beschnittkante.
+ *
+ * Das ist der äußerste Punkt, den überhaupt eine Fassung zeichnet: `bar` setzt
+ * ihre Perle (⌀ 3,2) mittig auf den Balken bei 1,8 und ragt damit bis 1,1
+ * hinaus. Gemessen, nicht geschätzt — `side-timeline.test.ts` hält es fest.
+ */
+const BAND_AUSSEN_MM = 1.1;
+
+/**
+ * Breite des Bandes, das die Randachse für sich braucht.
+ *
+ * Gemessen über alle vier Fassungen: von der Perle der `bar` bei 1,1 bis zu
+ * ihrem laufenden Jahr, das bei 6,8 endet — also 5,7 mm. Ein Zehntel Zuschlag,
+ * weil die Textbreite geschätzt ist (`estimatedTextWidthMm`) und eine
+ * vierstellige Zahl in einer anderen Schrift breiter geraten könnte.
+ */
+export const SIDE_AXIS_BAND_MM = 5.8;
+
+/**
+ * Ob die Randachse in diesem Format Platz hat, ohne in den Beschnitt oder auf
+ * die Bilder zu geraten.
+ *
+ * **Die Achse lag einmal im Sicherheitsrand.** Der Entwurf hielt das für einen
+ * Vorteil — der Rand ist ohnehin frei, die Achse kostet also keinen Platz, den
+ * die Bilder brauchen. Am gedruckten Buch ist es ein Risiko: Am gemessenen
+ * 28×28 standen die Jahreszahlen 1,8 mm vor der Schnittkante, und bei der
+ * üblichen Schneidtoleranz von ein bis zwei Millimetern wird eine Zahl
+ * angeschnitten oder steht von Blatt zu Blatt verschieden weit vom Rand. Bei
+ * einer Linie fiele das nicht auf, bei einer halb weggeschnittenen „2008"
+ * schon.
+ *
+ * Deshalb liegt das Band jetzt **hinter** der Sicherheitslinie, im druckbaren
+ * Bereich. Dort hat es nur Platz, wenn der Satzspiegel der Bibliothek weit
+ * genug nach innen rückt: 10 mm Sicherheitsrand plus 5,8 mm Band sind 15,8 mm,
+ * und jede Vorlage hält 7,33 % der Seitenbreite frei. Am 28×28 sind das 19,8 mm
+ * — es bleiben 4,0 mm Luft. An den fünf kleineren Formaten reicht es nicht (das
+ * knappste, 21×28, verfehlt es um 0,4 mm), und dann
+ * wird **nicht** gezeichnet: Eine Achse, die auf den Bildern läge, wäre die
+ * schlechtere Antwort als keine. Die Oberfläche fragt dasselbe und bietet die
+ * Randachse dort gar nicht erst an.
+ */
+export function sideAxisPasst(profile: {
+  page: { trimWidthMm: number; safetyMm: number };
+}): boolean {
+  return libraryOuterMarginMm(profile) >= profile.page.safetyMm + SIDE_AXIS_BAND_MM;
+}
 /** Abstand oben und unten, damit die Achse nicht in die Ecken läuft. */
 const AXIS_MARGIN_MM = 26;
 const AXIS_WIDTH_MM = 0.3;
@@ -61,6 +121,12 @@ const SIDE_TONES = { vergangen: '#bdb3a6', kommend: '#e3ded5' } as const;
 
 /** Die Zahlen der Achse – leiser als ihre Linie, sie zählen nur mit. */
 const COLOR_NUMBER = '#a89e91';
+
+/**
+ * Präfix aller Kennungen, die die Randachse vergibt. Siehe
+ * `TIMELINE_SLOT_PREFIX` — dieselbe Begründung.
+ */
+export const SIDE_TIMELINE_SLOT_PREFIX = 'side-timeline-';
 
 /** Die Fassungen der Randachse. `classic` ist die Vorgabe und der Bestand. */
 export const TIMELINE_SIDE_VARIANTS = ['classic', 'ladder', 'bar', 'column'] as const;
@@ -94,7 +160,10 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
   const { fromYear, toYear } = input;
   if (!Number.isFinite(fromYear) || !Number.isFinite(toYear) || toYear < fromYear) return [];
 
-  const { bleedMm, trimHeightMm } = profile.page;
+  // Kein Platz, keine Achse: Sie läge sonst auf den Bildern oder im Beschnitt.
+  if (!sideAxisPasst(profile)) return [];
+
+  const { bleedMm, trimHeightMm, safetyMm } = profile.page;
   const y0 = bleedMm + AXIS_MARGIN_MM;
   const y1 = bleedMm + trimHeightMm - AXIS_MARGIN_MM;
   const laenge = y1 - y0;
@@ -121,8 +190,16 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
   const anteil = (wert: NaiveDateTime): number => seit(wert) / jahre;
 
   const ctx: SideContext = {
-    /** Absolute x-Werte entstehen aus dem Abstand zur Beschnittkante. */
-    x: (insetMm: number) => bleedMm + insetMm,
+    /**
+     * Absolute x-Werte entstehen aus dem Abstand zur Außenkante des Bandes —
+     * und die liegt an der Sicherheitslinie.
+     *
+     * Die Einrückungen der vier Fassungen bleiben, wie sie sind: Sie
+     * beschreiben die Achse in sich, und verschoben wird das ganze Band. Vorher
+     * stand hier `bleedMm + insetMm`, das Band also im Beschnittrand — siehe
+     * `sideAxisPasst`.
+     */
+    x: (insetMm: number) => bleedMm + safetyMm - BAND_AUSSEN_MM + insetMm,
     y0,
     laenge,
     jahre,
@@ -149,7 +226,12 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
 
 /** Was die vier Zeichenroutinen von Buch und Doppelseite wissen müssen. */
 interface SideContext {
-  /** Position aus dem Abstand zur Beschnittkante. Das Band liegt bei 0 bis 8. */
+  /**
+   * Absolute Position aus einer Einrückung **im Band**.
+   *
+   * Die Einrückungen der Fassungen liegen zwischen 1,1 und 6,8; wo das Band
+   * selbst liegt, entscheidet der Aufbau in `sideTimelineBoxes`.
+   */
   x: (insetMm: number) => number;
   y0: number;
   laenge: number;
@@ -489,7 +571,7 @@ function zahl(o: {
  *
  * Der Grund, warum diese Achse überhaupt beschriftet werden kann: Vierstellig
  * müsste die Zahl gedreht werden und wäre im Buch nur mit gedrehtem Kopf zu
- * lesen. „17" misst bei 5 pt 1,8 mm und passt waagerecht in das Band von 8 mm.
+ * lesen. „17" misst bei 5 pt 1,8 mm und passt waagerecht in das Band.
  */
 function zweistellig(jahr: number): string {
   return String(jahr).slice(-2).padStart(2, '0');
