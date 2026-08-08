@@ -58,6 +58,8 @@ import {
   pruefeBuch,
   markiere,
   seitenbefunde,
+  befundzeile,
+  BEFUNDARTEN,
   effectivePhoto,
   findBulkSeconds,
   FULL_CROP,
@@ -1874,6 +1876,36 @@ export class Project {
   befundeDerSeite(gerendert: RenderedSpread, index: number): Befund[] {
     const abgenommen = new Set(Object.keys(this.abnahmen));
     return seitenbefunde(gerendert, index, this.profile).map((b) => markiere(b, abgenommen));
+  }
+
+  /**
+   * Je Doppelseite eine Zeile für den Fuß des Korrekturabzugs — oder nichts.
+   *
+   * Aus demselben Bericht wie der Reiter „Prüfung", damit auf dem Papier nicht
+   * etwas anderes steht als auf dem Bildschirm. **Nur die offenen Funde**: Was
+   * abgenickt ist, hat man gesehen und für gut befunden, und eine Zeile darüber
+   * wäre beim Durchsehen genau das Rauschen, das man dann überliest.
+   *
+   * Buch- und Umschlagfunde bleiben draußen: Sie hängen an keiner Doppelseite,
+   * stünden also auf jeder.
+   *
+   * Genannt wird die **Art** und nicht der Wortlaut des Funds: „Bild und Platz
+   * stehen quer (4)" ist am Blattrand die brauchbarere Auskunft als viermal
+   * „nur 42 % der Bildfläche sind zu sehen" — und nur so bündelt die Zeile
+   * überhaupt, denn zwei Freitexte sind nie gleich. Die Zahl steht am Bild,
+   * nachgelesen wird im Reiter „Prüfung".
+   */
+  befundzeilen(): (string | undefined)[] {
+    const titel = new Map(BEFUNDARTEN.map((a) => [a.art, a.titel]));
+    const nachSeite = new Map<number, string[]>();
+    for (const befund of this.abnahme().befunde) {
+      if (befund.abgenommen || befund.ort.kind !== 'spread') continue;
+      const text = titel.get(befund.art) ?? befund.text;
+      const bisher = nachSeite.get(befund.ort.index);
+      if (bisher) bisher.push(text);
+      else nachSeite.set(befund.ort.index, [text]);
+    }
+    return this.spreads.map((_, i) => befundzeile(nachSeite.get(i) ?? []));
   }
 
   /**

@@ -1076,3 +1076,12 @@ export const pdfExportieren = (spreadIndex?: number) =>
     '/api/export/pdf',
     spreadIndex === undefined ? {} : { spreadIndex },
   );
+
+/**
+ * Der Korrekturabzug — immer das ganze Buch.
+ *
+ * Ohne Doppelseitenwahl, anders als beim Druck-PDF: Eine einzelne Seite sieht
+ * man in der Vorschau, und zum Blättern gibt es nichts, wenn es ein Blatt ist.
+ */
+export const abzugExportieren = () =>
+  sende<{ outputPath: string; pages: number; images: number }>('POST', '/api/export/abzug', {});

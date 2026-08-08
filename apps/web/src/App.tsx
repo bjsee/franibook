@@ -32,6 +32,7 @@ import {
   formatWechseln,
   fehlertext,
   neuEinlesen,
+  abzugExportieren,
   pdfExportieren,
   type ProjectInfo,
   projektLaden,
@@ -688,6 +689,19 @@ export function App() {
     }
   }
 
+  async function exportAbzug() {
+    setBusy('Ziehe das Buch ab …');
+    setNote(null);
+    try {
+      const data = await abzugExportieren();
+      setNote(`${data.outputPath} — ${data.pages} Blatt, ${data.images} Bilder`);
+    } catch (e) {
+      setNote(`Fehler: ${fehlertext(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function exportPdf(all: boolean) {
     setBusy(all ? 'Exportiere ganzes Buch …' : 'Exportiere Doppelseite …');
     setNote(null);
@@ -901,13 +915,29 @@ export function App() {
         )}
 
         {view !== 'cover' && (
-          <button
-            onClick={() => void exportPdf(view !== 'spread')}
-            disabled={!!busy}
-            style={B.knopfPrimaer}
-          >
-            {view === 'spread' ? 'Diese Seite als PDF' : 'Buch als PDF'}
-          </button>
+          <>
+            {/*
+              Der Abzug steht neben dem Druck-PDF und nicht darin versteckt: Er
+              ist der Griff, den man beim Arbeiten am häufigsten braucht — nur
+              eben nicht der, mit dem das Buch bestellt wird. Deshalb daneben und
+              schlicht statt in Cyan.
+            */}
+            <button
+              onClick={() => void exportAbzug()}
+              disabled={!!busy}
+              style={B.knopf}
+              title="Das ganze Buch klein und blätterbar, mit Seitenzahlen zum Notieren — aus den Vorschauen, ohne Beschnitt."
+            >
+              Korrekturabzug
+            </button>
+            <button
+              onClick={() => void exportPdf(view !== 'spread')}
+              disabled={!!busy}
+              style={B.knopfPrimaer}
+            >
+              {view === 'spread' ? 'Diese Seite als PDF' : 'Buch als PDF'}
+            </button>
+          </>
         )}
       </header>
 

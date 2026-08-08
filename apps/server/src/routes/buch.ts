@@ -7,13 +7,14 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { abzugsblatt, linkeSeitenzahl } from '@franibook/core';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import { renderPdf } from '@franibook/render-pdf';
 import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
 
 export function buchRouten(
   app: FastifyInstance,
-  { project, sources, decodes, outDir }: Kontext,
+  { project, sources, previews, decodes, outDir }: Kontext,
 ): void {
   /**
    * Die Buchaufteilung als lesbares JSON.
@@ -258,4 +259,82 @@ export function buchRouten(
       }
     },
   );
+
+  /**
+   * Der Korrekturabzug: dasselbe Buch zum Durchsehen statt zum Drucken.
+   *
+   * Ein eigener Endpunkt und kein Schalter an `/api/export/pdf`: Die beiden
+   * unterscheiden sich in allem außer der Layoutrechnung — Bildquelle,
+   * Auflösung, Blattformat, Dateiname —, und ein `abzug: true` im Rumpf hätte
+   * jeden Aufrufer zum Nachlesen gezwungen, was daran noch gilt.
+   *
+   * **Aus den Vorschauen, nicht aus den Originalen.** `resolvePhoto` ist
+   * synchron, die Vorschauerzeugung nicht — deshalb der Warmlauf davor, der die
+   * Karte gleich mitliefert. Nach dem Anlauf ist er ein Verzeichniszugriff je
+   * Foto und kostet nichts; kalt erzeugt er, was die Oberfläche ohnehin gleich
+   * braucht.
+   *
+   * Kein Eintrag in `UNDO_ROUTEN` mit Wirkung: Der Abzug schreibt eine Datei
+   * nach `outDir` und ändert am Projekt nichts — wie `/api/export/pdf`.
+   */
+  app.post<{ Body?: { fileName?: string } }>('/api/export/abzug', async (req, reply) => {
+    const spreads = project.renderAll();
+    if (spreads.length === 0) {
+      return reply.code(404).send({ error: 'Keine Doppelseite zum Abziehen' });
+    }
+
+    const fileName = req.body?.fileName ?? 'abzug.pdf';
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
+    await mkdir(outDir, { recursive: true });
+    const outputPath = join(outDir, fileName);
+    const zeilen = project.befundzeilen();
+
+    try {
+      const vorschauen = await previews.warm(project.effectivePhotoList(), 'preview', 6);
+
+      const result = await renderPdf({
+        spreads,
+        profile: project.profile,
+        outputPath,
+        abzug: (index) =>
+          abzugsblatt(project.profile, {
+            linkeSeite: linkeSeitenzahl(index),
+            ...(zeilen[index] ? { befundzeile: zeilen[index] } : {}),
+          }),
+        resolvePhoto: (photoId) => {
+          const vorschau = vorschauen.get(photoId);
+          // `orientation: 1` und keine Vierteldrehung: Die Vorschau liegt im
+          // Cache bereits aufgerichtet (`previews.ts` wendet EXIF-Orientierung
+          // und Korrektur beim Erzeugen an). Beides ein zweites Mal anzuwenden
+          // legte jedes gedrehte Bild quer — und der gespeicherte Ausschnitt
+          // bezieht sich ohnehin auf das gedrehte Bild.
+          if (vorschau) return { path: vorschau, orientation: 1 };
+
+          // Ohne Vorschau das Original. Kein `recoverPhoto` daneben: Der Weg
+          // über `sips` kostet Sekunden je Bild, und der Abzug lebt davon, in
+          // Sekunden fertig zu sein. Ein Bild, das hier fehlt, fehlt in der
+          // Oberfläche genauso — es fällt beim Durchsehen von selbst auf.
+          const photo = project.photo(photoId);
+          if (!photo) return undefined;
+          return {
+            path: sources.pfad(photo),
+            orientation: photo.orientation,
+            ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+          };
+        },
+      });
+
+      return { outputPath, ...result };
+    } catch (err) {
+      if (istDateiFehler(err)) {
+        return reply.code(503).send({
+          error: 'Eine Bilddatei ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+        });
+      }
+      throw err;
+    }
+  });
 }

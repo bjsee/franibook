@@ -1859,6 +1859,43 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > (`/doppelseite/18/platz/r2c`) — bei acht Bildern auf einer Doppelseite ist das der
 > Unterschied zwischen einer Auskunft und einem Suchbild.
 
+> **Ergänzung (8. August 2026): der Korrekturabzug**
+>
+> Der Export konnte lange nur eines — Originale, 56 s Laufzeit, 160 MB. Zum Durchsehen
+> braucht es das Gegenteil, und das ist keine Einstellung, sondern ein zweiter Zweck:
+> schnell, klein, blätterbar, mit gedruckter Seitenzahl zum Notieren. `POST
+/api/export/abzug` liefert ihn, `renderPdf({ abzug })` zeichnet ihn.
+>
+> **Dieselbe Rechnung, andere Ausgabe.** Der Buchinhalt kommt aus demselben RSM wie die
+> Druckdatei; verschieden sind Bildquelle (die 1600-px-Vorschauen), Auflösung (150 dpi
+> des Blattes statt 240 dpi des Buches), Kompression (q65, 4:2:0, keine
+> Trellis-Quantisierung) und das Blatt. Eine zweite Layoutrechnung wäre das Ende des
+> Werkzeugs: Ein Abzug, der ein anderes Buch zeigt als die Datei zur Druckerei, taugt
+> nicht zum Durchsehen. Gemessen am Probestand (52 Doppelseiten, 60 Fotos): 1,1 MB in
+> 1,0 s gegen 18,3 MB in 6,2 s.
+>
+> **DIN A4 quer, nicht das Buchformat verkleinert.** Ein Abzug im Seitenmaß des Buches
+> (bei 28×28 wären das 580 × 320 mm) landet in jedem Druckdialog in einem
+> Skalierungsgespräch. A4 kommt aus jedem Drucker, ohne dass jemand etwas einstellt —
+> und weil eine Doppelseite mindestens doppelt so breit wie hoch ist, bleibt unter ihr
+> von selbst der Streifen frei, auf dem die Notiz landet. Das Blattformat ist eine Norm
+> und kein Anbieterwert; es steht deshalb in `core/pruefung/abzug.ts` und nicht im
+> `PrintProfile`.
+>
+> **Gezeigt wird das Endformat**: kein Beschnitt, keine Hilfslinien, keine TrimBox. Wer
+> durchsieht, soll das Buch sehen und nicht die Druckvorstufe. Die Seitenzahlen stehen
+> außen unter ihrer Seite wie im gebundenen Buch (Seite 1 ist die linke der ersten
+> Doppelseite), darunter mittig die offenen Funde der Abnahme — nach **Art** gebündelt
+> („Bild und Platz stehen quer (4)") und nicht im Wortlaut, weil zwei Freitexte nie
+> gleich sind und vier Prozentangaben am Blattrand niemandem helfen. Abgenickte Funde
+> fehlen: Was man gesehen und für gut befunden hat, ist beim Durchsehen genau das
+> Rauschen, das man dann überliest.
+>
+> Die Seitenzahl **im Buch** ist damit ausdrücklich nicht erledigt (#21): Sie wäre eine
+> Textbox im RSM und müsste dem Zeitstrahl im Fußraum ausweichen. Der Abzug trägt sie
+> auf dem Blatt, nicht auf der Buchseite — das ist der Grund, weshalb er sie schon
+> heute haben kann.
+
 ## Druckprofil-Modell
 
 ### Struktur

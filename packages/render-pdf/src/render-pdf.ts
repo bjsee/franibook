@@ -16,9 +16,11 @@ import { pipeline } from 'node:stream/promises';
 import PDFDocument from 'pdfkit';
 import {
   resolveWeight,
+  type Abzugsblatt,
   type ImageBox,
   type PhotoId,
   type PrintProfile,
+  type RenderBox,
   type RenderedSpread,
   mmToPt,
   textBaselineOffsetMm,
@@ -57,6 +59,36 @@ export interface RenderPdfOptions {
   recoverPhoto?: (photoId: PhotoId, reason: string) => Promise<PhotoSource | undefined>;
   outputPath: string;
   onProgress?: (done: number, total: number) => void;
+  /**
+   * Korrekturabzug statt Druckdatei: je Doppelseite ein Blatt.
+   *
+   * Als Haken und nicht als Schalter, weil die Blattgeometrie aus dem Kern
+   * kommt (`abzugsblatt`) und je Doppelseite eine andere Seitenzahl und andere
+   * Befunde trägt. Der Renderer entscheidet damit auch hier nichts – er
+   * verschiebt, verkleinert und schneidet ab, was ihm gesagt wird.
+   *
+   * Gerendert wird dasselbe RSM wie für den Druck. Ein Abzug, der ein zweites
+   * Mal rechnete, zeigte ein anderes Buch als die Datei, die zur Druckerei geht.
+   */
+  abzug?: (spreadIndex: number) => Abzugsblatt;
+}
+
+/**
+ * Was das Zeichnen einer Boxenliste braucht.
+ *
+ * Zusammengefasst, weil die Liste an drei Stellen dieselbe ist: Druckseite,
+ * Buchinhalt eines Abzugsblattes und das Beiwerk daneben.
+ */
+interface Zeichenkontext {
+  profile: PrintProfile;
+  resolvePhoto: (photoId: PhotoId) => PhotoSource | undefined;
+  recoverPhoto?:
+    ((photoId: PhotoId, reason: string) => Promise<PhotoSource | undefined>) | undefined;
+  skipped: { photoId: PhotoId; reason: string }[];
+  /** Zielauflösung des Abzugs, wenn dies einer ist. */
+  abzugDpi?: number | undefined;
+  /** Wird nach jedem eingebetteten Bild gerufen. */
+  gezeichnet: () => void;
 }
 
 export interface RenderPdfResult {
@@ -118,17 +150,24 @@ function pageSlices(spread: RenderedSpread, profile: PrintProfile): PageSlice[] 
 }
 
 export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult> {
-  const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress } = opts;
+  const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress, abzug } = opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
   // Vor dem ersten Bild: `setzeAusgabeIntent` prüft über `iccProfil` mit, dass
   // das Druckprofil einen Farbraum verlangt, den dieser Weg auch liefert. Ein
   // Wurf hier kostet nichts – einer nach 84 Doppelseiten kostet 56 Sekunden.
+  //
+  // Auch im Abzug: Die Bilder werden auf demselben Weg nach sRGB gewandelt, und
+  // ein Betrachter, der den Intent liest, zeigt dieselben Farben wie das
+  // Druck-PDF. Der Abzug soll das Buch zeigen, auch farblich.
   setzeAusgabeIntent(doc, profile);
-  registerFonts(
-    doc,
-    spreads.flatMap((s) => s.boxes.filter((b) => b.kind === 'text')),
-  );
+  registerFonts(doc, [
+    ...spreads.flatMap((s) => s.boxes.filter((b) => b.kind === 'text')),
+    // Die Seitenzahlen des Abzugs stehen in derselben Buchschrift und müssen
+    // deshalb mit eingebettet werden – sonst fehlte der Schnitt auf einem Blatt,
+    // dessen Doppelseite selbst keinen Text trägt.
+    ...(abzug ? spreads.flatMap((_, i) => abzug(i).boxen.filter((b) => b.kind === 'text')) : []),
+  ]);
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
   const skipped: { photoId: PhotoId; reason: string }[] = [];
@@ -140,7 +179,24 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
     0,
   );
 
-  for (const spread of spreads) {
+  const ctx: Zeichenkontext = {
+    profile,
+    resolvePhoto,
+    recoverPhoto,
+    skipped,
+    gezeichnet: () => {
+      images++;
+      onProgress?.(images, totalImages);
+    },
+  };
+
+  for (const [index, spread] of spreads.entries()) {
+    if (abzug) {
+      await zeichneAbzugsblatt(doc, spread, abzug(index), ctx);
+      pages++;
+      continue;
+    }
+
     for (const slice of pageSlices(spread, profile)) {
       doc.addPage({ size: [mmToPt(slice.widthMm), mmToPt(slice.heightMm)], margin: 0 });
       setPageBoxes(doc, profile, slice.widthMm, slice.heightMm);
@@ -150,117 +206,7 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
       // transparent, was im Druck zu unvorhersehbaren Ergebnissen führt.
       doc.rect(0, 0, mmToPt(slice.widthMm), mmToPt(slice.heightMm)).fill(spread.background);
 
-      for (const box of spread.boxes) {
-        if (box.kind === 'image') {
-          const ok = await drawImage(doc, box, slice, profile, resolvePhoto, skipped, recoverPhoto);
-          if (ok) {
-            images++;
-            onProgress?.(images, totalImages);
-          }
-        } else if (box.kind === 'text') {
-          const baselineMm =
-            box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
-          // Gedreht wird das Koordinatensystem, nicht der Text – dieselbe
-          // Festlegung wie beim Bild. Der Drehpunkt steht im Modell, damit die
-          // Zeilen eines Blocks um denselben Punkt fahren und nicht jede um
-          // ihre eigene Mitte.
-          const drehung = box.rotateDeg ?? 0;
-          if (drehung !== 0) {
-            const dreh = box.rotateAboutMm ?? {
-              xMm: box.xMm + box.wMm / 2,
-              yMm: box.yMm + box.hMm / 2,
-            };
-            doc.save();
-            doc.rotate(drehung, {
-              origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
-            });
-          }
-
-          doc
-            .font(fontKey(box.family ?? 'sans', resolveWeight(box.family ?? 'sans', box.weight)))
-            .fontSize(box.fontSizePt)
-            .fillColor(box.color)
-            .text(box.content, mmToPt(box.xMm + slice.offsetXMm), mmToPt(baselineMm), {
-              width: mmToPt(box.wMm),
-              align: box.align,
-              lineBreak: false,
-              // Die Sperrung steht im Modell in Millimetern, pdfkit erwartet
-              // Punkt – dieselbe Umrechnung wie für jede andere Länge. Ohne die
-              // ausdrückliche Null bliebe der Wert der vorigen Textbox stehen:
-              // `characterSpacing` ist bei pdfkit Zustand, keine Eigenschaft
-              // des Aufrufs.
-              characterSpacing: mmToPt(box.letterSpacingMm ?? 0),
-              // Die y-Koordinate ist die Grundlinie, nicht der Kastenoberrand.
-              // Ohne diese Angabe verschiebt pdfkit die Zeile um seinen eigenen
-              // Ascender (1,024 em) nach unten – eine Layoutentscheidung des
-              // Adapters, und genau die darf hier keine getroffen werden.
-              baseline: 'alphabetic',
-            });
-
-          if (drehung !== 0) doc.restore();
-        } else if (box.kind === 'rect') {
-          const x = mmToPt(box.xMm + slice.offsetXMm);
-          const y = mmToPt(box.yMm);
-          const w = mmToPt(box.wMm);
-          const h = mmToPt(box.hMm);
-          // `roundedRect` klemmt einen zu großen Radius nicht; die halbe kurze
-          // Kante ist die Grenze, ab der die Form wieder aufbricht.
-          const r = Math.min(mmToPt(box.rxMm ?? 0), Math.min(w, h) / 2);
-
-          // Deckkraft und Drehung sind bei pdfkit Grafikzustand, keine
-          // Eigenschaften des Aufrufs: Ohne `save`/`restore` läge die nächste
-          // Box mit derselben Transparenz und im selben Winkel da. Dieselbe
-          // Falle wie bei `characterSpacing` weiter oben.
-          doc.save();
-          try {
-            const drehung = box.rotateDeg ?? 0;
-            if (drehung !== 0) {
-              const dreh = box.rotateAboutMm ?? {
-                xMm: box.xMm + box.wMm / 2,
-                yMm: box.yMm + box.hMm / 2,
-              };
-              doc.rotate(drehung, {
-                origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
-              });
-            }
-            if (box.opacity !== undefined) doc.fillOpacity(box.opacity).strokeOpacity(box.opacity);
-
-            if (r > 0) doc.roundedRect(x, y, w, h, r);
-            else doc.rect(x, y, w, h);
-
-            // Der Strich liegt bei pdfkit mittig auf dem Pfad – genau die
-            // Festlegung, die das Modell trifft und die die Vorschau mit
-            // `outline-offset` nachbaut.
-            const gefuellt = box.fill !== 'none';
-            if (box.stroke) {
-              doc.lineWidth(mmToPt(box.strokeWidthMm ?? 0)).strokeColor(box.stroke);
-              if (gefuellt) doc.fillAndStroke(box.fill, box.stroke);
-              else doc.stroke();
-            } else if (gefuellt) {
-              doc.fill(box.fill);
-            }
-          } finally {
-            doc.restore();
-          }
-        } else if (box.kind === 'polygon') {
-          const [first, ...rest] = box.pointsMm;
-          if (first) {
-            doc.save();
-            try {
-              if (box.opacity !== undefined) doc.fillOpacity(box.opacity);
-              doc.moveTo(mmToPt(first.xMm + slice.offsetXMm), mmToPt(first.yMm));
-              for (const point of rest) {
-                doc.lineTo(mmToPt(point.xMm + slice.offsetXMm), mmToPt(point.yMm));
-              }
-              doc.closePath().fill(box.fill);
-            } finally {
-              doc.restore();
-            }
-          }
-        }
-        // 'empty' erscheint bewusst nicht im PDF – ein leerer Slot ist im
-        // Druck schlicht Hintergrund.
-      }
+      await zeichneBoxen(doc, spread.boxes, slice, ctx);
     }
   }
 
@@ -268,6 +214,203 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   await written;
 
   return { pages, images, skipped };
+}
+
+/**
+ * Ein Blatt des Korrekturabzugs: die Doppelseite im Endformat, verkleinert.
+ *
+ * Drei Unterschiede zur Druckseite, und alle drei sind Absicht. **Keine
+ * TrimBox** – der Abzug ist keine Druckdatei, und eine Schnittmarke darauf wäre
+ * eine falsche Ansage. **Kein Aufteilen an der Falzachse**, auch wenn das Profil
+ * Einzelseiten verlangt: Wer durchsieht, will die Doppelseite sehen, so wie das
+ * Buch aufgeschlagen daliegt. Und **abgeschnitten am Endformat**, statt den
+ * Beschnitt mitzuzeigen – was gedruckt wegfällt, soll hier schon weg sein.
+ */
+async function zeichneAbzugsblatt(
+  doc: PDFKit.PDFDocument,
+  spread: RenderedSpread,
+  blatt: Abzugsblatt,
+  ctx: Zeichenkontext,
+): Promise<void> {
+  doc.addPage({ size: [mmToPt(blatt.breiteMm), mmToPt(blatt.hoeheMm)], margin: 0 });
+  doc.rect(0, 0, mmToPt(blatt.breiteMm), mmToPt(blatt.hoeheMm)).fill('#ffffff');
+
+  const { bleedMm } = ctx.profile.page;
+
+  // pdfkit legt selbsttätig eine neue Seite an, sobald eine Textzeile unter den
+  // Satzspiegel rutscht – und es prüft das an der **untransformierten**
+  // Seitenhöhe. Die Textboxen des Buches stehen aber in Buchmillimetern, beim
+  // 28×28 also bis 782 pt auf einem 595 pt hohen Blatt: Ohne diesen Griff bekam
+  // jede Doppelseite mit Zeitstrahl leere Blätter hinterher (gemessen: 154 statt
+  // 52 Seiten). Angehoben wird allein die Zahl, an der pdfkit den Umbruch misst;
+  // die MediaBox steht seit `addPage` fest und bleibt unberührt.
+  //
+  // Das Doppelte der Buchhöhe und nicht genau sie: Eine Grundlinie dicht an der
+  // Unterkante zählt bei pdfkit noch ihre Zeilenhöhe dazu.
+  const satzspiegel = doc.page.height;
+  doc.page.height = 2 * mmToPt(spread.heightMm);
+
+  doc.save();
+  try {
+    // Erst an die Stelle, dann verkleinern, dann den Beschnitt wegschieben: Die
+    // Boxen des RSM zählen ab der Beschnittkante, das Blatt ab dem Endformat.
+    // Danach zeichnet alles darunter unverändert in Buchmillimetern – der
+    // einzige Unterschied zum Druck ist die Transformationsmatrix.
+    doc.translate(mmToPt(blatt.inhalt.xMm), mmToPt(blatt.inhalt.yMm));
+    doc.scale(blatt.massstab);
+    doc.translate(-mmToPt(bleedMm), -mmToPt(bleedMm));
+    doc
+      .rect(
+        mmToPt(bleedMm),
+        mmToPt(bleedMm),
+        mmToPt(spread.widthMm - 2 * bleedMm),
+        mmToPt(spread.heightMm - 2 * bleedMm),
+      )
+      .clip();
+
+    // Der Hintergrund reicht nur bis ans Endformat – über den Schnitt hinaus
+    // gehört auf diesem Blatt das Papier des Abzugs und nicht das des Buches.
+    doc
+      .rect(
+        mmToPt(bleedMm),
+        mmToPt(bleedMm),
+        mmToPt(spread.widthMm - 2 * bleedMm),
+        mmToPt(spread.heightMm - 2 * bleedMm),
+      )
+      .fill(spread.background);
+
+    const lage = { offsetXMm: 0, widthMm: spread.widthMm, heightMm: spread.heightMm };
+    await zeichneBoxen(doc, spread.boxes, lage, { ...ctx, abzugDpi: blatt.bildDpi });
+  } finally {
+    doc.restore();
+    doc.page.height = satzspiegel;
+  }
+
+  // Seitenzahlen und Befundzeile stehen im Blattmaßstab neben dem Buch, nicht
+  // darin – deshalb nach dem `restore` und ohne jede Umrechnung.
+  await zeichneBoxen(
+    doc,
+    blatt.boxen,
+    { offsetXMm: 0, widthMm: blatt.breiteMm, heightMm: blatt.hoeheMm },
+    ctx,
+  );
+}
+
+/** Zeichnet eine Boxenliste in das aktuelle Koordinatensystem. */
+async function zeichneBoxen(
+  doc: PDFKit.PDFDocument,
+  boxes: readonly RenderBox[],
+  slice: PageSlice,
+  ctx: Zeichenkontext,
+): Promise<void> {
+  for (const box of boxes) {
+    if (box.kind === 'image') {
+      const ok = await drawImage(doc, box, slice, ctx);
+      if (ok) ctx.gezeichnet();
+    } else if (box.kind === 'text') {
+      const baselineMm =
+        box.yMm + textBaselineOffsetMm(box.hMm, box.fontSizePt, box.family ?? 'sans');
+      // Gedreht wird das Koordinatensystem, nicht der Text – dieselbe
+      // Festlegung wie beim Bild. Der Drehpunkt steht im Modell, damit die
+      // Zeilen eines Blocks um denselben Punkt fahren und nicht jede um
+      // ihre eigene Mitte.
+      const drehung = box.rotateDeg ?? 0;
+      if (drehung !== 0) {
+        const dreh = box.rotateAboutMm ?? {
+          xMm: box.xMm + box.wMm / 2,
+          yMm: box.yMm + box.hMm / 2,
+        };
+        doc.save();
+        doc.rotate(drehung, {
+          origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
+        });
+      }
+
+      doc
+        .font(fontKey(box.family ?? 'sans', resolveWeight(box.family ?? 'sans', box.weight)))
+        .fontSize(box.fontSizePt)
+        .fillColor(box.color)
+        .text(box.content, mmToPt(box.xMm + slice.offsetXMm), mmToPt(baselineMm), {
+          width: mmToPt(box.wMm),
+          align: box.align,
+          lineBreak: false,
+          // Die Sperrung steht im Modell in Millimetern, pdfkit erwartet
+          // Punkt – dieselbe Umrechnung wie für jede andere Länge. Ohne die
+          // ausdrückliche Null bliebe der Wert der vorigen Textbox stehen:
+          // `characterSpacing` ist bei pdfkit Zustand, keine Eigenschaft
+          // des Aufrufs.
+          characterSpacing: mmToPt(box.letterSpacingMm ?? 0),
+          // Die y-Koordinate ist die Grundlinie, nicht der Kastenoberrand.
+          // Ohne diese Angabe verschiebt pdfkit die Zeile um seinen eigenen
+          // Ascender (1,024 em) nach unten – eine Layoutentscheidung des
+          // Adapters, und genau die darf hier keine getroffen werden.
+          baseline: 'alphabetic',
+        });
+
+      if (drehung !== 0) doc.restore();
+    } else if (box.kind === 'rect') {
+      const x = mmToPt(box.xMm + slice.offsetXMm);
+      const y = mmToPt(box.yMm);
+      const w = mmToPt(box.wMm);
+      const h = mmToPt(box.hMm);
+      // `roundedRect` klemmt einen zu großen Radius nicht; die halbe kurze
+      // Kante ist die Grenze, ab der die Form wieder aufbricht.
+      const r = Math.min(mmToPt(box.rxMm ?? 0), Math.min(w, h) / 2);
+
+      // Deckkraft und Drehung sind bei pdfkit Grafikzustand, keine
+      // Eigenschaften des Aufrufs: Ohne `save`/`restore` läge die nächste
+      // Box mit derselben Transparenz und im selben Winkel da. Dieselbe
+      // Falle wie bei `characterSpacing` weiter oben.
+      doc.save();
+      try {
+        const drehung = box.rotateDeg ?? 0;
+        if (drehung !== 0) {
+          const dreh = box.rotateAboutMm ?? {
+            xMm: box.xMm + box.wMm / 2,
+            yMm: box.yMm + box.hMm / 2,
+          };
+          doc.rotate(drehung, {
+            origin: [mmToPt(dreh.xMm + slice.offsetXMm), mmToPt(dreh.yMm)],
+          });
+        }
+        if (box.opacity !== undefined) doc.fillOpacity(box.opacity).strokeOpacity(box.opacity);
+
+        if (r > 0) doc.roundedRect(x, y, w, h, r);
+        else doc.rect(x, y, w, h);
+
+        // Der Strich liegt bei pdfkit mittig auf dem Pfad – genau die
+        // Festlegung, die das Modell trifft und die die Vorschau mit
+        // `outline-offset` nachbaut.
+        const gefuellt = box.fill !== 'none';
+        if (box.stroke) {
+          doc.lineWidth(mmToPt(box.strokeWidthMm ?? 0)).strokeColor(box.stroke);
+          if (gefuellt) doc.fillAndStroke(box.fill, box.stroke);
+          else doc.stroke();
+        } else if (gefuellt) {
+          doc.fill(box.fill);
+        }
+      } finally {
+        doc.restore();
+      }
+    } else if (box.kind === 'polygon') {
+      const [first, ...rest] = box.pointsMm;
+      if (first) {
+        doc.save();
+        try {
+          if (box.opacity !== undefined) doc.fillOpacity(box.opacity);
+          doc.moveTo(mmToPt(first.xMm + slice.offsetXMm), mmToPt(first.yMm));
+          for (const point of rest) {
+            doc.lineTo(mmToPt(point.xMm + slice.offsetXMm), mmToPt(point.yMm));
+          }
+          doc.closePath().fill(box.fill);
+        } finally {
+          doc.restore();
+        }
+      }
+    }
+    // 'empty' erscheint bewusst nicht im PDF – ein leerer Slot ist im
+    // Druck schlicht Hintergrund.
+  }
 }
 
 /** Wie weit eine geneigte Box seitlich über ihre eigene Breite hinausragt. */
@@ -282,11 +425,9 @@ async function drawImage(
   doc: PDFKit.PDFDocument,
   box: ImageBox,
   slice: PageSlice,
-  profile: PrintProfile,
-  resolvePhoto: (id: PhotoId) => PhotoSource | undefined,
-  skipped: { photoId: PhotoId; reason: string }[],
-  recoverPhoto?: (photoId: PhotoId, reason: string) => Promise<PhotoSource | undefined>,
+  ctx: Zeichenkontext,
 ): Promise<boolean> {
+  const { profile, resolvePhoto, recoverPhoto, skipped } = ctx;
   const source = resolvePhoto(box.photoId);
   if (!source) {
     skipped.push({ photoId: box.photoId, reason: 'Bilddatei nicht gefunden' });
@@ -309,6 +450,7 @@ async function drawImage(
       widthMm: box.wMm,
       heightMm: box.hMm,
       profile,
+      ...(ctx.abzugDpi !== undefined ? { abzug: { targetDpi: ctx.abzugDpi } } : {}),
     });
 
     // Drehung um den Mittelpunkt der Box – dieselbe Festlegung, die die
