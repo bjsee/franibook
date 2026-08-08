@@ -37,11 +37,59 @@ export interface SlotCostBreakdown {
   orientationClash: number;
   dpiPenalty: number;
   weightMismatch: number;
+  /** Zuschlag für ein unscharfes Bild in einem prominenten Platz. */
+  qualityPenalty: number;
   /** Auflösung, die sich bei dieser Zuordnung ergibt. */
   dpi: number;
 }
 
 const WEIGHT_RANK: Record<PhotoWeight, number> = { filler: 1, normal: 2, hero: 3 };
+
+/**
+ * Ab welcher Schärfe ein Bild als gut gilt, und ab welcher als schwach.
+ *
+ * Gemessen am echten Bestand (`docs/spikes/serien.md`, 956 Fotos): Die
+ * Laplace-Varianz auf der 320-px-Vorschau liegt im Median bei 1.036 und im
+ * zehnten Perzentil bei 316. Die beiden Zahlen sind also der Median und das
+ * untere Zehntel — keine gesetzten Striche, sondern die Lage dieses Bestands.
+ *
+ * **Damit hängen sie an ihm.** Ein Bestand aus einer anderen Kamerageneration
+ * läge anders, und die Zahlen gehörten nachgemessen. Der Alternative — Rang
+ * innerhalb der Doppelseite statt absoluter Kennlinie — fehlt genau das, was
+ * hier zählt: Auf einer Seite mit sechs gleich guten Bildern bestrafte sie das
+ * minimal schlechteste, obwohl nichts daran fehlt.
+ */
+const SHARPNESS_SCHWACH = 316;
+const SHARPNESS_GUT = 1036;
+
+/**
+ * Zuschlag für ein technisch schwaches Bild in einem prominenten Platz.
+ *
+ * Der große Platz fällt im Buch auf, und ein unscharfes Bild fällt dort doppelt
+ * auf (Issue #19). Der Zuschlag wächst mit der Prominenz und verschwindet im
+ * kleinsten Platz ganz: Ein verwackeltes Foto soll nicht aus dem Buch fallen,
+ * es soll nur nicht die Seite tragen.
+ *
+ * **Ohne Messung kein Zuschlag.** Ein Foto ohne `quality` — vor der Bewertung
+ * eingelesen, Vorschau nicht lesbar — wird behandelt wie ein gutes. Die
+ * Umkehrung hieße, fehlende Auskunft als Mangel zu werten, und dann verlöre
+ * ein frisch eingeworfenes Bild seinen Platz an ein gemessenes.
+ *
+ * Höchstens 0,3 und damit unter dem Orientierungsbruch (0,6): Ein Hochformat
+ * im Querformatslot bleibt der schwerere Fehler. Die Belichtung geht bewusst
+ * **nicht** ein — am Bestand sind 14 % abgesoffene Pixel im neunten Dezil ganz
+ * normal (Nacht, Gegenlicht), und ein Zuschlag darauf benachteiligte richtig
+ * belichtete dunkle Bilder.
+ */
+function qualityCost(photo: Photo, prominence: 1 | 2 | 3): number {
+  const sharpness = photo.quality?.sharpness;
+  if (sharpness === undefined) return 0;
+  const mangel = Math.min(
+    1,
+    Math.max(0, (SHARPNESS_GUT - sharpness) / (SHARPNESS_GUT - SHARPNESS_SCHWACH)),
+  );
+  return mangel * ((prominence - 1) / 2) * 0.3;
+}
 
 /**
  * Kosten, ein bestimmtes Foto in einen bestimmten Slot zu legen.
@@ -91,12 +139,16 @@ export function slotCost(
   // 4. Gewichtung: ein Hauptbild gehört in einen prominenten Slot
   const weightMismatch = Math.abs(WEIGHT_RANK[ctx.weightOf(photo.id)] - slot.prominence) * 0.25;
 
+  // 5. Bildqualität: der große Platz für das schärfere Bild
+  const qualityPenalty = qualityCost(photo, slot.prominence);
+
   return {
-    total: cropLoss + orientationClash + dpiPenalty + weightMismatch,
+    total: cropLoss + orientationClash + dpiPenalty + weightMismatch + qualityPenalty,
     cropLoss,
     orientationClash,
     dpiPenalty,
     weightMismatch,
+    qualityPenalty,
     dpi,
   };
 }

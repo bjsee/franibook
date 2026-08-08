@@ -36,9 +36,17 @@ interface AbnahmeProps {
   standVersion?: number;
   /** Eine Abnahme ändert das Projekt — die Kennzahlen und der Verlauf ziehen nach. */
   onChanged?: () => void;
+  /**
+   * Meldet die offenen Funde an den Reiter der Prüfung.
+   *
+   * Die Ansicht hat die Zahl ohnehin (`bilanz.schwer + leicht`, beide zählen nur
+   * Offenes); sie ein zweites Mal zu holen wäre eine zweite Anfrage für dieselbe
+   * Auskunft.
+   */
+  onOffen?: (offen: number) => void;
 }
 
-export function Abnahme({ onNavigieren, standVersion, onChanged }: AbnahmeProps) {
+export function Abnahme({ onNavigieren, standVersion, onChanged, onOffen }: AbnahmeProps) {
   const [bericht, setBericht] = useState<Abnahmebericht | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [laeuft, setLaeuft] = useState(false);
@@ -59,6 +67,13 @@ export function Abnahme({ onNavigieren, standVersion, onChanged }: AbnahmeProps)
   // Wie in den übrigen Ansichten: neu laden, ohne neu einzuhängen. Ein
   // Zurücknehmen kann jeden Fund beseitigt oder erzeugt haben.
   useEffect(laden, [laden, standVersion]);
+
+  // Die offenen Funde an den Reiter melden. `schwer` und `leicht` zählen beide
+  // nur Offenes (siehe `Abnahmebericht.bilanz`), also ist die Summe genau das,
+  // was dort in Klammern stehen soll.
+  useEffect(() => {
+    if (bericht) onOffen?.(bericht.bilanz.schwer + bericht.bilanz.leicht);
+  }, [bericht, onOffen]);
 
   /**
    * Abnicken und Zurücknehmen liefern den ganzen Bericht zurück.

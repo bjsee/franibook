@@ -1,5 +1,5 @@
 /**
- * Das Gerüst: Kopfzeile, Kennzahlen, sieben Ansichten.
+ * Das Gerüst: Kopfzeile, Kennzahlen, die Ansichten.
  *
  * Die App füllt das Fenster und scrollt nicht als Ganzes. Kopfzeile und
  * Kennzahlenzeile stehen fest, darunter füllt die Ansicht den Rest — bei der
@@ -20,9 +20,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
+  abnahmeLaden,
   buchErzeugen,
   buchseiteLoeschen,
   ApiFehler,
+  doppelLaden,
   doppelseiteFesthalten,
   doppelseiteLaden,
   doppelseiteLoeschen,
@@ -44,7 +46,7 @@ import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
-import { Abnahme } from './Abnahme.js';
+import { Pruefung } from './Pruefung.js';
 import { Fotodaten } from './Fotodaten.js';
 import { Overview } from './Overview.js';
 import { Baum } from './baum/Baum.js';
@@ -77,7 +79,7 @@ const REITER: { id: View; label: string }[] = [
   { id: 'sources', label: 'Bildquellen' },
   { id: 'edit', label: 'Aufteilung' },
   { id: 'cover', label: 'Umschlag' },
-  { id: 'abnahme', label: 'Abnahme' },
+  { id: 'pruefung', label: 'Prüfung' },
 ];
 
 /**
@@ -159,6 +161,33 @@ export function App() {
    * bestehenden Seite; `spreadCount` bedeutet „ganz hinten".
    */
   const [einfuegenAn, setEinfuegenAn] = useState<number | null>(null);
+
+  /**
+   * Offene Prüfpunkte je Bereich, `null` heißt „noch nicht gezählt".
+   *
+   * Am Reiter steht die Summe, und der Unterschied zwischen „null offen" und
+   * „noch nicht gezählt" ist der Grund für die beiden `null`: Eine Zahl, die von
+   * 12 auf 61 springt, weil der zweite Bereich nachlädt, sieht aus wie ein
+   * Fehler.
+   *
+   * Gezählt wird **einmal** im Hintergrund nach dem Anlauf und danach von den
+   * Bereichen selbst, wenn sie geöffnet sind (`Pruefung.onOffen`). Nicht bei
+   * jeder Änderung neu: Die Doppel-Rechnung kostet anderthalb Sekunden
+   * Bildvergleich, und wer zwanzig Doppel abarbeitet, löste damit zwanzig
+   * Durchläufe aus — für eine Zahl, die die offene Ansicht ohnehin kennt.
+   */
+  const [offen, setOffen] = useState<{ buch: number | null; bestand: number | null }>({
+    buch: null,
+    bestand: null,
+  });
+  const pruefpunkte =
+    offen.buch !== null && offen.bestand !== null ? offen.buch + offen.bestand : null;
+
+  const merkeOffen = useCallback((bereich: 'buch' | 'bestand', anzahl: number) => {
+    // Gleicher Wert, gleiches Objekt: Sonst rendert jede Meldung neu, und die
+    // Meldung kommt aus einem Effekt der Ansicht.
+    setOffen((alt) => (alt[bereich] === anzahl ? alt : { ...alt, [bereich]: anzahl }));
+  }, []);
 
   const bare = new URLSearchParams(location.search).has('bare');
   const [guides, setGuides] = useState<GuideVisibility>(() =>
@@ -283,6 +312,42 @@ export function App() {
   }, []);
 
   useEffect(loadInfo, [loadInfo]);
+
+  /**
+   * Zählt die offenen Prüfpunkte, einmal nach dem Anlauf.
+   *
+   * Im Hintergrund und ohne dass jemand darauf wartet: Der Abnahmebericht kostet
+   * rund 20 ms, die Doppel anderthalb Sekunden Bildvergleich. Wer währenddessen
+   * blättert, sieht den Reiter ohne Zahl — das ist richtiger, als eine Zahl zu
+   * zeigen, die gleich eine andere ist.
+   *
+   * **Danach wird nicht mehr von hier gezählt.** Die geöffneten Bereiche melden
+   * ihre Zahlen selbst (`Pruefung.onOffen`), und alles andere wäre ein
+   * Bildvergleich je Handgriff. Der Preis: Wer Fotos in einer anderen Ansicht
+   * aussortiert, sieht die Zahl erst beim nächsten Öffnen der Prüfung
+   * nachziehen. Für eine Klammer am Reiter ist das der richtige Tausch.
+   */
+  useEffect(() => {
+    if (anlauf !== null) return;
+    let lebt = true;
+    void abnahmeLaden()
+      .then((b) => {
+        if (lebt) merkeOffen('buch', b.bilanz.schwer + b.bilanz.leicht);
+      })
+      .catch(() => {
+        // Ohne Zahl bleibt der Reiter ohne Klammer. Kein Fehler für den
+        // Benutzer: Er hat nicht danach gefragt.
+      });
+    void doppelLaden()
+      .then((d) => {
+        if (lebt)
+          merkeOffen('bestand', d.doppel.filter((x) => x.behaltenSeit === undefined).length);
+      })
+      .catch(() => {});
+    return () => {
+      lebt = false;
+    };
+  }, [anlauf, merkeOffen]);
 
   useEffect(() => {
     if (view !== 'spread' && !bare) return;
@@ -750,6 +815,18 @@ export function App() {
               style={view === r.id ? B.segAn : B.segAus}
             >
               {r.label}
+              {/*
+                Die offenen Prüfpunkte in Rot — eine Aussage über das Buch und
+                nicht über die Bedienung, wie „3 zu klein" in den Kennzahlen.
+                Türkis bleibt der Auswahl vorbehalten (`.claude/rules/web.md`).
+
+                Erst wenn beide Bereiche gezählt haben: Eine Zahl, die von 12 auf
+                61 springt, weil der zweite Teil nachlädt, sieht aus wie ein
+                Fehler.
+              */}
+              {r.id === 'pruefung' && pruefpunkte !== null && (
+                <span style={S.pruefzahl}> ({pruefpunkte})</span>
+              )}
             </Link>
           ))}
         </nav>
@@ -978,13 +1055,20 @@ export function App() {
         )
       ) : view === 'cover' ? (
         <Cover imageSrc={imageSrc} standVersion={standVersion} />
-      ) : view === 'abnahme' ? (
-        <Abnahme
+      ) : route.view === 'pruefung' ? (
+        <Pruefung
+          {...(route.teil ? { teil: route.teil } : {})}
           onNavigieren={navigieren}
           standVersion={standVersion}
-          // Eine Abnahme ist ein Schritt im Verlauf: Der Rückgängig-Knopf in
-          // der Kopfzeile muss danach wissen, was er zurücknähme.
-          onChanged={loadInfo}
+          bildVersion={bildVersion}
+          onOffen={merkeOffen}
+          // Beide Bereiche ändern den Projektzustand — eine Abnahme wie ein
+          // Aussortieren. Der Rückgängig-Knopf muss wissen, was er zurücknähme,
+          // und die Doppelseiten dahinter können ein Bild verloren haben.
+          onChanged={() => {
+            loadInfo();
+            neuRendern();
+          }}
         />
       ) : (
         <div style={S.laedt}>
@@ -1045,6 +1129,15 @@ export function App() {
 
 const S = {
   app: { height: '100%', display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' },
+  /**
+   * Die offenen Prüfpunkte am Reiter.
+   *
+   * Rot, weil es eine Aussage über das Buch ist und keine über die Bedienung —
+   * dieselbe Farbe wie „3 zu klein" in den Kennzahlen. Türkis bleibt der Auswahl
+   * vorbehalten (`.claude/rules/web.md`). Ziffern gleich breit, damit der Reiter
+   * beim Zählen nicht wackelt.
+   */
+  pruefzahl: { color: T.fehler, fontVariantNumeric: 'tabular-nums' as const },
   kopf: {
     display: 'flex',
     alignItems: 'center',
