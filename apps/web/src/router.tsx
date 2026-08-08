@@ -27,11 +27,28 @@
 import { useCallback, useEffect, useState } from 'react';
 
 export type View =
-  'overview' | 'spread' | 'groups' | 'years' | 'fotodaten' | 'sources' | 'edit' | 'cover';
+  | 'overview'
+  | 'spread'
+  | 'groups'
+  | 'years'
+  | 'fotodaten'
+  | 'sources'
+  | 'edit'
+  | 'cover'
+  | 'abnahme';
 
 export type Route =
   | { view: 'overview' }
-  | { view: 'spread'; index: number }
+  /**
+   * Die Doppelseite, wahlweise mit dem Platz, auf den geschaut werden soll.
+   *
+   * Der Platz steht im Pfad und nicht in der Query, weil er sagt, *was* man
+   * ansieht: Aus der Abnahme springt man nicht auf eine Seite, sondern auf ein
+   * Bild — bei acht Bildern auf einem Blatt ist das der Unterschied zwischen
+   * einer Auskunft und einem Suchbild. Als Unterpfad wie `/aufteilung/json`,
+   * damit ⌘-Klick ihn in einen zweiten Tab mitnimmt.
+   */
+  | { view: 'spread'; index: number; slotId?: string }
   /** Ohne `groupId` steht die Liste auf „Alle Fotos". */
   | { view: 'groups'; groupId?: string }
   | { view: 'years' }
@@ -42,7 +59,9 @@ export type Route =
    * demselben Gegenstand – deshalb ein Unterpfad und keine zweite Ansicht.
    */
   | { view: 'edit'; json?: true }
-  | { view: 'cover' };
+  | { view: 'cover' }
+  /** Der Abnahmebericht: was dem Druck im Weg steht. */
+  | { view: 'abnahme' };
 
 /** Zeitfenster, in dem zwei Navigationen mit gleichem Schlüssel zu einer Station verschmelzen. */
 const VERSCHMELZ_MS = 1500;
@@ -57,11 +76,15 @@ const PFADE: Record<View, string> = {
   sources: '/bildquellen',
   edit: '/aufteilung',
   cover: '/umschlag',
+  abnahme: '/abnahme',
 };
 
 /** Die Adresse zu einer Route — ohne Query, die hängt der Aufrufer daran. */
 export function pfadVon(route: Route): string {
-  if (route.view === 'spread') return `/doppelseite/${route.index + 1}`;
+  if (route.view === 'spread') {
+    const seite = `/doppelseite/${route.index + 1}`;
+    return route.slotId ? `${seite}/platz/${encodeURIComponent(route.slotId)}` : seite;
+  }
   if (route.view === 'groups' && route.groupId) {
     return `/gruppen/${encodeURIComponent(route.groupId)}`;
   }
@@ -100,8 +123,9 @@ export function routeVon(pfad: string, suche = ''): Route {
     const nr = Number(teile[1]);
     // Nach oben offen: Wie viele Doppelseiten das Buch hat, weiß hier niemand,
     // und der Server sagt es beim Laden deutlich genug.
-    if (Number.isInteger(nr) && nr >= 1) return { view: 'spread', index: nr - 1 };
-    return { view: 'spread', index: 0 };
+    const index = Number.isInteger(nr) && nr >= 1 ? nr - 1 : 0;
+    const platz = teile[2] === 'platz' ? teile[3] : undefined;
+    return { view: 'spread', index, ...(platz ? { slotId: decodeURIComponent(platz) } : {}) };
   }
 
   if (erstes === 'gruppen') {
@@ -114,7 +138,7 @@ export function routeVon(pfad: string, suche = ''): Route {
   }
 
   // Die übrigen Ansichten tragen keine Kennung im Pfad.
-  for (const view of ['years', 'fotodaten', 'sources', 'cover'] as const) {
+  for (const view of ['years', 'fotodaten', 'sources', 'cover', 'abnahme'] as const) {
     if (PFADE[view] === `/${erstes}`) return { view };
   }
   return { view: 'overview' };
@@ -130,6 +154,7 @@ const WORTE: Record<View, string> = {
   sources: 'Bildquellen',
   edit: 'Aufteilung',
   cover: 'Umschlag',
+  abnahme: 'Abnahme',
 };
 
 /**

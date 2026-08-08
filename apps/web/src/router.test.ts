@@ -20,6 +20,8 @@ const ALLE: Route[] = [
   { view: 'edit' },
   { view: 'edit', json: true },
   { view: 'cover' },
+  { view: 'abnahme' },
+  { view: 'spread', index: 17, slotId: 'r2c' },
 ];
 
 describe('pfadVon', () => {
@@ -33,6 +35,18 @@ describe('pfadVon', () => {
     expect(pfadVon({ view: 'sources' })).toBe('/bildquellen');
     expect(pfadVon({ view: 'edit' })).toBe('/aufteilung');
     expect(pfadVon({ view: 'cover' })).toBe('/umschlag');
+  });
+
+  it('hängt den Platz einer Doppelseite als Unterpfad an', () => {
+    // Der Sprung aus der Abnahme zeigt auf ein Bild, nicht nur auf ein Blatt.
+    expect(pfadVon({ view: 'spread', index: 17, slotId: 'r2c' })).toBe('/doppelseite/18/platz/r2c');
+    expect(routeVon('/doppelseite/18/platz/r2c')).toEqual({
+      view: 'spread',
+      index: 17,
+      slotId: 'r2c',
+    });
+    // Ohne Platz bleibt die Adresse die kurze — sonst hätte jede Seite zwei.
+    expect(pfadVon({ view: 'spread', index: 17 })).toBe('/doppelseite/18');
   });
 
   it('hängt den Texteditor der Aufteilung als Unterpfad an', () => {

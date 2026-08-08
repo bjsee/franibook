@@ -49,6 +49,29 @@ interface RawTemplate {
 
 const REF = library.reference;
 
+/**
+ * Was jede Vorlage der Bibliothek nach außen freilässt, in Referenzeinheiten.
+ *
+ * Kein Entwurfswert, sondern eine Eigenschaft der Bibliothek: Kein Bildplatz
+ * und kein Textplatz beginnt weiter außen als hier — bis auf den einen bewusst
+ * randabfallenden Auftakt (`spread.group.opener-full`). `library.test.ts` hält
+ * das fest, denn zwei Stellen rechnen damit: die justierten Zeilen setzen
+ * denselben Satzspiegel (`layout/justify.ts`), und die Randachse des
+ * Zeitstrahls prüft daran, ob sie überhaupt Platz hat.
+ */
+export const LIBRARY_OUTER_MARGIN_REF = 22;
+
+/**
+ * Derselbe Rand in Millimetern des gewählten Formats.
+ *
+ * Die Referenzseite der Bibliothek ist 600 mm breit für die ganze Doppelseite —
+ * der Rand ist also ein Anteil der Doppelseitenbreite und wächst mit dem Format
+ * mit.
+ */
+export function libraryOuterMarginMm(profile: { page: { trimWidthMm: number } }): number {
+  return (LIBRARY_OUTER_MARGIN_REF / REF.widthMm) * 2 * profile.page.trimWidthMm;
+}
+
 /** Ein Bildplatz aus der Bibliothek: Millimeter hinein, 0..1 heraus. */
 function slot(s: RawSlot): TemplateSlot {
   return {

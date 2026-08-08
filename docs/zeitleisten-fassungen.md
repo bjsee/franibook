@@ -119,10 +119,27 @@ Loch im Band.
 ## Randachse
 
 `y0 = bleed + 26` = 29, Länge `trimH − 52` = 248 mm, bei 19 Jahrgängen 13,05 mm
-im Jahr. Die x-Werte unten sind absolut ab der linken Kante der Doppelseite;
-umgesetzt sind sie als Abstand zur Beschnittkante, damit sie nicht an einem
-Profil hängen. Beschnittkante bei 3, Sicherheitsrand bei 11 – jede Fassung
-bleibt in diesem Band.
+im Jahr.
+
+**Das Band liegt hinter der Sicherheitslinie, nicht davor.** Ursprünglich lag die
+Achse im äußeren Sicherheitsrand – der ist ohnehin frei, sie kostete also keinen
+Platz, den die Bilder brauchen. Am gedruckten Buch war das ein Risiko: Die
+Jahreszahlen standen 1,8 mm vor der Schnittkante, und bei einer Schneidtoleranz
+von ein bis zwei Millimetern wird eine Zahl angeschnitten oder steht von Blatt zu
+Blatt verschieden weit vom Rand. Bei einer Linie fiele das nicht auf, bei einer
+halb weggeschnittenen „2008" schon; der Abnahmebericht hat es gemeldet
+(`docs/konzept.md`, Abschnitt „Prüfbericht").
+
+Seither beginnt das Band an der Sicherheitslinie und ist 5,8 mm breit
+(`SIDE_AXIS_BAND_MM`, gemessen von der Perle der `bar` bis zu ihrem laufenden
+Jahr). Die x-Werte unten sind unverändert und beschreiben die Achse **in sich**;
+absolut kommen am 28×28 jeweils 8,9 mm dazu. Platz dafür ist nur, wo der
+Satzspiegel der Bibliothek weit genug nach innen rückt – 10 mm Sicherheitsrand
+plus 5,8 mm Band gegen 7,33 % der Seitenbreite. Am 28×28 sind das 19,8 mm gegen
+15,8 mm, es bleiben 4 mm Luft; die fünf kleineren Formate haben den Platz nicht,
+und dort wird die Randachse nicht gezeichnet und nicht angeboten
+(`sideAxisPasst`). Eine Achse, die auf den Bildern läge, wäre die schlechtere
+Antwort als keine.
 
 ### `ladder` — Jahresleiter
 

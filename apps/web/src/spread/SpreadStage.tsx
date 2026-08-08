@@ -17,7 +17,7 @@
  */
 import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
-import { dpiInSlot } from '@franibook/core';
+import { dpiInSlot, istSchwer } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { ABSICHT_WORT, absichtVon } from './absicht.js';
 import { textName } from './bewegtext.js';
@@ -177,6 +177,30 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
         {zuKlein && box.kind === 'image' && (
           <span style={S.zuKlein}>zu klein · {Math.round(box.effectiveDpi)} dpi</span>
         )}
+        {/*
+          Was die Abnahme über dieses Bild sagt — an ihm und nicht nur in der
+          Liste: Wer einen Ausschnitt zieht, soll sofort sehen, was das für den
+          Druck bedeutet. Nur die offenen Funde; abgenickte sind eine
+          Entscheidung und keine Meldung mehr, sie stehen im Bildpanel weiter.
+          Die Marke folgt dem Diagnoseschalter (Taste `g`) wie das dpi-Band, denn
+          sie ist dieselbe Sorte Auskunft.
+        */}
+        {guides.diagnostics &&
+          (() => {
+            const offen = model.befundeVon(slotId).filter((b) => !b.abgenommen);
+            if (offen.length === 0) return null;
+            return (
+              <span
+                style={{
+                  ...S.befundmarke,
+                  background: offen.some((b) => istSchwer(b.art)) ? T.fehler : T.warn,
+                }}
+                title={offen.map((b) => b.text).join('\n')}
+              >
+                {offen.length === 1 ? '!' : offen.length}
+              </span>
+            );
+          })()}
         {infosSichtbar && info && (
           <div style={S.infoOverlay}>
             <span style={S.infoZeile}>
@@ -425,7 +449,29 @@ const S = {
     outlineOffset: -2,
     pointerEvents: 'none' as const,
   },
-  /** Unten links, weil oben links die Aufnahmedaten stehen. */
+  /**
+   * Die Zahl der offenen Befunde, oben rechts im Bild.
+   *
+   * Rund und klein: Sie soll auffallen, ohne das Bild zu verstellen — und der
+   * Hinweistext nennt die Funde im Wortlaut des Berichts. Ohne Zeigerereignisse,
+   * damit sie das Ziehen am Bild nicht abfängt; der Titel erscheint trotzdem.
+   */
+  befundmarke: {
+    position: 'absolute' as const,
+    right: 3,
+    top: 3,
+    minWidth: 15,
+    height: 15,
+    padding: '0 4px',
+    borderRadius: T.rPill,
+    fontSize: 10,
+    fontWeight: 600,
+    lineHeight: '15px',
+    textAlign: 'center' as const,
+    color: '#fff',
+    pointerEvents: 'none' as const,
+  },
+  /** Unten links, weil oben links die Aufnahmedaten und oben rechts die Marke stehen. */
   zuKlein: {
     position: 'absolute' as const,
     left: 0,

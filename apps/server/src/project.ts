@@ -27,6 +27,8 @@ import {
   type PhotoMove,
   type Photo,
   type PhotoId,
+  type Abnahmebericht,
+  type Befund,
   type PhotoGroup,
   type PhotoOverride,
   type PrintProfile,
@@ -51,6 +53,9 @@ import {
   defaultProfile,
   DEFAULT_PROFILE_ID,
   profileById,
+  pruefeBuch,
+  markiere,
+  seitenbefunde,
   effectivePhoto,
   findBulkSeconds,
   FULL_CROP,
@@ -226,7 +231,31 @@ interface PersistedProject {
   yearEvents?: Record<string, string[]>;
   /** Erst ab Umschlagunterstützung vorhanden; ältere Projekte haben es nicht. */
   cover?: CoverDesign;
+  /**
+   * Abgenickte Befunde der Abnahme, Schlüssel → Zeitpunkt. Fehlt in Projekten
+   * von vor dem Abnahmebericht — ein leeres Objekt ist die richtige Antwort
+   * darauf und kostet keine Schemaerhöhung.
+   */
+  abnahmen?: Record<string, string>;
   importedAt: string;
+}
+
+/**
+ * Die abgenickten Befunde aus einem gespeicherten Projekt.
+ *
+ * `istBrauchbareStruktur` prüft das Feld nicht mit — es ist optional und fehlt
+ * in jedem älteren Stand. Ein von Hand verändertes `project.json` könnte dort
+ * aber auch eine Liste oder eine Zeichenkette stehen haben, und `Object.keys`
+ * darauf ergäbe Schlüssel wie `0`, `1`, `2`. Derselbe Grundsatz wie beim
+ * Schema: lieber leer als falsch gedeutet.
+ */
+function abnahmenAus(roh: unknown): Record<string, string> {
+  if (typeof roh !== 'object' || roh === null || Array.isArray(roh)) return {};
+  return Object.fromEntries(
+    Object.entries(roh as Record<string, unknown>).filter(
+      (eintrag): eintrag is [string, string] => typeof eintrag[1] === 'string',
+    ),
+  );
 }
 
 /**
@@ -357,6 +386,11 @@ export interface Stand {
   settings: ProjectSettings;
   yearEvents: Record<string, string[]>;
   cover: CoverDesign;
+  /**
+   * Mit im Stand, und damit nimmt ein Cmd+Z auch ein „Weiß ich, ist ok"
+   * zurück — es ist eine Entscheidung über das Buch wie jede andere.
+   */
+  abnahmen: Record<string, string>;
   lastReport: GenerateResult['report'] | null;
 }
 
@@ -390,6 +424,16 @@ export class Project {
    */
   aussortiert: Record<PhotoId, Aussortiert> = {};
   overrides: Record<PhotoId, PhotoOverride> = {};
+  /**
+   * Was der Benutzer an der Abnahme gesehen und für gut befunden hat:
+   * `Befund.schluessel` → Zeitpunkt der Abnahme.
+   *
+   * Der Schlüssel hängt am **Gegenstand** des Funds (Foto, Textplatz, Art) und
+   * nicht an seiner Stelle im Buch. Eine Neuanordnung wirft die Abnahme deshalb
+   * nicht um, und die Randachse des Zeitstrahls ist mit einem Eintrag für alle
+   * achtzig Doppelseiten erledigt.
+   */
+  abnahmen: Record<string, string> = {};
   groups: PhotoGroup[] = [];
   spreads: Spread[] = [];
   structure: Structure = { chapters: [], undated: [], photoCount: 0 };
@@ -530,6 +574,7 @@ export class Project {
       settings: this.settings,
       yearEvents: this.yearEvents,
       cover: this.cover,
+      abnahmen: this.abnahmen,
       lastReport: this.lastReport,
     });
   }
@@ -550,6 +595,7 @@ export class Project {
     this.settings = stand.settings;
     this.yearEvents = stand.yearEvents;
     this.cover = stand.cover;
+    this.abnahmen = stand.abnahmen;
     this.lastReport = stand.lastReport;
     this.rebuildStructure();
   }
@@ -1761,6 +1807,102 @@ export class Project {
   }
 
   /**
+   * Der Abnahmebericht: was dem Druck im Weg steht, über das ganze Buch.
+   *
+   * Bleibt hier bei den `render*`-Methoden und wird kein Modul in `project/`:
+   * Gerechnet wird nichts: Die Fachlogik liegt vollständig im Kern
+   * (`pruefeBuch`), und was hier steht, ist das Zusammenstellen der Eingaben aus
+   * dem gerenderten Buch, dem Umschlag und den beiden Abdrücken. Ein Modul mit
+   * eigener Zustandsschnittstelle wäre für diese fünf Zeilen mehr Zeremonie als
+   * Auskunft.
+   */
+  abnahme(): Abnahmebericht {
+    return pruefeBuch({
+      spreads: this.renderAll(),
+      cover: this.renderCover(),
+      profile: this.profile,
+      groupsPending: this.groupsPending(),
+      structurePending: this.structurePending(),
+      abgenommen: new Set(Object.keys(this.abnahmen)),
+    });
+  }
+
+  /**
+   * Die Befunde einer schon gerenderten Doppelseite, mit ihrer Abnahme markiert.
+   *
+   * Für `spreadAntwort`: Die Bühne blendet damit am Bild ein, was der
+   * Abnahmebericht über es sagt, ohne dafür das ganze Buch zu rechnen oder eine
+   * zweite Anfrage zu stellen. Die gerenderte Seite kommt als Argument, weil der
+   * Aufrufer sie ohnehin schon hat — ein zweites `render()` wäre dieselbe
+   * Rechnung ein zweites Mal.
+   */
+  befundeDerSeite(gerendert: RenderedSpread, index: number): Befund[] {
+    const abgenommen = new Set(Object.keys(this.abnahmen));
+    return seitenbefunde(gerendert, index, this.profile).map((b) => markiere(b, abgenommen));
+  }
+
+  /**
+   * Nickt einen Befund ab: „Weiß ich, ist ok."
+   *
+   * **Nur, was der Bericht auch meldet.** Der Schlüssel kommt aus einer Anfrage,
+   * und er landet als Objektschlüssel im gespeicherten Projekt; ihn gegen den
+   * aktuellen Bericht zu prüfen ist billiger als ein Muster, das raten müsste,
+   * welche Schlüssel es geben kann — und es hält die Liste frei von Einträgen,
+   * zu denen es nie einen Fund gab.
+   *
+   * Der Zeitpunkt ist die einzige Stelle im Server, an der die Abnahme eine Uhr
+   * braucht; im Kern wäre er verboten (Determinismus), hier ist er Auskunft.
+   *
+   * Der Bericht wird dabei zweimal gerechnet — einmal hier zur Prüfung, einmal
+   * für die Antwort der Route. Das kostet am echten Buch 2 × 21 ms und bleibt
+   * so: Den Bericht der Prüfung weiterzureichen hieße, ihn nach der Änderung
+   * von Hand nachzuziehen (Marke setzen, Bilanz umrechnen) — und damit eine
+   * zweite Rechnung für dieselbe Aussage.
+   */
+  abnicken(schluessel: string): { ok: true } | { ok: false; error: string } {
+    // `Object.hasOwn` und nicht der Wahrheitswert: `abnahmen['toString']` ist
+    // von der Prototypkette her wahr, und der Aufruf hätte „schon abgenickt"
+    // gemeldet, ohne etwas gespeichert zu haben.
+    //
+    // Und ein Misserfolg statt eines stillen `ok`: Sonst legte der Haken in
+    // `routes/undo.ts` einen Schritt an, der nichts zurücknimmt — ein Cmd+Z,
+    // das nichts tut, sieht aus wie ein Fehler.
+    if (Object.hasOwn(this.abnahmen, schluessel)) {
+      return { ok: false, error: 'Dieser Befund ist schon abgenickt' };
+    }
+    const bekannt = this.abnahme().befunde.some((b) => b.schluessel === schluessel);
+    if (!bekannt) {
+      return { ok: false, error: 'Diesen Befund meldet die Abnahme gerade nicht' };
+    }
+    this.abnahmen[schluessel] = new Date().toISOString();
+    return { ok: true };
+  }
+
+  /**
+   * Nimmt eine Abnahme zurück — einzeln oder alle auf einmal.
+   *
+   * Ohne Schlüssel wird geleert: Wer die Abnahme von vorn durchgehen will, soll
+   * das in einem Griff können und nicht in vierzehn. Beides ist ein
+   * Undo-Schritt, also nicht endgültig.
+   *
+   * @returns wie viele Abnahmen aufgehoben wurden.
+   */
+  abnahmeZurueck(schluessel?: string): number {
+    // `0` heißt „nichts geschehen"; die Route macht daraus einen Misserfolg,
+    // damit kein leerer Undo-Schritt stehen bleibt.
+    if (schluessel === undefined) {
+      const anzahl = Object.keys(this.abnahmen).length;
+      this.abnahmen = {};
+      return anzahl;
+    }
+    // Wie beim Abnicken über `Object.hasOwn`: Sonst meldete ein Schlüssel wie
+    // `toString` eine aufgehobene Abnahme, die es nie gab.
+    if (!Object.hasOwn(this.abnahmen, schluessel)) return 0;
+    delete this.abnahmen[schluessel];
+    return 1;
+  }
+
+  /**
    * Was der Zeitstrahl über die Doppelseite hinaus braucht.
    *
    * Das Ersatzjahr entsteht hier und nicht in der Engine: Nur der Projektstand
@@ -2139,6 +2281,7 @@ export class Project {
       yearEvents: this.yearEvents,
       book: { spreads: this.spreads },
       cover: this.cover,
+      abnahmen: this.abnahmen,
       importedAt: this.importedAt,
     };
   }
@@ -2224,6 +2367,7 @@ export class Project {
     this.yearEvents = data.yearEvents ?? {};
     this.spreads = data.book?.spreads ?? [];
     this.cover = data.cover ?? {};
+    this.abnahmen = abnahmenAus(data.abnahmen);
     this.settings = { ...this.settings, ...data.settings };
     this.importedAt = data.importedAt ?? this.importedAt;
     this.rebuildStructure();
@@ -2264,6 +2408,7 @@ export class Project {
       this.yearEvents = data.yearEvents ?? {};
       this.spreads = data.book?.spreads ?? [];
       this.cover = data.cover ?? {};
+      this.abnahmen = abnahmenAus(data.abnahmen);
       this.settings = { ...this.settings, ...data.settings };
       this.importedAt = data.importedAt ?? this.importedAt;
       this.rebuildStructure();
