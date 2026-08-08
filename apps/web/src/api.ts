@@ -28,6 +28,7 @@ import type {
   MoveTarget,
   PhotoGroup,
   PhotoMove,
+  PhotoQuality,
   RenderedCover,
   RenderedSpread,
   TextElement,
@@ -600,7 +601,71 @@ export interface FotoInfo {
    * der alten Ausrichtung, weil die Vorschauen `immutable` ausgeliefert werden.
    */
   quarterTurns?: 1 | 2 | 3;
+  /**
+   * Gemessene Bildqualität, sofern der Hintergrundlauf schon dort war.
+   *
+   * Die Ansicht zeigt daraus nur die Schärfe, und nur im Vergleich: Ein
+   * absoluter Wert sagt niemandem etwas, „von diesen zweien das schärfere"
+   * dagegen sofort.
+   */
+  quality?: PhotoQuality;
 }
+
+// ─── Doppel ─────────────────────────────────────────────────────────────────
+
+/**
+ * Mehrere Aufnahmen desselben Augenblicks.
+ *
+ * Wird bei jedem Aufruf frisch gerechnet und nirgends gespeichert — der
+ * Vorschlag hängt an den Datumskorrekturen (`apps/server/src/project/doppel.ts`).
+ */
+export interface DoppelVorschlag {
+  photoIds: string[];
+  from: string;
+  to: string;
+  /** Welches Foto die Automatik behielte — das schärfste. */
+  behalten: string;
+  /** Die Kennung, unter der ein „beide behalten" gemerkt wird. */
+  schluessel: string;
+  /**
+   * Der größte gemessene Bildabstand innerhalb des Doppels — die Begründung
+   * des Vorschlags. Fehlt, wenn kein Bildvergleich stattgefunden hat.
+   */
+  aehnlichkeit?: number;
+  /** Wann „beide behalten" gedrückt wurde, sofern es das wurde. */
+  behaltenSeit?: string;
+}
+
+export interface DoppelBericht {
+  doppel: DoppelVorschlag[];
+  fotos: number;
+  /**
+   * Ob ein Bildvergleich stattgefunden hat.
+   *
+   * `false` heißt, dass die Vorschläge allein aus der Zeit stammen — dann
+   * stehen auch zwei Kameras auf demselben Fest als Doppel darin, und die
+   * Ansicht sagt es dazu.
+   */
+  bestaetigt: boolean;
+  /** Die Schwellen, mit denen gerechnet wurde — die Ansicht begründet damit. */
+  fensterSekunden: number;
+  hoechstabstand: number;
+  millisekunden: number;
+}
+
+export const doppelLaden = () => hole<DoppelBericht>('/api/photos/doppel');
+
+/** „Beide behalten": merkt ein Doppel als erledigt, ohne etwas zu löschen. */
+export const doppelBehalten = (schluessel: string) =>
+  sende<{ ok: true; schluessel: string }>('POST', '/api/photos/doppel/behalten', { schluessel });
+
+/** Nimmt ein „beide behalten" zurück; ohne Schlüssel alle auf einmal. */
+export const doppelBehaltenZurueck = (schluessel?: string) =>
+  sende<{ ok: true; anzahl: number }>(
+    'DELETE',
+    '/api/photos/doppel/behalten',
+    schluessel === undefined ? {} : { schluessel },
+  );
 
 // ─── Einwurf ────────────────────────────────────────────────────────────────
 

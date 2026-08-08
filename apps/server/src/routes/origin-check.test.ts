@@ -27,6 +27,7 @@ async function server() {
     sources,
     previews: null as never,
     decodes: null as never,
+    abstaende: null as never,
     outDir: dir,
   } as Kontext;
   return { ...baueApp({ kontext, anlauf: () => null, logger: false }), project };
@@ -109,6 +110,7 @@ describe('Origin-Schutz', () => {
       sources,
       previews: null as never,
       decodes: null as never,
+      abstaende: null as never,
       outDir: dir,
     } as Kontext;
     const { app } = baueApp({ kontext, anlauf: () => null, logger: false });

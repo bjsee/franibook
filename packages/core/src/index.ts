@@ -24,6 +24,7 @@ export * from './structure/segment.js';
 export * from './structure/occasions.js';
 export * from './structure/groups.js';
 export * from './structure/suggest-groups.js';
+export * from './structure/doppel.js';
 
 export * from './layout/scoring.js';
 export * from './layout/grouping.js';

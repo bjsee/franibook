@@ -179,3 +179,12 @@ Abschnitt „Wenn Bild und Platz quer zueinander stehen".
 Die Slot-Zuordnung (`layout/scoring.ts`) kennt den Bildfokus **nicht** — er
 verschiebt nur den Ausschnitt und verkleinert ihn nicht, also darf er die
 Bildverteilung des Buchs nicht ändern.
+
+**Die Bildschärfe kennt sie sehr wohl** (`qualityPenalty`), und der Unterschied
+ist genau dieser: Sie soll die Verteilung ändern — der große Platz gehört dem
+besseren Bild (Issue #19). Die Kennlinie läuft zwischen dem zehnten Perzentil des
+Bestands und seinem Median (316 und 1.036, gemessen in `docs/spikes/serien.md`)
+und wiegt mit höchstens 0,3 leichter als der Orientierungsbruch. Im kleinsten
+Platz entfällt sie ganz: Ein verwackeltes Foto soll nicht aus dem Buch fallen, es
+soll nur nicht die Seite tragen. Wirksam wird das erst beim nächsten Anordnen —
+es ist eine Layoutentscheidung und keine Rechnung beim Rendern.

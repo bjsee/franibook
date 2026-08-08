@@ -20,7 +20,7 @@ import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
 import { Sources } from './sources.js';
-import { VisionErkennung } from './vision.js';
+import { AbstandsErkennung, VisionErkennung } from './vision.js';
 import { shutdownImport } from './import.js';
 import type { Kontext } from './routes/kontext.js';
 
@@ -55,12 +55,21 @@ const project = new Project(sources, previews, decodes, PROJECT_DIR);
  * Anlauf und trägt ihr Ergebnis in den Bestand ein.
  */
 const vision = new VisionErkennung(CACHE_DIR);
+/**
+ * Bildvergleich für die Doppel.
+ *
+ * Anders als die Gesichtserkennung **im** `Kontext`: Ihr Ergebnis wird nicht
+ * gespeichert, sondern auf Anfrage gerechnet — der Vorschlag hängt an den
+ * Datumskorrekturen und wäre gespeichert nach der nächsten falsch.
+ */
+const abstaende = new AbstandsErkennung(CACHE_DIR);
 
 const kontext: Kontext = {
   project,
   sources,
   previews,
   decodes,
+  abstaende,
   outDir: OUT_DIR,
   importLimit: IMPORT_LIMIT,
 };
@@ -179,7 +188,8 @@ async function start(): Promise<void> {
   void previews
     .warm(project.effectivePhotoList(), 'preview', 6)
     .then(() => process.stdout.write('Vorschaubilder vollständig\n'))
-    .then(() => merkmaleNachziehen());
+    .then(() => merkmaleNachziehen())
+    .then(() => qualitaetNachziehen());
 }
 
 /**
@@ -213,6 +223,35 @@ async function merkmaleNachziehen(): Promise<void> {
     // Merkmale bleibt der Ausschnitt in der Bildmitte, und beim nächsten Start
     // wird es erneut versucht.
     process.stdout.write(`Bildmerkmale übersprungen: ${String(err)}\n`);
+  }
+}
+
+/**
+ * Schärfe und Belichtung für die Fotos, denen sie fehlen.
+ *
+ * Nach den Bildmerkmalen und aus demselben Grund im Hintergrund: Das Buch steht
+ * ohne die Zahlen. Sie gewichten den Slotplatz (`layout/scoring.ts`) und
+ * schlagen innerhalb eines Doppels das schärfere Bild vor — beides wirkt beim
+ * nächsten Anordnen, nichts wird dafür umgestellt.
+ *
+ * Gerechnet wird auf den 320-px-Vorschauen, die der Warmlauf davor erzeugt hat.
+ * Deshalb steht dieser Schritt am Ende der Kette und nicht daneben: Er wäre
+ * sonst der Grund, dass die Vorschauen doppelt entstehen.
+ */
+async function qualitaetNachziehen(): Promise<void> {
+  try {
+    const bericht = await project.qualitaetNachziehen(previews);
+    if (bericht.gemessen === 0 && bericht.gescheitert === 0) return;
+    await project.save();
+    process.stdout.write(
+      `Bildqualität: ${bericht.gemessen} Fotos gemessen` +
+        (bericht.gescheitert > 0 ? `, ${bericht.gescheitert} gescheitert` : '') +
+        ` (${bericht.millisekunden} ms)\n`,
+    );
+  } catch (err) {
+    // Wie bei den Merkmalen: Ohne die Zahlen bleibt die Gewichtung, wie sie
+    // war, und beim nächsten Start wird es erneut versucht.
+    process.stdout.write(`Bildqualität übersprungen: ${String(err)}\n`);
   }
 }
 

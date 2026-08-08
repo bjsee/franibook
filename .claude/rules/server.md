@@ -22,7 +22,8 @@ sources.ts          Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad 
 import.ts           Scan und EXIF-Auswertung
 decode.ts           HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
 previews.ts         WebP-Vorschauen (320 px / 1600 px lange Kante)
-vision.ts           Gesichter und Salienz (macOS Vision über ein Swift-Werkzeug)
+vision.ts           Gesichter, Salienz und Bildabstand (macOS Vision über zwei Swift-Werkzeuge)
+bildqualitaet.ts    Schärfe und Belichtung, gemessen auf der 320-px-Vorschau
 ```
 
 **Eine Route entscheidet nichts Fachliches.** Sie liest Parameter, prüft sie,
@@ -213,11 +214,30 @@ Der Vorschau-Cache trägt die Fassung eines Fotos im Namen (Drehung), und die
 Oberfläche hängt eine Bildversion als `?v=` an jede Adresse — ohne das bliebe ein
 gedrehtes Bild hinter `immutable` unsichtbar.
 
-**Bildmerkmale erkennt der Server, nicht der Kern** (`vision.ts`, Swift-Werkzeug in
+**Bildmerkmale erkennt der Server, nicht der Kern** (`vision.ts`, Swift-Werkzeuge in
 `apps/server/vision/`, beim ersten Bedarf nach `<cache>/bin/` kompiliert). Der Lauf
 liegt nach dem Anlauf im Hintergrund (`project/merkmale.ts`), damit ein Kaltstart
 nicht darauf wartet; fehlt `swiftc`, entfällt er stillschweigend. `FRANIBOOK_NO_VISION`
 schaltet ihn ab.
+
+Dahinter hängen in derselben Kette **die Qualitätszahlen** (`project/qualitaet.ts`
+über `bildqualitaet.ts`) — sie rechnen auf den 320-px-Vorschauen, die der Warmlauf
+davor erzeugt hat, und stünden daneben nur im Weg. Wie bei den Merkmalen gilt:
+gemessen wird, was noch keine Auskunft hat, und eine unlesbare Datei bleibt ohne
+statt mit einer Null.
+
+**Die Doppel dagegen werden nicht gespeichert** (`project/doppel.ts`,
+`GET /api/photos/doppel`, Vergleich über `AbstandsErkennung`). Der Vorschlag hängt
+an den Datumskorrekturen und wäre gespeichert nach der nächsten falsch; gerechnet
+kostet er rund 1,5 s über den ganzen Bestand, und nur wenn jemand die Liste öffnet.
+
+Gespeichert wird allein **die Entscheidung darüber**: `doppelBehalten` hält die
+Doppel, bei denen alle Bilder bleiben sollen — Schlüssel → Zeitpunkt, genau wie
+`abnahmen`, und über dieselbe Formprüfung geladen (`merkkarteAus`). Der Schlüssel
+kommt aus dem Kern (`doppelSchluessel`, sortierte Fotokennungen), damit eine
+Datumskorrektur ihn nicht ändert. `POST`/`DELETE /api/photos/doppel/behalten`
+prüfen dabei **nicht**, ob es das Doppel gerade gibt: Das kostete eine volle
+Doppelrechnung samt Bildvergleich für eine Auskunft, die die Oberfläche schon hat.
 
 ## Sicherheit
 

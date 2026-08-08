@@ -17,6 +17,7 @@ import type { DecodeCache } from '../decode.js';
 import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
 import type { Sources } from '../sources.js';
+import type { AbstandsErkennung } from '../vision.js';
 
 /**
  * Ein Dateiname für den PDF-Export.
@@ -84,6 +85,14 @@ export interface Kontext {
   sources: Sources;
   previews: PreviewCache;
   decodes: DecodeCache;
+  /**
+   * Bildvergleich für die Doppel (`GET /api/photos/doppel`).
+   *
+   * Anders als die Gesichtserkennung steht sie hier: Ihr Ergebnis wird nicht
+   * gespeichert, sondern auf Anfrage gerechnet — der Vorschlag hängt an den
+   * Datumskorrekturen und wäre gespeichert nach der nächsten falsch.
+   */
+  abstaende: AbstandsErkennung;
   /** Wohin die PDF-Ausgabe geht. */
   outDir: string;
   /** Vorgabe für `FRANIBOOK_LIMIT`, wenn eine Anfrage keine eigene mitbringt. */
