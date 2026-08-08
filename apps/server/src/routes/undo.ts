@@ -300,6 +300,7 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
 
   // ------------------------------------------- Was den Zustand nicht anfasst
   'POST /api/export/pdf': null,
+  'POST /api/export/abzug': null,
   'POST /api/export/cover': null,
   // Zurücknehmen und Wiederholen führen den Verlauf selbst – ein Schritt darauf
   // wäre eine Schleife.

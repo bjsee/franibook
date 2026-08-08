@@ -70,6 +70,25 @@ describe('prepareImage — Zielauflösung', () => {
   });
 });
 
+describe('prepareImage — Korrekturabzug', () => {
+  it('rechnet auf die Auflösung des Abzugs statt auf die des Drucks', async () => {
+    const bild = await testbild();
+    const opts = { orientation: 1 as const, crop, widthMm: SLOT_MM, heightMm: SLOT_MM, profile };
+
+    // 73 dpi: 150 dpi auf dem A4-Blatt, dessen Maßstab knapp die Hälfte beträgt.
+    const abzug = await prepareImage(bild, { ...opts, abzug: { targetDpi: 73 } });
+    const druck = await prepareImage(bild, opts);
+
+    expect(abzug.widthPx).toBe(targetPx(SLOT_MM, 73));
+    expect(abzug.widthPx).toBeLessThan(druck.widthPx / 4);
+    // Die Bytes fallen um Faktor 11,8, die Pixelzahl um 16,8 — ein kleines Bild
+    // trägt je Pixel mehr Detail, und der Druck hat die Trellis-Quantisierung
+    // auf seiner Seite. Die Schranke steht darunter und nicht am Messwert: Ein
+    // Test, der auf 11,8 besteht, fällt beim nächsten sharp.
+    expect(abzug.buffer.byteLength).toBeLessThan(druck.buffer.byteLength / 8);
+  });
+});
+
 /**
  * Dasselbe Testbild, aber mit weitem Farbraum: `withIccProfile('p3')` wandelt
  * die Pixel nach Display P3 und hängt das Profil an — genau die Machart der

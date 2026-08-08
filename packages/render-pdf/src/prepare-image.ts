@@ -37,7 +37,32 @@ export interface PrepareOptions {
   widthMm: number;
   heightMm: number;
   profile: PrintProfile;
+  /**
+   * Ausgabe für den Korrekturabzug statt für den Druck.
+   *
+   * Nur der Abzug setzt das Feld, und er setzt es an genau einer Stelle
+   * (`renderPdf`). Ohne die Angabe gilt das Druckprofil – die Vorgabe bleibt
+   * damit die Druckdatei, und ein vergessener Schalter kostet Laufzeit statt
+   * Qualität.
+   */
+  abzug?: { targetDpi: number };
 }
+
+/**
+ * Die Kompression des Korrekturabzugs.
+ *
+ * Drei Abweichungen von der Druckdatei, alle in dieselbe Richtung: Der Abzug
+ * soll in Sekunden fertig sein und sich blättern lassen, und niemand beurteilt
+ * daran Farbe oder Schärfe.
+ *
+ * - **65 statt 88**: Bei 150 dpi auf A4 sind die Artefakte nicht zu sehen; die
+ *   Frage am Abzug ist „welches Bild fliegt raus", nicht „wie sieht die Haut aus".
+ * - **4:2:0**, auch wenn das Profil 4:4:4 verlangt – dieselbe Begründung.
+ * - **keine Trellis-Quantisierung**: Sie kostet am vollen Buch 28 zusätzliche
+ *   Sekunden für ein Drittel Dateigröße. Beim Druck-Upload ist das die günstigere
+ *   Währung, beim Durchsehen genau die falsche.
+ */
+const ABZUG_JPEG = { quality: 65, chromaSubsampling: '4:2:0' } as const;
 
 /**
  * Bereitet ein Bild für die Einbettung ins PDF auf.
@@ -80,7 +105,7 @@ export async function prepareImage(
 
   const region = cropToPixels(crop, srcWidth, srcHeight);
 
-  const dpi = profile.resolution.targetDpi;
+  const dpi = opts.abzug?.targetDpi ?? profile.resolution.targetDpi;
   let outWidth = targetPx(widthMm, dpi);
   let outHeight = targetPx(heightMm, dpi);
 
@@ -112,8 +137,10 @@ export async function prepareImage(
     // Bildern 2,5 MB für dieselbe Auskunft.
     .withIccProfile(sharpFarbraum(profile), { attach: false })
     .jpeg({
-      quality: profile.encoding.jpegQuality,
-      chromaSubsampling: profile.encoding.chromaSubsampling,
+      quality: opts.abzug ? ABZUG_JPEG.quality : profile.encoding.jpegQuality,
+      chromaSubsampling: opts.abzug
+        ? ABZUG_JPEG.chromaSubsampling
+        : profile.encoding.chromaSubsampling,
       // Trellis-Quantisierung aus mozjpeg: Sie rechnet je Block die
       // Koeffizienten neu durch und spart Bytes, ohne die Qualitätsstufe zu
       // senken. Am Bestand gemessen (120 Fotos, bezogen auf 92/4:4:4 = 100 %):
@@ -121,8 +148,9 @@ export async function prepareImage(
       // zusammen also weniger als erwartet — hier liegt das letzte Drittel.
       // Bezahlt wird mit Laufzeit: der Vollexport dauert 56 statt 28 s. Bei
       // einer Datei, die hochgeladen werden muss, ist das die günstigere
-      // Währung.
-      trellisQuantisation: true,
+      // Währung. Beim Korrekturabzug nicht: dort zählt die Sekunde, siehe
+      // `ABZUG_JPEG`.
+      trellisQuantisation: !opts.abzug,
       overshootDeringing: true,
       // Quantisierungstabelle 3 (ImageMagick) gehört zu derselben Messung; sie
       // verteilt die Bits flächiger als die Tabelle aus Annex K.

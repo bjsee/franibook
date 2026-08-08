@@ -60,6 +60,40 @@ Ein roter Parity-Test wird behoben, nicht gelockert.
 Verglichen wird gegen die Originale (`/api/photos/:id/original`), nie gegen die
 WebP-Vorschauen — sonst misst der Test Kompression statt Geometrie.
 
+## Der Korrekturabzug ist dieselbe Zeichnung, kleiner
+
+`renderPdf({ abzug })` legt statt einer Druckseite ein A4-Blatt an und setzt die
+Doppelseite verkleinert darauf (`POST /api/export/abzug`). **Auch hier rechnet der
+Adapter nichts**: Blattmaß, Maßstab, Lage, Seitenzahlen und Bildauflösung kommen
+aus `core/pruefung/abzug.ts` (`abzugsblatt`), der Buchinhalt aus demselben RSM wie
+der Druck. Was der Adapter tut, ist eine Transformationsmatrix und ein Clip auf das
+Endformat — deshalb kann der Abzug gar kein anderes Buch zeigen als die Datei, die
+zur Druckerei geht.
+
+**Alle Maße des Blattes stammen aus dem RSM, keines aus dem Druckprofil.**
+`abzugsblatt` nimmt eine `Abzugsflaeche` (`widthMm`, `heightMm`, `bleedMm` — ein
+`RenderedSpread` erfüllt sie), und der Haken bekommt die Doppelseite mit, für die
+er das Blatt bauen soll. Käme der Maßstab aus dem Profil und der Zuschnitt aus dem
+RSM, säße das Buch nach einem Formatwechsel ohne Neurendern verschoben auf dem
+Blatt, ohne dass etwas meldet — beide Zahlen wären für sich genommen richtig.
+Dieselbe Machart wie `TextBlockArea` und `randabfallend`. Gerufen wird der Haken
+genau einmal je Doppelseite, vor dem ersten Blatt: Die Schriften müssen vor der
+ersten Seite feststehen.
+
+Zwei Fallen, beide gemessen und beide in `abzug.test.ts` festgehalten:
+
+- **pdfkit bricht selbst um.** Eine Textzeile unterhalb des Satzspiegels lässt es
+  eine Seite nachlegen, und es misst das an der _untransformierten_ Seitenhöhe —
+  der Zeitstrahl liegt bei einem 28×28-Buch bei 782 pt auf einem 595 pt hohen
+  Blatt. Ohne das Anheben von `doc.page.height` waren es 154 Blatt für 52
+  Doppelseiten. Der Zähler des Renderers merkt davon nichts, also prüft der Test
+  die `/MediaBox`-Vorkommen im fertigen PDF.
+- **Die Vorschau ist schon gedreht.** Wer sie als Bildquelle reicht, gibt
+  `orientation: 1` und keine Vierteldrehung mit (siehe `.claude/rules/server.md`).
+
+Der Parity-Test deckt den Abzug **nicht** ab und soll es nicht: Er vergleicht
+Geometrie, und der Abzug ist bewusst eine andere Ausgabe derselben Geometrie.
+
 ## Umgebung
 
 `render-dom` läuft im Browser: keine Node-Builtins. `render-pdf` läuft im Server

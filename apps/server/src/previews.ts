@@ -126,15 +126,25 @@ export class PreviewCache {
     return target;
   }
 
-  /** Erzeugt Vorschauen im Voraus, mit begrenzter Nebenläufigkeit. */
+  /**
+   * Erzeugt Vorschauen im Voraus, mit begrenzter Nebenläufigkeit.
+   *
+   * Der Rückgabewert ist die Karte Foto → Datei; wer sie nicht braucht (der
+   * Warmlauf beim Start), ignoriert sie. Sie ist der Weg, auf dem der
+   * Korrekturabzug an seine Bildquellen kommt: `renderPdf.resolvePhoto` ist
+   * synchron, also müssen die Pfade vorher feststehen — und genau das leistet
+   * dieser Durchgang ohnehin schon. Ein defektes Bild fehlt in der Karte, statt
+   * mit einem Pfad einzustehen, hinter dem keine Datei liegt.
+   */
   async warm(
     photos: readonly PhotoRef[],
     size: PreviewSize,
     concurrency: number,
     onProgress?: (done: number, total: number) => void,
-  ): Promise<void> {
+  ): Promise<Map<string, string>> {
     let next = 0;
     let done = 0;
+    const pfade = new Map<string, string>();
     await Promise.all(
       Array.from({ length: Math.min(concurrency, photos.length) }, async () => {
         for (;;) {
@@ -142,7 +152,7 @@ export class PreviewCache {
           if (i >= photos.length) return;
           const p = photos[i]!;
           try {
-            await this.get(p, size);
+            pfade.set(p.id, await this.get(p, size));
           } catch {
             // Ein defektes Bild darf den Import nicht anhalten; es fällt
             // später als fehlende Vorschau auf.
@@ -151,5 +161,6 @@ export class PreviewCache {
         }
       }),
     );
+    return pfade;
   }
 }
