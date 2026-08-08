@@ -290,6 +290,42 @@ describe('Abnahme eines Befundes', () => {
   });
 });
 
+describe('Befundzeilen für den Korrekturabzug', () => {
+  /** Drei leere Doppelseiten – jede meldet „ganz leer", also je ein Befund. */
+  function projektMitDrei(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    p.spreads = [0, 1, 2].map((index) => ({
+      id: `s${index}`,
+      index,
+      templateId: 'spread.4up.grid',
+      slots: [],
+    }));
+    return p;
+  }
+
+  it('nennt je Doppelseite die Art des Funds, nicht seinen Wortlaut', () => {
+    const p = projektMitDrei();
+    const zeilen = p.befundzeilen();
+    const befund = p.abnahme().befunde.find((b) => b.ort.kind === 'spread')!;
+
+    expect(zeilen).toHaveLength(3);
+    // Die Art bündelt („Platz ohne Bild (4)"), der Wortlaut nie – zwei
+    // Freitexte sind nie gleich.
+    for (const zeile of zeilen) expect(zeile).toBe('Doppelseite ohne Bild');
+    expect(befund.text).not.toBe('Doppelseite ohne Bild');
+  });
+
+  it('schweigt zu einer Doppelseite, deren Befund abgenickt ist', () => {
+    const p = projektMitDrei();
+    const befund = p.abnahme().befunde.find((b) => b.ort.kind === 'spread')!;
+    p.abnicken(befund.schluessel);
+
+    // Der Schlüssel einer leeren Doppelseite hängt an der Seite, also trifft er
+    // genau eine – die übrigen beiden melden weiter.
+    expect(p.befundzeilen().filter((z) => z === undefined)).toHaveLength(1);
+  });
+});
+
 describe('setSpreadTemplate', () => {
   /** Ein Projekt mit einer Doppelseite aus drei gleich geformten Bildern. */
   function projektMitDrei(): Project {
