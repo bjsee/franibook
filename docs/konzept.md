@@ -1871,8 +1871,8 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > des Blattes statt 240 dpi des Buches), Kompression (q65, 4:2:0, keine
 > Trellis-Quantisierung) und das Blatt. Eine zweite Layoutrechnung wäre das Ende des
 > Werkzeugs: Ein Abzug, der ein anderes Buch zeigt als die Datei zur Druckerei, taugt
-> nicht zum Durchsehen. Gemessen am Probestand (52 Doppelseiten, 60 Fotos): 1,1 MB in
-> 1,0 s gegen 18,3 MB in 6,2 s.
+> nicht zum Durchsehen. Am echten Buch gemessen (80 Doppelseiten, 997 Bilder): 9,3 MB
+> in 18,4 s gegen 156 MB in 81,9 s — siebzehnmal kleiner, viereinhalbmal schneller.
 >
 > **DIN A4 quer, nicht das Buchformat verkleinert.** Ein Abzug im Seitenmaß des Buches
 > (bei 28×28 wären das 580 × 320 mm) landet in jedem Druckdialog in einem
@@ -1890,6 +1890,17 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > gleich sind und vier Prozentangaben am Blattrand niemandem helfen. Abgenickte Funde
 > fehlen: Was man gesehen und für gut befunden hat, ist beim Durchsehen genau das
 > Rauschen, das man dann überliest.
+>
+> **Und er lässt sich öffnen.** Jeder Export endete vorher mit einem Dateipfad in einer
+> Meldung, den man von Hand in den Finder tippte — beim Druck-PDF verschmerzbar, beim
+> Abzug der Bruch mitten im Handgriff, denn er ist zum sofortigen Durchsehen da.
+> `GET /api/export/:fileName` liefert die erzeugte Datei mit `Content-Disposition:
+inline` aus, und aus der Meldung wird ein Link in einen neuen Tab. Im
+> PDF-Betrachter des Browsers, nicht über einen `open`-Aufruf des Servers: Das
+> braucht keinen Kommandoaufruf, läuft auf jedem Rechner gleich, und blättern und
+> drucken kann der Betrachter ohnehin. Die Route liest ausschließlich aus `outDir` und
+> prüft den Namen mit demselben `EXPORT_DATEINAME` wie das Schreiben — in
+> Leserichtung wäre ein `..` sonst ein Leseloch auf jede Datei des Serverprozesses.
 >
 > Die Seitenzahl **im Buch** ist damit ausdrücklich nicht erledigt (#21): Sie wäre eine
 > Textbox im RSM und müsste dem Zeitstrahl im Fußraum ausweichen. Der Abzug trägt sie

@@ -84,6 +84,18 @@ const REITER: { id: View; label: string }[] = [
 ];
 
 /**
+ * Eine Meldung im Toast, wahlweise mit einer erzeugten Datei daran.
+ *
+ * `datei` ist der Dateiname aus der Export-Antwort, nicht der volle Pfad: Er ist
+ * die Adresse für `GET /api/export/:fileName`, und den Namen aus dem Pfad zu
+ * schneiden hieße, hier noch einmal zu wissen, welcher Trenner gilt.
+ */
+interface Notiz {
+  text: string;
+  datei?: string;
+}
+
+/**
  * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
  * um – sonst würde er WebP-Kompression gegen JPEG-Kompression messen statt
  * Geometrie gegen Geometrie.
@@ -155,7 +167,19 @@ export function App() {
   /** Was der Server gerade tut, solange er noch nicht antwortet. `null` = läuft. */
   const [anlauf, setAnlauf] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [notiz, setNotiz] = useState<Notiz | null>(null);
+  const note = notiz?.text ?? null;
+  /**
+   * Die gewöhnliche Meldung — und sie löscht eine angehängte Datei mit.
+   *
+   * Der Wrapper statt eines zweiten Zustands neben `note`: Zwei getrennte
+   * Zustände hießen, an jeder der zwanzig Meldestellen an beide zu denken, und
+   * die eine vergessene ließe den Öffnen-Link einer längst abgelösten Meldung
+   * stehen. So kann das gar nicht passieren.
+   */
+  const setNote = (text: string | null) => setNotiz(text === null ? null : { text });
+  /** Meldung mit Öffnen-Link auf eine erzeugte Datei. */
+  const meldeDatei = (text: string, datei: string) => setNotiz({ text, datei });
   /**
    * Stelle, an der eine eigene Doppelseite entstehen soll – `null` heißt: kein
    * Dialog offen. Die Zahl ist die Einfügestelle, nicht der Index einer
@@ -694,7 +718,7 @@ export function App() {
     setNote(null);
     try {
       const data = await abzugExportieren();
-      setNote(`${data.outputPath} — ${data.pages} Blatt, ${data.images} Bilder`);
+      meldeDatei(`${data.outputPath} — ${data.pages} Blatt, ${data.images} Bilder`, data.fileName);
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
@@ -707,7 +731,7 @@ export function App() {
     setNote(null);
     try {
       const data = await pdfExportieren(all ? undefined : index);
-      setNote(`${data.outputPath} — ${data.pages} Seiten, ${data.images} Bilder`);
+      meldeDatei(`${data.outputPath} — ${data.pages} Seiten, ${data.images} Bilder`, data.fileName);
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
@@ -1146,6 +1170,23 @@ export function App() {
       {(busy || note) && (
         <div style={S.toast} role="status">
           {busy ?? note}
+          {/*
+            Der Weg vom Pfad zum Blättern. Ohne ihn endete jeder Export mit einer
+            Zeile, die man von Hand in den Finder tippt — und gerade der Abzug
+            lebt davon, sofort durchgesehen zu werden. Ein neuer Tab und nicht
+            dieser: Wer den Abzug ansieht, will danach in der Oberfläche
+            weitermachen, wo er war.
+          */}
+          {!busy && notiz?.datei && (
+            <a
+              href={`/api/export/${notiz.datei}`}
+              target="_blank"
+              rel="noreferrer"
+              style={S.toastLink}
+            >
+              Öffnen
+            </a>
+          )}
           {!busy && (
             <button onClick={() => setNote(null)} style={S.toastZu} title="Ausblenden">
               ×
@@ -1253,5 +1294,21 @@ const S = {
     color: 'var(--warm-400)',
     cursor: 'pointer',
     flexShrink: 0,
+  },
+  /**
+   * Der Öffnen-Link im Toast.
+   *
+   * Heller als der Schließknopf und mit Rahmen: Er ist das Angebot, nicht das
+   * Wegräumen. `whiteSpace: nowrap`, weil der Dateipfad davor lang ist und die
+   * beiden Wörter sonst umbrechen.
+   */
+  toastLink: {
+    flexShrink: 0,
+    padding: '4px 10px',
+    border: '1px solid var(--warm-600)',
+    borderRadius: T.rSm,
+    color: 'var(--warm-50)',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap' as const,
   },
 } satisfies Record<string, React.CSSProperties>;

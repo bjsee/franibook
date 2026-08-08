@@ -1014,6 +1014,7 @@ export const umschlagAendern = (patch: Partial<CoverDesign>) =>
 export const umschlagExportieren = () =>
   sende<{
     outputPath: string;
+    fileName: string;
     widthMm: number;
     heightMm: number;
     spineMm: number;
@@ -1070,8 +1071,21 @@ async function layoutAnwendenAnfrage(rohtext: string): Promise<LayoutErgebnis> {
   return daten as LayoutErgebnis;
 }
 
+/**
+ * Was ein Export zurückgibt.
+ *
+ * `outputPath` ist die Auskunft für den Menschen, `fileName` die Adresse für
+ * `GET /api/export/:fileName` — daran hängt der Öffnen-Link an der Meldung.
+ */
+export interface ExportErgebnis {
+  outputPath: string;
+  fileName: string;
+  pages: number;
+  images: number;
+}
+
 export const pdfExportieren = (spreadIndex?: number) =>
-  sende<{ outputPath: string; pages: number; images: number }>(
+  sende<ExportErgebnis>(
     'POST',
     '/api/export/pdf',
     spreadIndex === undefined ? {} : { spreadIndex },
@@ -1083,5 +1097,4 @@ export const pdfExportieren = (spreadIndex?: number) =>
  * Ohne Doppelseitenwahl, anders als beim Druck-PDF: Eine einzelne Seite sieht
  * man in der Vorschau, und zum Blättern gibt es nichts, wenn es ein Blatt ist.
  */
-export const abzugExportieren = () =>
-  sende<{ outputPath: string; pages: number; images: number }>('POST', '/api/export/abzug', {});
+export const abzugExportieren = () => sende<ExportErgebnis>('POST', '/api/export/abzug', {});

@@ -4,7 +4,8 @@
  * Alles hier betrifft mehr als eine Doppelseite — deshalb `/api/book/…` und
  * nicht `/api/spreads/…`.
  */
-import { mkdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { abzugsblatt, linkeSeitenzahl } from '@franibook/core';
@@ -189,6 +190,51 @@ export function buchRouten(
     spreads: project.renderAll(),
   }));
 
+  /**
+   * Eine erzeugte PDF-Datei zum Ansehen — der Weg vom Pfad zum Blättern.
+   *
+   * Ohne sie endet jeder Export mit einem Dateipfad in einer Meldung, den man von
+   * Hand in den Finder tippt. Mit ihr wird die Meldung ein Link, und der Abzug
+   * lässt sich sofort durchblättern und drucken; genau dafür ist er da.
+   *
+   * `inline` und nicht `attachment`: Der Browser zeigt das PDF in seinem eigenen
+   * Betrachter, statt es in den Download-Ordner zu legen. Speichern kann man von
+   * dort immer noch, umgekehrt nicht.
+   *
+   * **Nur aus `outDir` und nur nach `EXPORT_DATEINAME`** — dieselbe Prüfung wie
+   * beim Schreiben, aus demselben Grund: Der Name kommt aus einer Adresse und
+   * landet in `join(outDir, name)`. Ein `..` darin läse jede Datei, die der
+   * Serverprozess lesen darf. Kein `Cache-Control: immutable` wie bei den
+   * Bildern: Derselbe Name trägt nach jedem Export einen anderen Inhalt.
+   *
+   * Der Ursprungshaken (`ursprungHaken`) greift hier nicht, weil er nur
+   * mutierende Routen prüft — und das ist richtig: Eine fremde Seite kann die
+   * Anfrage zwar auslösen, die Antwort ohne CORS-Freigabe aber nicht lesen.
+   * Dieselbe Lage wie bei `GET /api/photos/:id/original`.
+   */
+  app.get<{ Params: { fileName: string } }>('/api/export/:fileName', async (req, reply) => {
+    const { fileName } = req.params;
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
+    const pfad = join(outDir, fileName);
+    try {
+      // `createReadStream` wirft bei einer fehlenden Datei erst asynchron über
+      // das Streamobjekt – zu spät für ein try/catch um den Aufruf. Deshalb
+      // vorab prüfen, wie bei `/api/photos/:id/original`.
+      await access(pfad);
+    } catch {
+      return reply.code(404).send({ error: 'Diese Datei wurde noch nicht erzeugt' });
+    }
+
+    return reply
+      .type('application/pdf')
+      .header('Content-Disposition', `inline; filename="${fileName}"`)
+      .header('Cache-Control', 'no-store')
+      .send(createReadStream(pfad));
+  });
+
   app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
     '/api/export/pdf',
     async (req, reply) => {
@@ -246,7 +292,11 @@ export function buchRouten(
           },
         });
 
-        return { outputPath, ...result };
+        // `fileName` neben `outputPath`: Der Pfad ist die Auskunft für den
+        // Menschen, der Name die Adresse für `GET /api/export/:fileName`. Ihn in
+        // der Oberfläche aus dem Pfad zu schneiden hieße, dort noch einmal zu
+        // wissen, welcher Trenner gilt.
+        return { outputPath, fileName, ...result };
       } catch (err) {
         // Ein ausgehängtes NAS etwa: Die rohe Exception trüge den vollen Pfad
         // in die Antwort, ein deutscher Satz mit 503 ist die ehrlichere Auskunft.
@@ -327,7 +377,7 @@ export function buchRouten(
         },
       });
 
-      return { outputPath, ...result };
+      return { outputPath, fileName, ...result };
     } catch (err) {
       if (istDateiFehler(err)) {
         return reply.code(503).send({
