@@ -30,6 +30,7 @@
 import type { Photo } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
+import { libraryOuterMarginMm } from '../templates/index.js';
 
 /** Abstand zwischen zwei Bildern, waagerecht wie senkrecht. */
 const GAP_MM = 6;
@@ -48,7 +49,6 @@ const GAP_MM = 6;
  * Bezogen auf die Referenzseite der Bibliothek und mit dem Format skaliert,
  * damit ein 21×21-Profil dieselben Verhältnisse bekommt.
  */
-const MARGIN_REF_MM = 22;
 const GUTTER_REF_MM = 16;
 const REF_PAGE_MM = 300;
 
@@ -90,7 +90,13 @@ export interface JustifyOptions {
   profile: PrintProfile;
 }
 
-/** Der Satzspiegel einer Einzelseite, in Millimetern des Druckprofils. */
+/**
+ * Der Satzspiegel einer Einzelseite, in Millimetern des Druckprofils.
+ *
+ * Nach außen derselbe Rand, den jede Vorlage der Bibliothek hält
+ * (`libraryOuterMarginMm`) — und auf den sich außerdem die Randachse des
+ * Zeitstrahls verlässt.
+ */
 export function justifyBounds(profile: PrintProfile): {
   marginMm: number;
   gutterMm: number;
@@ -99,7 +105,11 @@ export function justifyBounds(profile: PrintProfile): {
 } {
   const { trimWidthMm, trimHeightMm } = profile.page;
   const skala = trimWidthMm / REF_PAGE_MM;
-  const marginMm = MARGIN_REF_MM * skala;
+  // Der äußere Rand kommt aus der Bibliothek und wird hier nicht noch einmal
+  // hingeschrieben: Es ist dieselbe Zahl in derselben Bedeutung, und eine
+  // zweite Fassung driftete beim ersten Ändern lautlos weg. Der Falzabstand
+  // bleibt eigen — die Vorlagen halten dort 16 statt 22.
+  const marginMm = libraryOuterMarginMm(profile);
   const gutterMm = GUTTER_REF_MM * skala;
   return {
     marginMm,

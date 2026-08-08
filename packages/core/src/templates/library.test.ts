@@ -14,6 +14,7 @@ import { crossesGutter, slotAspect, slotPage } from '../model/template.js';
 import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import {
+  LIBRARY_OUTER_MARGIN_REF,
   TEMPLATE_REFERENCE,
   allTemplates,
   chapterChoices,
@@ -48,6 +49,25 @@ function dpiIn(photo: { w: number; h: number }, slotWMm: number, slotHMm: number
 }
 
 describe('Bibliothek', () => {
+  it('hält nach außen frei, worauf sich justierte Zeilen und Randachse verlassen', () => {
+    // Zwei Stellen rechnen mit diesem Rand: `layout/justify.ts` setzt denselben
+    // Satzspiegel, damit eine gerechnete Seite neben einer Vorlagenseite nicht
+    // auffällt, und die Randachse des Zeitstrahls prüft daran, ob ihr Band
+    // hinter der Sicherheitslinie überhaupt Platz hat. Rückt eine Vorlage
+    // weiter nach außen, stimmt beides nicht mehr — und niemand merkt es.
+    const rand = LIBRARY_OUTER_MARGIN_REF / SPREAD_W;
+    for (const t of allTemplates()) {
+      // Der eine bewusst randabfallende Auftakt ist ausgenommen; er soll über
+      // die Kante laufen.
+      // (auch in seiner gespiegelten Fassung).
+      if (t.id.startsWith('spread.group.opener-full')) continue;
+      for (const s of [...t.slots, ...(t.textSlots ?? [])]) {
+        expect(s.x, `${t.id}/${s.id} links`).toBeGreaterThanOrEqual(rand - 1e-9);
+        expect(1 - (s.x + s.w), `${t.id}/${s.id} rechts`).toBeGreaterThanOrEqual(rand - 1e-9);
+      }
+    }
+  });
+
   it('enthält Templates für die üblichen Gruppengrößen', () => {
     const counts = supportedSlotCounts();
     for (const n of [1, 2, 3, 4, 5, 6, 8]) {

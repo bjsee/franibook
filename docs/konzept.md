@@ -1671,6 +1671,78 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 - Seitenzahl gegen die Profilregeln (Minimum, Maximum, Schrittweite)
 - Buchrückenbreite und daraus resultierende Covermaße
 
+> **Korrektur (7. August 2026): der Bericht steht neben dem Export, nicht davor**
+>
+> Die Liste stimmt, der Ort nicht. Gebaut ist `pruefeBuch`
+> (`packages/core/src/pruefung/abnahme.ts`) hinter `GET /api/book/pruefung`, sichtbar
+> als eigener Reiter **Abnahme**. Kein Preflight vor dem Schreiben und kein
+> `export-report.json`: Ein Bericht, der am Export hängt, ist genau dann zu spät, wenn
+> man ihn braucht — man will vor der Bestellung wissen, was noch offen ist, und nicht
+> beim Klick auf „Buch als PDF". Verhindern soll er ohnehin nichts (siehe DPI-Absatz
+> oben), und ein Ergebnis, das man nur beim Exportieren sieht, wäre eine Warnung mit
+> falschem Anlass. Die Datei neben dem PDF entfällt aus demselben Grund; sie wäre eine
+> zweite Fassung derselben Auskunft.
+>
+> Drei Entwurfsentscheidungen kamen beim Messen am echten Buch dazu:
+>
+> - **Der Bericht rechnet nichts nach.** Jeder Fund stammt aus einer Warnung des RSM
+>   oder des RCM oder aus einem Vergleich mit dem Profil. Eine zweite dpi-Rechnung
+>   neben `renderSpread` wäre die zweite Wahrheit, die auseinanderläuft.
+> - **Die Zielauflösung steht als Summe, nicht je Bild.** Am gewählten 28×28 verfehlen
+>   Bilder mit 2048 px langer Kante die 300 dpi regelmäßig (gemessen: 11 Stück,
+>   schwächstes 246 dpi). Als Einzelzeilen begrabe das die neun Bilder unter der
+>   Mindestauflösung.
+> - **Ein Textplatz ist ein Fund, keine achtzig.** Die Randachse des Zeitstrahls setzt
+>   ihre Jahreszahlen ausdrücklich in den Sicherheitsrand (`docs/zeitleisten-fassungen.md`, Abschnitt
+>   „Randachse": Das Band lag zwischen Beschnittkante und Sicherheitsrand) — gemessen 1,8 mm von der Schnittkante, auf jeder Doppelseite. Roh
+>   gezählt waren das 240 von 318 Funden. Gebündelt wird deshalb, **was die Engine auf
+>   jeder Doppelseite gleich zeichnet** — die Beschriftung des Zeitstrahls. Ein
+>   Vorlagentext trägt zwar auch überall dieselbe Kennung (`t-year` auf jedem
+>   Jahresauftakt), steht aber nur dort zu weit außen, wo ihn jemand hingezogen hat;
+>   sein Schlüssel trägt deshalb die Seite, sonst erledigte eine Abnahme neunzehn
+>   fremde Auftakte mit. Der Bericht nennt die Zahl im Satz und springt zur ersten
+>   betroffenen Seite; ausgenommen wird die
+>   Achse nicht, denn 1,8 mm vor dem Messer sind eine Aussage über das gedruckte Buch,
+>   gleich ob sie beabsichtigt war. **Sie ist inzwischen behoben:** Das Band der
+>   Randachse liegt jetzt hinter der Sicherheitslinie (`docs/zeitleisten-fassungen.md`,
+>   Abschnitt „Randachse"), und der Fund ist am echten Buch verschwunden — aus 12
+>   schweren Funden wurden 9. Das ist der erste Mangel, den dieser Bericht gefunden
+>   und dessen Behebung er ausgelöst hat.
+>
+> Am echten Buch (80 Doppelseiten, 997 Bilder) stand der Bericht damit zuerst auf 12
+> schweren und 69 leichten Funden, nach der Behebung der Randachse auf **9 schweren und
+> 69 leichten**, und er braucht 21 ms (erster Aufruf nach dem Start: 46 ms) — kein Grund für einen
+> Zwischenspeicher, der nach jeder Änderung ungültig wäre. Der eine Fund, den man vor
+> der Bestellung wirklich sucht, war darunter: Das Titelbild des Umschlags liegt bei
+> 135 dpi.
+>
+> **„Weiß ich, ist ok".** Ein Bericht, der Unbehebbares wiederholt, wird überblättert —
+> und die Randachse ist genau das: Ihre Lage steht im Code, von Hand ist daran nichts
+> zu rücken. Jeder Fund lässt sich deshalb abnicken (`POST /api/book/pruefung/abnahmen`),
+> verschwindet aus der offenen Liste und bleibt am Fuß abrufbar; „alle zurücknehmen"
+> holt sie in einem Griff zurück, und beides steht im Verlauf.
+>
+> Woran die Abnahme hängt, ist die eigentliche Entwurfsfrage. Sie hängt am **Gegenstand**
+> des Funds und nicht an seiner Stelle (`Befund.schluessel`): ein Bildfund am Foto, ein
+> Textfund am Textplatz, ein Buchfund an seiner Art. Eine Neuanordnung wirft die Abnahme
+> damit nicht um — ein abgenicktes Foto darf quer stehen, wo immer es landet —, und die
+> Randachse ist mit einem Klick für alle achtzig Doppelseiten erledigt statt achtzigmal.
+> Verworfen wurde die Bindung an Doppelseite und Platz (nach jedem Einfügen einer Seite
+> neu zu vergeben) und ein Schalter je Art (der auch das nächste, neu entstandene
+> Problem verschwiegen hätte). Zwei Arten haben keinen Gegenstand außer der Seite —
+> leerer Platz, Doppelseite ohne Bild — und hängen deshalb an ihr; das ist
+> verschmerzbar, weil ein Neuaufbau leere Plätze ohnehin auffüllt.
+>
+> **Am Bild statt nur in der Liste.** `seitenbefunde` ist derselbe Bericht für eine
+> einzelne Doppelseite und hängt an jeder Doppelseitenantwort (`spreadAntwort`). Die
+> Bühne setzt daraus eine Marke an jedes Bild mit offenen Funden — am Diagnoseschalter
+> (`g`) wie das dpi-Band —, und `Bildbefunde` zeigt sie am gewählten Bild samt Abnahme,
+> in allen drei Rahmen. Ein zweiter Abruf wäre immer einen Handgriff hinterher: Ein Fund
+> entsteht und verschwindet mit dem Ausschnitt, den man gerade zieht. Der Sprung aus der
+> Liste trifft deshalb auch nicht mehr nur das Blatt, sondern das Bild
+> (`/doppelseite/18/platz/r2c`) — bei acht Bildern auf einer Doppelseite ist das der
+> Unterschied zwischen einer Auskunft und einem Suchbild.
+
 ## Druckprofil-Modell
 
 ### Struktur
@@ -2796,6 +2868,8 @@ Der Server bindet ausschließlich an `127.0.0.1` und legt keine Authentifizierun
 > | `/api/groups/:id/merge`, `/add`, `/ungroup` | POST              | zusammenführen, zuordnen, herauslösen   |
 > | `/api/photos`                               | GET               | Fotos mit Datum, `?problems` filtert    |
 > | `/api/book/unplaced`                        | GET               | Fotopool: Fotos in keinem Slot          |
+> | `/api/book/pruefung`                        | GET               | Abnahmebericht über Buch und Umschlag   |
+> | `/api/book/pruefung/abnahmen`               | POST/DELETE       | Befund abnicken, einen oder alle zurück |
 > | `/api/book/move`                            | POST              | ein Foto umhängen: Slot, Seite, Pool    |
 > | `/api/spreads`, `/api/spreads/:index`       | GET               | gerenderte Doppelseiten (RSM)           |
 > | `/api/spreads/:i/templates`                 | GET               | wählbare Anordnungen samt Slotgeometrie |

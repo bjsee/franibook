@@ -17,6 +17,8 @@
  * der zur Laufzeit verschwindet.
  */
 import type {
+  Abnahmebericht,
+  Befund,
   CoverDesign,
   Crop,
   Ebenenzug,
@@ -175,7 +177,9 @@ export interface ProjectInfo {
   profile: {
     id: string;
     product: string;
-    page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number };
+    // `safetyMm` gehört dazu, seit die Oberfläche entscheidet, ob die Randachse
+    // des Zeitstrahls in diesem Format überhaupt Platz hat (`sideAxisPasst`).
+    page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number; safetyMm: number };
     pageCount: { min: number; max: number; step: number };
     resolution: { minDpi: number; targetDpi: number };
   };
@@ -315,6 +319,11 @@ export type SpreadResponse = RenderedSpread & {
   locked?: boolean;
   /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
   splittable?: boolean;
+  /**
+   * Was die Abnahme über diese Doppelseite sagt — einschließlich der schon
+   * abgenickten Funde, die die Bühne leise zeigt statt gar nicht.
+   */
+  befunde?: Befund[];
 };
 
 /** Was ein Umbau an Seiten hinterlassen hat. */
@@ -799,6 +808,37 @@ export interface BaumSeite {
 }
 
 export const baumLaden = () => hole<{ spreads: BaumSeite[] }>('/api/book/tree');
+
+/**
+ * Der Abnahmebericht — was dem Druck im Weg steht, über das ganze Buch.
+ *
+ * Der Antworttyp kommt aus dem Kern und wird hier nicht nachgeschrieben: Er ist
+ * das Ergebnis von `pruefeBuch`, und eine zweite Fassung davon in dieser Datei
+ * wäre eine zweite Wahrheit über die Arten von Befunden — mit der die Ansicht
+ * eine Art zeigen könnte, die es nicht mehr gibt.
+ */
+export const abnahmeLaden = () => hole<Abnahmebericht>('/api/book/pruefung');
+
+/**
+ * „Weiß ich, ist ok" — nickt einen Befund ab.
+ *
+ * Der Schlüssel hängt am Gegenstand des Funds, nicht an seiner Stelle: Ein
+ * abgenicktes Foto darf quer stehen, wo immer es landet. Zurück kommt der
+ * ganze Bericht, weil sich mit einer Abnahme auch die Bilanz und — bei einem
+ * gebündelten Textplatz — mehrere Zeilen auf einmal ändern.
+ */
+export const befundAbnicken = (schluessel: string) =>
+  sende<{ ok: true; bericht: Abnahmebericht }>('POST', '/api/book/pruefung/abnahmen', {
+    schluessel,
+  });
+
+/** Nimmt eine Abnahme zurück — mit Schlüssel eine, ohne alle. */
+export const abnahmeZuruecknehmen = (schluessel?: string) =>
+  sende<{ ok: true; anzahl: number; bericht: Abnahmebericht }>(
+    'DELETE',
+    '/api/book/pruefung/abnahmen',
+    schluessel === undefined ? {} : { schluessel },
+  );
 
 export const fotosDerSeiteLaden = (index: number) =>
   hole<{ photos: FotoInfo[] }>(`/api/spreads/${index}/photos`);
