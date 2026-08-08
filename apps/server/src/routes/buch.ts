@@ -349,8 +349,10 @@ export function buchRouten(
         spreads,
         profile: project.profile,
         outputPath,
-        abzug: (index) =>
-          abzugsblatt(project.profile, {
+        // Das Blatt rechnet aus der Doppelseite selbst, nicht aus dem Profil —
+        // dann können Maßstab und Zuschnitt nicht auseinanderlaufen.
+        abzug: (spread, index) =>
+          abzugsblatt(spread, {
             linkeSeite: linkeSeitenzahl(index),
             ...(zeilen[index] ? { befundzeile: zeilen[index] } : {}),
           }),

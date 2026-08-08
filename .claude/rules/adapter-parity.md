@@ -70,6 +70,16 @@ der Druck. Was der Adapter tut, ist eine Transformationsmatrix und ein Clip auf 
 Endformat — deshalb kann der Abzug gar kein anderes Buch zeigen als die Datei, die
 zur Druckerei geht.
 
+**Alle Maße des Blattes stammen aus dem RSM, keines aus dem Druckprofil.**
+`abzugsblatt` nimmt eine `Abzugsflaeche` (`widthMm`, `heightMm`, `bleedMm` — ein
+`RenderedSpread` erfüllt sie), und der Haken bekommt die Doppelseite mit, für die
+er das Blatt bauen soll. Käme der Maßstab aus dem Profil und der Zuschnitt aus dem
+RSM, säße das Buch nach einem Formatwechsel ohne Neurendern verschoben auf dem
+Blatt, ohne dass etwas meldet — beide Zahlen wären für sich genommen richtig.
+Dieselbe Machart wie `TextBlockArea` und `randabfallend`. Gerufen wird der Haken
+genau einmal je Doppelseite, vor dem ersten Blatt: Die Schriften müssen vor der
+ersten Seite feststehen.
+
 Zwei Fallen, beide gemessen und beide in `abzug.test.ts` festgehalten:
 
 - **pdfkit bricht selbst um.** Eine Textzeile unterhalb des Satzspiegels lässt es
