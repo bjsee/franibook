@@ -2,18 +2,28 @@ import { describe, expect, it } from 'vitest';
 import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import hoch from '../print/profiles/saal-15x21.json' with { type: 'json' };
 import breit from '../print/profiles/saal-42x28.json' with { type: 'json' };
-import type { PrintProfile } from '../print/profile.js';
+import { spreadHeightMm, spreadWidthMm, type PrintProfile } from '../print/profile.js';
 import type { TextBox } from '../render/rendered-spread.js';
-import { abzugsblatt, befundzeile, linkeSeitenzahl } from './abzug.js';
+import { abzugsblatt, befundzeile, linkeSeitenzahl, type Abzugsflaeche } from './abzug.js';
 
-const profile = saal as PrintProfile;
+/**
+ * Die Maße einer Doppelseite, wie `renderSpread` sie in das RSM schreibt.
+ *
+ * Der Test geht denselben Weg wie der Server: Er rechnet die Fläche einmal aus
+ * dem Profil und gibt sie weiter – `abzugsblatt` selbst kennt kein Profil mehr.
+ */
+function flaeche(p: PrintProfile): Abzugsflaeche {
+  return { widthMm: spreadWidthMm(p), heightMm: spreadHeightMm(p), bleedMm: p.page.bleedMm };
+}
+
+const profile = flaeche(saal as PrintProfile);
 
 /**
  * Die beiden Extreme der Profilliste: 42×28 ergibt die breiteste Doppelseite
  * (3:1), 15×21 die gedrungenste (1,43:1) – und nur bei der zweiten begrenzt die
  * Höhe des Blattes den Maßstab.
  */
-const FORMATE = [profile, breit as PrintProfile, hoch as PrintProfile];
+const FORMATE = [profile, flaeche(breit as PrintProfile), flaeche(hoch as PrintProfile)];
 
 function texte(boxen: readonly { kind: string }[]): TextBox[] {
   return boxen.filter((b): b is TextBox => b.kind === 'text');
@@ -51,6 +61,18 @@ describe('abzugsblatt', () => {
       expect(blatt.inhalt.xMm + blatt.inhalt.wMm).toBeLessThanOrEqual(blatt.breiteMm);
       expect(unterkante).toBeLessThanOrEqual(blatt.hoeheMm);
     }
+  });
+
+  it('rechnet mit der übergebenen Fläche und nicht mit einem angenommenen Format', () => {
+    // Eine Fläche, die zu keinem Profil der Bibliothek gehört. Sie muss trotzdem
+    // sauber eingepasst werden — das ist der ganze Grund, weshalb die Funktion
+    // die Maße nimmt und nicht das Druckprofil: Nur so ist ausgeschlossen, dass
+    // Maßstab und Zuschnitt aus zwei verschiedenen Quellen stammen.
+    const eigen = abzugsblatt({ widthMm: 406, heightMm: 206, bleedMm: 3 }, { linkeSeite: 1 });
+
+    expect(eigen.massstab).toBeCloseTo(273 / 400, 6);
+    expect(eigen.inhalt.wMm).toBeCloseTo(273, 6);
+    expect(eigen.inhalt.hMm / eigen.inhalt.wMm).toBeCloseTo(200 / 400, 6);
   });
 
   it('setzt die Bildauflösung auf 150 dpi des Blattes, nicht des Buches', () => {

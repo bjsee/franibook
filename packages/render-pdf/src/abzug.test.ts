@@ -103,8 +103,13 @@ function blattzahl(pdf: string): number {
   return (pdf.match(/\/MediaBox/g) ?? []).length;
 }
 
-function alsAbzug(p: PrintProfile) {
-  return (index: number) => abzugsblatt(p, { linkeSeite: linkeSeitenzahl(index) });
+/**
+ * Der Haken, wie ihn die Route setzt: Das Blatt entsteht aus der Doppelseite
+ * selbst, nicht aus einem daneben gehaltenen Druckprofil.
+ */
+function alsAbzug() {
+  return (spread: RenderedSpread, index: number) =>
+    abzugsblatt(spread, { linkeSeite: linkeSeitenzahl(index) });
 }
 
 describe('Korrekturabzug', () => {
@@ -115,7 +120,7 @@ describe('Korrekturabzug', () => {
       profile,
       resolvePhoto: () => ({ path: bild, orientation: 1 }),
       outputPath: ziel,
-      abzug: alsAbzug(profile),
+      abzug: alsAbzug(),
     });
 
     expect(ergebnis.pages).toBe(2);
@@ -150,7 +155,7 @@ describe('Korrekturabzug', () => {
       profile: einzeln,
       resolvePhoto: () => ({ path: bild, orientation: 1 }),
       outputPath: join(dir, 'abzug.pdf'),
-      abzug: alsAbzug(einzeln),
+      abzug: alsAbzug(),
     });
 
     expect(geteilt.pages).toBe(2);
@@ -165,7 +170,7 @@ describe('Korrekturabzug', () => {
       profile,
       resolvePhoto: () => ({ path: bild, orientation: 1 }),
       outputPath: ziel,
-      abzug: alsAbzug(profile),
+      abzug: alsAbzug(),
     });
 
     const pdf = (await readFile(ziel)).toString('latin1');
@@ -188,7 +193,7 @@ describe('Korrekturabzug', () => {
       profile,
       resolvePhoto: () => ({ path: bild, orientation: 1 }),
       outputPath: abzug,
-      abzug: alsAbzug(profile),
+      abzug: alsAbzug(),
     });
 
     // Ein Zehntel ist die gemessene Größenordnung und keine Wunschzahl: Die
@@ -210,8 +215,8 @@ describe('Korrekturabzug', () => {
       profile,
       resolvePhoto: () => ({ path: bild, orientation: 1 }),
       outputPath: ziel,
-      abzug: (index) => {
-        const blatt = abzugsblatt(profile, { linkeSeite: linkeSeitenzahl(index) });
+      abzug: (s, index) => {
+        const blatt = abzugsblatt(s, { linkeSeite: linkeSeitenzahl(index) });
         for (const box of blatt.boxen) {
           if (box.kind === 'text') zahlen.push(box.content);
         }
@@ -219,8 +224,29 @@ describe('Korrekturabzug', () => {
       },
     });
 
-    // Je Blatt zwei Zahlen; `registerFonts` fragt die Blätter vorab ein
-    // zweites Mal ab, deshalb die Menge statt der Liste.
-    expect([...new Set(zahlen)]).toEqual(['1', '2', '3', '4', '5', '6']);
+    // Die Liste und nicht ihre Menge: Der Haken wird genau einmal je Doppelseite
+    // gerufen, also stehen hier sechs Zahlen und nicht zwölf. Vorher fragte
+    // `registerFonts` die Blätter ein zweites Mal ab, und der Test musste
+    // ausweichen.
+    expect(zahlen).toEqual(['1', '2', '3', '4', '5', '6']);
+  });
+
+  it('fragt jedes Blatt genau einmal ab', async () => {
+    // Ein Haken mit Buchführung – ein Zähler, ein Protokoll – liefe sonst
+    // doppelt, ohne dass die Signatur etwas darüber sagt.
+    const gefragt: number[] = [];
+
+    await renderPdf({
+      spreads: [spread('s0'), spread('s1')],
+      profile,
+      resolvePhoto: () => ({ path: bild, orientation: 1 }),
+      outputPath: join(dir, 'abzug.pdf'),
+      abzug: (s, index) => {
+        gefragt.push(index);
+        return abzugsblatt(s, { linkeSeite: linkeSeitenzahl(index) });
+      },
+    });
+
+    expect(gefragt).toEqual([0, 1]);
   });
 });

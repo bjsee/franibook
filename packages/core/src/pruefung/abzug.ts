@@ -25,7 +25,6 @@
  * Der Abzug zeigt das **Endformat**: kein Beschnitt, keine Hilfslinien, keine
  * Marken. Wer durchsieht, soll das Buch sehen und nicht die Druckvorstufe.
  */
-import { type PrintProfile } from '../print/profile.js';
 import type { RenderBox, Rect, TextBox } from '../render/rendered-spread.js';
 import { textFontSizePt, type TextStyle } from '../render/typography.js';
 
@@ -65,6 +64,27 @@ const BEFUND_STIL: TextStyle = { weight: 'regular', capHeightRatio: 0.6, color: 
  * `prepareImage` bekommt die Millimeter des Buches und nicht die des Blattes.
  */
 const BLATT_DPI = 150;
+
+/**
+ * Die Fläche, auf die sich ein Abzugsblatt bezieht.
+ *
+ * Ein `RenderedSpread` erfüllt sie — und genau den soll man übergeben. Dieselbe
+ * Machart wie `TextBlockArea` und `randabfallend`: Das Maßpaar statt des
+ * Druckprofils, damit die Rechnung nicht an zwei Stellen aus zwei Quellen
+ * stattfindet.
+ *
+ * Das ist hier kein Stilfrage. Käme der Maßstab aus dem `PrintProfile` und der
+ * Zuschnitt aus dem RSM, säße das Buch nach einem Formatwechsel ohne Neurendern
+ * verschoben auf dem Blatt — und nichts meldete es, weil beide Zahlen für sich
+ * genommen stimmen. Aus einer Quelle kann das nicht passieren.
+ */
+export interface Abzugsflaeche {
+  /** Breite einschließlich Beschnitt. */
+  widthMm: number;
+  /** Höhe einschließlich Beschnitt. */
+  heightMm: number;
+  bleedMm: number;
+}
 
 export interface AbzugOptionen {
   /**
@@ -113,12 +133,14 @@ export interface Abzugsblatt {
 /**
  * Blattgeometrie und Beiwerk eines Korrekturabzugs.
  *
- * Reine Rechnung aus Druckprofil und Seitennummer — dieselben Eingaben ergeben
- * dasselbe Blatt.
+ * Reine Rechnung aus den Maßen der Doppelseite und ihrer Seitennummer —
+ * dieselben Eingaben ergeben dasselbe Blatt.
  */
-export function abzugsblatt(profile: PrintProfile, opts: AbzugOptionen): Abzugsblatt {
-  const buchBreite = 2 * profile.page.trimWidthMm;
-  const buchHoehe = profile.page.trimHeightMm;
+export function abzugsblatt(flaeche: Abzugsflaeche, opts: AbzugOptionen): Abzugsblatt {
+  // Das Endformat, nicht die Beschnittfläche: Der Abzug zeigt, was nach dem
+  // Schneiden übrig ist.
+  const buchBreite = flaeche.widthMm - 2 * flaeche.bleedMm;
+  const buchHoehe = flaeche.heightMm - 2 * flaeche.bleedMm;
 
   // Erst in die Breite, dann prüfen, ob die Höhe noch trägt. Bei jedem Format
   // dieses Repos gewinnt die Breite (eine Doppelseite ist mindestens 2:1); der

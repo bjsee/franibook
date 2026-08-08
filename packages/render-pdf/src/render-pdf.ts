@@ -67,10 +67,18 @@ export interface RenderPdfOptions {
    * Befunde trägt. Der Renderer entscheidet damit auch hier nichts – er
    * verschiebt, verkleinert und schneidet ab, was ihm gesagt wird.
    *
+   * **Die Doppelseite kommt als Argument mit**, nicht nur ihr Index: Nur so
+   * rechnet `abzugsblatt` mit den Maßen genau der Seite, die anschließend darauf
+   * gezeichnet wird. Mit dem Index allein müsste der Aufrufer die Maße von
+   * woanders holen – und ein Profil, das nicht zum RSM passt, ergäbe ein Blatt,
+   * auf dem das Buch verschoben sitzt, ohne dass etwas meldet.
+   *
+   * Gerufen wird der Haken **einmal je Doppelseite**, vor dem ersten Blatt.
+   *
    * Gerendert wird dasselbe RSM wie für den Druck. Ein Abzug, der ein zweites
    * Mal rechnete, zeigte ein anderes Buch als die Datei, die zur Druckerei geht.
    */
-  abzug?: (spreadIndex: number) => Abzugsblatt;
+  abzug?: (spread: RenderedSpread, spreadIndex: number) => Abzugsblatt;
 }
 
 /**
@@ -161,12 +169,19 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   // ein Betrachter, der den Intent liest, zeigt dieselben Farben wie das
   // Druck-PDF. Der Abzug soll das Buch zeigen, auch farblich.
   setzeAusgabeIntent(doc, profile);
+
+  // Die Blätter vorab und genau einmal: Die Schriften müssen vor der ersten
+  // Seite feststehen, gezeichnet werden sie erst danach. Zweimal zu fragen wäre
+  // nicht nur doppelte Rechnung – es machte die Zusage „einmal je Doppelseite"
+  // zunichte, auf die sich ein Aufrufer mit Buchführung verlassen können soll.
+  const blaetter = abzug ? spreads.map((spread, i) => abzug(spread, i)) : [];
+
   registerFonts(doc, [
     ...spreads.flatMap((s) => s.boxes.filter((b) => b.kind === 'text')),
     // Die Seitenzahlen des Abzugs stehen in derselben Buchschrift und müssen
     // deshalb mit eingebettet werden – sonst fehlte der Schnitt auf einem Blatt,
     // dessen Doppelseite selbst keinen Text trägt.
-    ...(abzug ? spreads.flatMap((_, i) => abzug(i).boxen.filter((b) => b.kind === 'text')) : []),
+    ...blaetter.flatMap((b) => b.boxen.filter((box) => box.kind === 'text')),
   ]);
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
@@ -191,8 +206,9 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   };
 
   for (const [index, spread] of spreads.entries()) {
-    if (abzug) {
-      await zeichneAbzugsblatt(doc, spread, abzug(index), ctx);
+    const blatt = blaetter[index];
+    if (blatt) {
+      await zeichneAbzugsblatt(doc, spread, blatt, ctx);
       pages++;
       continue;
     }
@@ -235,7 +251,10 @@ async function zeichneAbzugsblatt(
   doc.addPage({ size: [mmToPt(blatt.breiteMm), mmToPt(blatt.hoeheMm)], margin: 0 });
   doc.rect(0, 0, mmToPt(blatt.breiteMm), mmToPt(blatt.hoeheMm)).fill('#ffffff');
 
-  const { bleedMm } = ctx.profile.page;
+  // Der Beschnitt aus dem RSM und nicht aus dem Druckprofil: `abzugsblatt` hat
+  // den Maßstab aus derselben Zahl gerechnet. Zwei Quellen für eine Länge wären
+  // genau die Stelle, an der Zuschnitt und Verkleinerung auseinanderlaufen.
+  const { bleedMm } = spread;
 
   // pdfkit legt selbsttätig eine neue Seite an, sobald eine Textzeile unter den
   // Satzspiegel rutscht – und es prüft das an der **untransformierten**
