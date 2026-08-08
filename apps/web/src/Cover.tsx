@@ -50,7 +50,14 @@ export function Cover({
   const [data, setData] = useState<CoverAntwort | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  /**
+   * Die Meldung, wahlweise mit der erzeugten Datei daran — wie in `App.tsx`.
+   * `setNote` löscht die Datei mit, damit kein Öffnen-Link einer abgelösten
+   * Meldung stehen bleibt.
+   */
+  const [notiz, setNotiz] = useState<{ text: string; datei?: string } | null>(null);
+  const note = notiz?.text ?? null;
+  const setNote = (text: string | null) => setNotiz(text === null ? null : { text });
   const [guides, setGuides] = useState<CoverGuideVisibility>({ hinge: true, diagnostics: true });
 
   const stageRef = useRef<HTMLDivElement>(null);
@@ -87,10 +94,12 @@ export function Cover({
     setNote(null);
     try {
       const r = await umschlagExportieren();
-      setNote(
-        `${r.outputPath} — ${r.widthMm.toFixed(1)} × ${r.heightMm.toFixed(1)} mm, ` +
+      setNotiz({
+        text:
+          `${r.outputPath} — ${r.widthMm.toFixed(1)} × ${r.heightMm.toFixed(1)} mm, ` +
           `Rücken ${r.spineMm.toFixed(1)} mm bei ${r.pageCount} Seiten`,
-      );
+        datei: r.fileName,
+      });
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
@@ -145,7 +154,21 @@ export function Cover({
         </ul>
       )}
 
-      {(busy || note) && <p style={S.status}>{busy ?? note}</p>}
+      {(busy || note) && (
+        <p style={S.status}>
+          {busy ?? note}
+          {!busy && notiz?.datei && (
+            <a
+              href={`/api/export/${notiz.datei}`}
+              target="_blank"
+              rel="noreferrer"
+              style={S.oeffnen}
+            >
+              Öffnen
+            </a>
+          )}
+        </p>
+      )}
 
       <div style={S.schalter}>
         {SCHALTER.map((s) => (
@@ -247,6 +270,13 @@ const S = {
     background: T.bg3,
     borderRadius: T.rMd,
     fontFamily: T.mono,
+  },
+  /** Der Öffnen-Link am Ende der Statuszeile — der Weg vom Pfad zur Datei. */
+  oeffnen: {
+    marginLeft: 10,
+    color: T.cyan,
+    textDecoration: 'none',
+    whiteSpace: 'nowrap' as const,
   },
   schalter: {
     display: 'flex',
