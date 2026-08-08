@@ -68,6 +68,36 @@
     "Orientierungsbruch die zur Gruppe passende – bei 51,3 % Hochformat im Bestand",
     "ist das der Unterschied zwischen 5,8 % und 26,7 % Beschnittverlust.",
     "",
+    "NEUN UND ZEHN BILDER – WARUM SIE ZULETZT KAMEN:",
+    "Beim ersten Bandsatz (12..24) hieß es, für neun finde die Arithmetik keine",
+    "Aufteilung. Der Grund steckt in den Obergrenzen: Auf 262 mm Nutzbreite trägt",
+    "ein Band ohne Ankerzelle mindestens drei Zellen (zwei Hochformate",
+    "nebeneinander wären 127 mm breit und damit über der 121-mm-Grenze), und ein",
+    "einzelnes Band füllt die 240 mm Blockhöhe nie. Eine Seite mit vier oder fünf",
+    "Bildern braucht deshalb zwingend ein hohes Band, und davon gibt es genau",
+    "zwei: Aq (162x121 quer + 91x121 hoch) und Ah (121x161 hoch + 133x100 quer).",
+    "",
+    "Neun Bilder gehen also nur als 5 + 4, und dann liegt auf *beiden* Seiten ein",
+    "hohes Band – die zweite große Zelle bekommt prominence 2, nicht 3. Das ist",
+    "der einzige Punkt, an dem die Neuner von den größeren Mosaiken abweichen,",
+    "und bei neun Bildern auf zwei Seiten ist ein zweites großes Bild kein",
+    "Kontaktbogen, sondern Absicht:",
+    "",
+    "  9up.mosaic-hoch   links Aq(Anker) + h3, rechts Aq(prom 2) + q2   5 hoch",
+    "  9up.mosaic-quer   links Ah(Anker) + q3, rechts Aq(prom 2) + q2   7 quer",
+    "  10up.mosaic-quer  beide Seiten Ah + q3                           8 quer",
+    "",
+    "Gemessen an den fünf Doppelseiten des echten Buchs, die vorher",
+    "spread.9up.four-and-five trugen (vier Zellen mit Seitenverhältnis 1,03):",
+    "Beschnittverlust 20,3 % -> 10,4 % im Mittel. Die eine Seite aus neun",
+    "Querformaten behält die alte Fassung, und zu Recht – im Mosaik müssten zwei",
+    "Querbilder in Hochformatzellen, was 44 % kostet statt 23 %.",
+    "",
+    "Die alten Fassungen (9up.four-and-five, 10up.dense, 11up.five-and-six)",
+    "bleiben deshalb in der Bibliothek. Anders als die 26 Raster, die der",
+    "Bandsatz ersetzt hat, stehen sie im gespeicherten Buch – eine entfernte",
+    "Kennung macht die Doppelseite unrenderbar (`requireTemplate`).",
+    "",
     "Halbseiten stehen unter \"halves\": die Anordnungen einer einzelnen",
     "Buchseite, die es in keiner Vorlage gibt. Siehe den Kommentar dort."
   ],
@@ -2292,6 +2322,206 @@
       ]
     },
     {
+      "id": "spread.9up.mosaic-hoch",
+      "name": "9 Fotos im Mosaik, hochformatbetont",
+      "tags": ["dicht", "fotoreich", "mosaik"],
+      "slots": [
+        {
+          "id": "l1a",
+          "x": 22,
+          "y": 38,
+          "w": 162,
+          "h": 121,
+          "prominence": 3,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l1b",
+          "x": 193,
+          "y": 38,
+          "w": 91,
+          "h": 121,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l2a",
+          "x": 22,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l2b",
+          "x": 112,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l2c",
+          "x": 202,
+          "y": 169,
+          "w": 82,
+          "h": 109,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 162,
+          "h": 121,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1b",
+          "x": 487,
+          "y": 38,
+          "w": 91,
+          "h": 121,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 183,
+          "w": 127,
+          "h": 95,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2b",
+          "x": 451,
+          "y": 183,
+          "w": 127,
+          "h": 95,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 22,
+          "w": 250,
+          "h": 12,
+          "style": "groupTitle",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "id": "spread.9up.mosaic-quer",
+      "name": "9 Fotos im Mosaik, querformatbetont",
+      "tags": ["dicht", "fotoreich", "mosaik"],
+      "slots": [
+        {
+          "id": "l1a",
+          "x": 22,
+          "y": 38,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l1b",
+          "x": 151,
+          "y": 99,
+          "w": 133,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2a",
+          "x": 22,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2b",
+          "x": 112,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2c",
+          "x": 202,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 162,
+          "h": 121,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1b",
+          "x": 487,
+          "y": 38,
+          "w": 91,
+          "h": 121,
+          "prominence": 1,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 183,
+          "w": 127,
+          "h": 95,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2b",
+          "x": 451,
+          "y": 183,
+          "w": 127,
+          "h": 95,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 22,
+          "w": 250,
+          "h": 12,
+          "style": "groupTitle",
+          "optional": true
+        }
+      ]
+    },
+    {
       "id": "spread.10up.mosaic-hoch",
       "name": "10 Fotos im Mosaik, hochformatbetont",
       "tags": ["dicht", "fotoreich", "mosaik"],
@@ -2383,6 +2613,115 @@
           "y": 183,
           "w": 127,
           "h": 95,
+          "prominence": 1,
+          "prefers": "landscape"
+        }
+      ],
+      "textSlots": [
+        {
+          "id": "t-title",
+          "role": "eventTitle",
+          "x": 22,
+          "y": 22,
+          "w": 250,
+          "h": 12,
+          "style": "groupTitle",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "id": "spread.10up.mosaic-quer",
+      "name": "10 Fotos im Mosaik, querformatbetont",
+      "tags": ["dicht", "fotoreich", "mosaik"],
+      "slots": [
+        {
+          "id": "l1a",
+          "x": 22,
+          "y": 38,
+          "w": 121,
+          "h": 161,
+          "prominence": 3,
+          "prefers": "portrait"
+        },
+        {
+          "id": "l1b",
+          "x": 151,
+          "y": 99,
+          "w": 133,
+          "h": 100,
+          "prominence": 2,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2a",
+          "x": 22,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2b",
+          "x": 112,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "l2c",
+          "x": 202,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r1a",
+          "x": 316,
+          "y": 38,
+          "w": 121,
+          "h": 161,
+          "prominence": 2,
+          "prefers": "portrait"
+        },
+        {
+          "id": "r1b",
+          "x": 445,
+          "y": 99,
+          "w": 133,
+          "h": 100,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2a",
+          "x": 316,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2b",
+          "x": 406,
+          "y": 217,
+          "w": 82,
+          "h": 61,
+          "prominence": 1,
+          "prefers": "landscape"
+        },
+        {
+          "id": "r2c",
+          "x": 496,
+          "y": 217,
+          "w": 82,
+          "h": 61,
           "prominence": 1,
           "prefers": "landscape"
         }

@@ -27,6 +27,7 @@ import type {
   FrameId,
   MoveSource,
   MoveTarget,
+  PhotoWeight,
   Rect,
   RenderedSpread,
 } from '@franibook/core';
@@ -61,6 +62,7 @@ import {
   fotopoolLaden,
   fotosDerSeiteLaden,
   fotoVerschieben,
+  gewichtSetzen as apiGewichtSetzen,
   seiteNeuAnordnen,
   neigungSetzen,
   ortSetzen as apiOrtSetzen,
@@ -1662,6 +1664,38 @@ export function useSpreadEditor({
     }
   }
 
+  /**
+   * Zeichnet das gewählte Bild als Hauptbild aus; `'normal'` nimmt es zurück.
+   *
+   * Ohne `onNeuRendern`: Das Gewicht steht in keiner Box des Rendered Spread
+   * Model — es wiegt in der Slotzuordnung und ändert damit nichts, solange die
+   * Seite nicht neu angeordnet wird. Genau das sagt die Meldung, und der Knopf
+   * dafür steht daneben (`BildPanel.tsx`). Von selbst neu anzuordnen verwürfe die
+   * Ausschnitte der ganzen Seite — dieselbe Begründung wie beim Kippen.
+   */
+  async function gewichtSetzen(gewicht: PhotoWeight): Promise<void> {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return;
+    setNote(null);
+    try {
+      const e = await apiGewichtSetzen([photoId], gewicht);
+      const neu = e.photos.find((p) => p.id === photoId);
+      if (neu) setInfos((bestand) => new Map(bestand).set(photoId, neu));
+      if (e.uebersprungen[0]) setNote(e.uebersprungen[0].grund);
+      else if (gewicht === 'normal') setNote('Auszeichnung zurückgenommen.');
+      else {
+        setNote(
+          gewicht === 'hero'
+            ? 'Hauptbild. Es bekommt den größten Platz beim nächsten Anordnen dieser Seite.'
+            : 'Beifoto. Es rückt beim nächsten Anordnen dieser Seite in einen kleinen Platz.',
+        );
+      }
+      onChanged();
+    } catch (fehler) {
+      setNote(fehlertext(fehler));
+    }
+  }
+
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
@@ -1806,6 +1840,7 @@ export function useSpreadEditor({
     datumSetzen,
     ortSetzen,
     ausrichtungKippen,
+    gewichtSetzen,
     ausschnittHinweis,
     kastenHinweis,
 
