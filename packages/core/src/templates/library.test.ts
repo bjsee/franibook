@@ -388,8 +388,11 @@ describe('Druckbarkeit mit dem echten Bestand', () => {
 describe('Mosaikvorlagen', () => {
   const mosaike = () => allTemplates().filter((t) => t.tags?.includes('mosaik'));
 
-  it('deckt jede Bilderzahl von 10 bis 24 ab', () => {
-    for (let n = 10; n <= 24; n++) {
+  it('deckt jede Bilderzahl von 9 bis 24 ab', () => {
+    // Neun war die Lücke: `spread.9up.four-and-five` hatte vier nahezu
+    // quadratische Zellen und schnitt am echten Buch 20,3 % der Bildfläche weg
+    // — der höchste Wert aller Vorlagenarten, gegen 9,3 % bei den Mosaiken.
+    for (let n = 9; n <= 24; n++) {
       expect(
         mosaike().filter((t) => t.slots.length === n).length,
         `keine Mosaikvorlage für ${n} Bilder`,
@@ -437,7 +440,10 @@ describe('Mosaikvorlagen', () => {
   it('bietet für die häufigen Bilderzahlen eine quer- und eine hochformatbetonte Fassung', () => {
     // Bei 51,3 % Hochformat im Bestand muss die Engine wählen können; sonst
     // landen Hochformate in Querformatslots und verlieren 44 % ihrer Fläche.
-    for (let n = 11; n <= 24; n++) {
+    //
+    // Ab neun und nicht ab elf: Für zehn gab es nur die hochformatbetonte
+    // Fassung, und neun war überhaupt nicht abgedeckt.
+    for (let n = 9; n <= 24; n++) {
       const ids = mosaike()
         .filter((t) => t.slots.length === n)
         .map((t) => t.id);
