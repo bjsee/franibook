@@ -130,6 +130,11 @@ export function Fotodaten({
                         {f.placeManual && <span style={S.ortHand}> von Hand</span>}
                       </span>
                     )}
+                    {/* Wie „von Hand" beim Ort: eine getroffene Entscheidung
+                        gehört in die Zeile, sonst ist sie nur im Buch zu sehen —
+                        und dort erst nach dem nächsten Anordnen. */}
+                    {f.weight === 'hero' && <span style={S.hauptbild}>★ Hauptbild</span>}
+                    {f.weight === 'filler' && <span style={S.beifoto}>Beifoto</span>}
                     {f.issues.map((i) => (
                       <span key={i.code} style={S.befund} title={i.detail}>
                         {i.detail ?? i.code}
@@ -389,6 +394,48 @@ export function Fotodaten({
           </button>
         </div>
 
+        {/*
+          Das einzige Werkzeug dieser Spalte, das nichts korrigiert: Es sagt,
+          welchen Platz ein Bild im Buch verdient. Es steht trotzdem hier, weil
+          hier die Mehrfachauswahl liegt — „diese vierzig Serienbilder sollen
+          keine Seite tragen" ist ein Griff und keine vierzig. Das *einzelne*
+          Hauptbild zeichnet man an der Doppelseite aus, wo man es groß sieht.
+        */}
+        <div style={B.abschnitt}>
+          <div style={B.titel}>Gewicht im Buch</div>
+          <p style={B.leiser}>
+            Ein Hauptbild bekommt den größten Platz seiner Doppelseite, ein Beifoto einen kleinen.
+            Wirksam wird das beim nächsten Anordnen — das Buch bleibt stehen, bis es angeordnet
+            wird.
+          </p>
+          <div style={S.zeileRechts}>
+            <button
+              type="button"
+              style={{ ...B.knopfPrimaer, flex: 1 }}
+              disabled={gesperrt}
+              onClick={() => m.gewichtAnwenden('hero')}
+            >
+              ★ Hauptbild
+            </button>
+            <button
+              type="button"
+              style={{ ...B.knopf, flex: 1 }}
+              disabled={gesperrt}
+              onClick={() => m.gewichtAnwenden('filler')}
+            >
+              Beifoto
+            </button>
+          </div>
+          <button
+            type="button"
+            style={{ ...B.knopf, marginTop: 6 }}
+            disabled={gesperrt}
+            onClick={() => m.gewichtAnwenden('normal')}
+          >
+            Auszeichnung zurücknehmen
+          </button>
+        </div>
+
         <div style={B.abschnitt}>
           <div style={B.titel}>Datumskorrektur zurücknehmen</div>
           <p style={B.leiser}>
@@ -479,6 +526,11 @@ const S = {
     padding: '1px 6px',
     borderRadius: T.rPill,
   },
+  // Türkis, weil es eine getroffene Entscheidung ist und keine Aussage über das
+  // Buch — dieselbe Regel, die die Farben Rot, Gelb und Grün der Auflösung und
+  // den Bildquellen vorbehält.
+  hauptbild: { fontSize: 11, color: T.cyanTief, fontWeight: 600 },
+  beifoto: { fontSize: 11, color: T.fg3 },
   platz: {
     fontSize: 12,
     fontVariantNumeric: 'tabular-nums' as const,

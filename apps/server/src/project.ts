@@ -31,6 +31,7 @@ import {
   type Befund,
   type PhotoGroup,
   type PhotoOverride,
+  type PhotoWeight,
   type PrintProfile,
   type RenderedCover,
   type RenderedSpread,
@@ -426,6 +427,14 @@ export interface PhotoView extends Photo {
   issues: { code: string; detail?: string }[];
   /** Ob `place` von Hand gesetzt ist statt über GPS aufgelöst. */
   placeManual?: boolean;
+  /**
+   * Von Hand gesetztes Gewicht, wenn eines gesetzt ist.
+   *
+   * Fehlt bei `normal` und nicht `'normal'`, weil genau das der Unterschied ist:
+   * Die Oberfläche soll eine getroffene Auszeichnung zeigen, nicht die Vorgabe
+   * als Zustand ausgeben.
+   */
+  weight?: PhotoWeight;
 }
 
 export class Project {
@@ -1154,6 +1163,21 @@ export class Project {
     if ('fehler' in ergebnis) return ergebnis;
     anordnung.dreheAusschnitte(this, ergebnis.gedreht);
     return ergebnis;
+  }
+
+  /**
+   * Zeichnet Fotos als Hauptbild aus; `'normal'` nimmt es zurück.
+   *
+   * Ohne `rebuildStructure` und ohne Neuanordnen: Das Gewicht sagt nichts über
+   * die Zeit und ändert keine Fotoverteilung, nur welchen Platz ein Bild in
+   * seiner Doppelseite verdient. Wirksam wird es beim nächsten Anordnen — wie
+   * die Bildschärfe, mit der es in `slotCost` dieselbe Rolle teilt.
+   */
+  setzeGewicht(
+    ids: readonly PhotoId[],
+    gewicht: PhotoWeight,
+  ): fotodaten.Korrekturergebnis | { fehler: string } {
+    return fotodaten.setzeGewicht(this, ids, gewicht);
   }
 
   /**
@@ -2239,6 +2263,7 @@ export class Project {
       dateConfidence: e.confidence,
       issues: e.issues,
       ...(override?.placeOverride ? { placeManual: true } : {}),
+      ...(override?.weight ? { weight: override.weight } : {}),
     };
   }
 

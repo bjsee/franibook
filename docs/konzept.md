@@ -1067,6 +1067,83 @@ Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. A
 > (10,7 % Flächenfüllung auf 19 von 80 Doppelseiten), randabfallende Bilder,
 > falzüberspannende Slots und die fehlende Hero-Gewichtung.
 
+> **Nachtrag (8. August 2026): das Hauptbild wird gesetzt
+> ([#7](https://github.com/bjsee/franibook/issues/7))**
+>
+> Die Ankerslots der Mosaikvorlagen standen ein halbes Jahr leer im Sinne der
+> Absicht: `weightOf` lieferte für jedes Foto `normal`, also legte die Engine
+> dorthin das Bild, das dort am besten **passt**, nicht das, das die Seite tragen
+> soll. Das Feld `PhotoOverride.weight` gab es, die Route dafür nicht.
+>
+> Jetzt zeichnet man ein Bild von Hand aus — am Bild auf der Doppelseite
+> (`spread/BildPanel.tsx`, Abschnitt „Gewicht") und im Stapel über den Reiter
+> Fotodaten. Drei Stufen, weil `filler` die andere Hälfte derselben Aussage ist
+> und in `slotCost` längst gerechnet wird; `normal` löscht den Eintrag, statt ihn
+> zu speichern — die Vorgabe ist keine Entscheidung.
+>
+> **Der Befund dabei war die justierte Zeile.** 27 von 80 Doppelseiten rechnen
+> ihre Plätze aus den Bildern und haben deshalb lauter gleich gewichtete Slots
+> (`templates/justified.ts`); sie tragen 358 der 997 Bilder. Auf einem Drittel des
+> Buchs wäre die Auszeichnung ein Knopf ohne Folge geblieben, und zwar unsichtbar.
+> `layoutSpread` überspringt die justierte Fassung deshalb, sobald ein Bild der
+> Seite als Hauptbild gilt: Wer eine Hierarchie will, bekommt eine Vorlage. Eine
+> von Hand gewählte justierte Vorlage bleibt davon unberührt.
+>
+> Am echten Buch gemessen (Doppelseite 4, 13 Bilder): vorher `justiert.13` mit
+> dreizehn gleich hohen Streifen, das größte Bild 75 × 140 mm; nach der
+> Auszeichnung `spread.13up.mosaic-quer` mit dem gewählten Bild in 146 × 109 mm,
+> 28 % breiter als das nächstgrößte.
+>
+> Das Buch folgt **nicht von selbst** — das Gewicht wiegt in der Slotzuordnung und
+> wirkt beim nächsten Anordnen. Derselbe Grund wie beim Kippen: Sofort neu
+> anzuordnen verwürfe die Ausschnitte der ganzen Seite. Der Knopf dafür steht
+> neben der Auszeichnung.
+
+> **Nachtrag (8. August 2026): neun und zehn Bilder, und was sich beim Nachmessen
+> als erledigt erwies ([#7](https://github.com/bjsee/franibook/issues/7))**
+>
+> Am Buch aus dem echten Bestand nachgemessen (997 Fotos, 80 Doppelseiten):
+>
+> | Vorlagenart                | Bilder | Beschnitt im Mittel |
+> | -------------------------- | -----: | ------------------: |
+> | `spread.9up.four-and-five` |     45 |              20,3 % |
+> | justierte Zeilen           |    358 |              14,8 % |
+> | Jahresauftakte             |    179 |              12,5 % |
+> | Mosaike                    |    398 |               9,3 % |
+> | ganzes Buch                |    997 |              12,4 % |
+>
+> Der schlechteste Wert des Buchs stand also bei der einen Bilderzahl, die der
+> Bandsatz nicht abdeckte. **Neun geht doch**, und warum es zunächst nicht ging,
+> steht jetzt im `$comment` von `library.json`: Eine Seite mit vier oder fünf
+> Bildern braucht ein hohes Band, davon gibt es genau zwei, und bei 5 + 4 liegt
+> deshalb auf beiden Seiten eines — die zweite große Zelle bekommt `prominence` 2.
+> Neu sind `spread.9up.mosaic-hoch`, `spread.9up.mosaic-quer` und
+> `spread.10up.mosaic-quer` (für zehn gab es nur die hochformatbetonte Fassung).
+> An den fünf betroffenen Doppelseiten gemessen: **20,3 % → 10,4 %**. Die eine
+> Seite aus neun Querformaten behält die alte Fassung, und das ist richtig — im
+> Mosaik müssten dort zwei Querbilder in Hochformatzellen, was 44 % kostet statt
+> 23 %. Die alten Fassungen bleiben in der Bibliothek, anders als die 26 Raster:
+> Sie stehen im gespeicherten Buch, und eine entfernte Kennung macht die
+> Doppelseite unrenderbar. Parity unverändert (0,198 bis 0,252 %).
+>
+> **Zwei der offenen Punkte hatte die Zwischenzeit erledigt.** Die Jahresauftakte
+> füllen nicht mehr 10,7 % ihrer Fläche, sondern im Median 37,6 %: Sie tragen seit
+> `chapterOpenersDense` neun Bilder. Die Ereigniszeilen stehen in jeder
+> Auftaktfassung bereit und sitzen typografisch, sobald jemand sie pflegt (11,4 pt
+> gegen 117,9 pt Jahreszahl, 10,8 mm Abstand darunter — am Buch geprüft). Dass sie
+> leer sind, ist keine Frage des Codes. Die Alternative „Auftakt nur für Jahre ab
+> drei Doppelseiten" ist damit gegenstandslos.
+>
+> Und der Weißraum ist keiner mehr: Die Flussdoppelseiten nutzen im Mittel 59,1 %
+> ihrer Fläche für Bilder (Median 60,1 %, dichteste 70,1 %) gegen 47 % vor dem
+> Bandsatz. Es gibt keine zu volle Doppelseite; die kleinsten Kästen (31 mm kurze
+> Kante) liegen auf den vier 17up- und der einen 24up-Seite. Auffällig ist das
+> Gegenteil: Fünf der sechs leersten Flussseiten sind justierte Zeilen — DS 4 mit
+> dreizehn Bildern auf 37,5 %. Formtreue Zeilen treffen die Seitenhöhe nur in
+> Sprüngen (`MAX_ZOOM` = 1,25), und wo der Sprung nicht aufgeht, bleibt der Block
+> zentriert stehen. Das ist Arithmetik, keine Nachlässigkeit; ein größerer Zoom
+> wäre mehr Beschnitt.
+
 Bei 51,6 % Hochformat im Bestand braucht mindestens ein Template je Slotzahl eine hochformatorientierte Variante. Ein Vierer-Raster aus vier Querformaten ist bei diesem Bestand die Ausnahme, nicht die Regel.
 
 Zusätzlich existiert für den `subtle`-Fall kein eigenes Template: Jedes Template kann einen optionalen `year`-Textslot tragen. Ein Jahreswechsel braucht damit keine eigene Seite, wie gefordert.

@@ -16,6 +16,11 @@
  * Koordinaten, und die Engine liest ohnehin nur `place`: Koordinaten eintippen
  * wäre ein Umweg durch die Ortsdatenbank, um am Ende denselben String zu
  * erzeugen.
+ *
+ * Das **Gewicht** fällt aus der Reihe: Es korrigiert nichts, sondern zeichnet
+ * aus. Es steht trotzdem hier, weil es im selben `PhotoOverride` wohnt und über
+ * dieselbe mengenwertige Route kommt — zwei Wege in dasselbe Feld wären zwei
+ * Gelegenheiten, es unterschiedlich aufzuräumen.
  */
 import {
   type DateContext,
@@ -24,6 +29,7 @@ import {
   type Photo,
   type PhotoId,
   type PhotoOverride,
+  type PhotoWeight,
   applyDateEdit,
   manualPlaceKey,
   resolveEffectiveDate,
@@ -217,6 +223,71 @@ export function kippeAusrichtung(
 
   return { geaendert, uebersprungen, unbekannt, gedreht };
 }
+
+/**
+ * Zeichnet Fotos als Hauptbild aus, oder nimmt die Auszeichnung zurück.
+ *
+ * `'normal'` ist die **Vorgabe und kein Wert**: Es löscht den Eintrag, wie
+ * `null` beim Ort und beim Kippen. Ein gespeichertes `weight: 'normal'` wäre
+ * eine Entscheidung, die keine ist — dieselbe Regel wie bei `dateEstimated`,
+ * und `exactOptionalPropertyTypes` verlangt es ohnehin.
+ *
+ * Anders als Datum, Ort und Ausrichtung ist das **keine Korrektur an der
+ * Datei**, sondern eine Aussage über das Buch: Dieses Bild soll die Seite
+ * tragen. Es steht trotzdem im `PhotoOverride` und nicht am Slot, denn es gilt
+ * dem Foto — es soll seinen prominenten Platz auch dann bekommen, wenn eine
+ * Neuanordnung es auf eine andere Doppelseite trägt.
+ *
+ * **Das Buch folgt nicht von selbst.** Das Gewicht wiegt in `slotCost`
+ * (`layout/scoring.ts`, bis 0,5 und damit knapp unter dem Orientierungsbruch)
+ * und wirkt deshalb erst beim nächsten Anordnen. Sofort neu anzuordnen verwürfe
+ * die Ausschnitte der ganzen Seite — dieselbe Begründung wie beim Kippen.
+ */
+export function setzeGewicht(
+  z: Fotodatenstand,
+  ids: readonly PhotoId[],
+  gewicht: PhotoWeight,
+): Korrekturergebnis | { fehler: string } {
+  if (ids.length === 0) return { fehler: 'Keine Fotos ausgewählt' };
+
+  const unbekannt: PhotoId[] = [];
+  const uebersprungen: { id: PhotoId; grund: string }[] = [];
+  let geaendert = 0;
+
+  for (const id of ids) {
+    if (!z.photos.has(id)) {
+      unbekannt.push(id);
+      continue;
+    }
+    const bestand = z.overrides[id] ?? {};
+    if ((bestand.weight ?? 'normal') === gewicht) {
+      uebersprungen.push({
+        id,
+        grund:
+          gewicht === 'normal' ? 'Keine Auszeichnung vorhanden' : `Schon ${BEZEICHNUNG[gewicht]}`,
+      });
+      continue;
+    }
+
+    if (gewicht === 'normal') {
+      const { weight: _weg, ...rest } = bestand;
+      if (Object.keys(rest).length === 0) delete z.overrides[id];
+      else z.overrides[id] = rest;
+    } else {
+      z.overrides[id] = { ...bestand, weight: gewicht };
+    }
+    geaendert++;
+  }
+
+  return { geaendert, uebersprungen, unbekannt };
+}
+
+/** Wie die Gewichte in einer Meldung heißen. */
+const BEZEICHNUNG: Record<PhotoWeight, string> = {
+  hero: 'Hauptbild',
+  normal: 'ohne Auszeichnung',
+  filler: 'Beifoto',
+};
 
 /**
  * Nimmt die Datumskorrektur zurück, sodass wieder die Datei entscheidet.

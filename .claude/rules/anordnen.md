@@ -180,6 +180,16 @@ Die Slot-Zuordnung (`layout/scoring.ts`) kennt den Bildfokus **nicht** — er
 verschiebt nur den Ausschnitt und verkleinert ihn nicht, also darf er die
 Bildverteilung des Buchs nicht ändern.
 
+**Das Gewicht eines Fotos kennt sie** (`weightMismatch`, bis 0,5): `hero` will den
+Ankerslot, `filler` den kleinen. Gesetzt wird es von Hand in `PhotoOverride.weight`
+(`PATCH /api/photos` mit `weight`), also am **Foto** und nicht am Slot — es gilt
+weiter, wenn eine Neuanordnung das Bild auf eine andere Doppelseite trägt, und ist
+darum keine Handarbeit im Sinne von `handwork()`. Wirksam wird es beim nächsten
+Anordnen; von selbst ordnet nichts um. **Justierte Zeilen sind ausgenommen**: Ihre
+Plätze sind alle gleich gewichtet, also überspringt `layoutSpread` sie, sobald ein
+Bild der Seite ausgezeichnet ist (27 von 80 Doppelseiten am echten Buch — ohne das
+wäre die Auszeichnung dort unsichtbar wirkungslos).
+
 **Die Bildschärfe kennt sie sehr wohl** (`qualityPenalty`), und der Unterschied
 ist genau dieser: Sie soll die Verteilung ändern — der große Platz gehört dem
 besseren Bild (Issue #19). Die Kennlinie läuft zwischen dem zehnten Perzentil des

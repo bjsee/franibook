@@ -106,7 +106,9 @@ function gitter(anzahl: number, seite: 0 | 1, idOffset: number): TemplateSlot[] 
     w: zellW,
     h: zellH,
     // Alle Plätze gleich gewichtet: Eine justierte Seite hat kein Hauptbild,
-    // sie hat lauter unverzerrte. Wer eine Hierarchie will, nimmt eine Vorlage.
+    // sie hat lauter unverzerrte. Wer eine Hierarchie will, nimmt eine Vorlage —
+    // und die Automatik nimmt sie von selbst, sobald ein Bild dieser Seite als
+    // Hauptbild ausgezeichnet ist (`layoutSpread` in `layout/rebuild.ts`).
     prominence: 2 as const,
   }));
 }
