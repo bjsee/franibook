@@ -206,9 +206,23 @@ gelten. Ein nicht eingehängtes Netzlaufwerk darf kein Buch leeren.
 ## Bilder ausliefern
 
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. **Die
-Doppelseitenvorschau lädt nie ein Original; der PDF-Export immer.** Eine Ansicht,
+Doppelseitenvorschau lädt nie ein Original; der Druckexport immer.** Eine Ansicht,
 die für ein Original nur eine Vorschau braucht, hält den Server unnötig am Decoder
 fest — und eine, die für den Druck eine Vorschau nähme, druckt Kompression.
+
+Die eine Ausnahme ist **der Korrekturabzug** (`POST /api/export/abzug`): Er nimmt
+die 1600-px-Vorschauen, weil er zum Durchsehen da ist und nicht zum Drucken. Am
+echten Buch gemessen (80 Doppelseiten, 997 Bilder): **9,3 MB in 18,4 s** gegen
+156 MB in 81,9 s. `warm()` liefert dafür die Karte Foto → Datei gleich mit:
+`renderPdf.resolvePhoto` ist synchron, die Vorschauerzeugung nicht. Wer diese Karte
+benutzt, setzt `orientation: 1` und **keine** Vierteldrehung — die Vorschau liegt
+schon aufgerichtet im Cache, ein zweites Anwenden legte jedes gedrehte Bild quer.
+
+Angesehen wird das Ergebnis über **`GET /api/export/:fileName`** — dieselbe
+Namensprüfung wie beim Schreiben, nur in Leserichtung, und `Content-Disposition:
+inline`, damit der Browser das PDF zeigt statt es abzulegen. Jede Export-Route gibt
+dafür `fileName` neben `outputPath` zurück: Der Pfad ist die Auskunft für den
+Menschen, der Name die Adresse.
 
 Der Vorschau-Cache trägt die Fassung eines Fotos im Namen (Drehung), und die
 Oberfläche hängt eine Bildversion als `?v=` an jede Adresse — ohne das bliebe ein

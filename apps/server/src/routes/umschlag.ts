@@ -43,7 +43,9 @@ export function umschlagRouten(app: FastifyInstance, { project, sources, outDir 
         },
       });
 
-      return { outputPath, ...result };
+      // `fileName` neben `outputPath`, wie beim Innenteil: Er ist die Adresse
+      // für `GET /api/export/:fileName`.
+      return { outputPath, fileName, ...result };
     } catch (err) {
       if (istDateiFehler(err)) {
         return reply.code(503).send({

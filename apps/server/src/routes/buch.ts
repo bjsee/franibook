@@ -4,16 +4,18 @@
  * Alles hier betrifft mehr als eine Doppelseite — deshalb `/api/book/…` und
  * nicht `/api/spreads/…`.
  */
-import { mkdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import { abzugsblatt, linkeSeitenzahl } from '@franibook/core';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import { renderPdf } from '@franibook/render-pdf';
 import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
 
 export function buchRouten(
   app: FastifyInstance,
-  { project, sources, decodes, outDir }: Kontext,
+  { project, sources, previews, decodes, outDir }: Kontext,
 ): void {
   /**
    * Die Buchaufteilung als lesbares JSON.
@@ -188,6 +190,51 @@ export function buchRouten(
     spreads: project.renderAll(),
   }));
 
+  /**
+   * Eine erzeugte PDF-Datei zum Ansehen — der Weg vom Pfad zum Blättern.
+   *
+   * Ohne sie endet jeder Export mit einem Dateipfad in einer Meldung, den man von
+   * Hand in den Finder tippt. Mit ihr wird die Meldung ein Link, und der Abzug
+   * lässt sich sofort durchblättern und drucken; genau dafür ist er da.
+   *
+   * `inline` und nicht `attachment`: Der Browser zeigt das PDF in seinem eigenen
+   * Betrachter, statt es in den Download-Ordner zu legen. Speichern kann man von
+   * dort immer noch, umgekehrt nicht.
+   *
+   * **Nur aus `outDir` und nur nach `EXPORT_DATEINAME`** — dieselbe Prüfung wie
+   * beim Schreiben, aus demselben Grund: Der Name kommt aus einer Adresse und
+   * landet in `join(outDir, name)`. Ein `..` darin läse jede Datei, die der
+   * Serverprozess lesen darf. Kein `Cache-Control: immutable` wie bei den
+   * Bildern: Derselbe Name trägt nach jedem Export einen anderen Inhalt.
+   *
+   * Der Ursprungshaken (`ursprungHaken`) greift hier nicht, weil er nur
+   * mutierende Routen prüft — und das ist richtig: Eine fremde Seite kann die
+   * Anfrage zwar auslösen, die Antwort ohne CORS-Freigabe aber nicht lesen.
+   * Dieselbe Lage wie bei `GET /api/photos/:id/original`.
+   */
+  app.get<{ Params: { fileName: string } }>('/api/export/:fileName', async (req, reply) => {
+    const { fileName } = req.params;
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
+    const pfad = join(outDir, fileName);
+    try {
+      // `createReadStream` wirft bei einer fehlenden Datei erst asynchron über
+      // das Streamobjekt – zu spät für ein try/catch um den Aufruf. Deshalb
+      // vorab prüfen, wie bei `/api/photos/:id/original`.
+      await access(pfad);
+    } catch {
+      return reply.code(404).send({ error: 'Diese Datei wurde noch nicht erzeugt' });
+    }
+
+    return reply
+      .type('application/pdf')
+      .header('Content-Disposition', `inline; filename="${fileName}"`)
+      .header('Cache-Control', 'no-store')
+      .send(createReadStream(pfad));
+  });
+
   app.post<{ Body?: { spreadIndex?: number; fileName?: string } }>(
     '/api/export/pdf',
     async (req, reply) => {
@@ -245,7 +292,11 @@ export function buchRouten(
           },
         });
 
-        return { outputPath, ...result };
+        // `fileName` neben `outputPath`: Der Pfad ist die Auskunft für den
+        // Menschen, der Name die Adresse für `GET /api/export/:fileName`. Ihn in
+        // der Oberfläche aus dem Pfad zu schneiden hieße, dort noch einmal zu
+        // wissen, welcher Trenner gilt.
+        return { outputPath, fileName, ...result };
       } catch (err) {
         // Ein ausgehängtes NAS etwa: Die rohe Exception trüge den vollen Pfad
         // in die Antwort, ein deutscher Satz mit 503 ist die ehrlichere Auskunft.
@@ -258,4 +309,84 @@ export function buchRouten(
       }
     },
   );
+
+  /**
+   * Der Korrekturabzug: dasselbe Buch zum Durchsehen statt zum Drucken.
+   *
+   * Ein eigener Endpunkt und kein Schalter an `/api/export/pdf`: Die beiden
+   * unterscheiden sich in allem außer der Layoutrechnung — Bildquelle,
+   * Auflösung, Blattformat, Dateiname —, und ein `abzug: true` im Rumpf hätte
+   * jeden Aufrufer zum Nachlesen gezwungen, was daran noch gilt.
+   *
+   * **Aus den Vorschauen, nicht aus den Originalen.** `resolvePhoto` ist
+   * synchron, die Vorschauerzeugung nicht — deshalb der Warmlauf davor, der die
+   * Karte gleich mitliefert. Nach dem Anlauf ist er ein Verzeichniszugriff je
+   * Foto und kostet nichts; kalt erzeugt er, was die Oberfläche ohnehin gleich
+   * braucht.
+   *
+   * Kein Eintrag in `UNDO_ROUTEN` mit Wirkung: Der Abzug schreibt eine Datei
+   * nach `outDir` und ändert am Projekt nichts — wie `/api/export/pdf`.
+   */
+  app.post<{ Body?: { fileName?: string } }>('/api/export/abzug', async (req, reply) => {
+    const spreads = project.renderAll();
+    if (spreads.length === 0) {
+      return reply.code(404).send({ error: 'Keine Doppelseite zum Abziehen' });
+    }
+
+    const fileName = req.body?.fileName ?? 'abzug.pdf';
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
+    await mkdir(outDir, { recursive: true });
+    const outputPath = join(outDir, fileName);
+    const zeilen = project.befundzeilen();
+
+    try {
+      const vorschauen = await previews.warm(project.effectivePhotoList(), 'preview', 6);
+
+      const result = await renderPdf({
+        spreads,
+        profile: project.profile,
+        outputPath,
+        // Das Blatt rechnet aus der Doppelseite selbst, nicht aus dem Profil —
+        // dann können Maßstab und Zuschnitt nicht auseinanderlaufen.
+        abzug: (spread, index) =>
+          abzugsblatt(spread, {
+            linkeSeite: linkeSeitenzahl(index),
+            ...(zeilen[index] ? { befundzeile: zeilen[index] } : {}),
+          }),
+        resolvePhoto: (photoId) => {
+          const vorschau = vorschauen.get(photoId);
+          // `orientation: 1` und keine Vierteldrehung: Die Vorschau liegt im
+          // Cache bereits aufgerichtet (`previews.ts` wendet EXIF-Orientierung
+          // und Korrektur beim Erzeugen an). Beides ein zweites Mal anzuwenden
+          // legte jedes gedrehte Bild quer — und der gespeicherte Ausschnitt
+          // bezieht sich ohnehin auf das gedrehte Bild.
+          if (vorschau) return { path: vorschau, orientation: 1 };
+
+          // Ohne Vorschau das Original. Kein `recoverPhoto` daneben: Der Weg
+          // über `sips` kostet Sekunden je Bild, und der Abzug lebt davon, in
+          // Sekunden fertig zu sein. Ein Bild, das hier fehlt, fehlt in der
+          // Oberfläche genauso — es fällt beim Durchsehen von selbst auf.
+          const photo = project.photo(photoId);
+          if (!photo) return undefined;
+          return {
+            path: sources.pfad(photo),
+            orientation: photo.orientation,
+            ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+          };
+        },
+      });
+
+      return { outputPath, fileName, ...result };
+    } catch (err) {
+      if (istDateiFehler(err)) {
+        return reply.code(503).send({
+          error: 'Eine Bilddatei ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+        });
+      }
+      throw err;
+    }
+  });
 }
