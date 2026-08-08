@@ -224,6 +224,22 @@ describe('layoutSpread mit justierten Zeilen', () => {
     expect(gelegt?.slots.find((sl) => sl.slotId === anker.id)?.photoId).toBe('q0');
   });
 
+  it('weicht der Bibliothek auch für ein Beifoto', () => {
+    // Dieselbe Aussage von der anderen Seite: „Dieses Bild soll die Seite nicht
+    // tragen." Nur `hero` zu prüfen hieße, die Zusage der Oberfläche („rückt in
+    // einen kleinen Platz") für die Hälfte der Fälle zu brechen.
+    const gelegt = layoutSpread({
+      photos: gemischt,
+      profile,
+      weightOf: (id) => (id === 'q0' ? 'filler' : 'normal'),
+    });
+    expect(isJustified(gelegt?.templateId)).toBe(false);
+
+    const vorlage = requireTemplate(gelegt!.templateId);
+    const anker = vorlage.slots.reduce((a, b) => (b.prominence > a.prominence ? b : a));
+    expect(gelegt?.slots.find((sl) => sl.slotId === anker.id)?.photoId).not.toBe('q0');
+  });
+
   it('lässt eine von Hand gewählte justierte Vorlage trotz Hauptbild stehen', () => {
     // Die Handauswahl schlägt die Automatik – wie überall sonst auch.
     const gelegt = layoutSpread({
