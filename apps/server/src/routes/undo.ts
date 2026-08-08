@@ -271,6 +271,20 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // -------------------------------------------------------------- Umschlag
   'PATCH /api/cover': { label: 'Umschlag geändert', schluessel: () => 'umschlag' },
 
+  // --------------------------------------------------------------- Abnahme
+  // Ein „Weiß ich, ist ok" ist eine Entscheidung über das Buch und gehört
+  // deshalb in den Verlauf. Kein Verschmelzschlüssel: Zwei abgenickte Befunde
+  // sind zwei Griffe, auch wenn sie schnell aufeinanderfolgen.
+  'POST /api/book/pruefung/abnahmen': { label: 'Befund abgenickt' },
+  'DELETE /api/book/pruefung/abnahmen': {
+    // Ohne Schlüssel trifft es alle — das gehört am Knopf zu stehen, sonst
+    // klingt das Zurücknehmen harmloser, als es war.
+    label: (_p, body) =>
+      (body as { schluessel?: unknown } | null)?.schluessel === undefined
+        ? 'Alle Abnahmen zurückgenommen'
+        : 'Abnahme zurückgenommen',
+  },
+
   // ------------------------------------------- Was den Zustand nicht anfasst
   'POST /api/export/pdf': null,
   'POST /api/export/cover': null,

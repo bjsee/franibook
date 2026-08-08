@@ -3,7 +3,9 @@ import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime } from '../model/photo.js';
 import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
-import { sideTimelineBoxes } from './side-timeline.js';
+import { profileById } from '../print/profiles/index.js';
+import { libraryOuterMarginMm } from '../templates/index.js';
+import { SIDE_AXIS_BAND_MM, sideAxisPasst, sideTimelineBoxes } from './side-timeline.js';
 
 const profile = saal as PrintProfile;
 const rects = (b: RenderBox[]) => b.filter((x): x is RectBox => x.kind === 'rect');
@@ -19,10 +21,13 @@ function achse(at?: string): RenderBox[] {
 const perle = (b: RenderBox[]) => rects(b).find((r) => r.rxMm !== undefined && r.wMm === r.hMm);
 
 describe('Randachse', () => {
-  it('läuft senkrecht im äußeren Sicherheitsrand der linken Seite', () => {
+  it('läuft senkrecht hinter der Sicherheitslinie der linken Seite', () => {
+    // Sie lag einmal *im* Sicherheitsrand — die Jahreszahlen standen damit
+    // 1,8 mm vor der Schnittkante und wären bei üblicher Schneidtoleranz
+    // angeschnitten worden. Jetzt beginnt das Band an der Sicherheitslinie.
     const boxen = rects(achse('2015-07-01T12:00:00'));
     const senkrecht = boxen.find((r) => r.hMm > 100)!;
-    expect(senkrecht.xMm).toBeLessThan(profile.page.bleedMm + profile.page.safetyMm);
+    expect(senkrecht.xMm).toBeGreaterThanOrEqual(profile.page.bleedMm + profile.page.safetyMm);
     expect(senkrecht.wMm).toBeLessThan(1);
   });
 
@@ -157,15 +162,33 @@ describe('Randachse: Fassungen', () => {
     expect(halbfett.map((t) => t.content)).toEqual(['17']);
   });
 
-  it('hält jede Fassung im Band zwischen Beschnittkante und Sicherheitsrand', () => {
+  it('hält jede Fassung in ihrem Band hinter der Sicherheitslinie', () => {
+    // Der Test, der das Druckrisiko festhält: Nichts von der Achse darf
+    // zwischen Papierkante und Sicherheitslinie liegen — dort schneidet das
+    // Werk. Und nichts darf über das Band hinausragen, sonst stünde sie auf
+    // den Bildern.
     const { bleedMm, safetyMm } = profile.page;
+    const bandAussen = bleedMm + safetyMm;
     for (const variant of ['classic', 'ladder', 'bar', 'column']) {
       for (const box of fassung(variant)) {
         if (box.kind === 'polygon') continue;
-        expect(box.xMm, variant).toBeGreaterThanOrEqual(bleedMm);
-        expect(box.xMm + box.wMm, variant).toBeLessThanOrEqual(bleedMm + safetyMm);
+        expect(box.xMm, variant).toBeGreaterThanOrEqual(bandAussen);
+        expect(box.xMm + box.wMm, variant).toBeLessThanOrEqual(bandAussen + SIDE_AXIS_BAND_MM);
       }
     }
+  });
+
+  it('zeichnet nichts, wo das Band keinen Platz hat', () => {
+    // Am kleinsten Format lässt die Bibliothek 10,6 mm frei, gebraucht werden
+    // 10 mm Sicherheitsrand plus 5,8 mm Band. Eine Achse, die auf den Bildern
+    // läge, wäre die schlechtere Antwort als keine — die Oberfläche bietet die
+    // Randachse dort deshalb gar nicht erst an.
+    const klein = profileById('saal-15x15')!;
+    expect(sideAxisPasst(klein)).toBe(false);
+    expect(sideTimelineBoxes({ fromYear: 2008, toYear: 2026 }, klein)).toEqual([]);
+
+    expect(sideAxisPasst(profile)).toBe(true);
+    expect(libraryOuterMarginMm(profile)).toBeCloseTo(19.8, 1);
   });
 
   it('lässt in jeder Fassung den Marker weg, wenn die Seite kein Datum hat', () => {

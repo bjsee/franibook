@@ -158,6 +158,9 @@ async function abdruck(p: Probe): Promise<string> {
     overrides: p.project.overrides,
     photos: [...p.project.photos.entries()],
     quellen: p.project.sources.list(),
+    // Die abgenickten Befunde stehen in keiner der Antworten oben – ohne sie
+    // hier wäre ein Abnicken für diesen Test eine Aktion, die nichts ändert.
+    abnahmen: p.project.abnahmen,
   });
 }
 
@@ -504,6 +507,26 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     url: '/api/cover',
     payload: { title: 'Franziska', subtitle: 'Achtzehn Jahre' },
   }),
+
+  // Abgenickt wird, was der Bericht auch meldet – `abnicken` lehnt einen
+  // erfundenen Schlüssel ab, und ein abgelehnter Aufruf änderte nichts.
+  'POST /api/book/pruefung/abnahmen': ({ project }) => ({
+    method: 'POST',
+    url: '/api/book/pruefung/abnahmen',
+    payload: { schluessel: project.abnahme().befunde[0]?.schluessel ?? 'seitenzahl' },
+  }),
+
+  // Und für das Zurücknehmen muss vorher etwas dastehen: Ein Leeren, das nichts
+  // leert, ließe den Rundlauf einen Stand vergleichen, der sich nie geändert
+  // hat. Das Abnicken gehört damit zur Ausgangslage.
+  'DELETE /api/book/pruefung/abnahmen': async ({ app, project }) => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/book/pruefung/abnahmen',
+      payload: { schluessel: project.abnahme().befunde[0]?.schluessel ?? 'seitenzahl' },
+    });
+    return { method: 'DELETE', url: '/api/book/pruefung/abnahmen' };
+  },
 
   'POST /api/history/:name': async ({ app, project }) => {
     const anker = await project.notanker('Buch neu angeordnet');

@@ -44,6 +44,7 @@ import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
+import { Abnahme } from './Abnahme.js';
 import { Fotodaten } from './Fotodaten.js';
 import { Overview } from './Overview.js';
 import { Baum } from './baum/Baum.js';
@@ -76,6 +77,7 @@ const REITER: { id: View; label: string }[] = [
   { id: 'sources', label: 'Bildquellen' },
   { id: 'edit', label: 'Aufteilung' },
   { id: 'cover', label: 'Umschlag' },
+  { id: 'abnahme', label: 'Abnahme' },
 ];
 
 /**
@@ -152,12 +154,6 @@ export function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   /**
-   * Ausgewählter Slot. Liegt hier und nicht im Editor, weil er die
-   * Tastenbelegung umschaltet: Solange ein Slot gewählt ist, justieren die
-   * Pfeiltasten den Ausschnitt statt zu blättern.
-   */
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  /**
    * Stelle, an der eine eigene Doppelseite entstehen soll – `null` heißt: kein
    * Dialog offen. Die Zahl ist die Einfügestelle, nicht der Index einer
    * bestehenden Seite; `spreadCount` bedeutet „ganz hinten".
@@ -175,10 +171,48 @@ export function App() {
 
   // --------------------------------------------------------------- Navigation
 
-  /** Zu einer Doppelseite. */
+  /**
+   * Zu einer Doppelseite.
+   *
+   * Ohne Platz: Wer aus der Übersicht, dem Baum oder dem Verlauf hierher
+   * springt, meint das Blatt. Auf ein *Bild* springt allein die Abnahme, und
+   * die baut ihre Adresse selbst (`Link` mit `slotId`) — ein zweiter Weg
+   * dorthin über diesen Helfer stand hier und hatte keinen Aufrufer.
+   */
   const zeigeSpread = useCallback(
     (i: number, opt?: NavOptionen) => navigieren({ view: 'spread', index: i }, opt),
     [navigieren],
+  );
+
+  /**
+   * Der ausgewählte Platz — abgeleitet aus der Adresse, nicht gehalten.
+   *
+   * Er schaltet die Tastenbelegung um (bei gewähltem Platz justieren die
+   * Pfeiltasten den Ausschnitt statt zu blättern) und stand deshalb hier einmal
+   * als `useState`. Seit die Abnahme auf ein **Bild** springt, muss er in der
+   * Adresse stehen: Zwei Wahrheiten darüber, welches Bild gemeint ist, wären
+   * genau der Fall, in dem der Sprung ins Leere zeigt.
+   *
+   * Nebenbei entfällt damit ein Effekt: Blättern trägt keinen Platz mit, also
+   * fällt die Auswahl beim Seitenwechsel von selbst weg. Vorher zog das ein
+   * `useEffect` auf `index` nach.
+   */
+  const selectedSlotId = route.view === 'spread' ? (route.slotId ?? null) : null;
+
+  /**
+   * Einen Platz wählen. Ersetzend, denn eine Auswahl ist eine Verfeinerung
+   * derselben Ansicht und keine neue Station — dieselbe Regel wie beim Filter
+   * der Gruppenliste.
+   */
+  const waehlePlatz = useCallback(
+    (slotId: string | null) => {
+      if (route.view !== 'spread') return;
+      navigieren(
+        { view: 'spread', index: route.index, ...(slotId ? { slotId } : {}) },
+        { ersetzen: true },
+      );
+    },
+    [navigieren, route],
   );
 
   /**
@@ -270,10 +304,6 @@ export function App() {
         if (fahrschein === spreadFahrschein.current) setError(fehlertext(e));
       });
   }, [index, view, bare, renderVersion]);
-
-  // Beim Blättern gilt die Auswahl nicht weiter: Slotkennungen wiederholen
-  // sich zwar von Doppelseite zu Doppelseite, gemeint war aber dieses Bild.
-  useEffect(() => setSelectedSlotId(null), [index]);
 
   /**
    * Eine Datei, die *neben* eine Abwurfstelle fällt, darf die Arbeit nicht beenden.
@@ -380,7 +410,7 @@ export function App() {
           if (e.key === 'ArrowLeft') blaettern(Math.max(0, index - 1));
         }
         if (e.key === 'Escape') {
-          if (selectedSlotId) setSelectedSlotId(null);
+          if (selectedSlotId) waehlePlatz(null);
           else navigieren({ view: 'overview' });
         }
       }
@@ -392,7 +422,18 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [bare, info?.spreadCount, view, index, selectedSlotId, zurueck, vor, blaettern, navigieren]);
+  }, [
+    bare,
+    info?.spreadCount,
+    view,
+    index,
+    selectedSlotId,
+    waehlePlatz,
+    zurueck,
+    vor,
+    blaettern,
+    navigieren,
+  ]);
 
   /**
    * Ändert eine Darstellungseinstellung.
@@ -822,6 +863,7 @@ export function App() {
           </div>
           <BuchPanel
             settings={info.settings}
+            profile={info.profile}
             formate={info.profiles}
             handwork={info.handwork}
             busy={!!busy}
@@ -850,7 +892,7 @@ export function App() {
             onSpread={setSpread}
             imageSrc={imageSrc}
             selectedSlotId={selectedSlotId}
-            onSelect={setSelectedSlotId}
+            onSelect={waehlePlatz}
             variante={variante}
             aussen={aussen}
           />
@@ -936,6 +978,14 @@ export function App() {
         )
       ) : view === 'cover' ? (
         <Cover imageSrc={imageSrc} standVersion={standVersion} />
+      ) : view === 'abnahme' ? (
+        <Abnahme
+          onNavigieren={navigieren}
+          standVersion={standVersion}
+          // Eine Abnahme ist ein Schritt im Verlauf: Der Rückgängig-Knopf in
+          // der Kopfzeile muss danach wissen, was er zurücknähme.
+          onChanged={loadInfo}
+        />
       ) : (
         <div style={S.laedt}>
           <span style={B.leise}>Lade Projekt …</span>

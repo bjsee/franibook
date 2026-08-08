@@ -12,6 +12,7 @@
 import { FRAMES, photoPixelsOf } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { Bilddaten } from './Bilddaten.js';
+import { AbnickKnopf, Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
@@ -59,6 +60,7 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
           {info?.camera && ` · ${info.camera}`}
         </p>
         <Bilddaten model={model} />
+        <Bildbefunde model={model} ausser={['lage-quer', 'gesicht-am-rand']} />
 
         {/*
           Der Balken misst gegen die Zielauflösung, die Marke steht an der
@@ -357,9 +359,12 @@ function LageWarnung({ model }: { model: SpreadEditorModel }) {
         {Math.round(warnung.sichtbar * 100)} %; weiter herauszoomen geht nicht, ohne es zu
         verzerren.
       </p>
-      <button onClick={() => void model.neuAnordnen()} style={B.knopf}>
-        Doppelseite neu anordnen
-      </button>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <button onClick={() => void model.neuAnordnen()} style={B.knopf}>
+          Doppelseite neu anordnen
+        </button>
+        <AbnickKnopf model={model} art="lage-quer" />
+      </span>
     </div>
   );
 }
@@ -396,6 +401,7 @@ function RandWarnung({ model }: { model: SpreadEditorModel }) {
       <p style={{ margin: 0 }}>
         {wer} {wo} und {folge}.
       </p>
+      <AbnickKnopf model={model} art="gesicht-am-rand" />
     </div>
   );
 }

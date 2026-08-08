@@ -413,10 +413,15 @@ Ein PDF, das bei Saal Digital tatsächlich hochgeladen werden kann.
 > 31 Sekunden, MediaBox, TrimBox und BleedBox gesetzt, Seitenaufteilung `single`
 > und `spread` implementiert, Bilder auf genau die nötige Pixelzahl skaliert.
 >
-> Offen — drei davon blockieren den ersten Druckauftrag:
+> Offen — eines davon blockiert den ersten Druckauftrag:
 >
-> - **Maße unverifiziert** ([#1](https://github.com/bjsee/franibook/issues/1)),
->   `provenance.verifiedAt` steht weiterhin auf `null`
+> - ~~**Maße unverifiziert** ([#1](https://github.com/bjsee/franibook/issues/1))~~ —
+>   acht Profile aus den Rohformaten der Anbietervorlagen hergeleitet und gegen
+>   seine Umschlagtabelle geprüft, `provenance.verifiedAt` steht auf `2026-08-05`.
+>   Was Gestaltungsreserve dieses Projekts bleibt, steht in `provenance.notes`;
+>   der Falzverlust an der Bindung ist als
+>   [#16](https://github.com/bjsee/franibook/issues/16) abgetrennt und wartet auf
+>   einen Testdruck
 > - **Cover steht** ([#2](https://github.com/bjsee/franibook/issues/2)):
 >   `packages/core/src/cover/` rechnet Geometrie und Rendered Cover Model,
 >   `renderCoverPdf` schreibt die zweite PDF-Datei, `CoverView` zeigt den Bogen
@@ -428,9 +433,16 @@ Ein PDF, das bei Saal Digital tatsächlich hochgeladen werden kann.
 >   vorher, **160 MB** nachher, bei unveränderter Auflösung von 300 dpi. Offen
 >   bleibt nur die Uploadgrenze bei Saal, die der Anbieter beantworten muss
 >   ([#3](https://github.com/bjsee/franibook/issues/3))
-> - Kein ICC-Profil und kein OutputIntent, kein Preflight, kein
->   `export-report.json`, kein SSE-Fortschritt. Der Export meldet übersprungene
->   Bilder immerhin im Ergebnis — aktuell genau eines
+> - ~~Kein ICC-Profil und kein OutputIntent~~ — Ausgabeprofil in jeder Bildkette,
+>   OutputIntent in beiden PDFs, die drei `color`-Felder durchgesetzt statt
+>   deklariert ([#13](https://github.com/bjsee/franibook/issues/13)).
+> - ~~Kein Preflight~~ — als **Abnahmebericht** gebaut, aber neben dem Export und
+>   nicht davor: `GET /api/book/pruefung`, Reiter „Abnahme"
+>   ([#14](https://github.com/bjsee/franibook/issues/14)). Kein
+>   `export-report.json` — Begründung im Abschnitt „Prüfbericht" in
+>   `docs/konzept.md`.
+> - Kein SSE-Fortschritt. Der Export meldet übersprungene Bilder immerhin im
+>   Ergebnis — aktuell genau eines
 >   ([#6](https://github.com/bjsee/franibook/issues/6)).
 
 **Inhalt**
@@ -534,6 +546,6 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 
 Der in der Anforderung beschriebene MVP ist nach Phase 8 vollständig erfüllt – Phase 9 und 10 sind Ausbau.
 
-Was bis zum ersten Druckauftrag fehlt, sind die als `blocker` markierten Punkte aus Phase 8: verifizierte Maße, Cover, Seitenzahl. Die Dateigröße ist erledigt, soweit sie in unserer Hand liegt — was Saal beim Upload zulässt, ist noch zu erfragen.
+Was bis zum ersten Druckauftrag fehlte, waren die als `blocker` markierten Punkte aus Phase 8: verifizierte Maße, Cover, Seitenzahl. Maße, Cover und Farbraum stehen, die Dateigröße ist erledigt, soweit sie in unserer Hand liegt — was Saal beim Upload zulässt, ist noch zu erfragen (#3). Was die Abnahme am Buch selbst noch findet, sagt der Reiter „Abnahme"; der Falzzuschlag (#16) braucht einen Testdruck.
 
 Drei Phasen sind Meilensteine, an denen sich eine Zwischenbeurteilung lohnt: Phase 1 beweist die Architektur, Phase 5 beweist das UX-Ziel, Phase 8 beweist die Druckbarkeit.

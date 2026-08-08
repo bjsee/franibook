@@ -130,6 +130,12 @@ export function spreadAntwort(project: Project, index: number) {
     // Gefragt wird mit `teilbar` und nicht mit `zerlegbar`: Ein festgehaltenes
     // Blatt wird beim Umpaaren geschont, auf Verlangen aber sehr wohl getrennt.
     splittable: spread ? teilbar(spread) : false,
+    // Was die Abnahme über diese Seite sagt — samt der schon abgenickten Funde,
+    // damit die Bühne sie leise zeigen kann statt gar nicht. Sie hängt an jeder
+    // Doppelseitenantwort und nicht an einem eigenen Endpunkt: Ein Fund entsteht
+    // und verschwindet mit dem Ausschnitt, den man gerade zieht, und ein zweiter
+    // Abruf wäre immer einen Handgriff hinterher.
+    befunde: project.befundeDerSeite(rendered, index),
   };
 }
 

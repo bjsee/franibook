@@ -218,6 +218,78 @@ describe('setSlotRotation', () => {
   });
 });
 
+describe('Abnahme eines Befundes', () => {
+  /**
+   * Ein Projekt mit einer Doppelseite ohne Bilder.
+   *
+   * Das genügt: Eine leere Doppelseite meldet „ganz leer", und damit gibt es
+   * genau einen Befund, an dem sich das Abnicken zeigen lässt — ohne Fotos,
+   * Quellen und Caches.
+   */
+  function projektMitBefund(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    p.spreads = [{ id: 's1', index: 0, templateId: 'spread.4up.grid', slots: [] }];
+    return p;
+  }
+
+  it('nickt nur ab, was der Bericht auch meldet', () => {
+    const p = projektMitBefund();
+    const echt = p.abnahme().befunde[0]!.schluessel;
+
+    expect(p.abnicken(echt)).toEqual({ ok: true });
+    expect(p.abnahme().befunde.find((b) => b.schluessel === echt)?.abgenommen).toBe(true);
+
+    // Ein erfundener Schlüssel landet nicht im Projekt: Er käme über die
+    // Anfrage und würde dort als Objektschlüssel gespeichert.
+    expect(p.abnicken('ausgedacht#foto:xyz').ok).toBe(false);
+    expect(Object.keys(p.abnahmen)).toEqual([echt]);
+  });
+
+  it('lässt sich von einem Schlüssel aus der Prototypkette nicht täuschen', () => {
+    // `abnahmen['toString']` ist wahr, ohne dass etwas gespeichert wäre. Über
+    // den Wahrheitswert geprüft hätte das Abnicken „schon abgenickt" gemeldet
+    // und das Zurücknehmen eine Abnahme, die es nie gab.
+    const p = projektMitBefund();
+
+    expect(p.abnicken('toString').ok).toBe(false);
+    expect(p.abnahmeZurueck('toString')).toBe(0);
+    expect(p.abnahmeZurueck('constructor')).toBe(0);
+    expect(Object.keys(p.abnahmen)).toEqual([]);
+  });
+
+  it('behält eine Abnahme, deren Befund gerade nicht auftritt', () => {
+    // Ein quer stehendes Foto kann nach einer Neuanordnung richtig liegen. Die
+    // Abnahme hängt am Foto, nicht an der Stelle — sie bleibt also stehen und
+    // gilt wieder, wenn der Fund zurückkommt. Verworfen wurde, sie beim
+    // Erzeugen des Berichts aufzuräumen: Das wäre ein stilles Vergessen.
+    const p = projektMitBefund();
+    const echt = p.abnahme().befunde[0]!.schluessel;
+    p.abnicken(echt);
+
+    // Ohne Doppelseiten meldet nur noch der Umschlag etwas — der Fund von
+    // vorhin ist weg, seine Abnahme bleibt.
+    p.spreads = [];
+    expect(p.abnahme().befunde.some((b) => b.schluessel === echt)).toBe(false);
+    expect(Object.keys(p.abnahmen)).toEqual([echt]);
+
+    p.spreads = [{ id: 's1', index: 0, templateId: 'spread.4up.grid', slots: [] }];
+    expect(p.abnahme().befunde[0]?.abgenommen).toBe(true);
+  });
+
+  it('nimmt einzeln oder alles zurück', () => {
+    const p = projektMitBefund();
+    const echt = p.abnahme().befunde[0]!.schluessel;
+
+    p.abnicken(echt);
+    expect(p.abnahmeZurueck(echt)).toBe(1);
+    expect(p.abnahme().bilanz.abgenommen).toBe(0);
+
+    p.abnicken(echt);
+    expect(p.abnahmeZurueck()).toBe(1);
+    expect(Object.keys(p.abnahmen)).toEqual([]);
+  });
+});
+
 describe('setSpreadTemplate', () => {
   /** Ein Projekt mit einer Doppelseite aus drei gleich geformten Bildern. */
   function projektMitDrei(): Project {

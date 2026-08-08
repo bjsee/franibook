@@ -17,6 +17,7 @@ import {
   FRAMES,
   type FrameId,
   MAX_TILT_DEG,
+  sideAxisPasst,
   TIMELINE_ACCENTS,
   type TimelineFootVariant,
   type TimelineSideVariant,
@@ -66,8 +67,20 @@ export interface Buchformat {
  */
 const ORT_ERKLAERUNG: Record<'foot' | 'side', string> = {
   foot: 'Im Fußraum, 14 mm hoch, über beide Seiten. Beantwortet: wie weit ist es seit der letzten Seite.',
-  side: 'Senkrecht im äußeren Rand der linken Seite. Beantwortet: wo im Buch stehe ich.',
+  side: 'Senkrecht am äußeren Rand der linken Seite, hinter der Sicherheitslinie. Beantwortet: wo im Buch stehe ich.',
 };
+
+/**
+ * Warum die Randachse in diesem Format nicht zur Wahl steht.
+ *
+ * Sie braucht ein Band hinter der Sicherheitslinie, und das hat nur Platz, wo
+ * der Satzspiegel der Bibliothek weit genug nach innen rückt. Vorher lag sie
+ * *im* Sicherheitsrand — dort wäre sie in jedem Format „möglich" gewesen und in
+ * jedem Format vom Messer bedroht.
+ */
+const RANDACHSE_ZU_ENG =
+  'In diesem Format kein Platz: Die Achse bräuchte ein Band hinter der Sicherheitslinie, ' +
+  'und der Satzspiegel lässt dafür zu wenig frei. Am Fuß geht sie in jedem Format.';
 
 /**
  * Die Fassungen mit ihren Namen.
@@ -108,8 +121,19 @@ export interface Handarbeit {
   festgehalten: number;
 }
 
+/**
+ * Das aktive Druckprofil, soweit dieses Panel es braucht.
+ *
+ * Nur zwei Maße, und für genau eine Frage: ob die Randachse des Zeitstrahls in
+ * diesem Format hinter die Sicherheitslinie passt. Die Antwort gibt der Kern
+ * (`sideAxisPasst`), damit Panel und Renderer nicht verschiedener Meinung
+ * darüber sind, was gezeichnet wird.
+ */
+export type Druckprofil = Parameters<typeof sideAxisPasst>[0];
+
 interface Props {
   settings: BuchEinstellungen;
+  profile: Druckprofil;
   /** Die wählbaren Buchformate; das gewählte steht in `settings.printProfileId`. */
   formate: Buchformat[];
   handwork: Handarbeit;
@@ -162,6 +186,7 @@ function nachAnbieter(formate: Buchformat[]): { vendor: string; formate: Buchfor
 
 export function BuchPanel({
   settings,
+  profile,
   formate,
   handwork,
   busy,
@@ -172,6 +197,8 @@ export function BuchPanel({
   onNotankerZurueck,
 }: Props) {
   const gewaehlt = formate.find((f) => f.id === settings.printProfileId);
+  /** Ob die Randachse in diesem Format hinter die Sicherheitslinie passt. */
+  const randachseGeht = sideAxisPasst(profile);
   const gruppen = nachAnbieter(formate);
   /** Was ein Neuaufbau kosten würde, in Stücken. */
   const verlust = [
@@ -363,20 +390,30 @@ export function BuchPanel({
           <div style={{ ...B.abschnitt, gap: 8 }}>
             <span style={B.marke}>Ort</span>
             <div style={B.segRahmen}>
-              {(['foot', 'side'] as const).map((ort) => (
-                <button
-                  key={ort}
-                  onClick={() => onDarstellung({ timelineStyle: ort })}
-                  style={{
-                    ...(settings.timelineStyle === ort ? B.segAn : B.segAus),
-                    flex: 1,
-                  }}
-                >
-                  {ort === 'foot' ? 'am Fuß' : 'am Rand'}
-                </button>
-              ))}
+              {(['foot', 'side'] as const).map((ort) => {
+                const geht = ort === 'foot' || randachseGeht;
+                return (
+                  <button
+                    key={ort}
+                    onClick={() => onDarstellung({ timelineStyle: ort })}
+                    disabled={!geht}
+                    title={geht ? undefined : RANDACHSE_ZU_ENG}
+                    style={{
+                      ...(settings.timelineStyle === ort ? B.segAn : B.segAus),
+                      flex: 1,
+                      ...(geht ? {} : { opacity: 0.45, cursor: 'not-allowed' }),
+                    }}
+                  >
+                    {ort === 'foot' ? 'am Fuß' : 'am Rand'}
+                  </button>
+                );
+              })}
             </div>
-            <p style={B.leiser}>{ORT_ERKLAERUNG[settings.timelineStyle]}</p>
+            <p style={B.leiser}>
+              {!randachseGeht && settings.timelineStyle === 'side'
+                ? RANDACHSE_ZU_ENG
+                : ORT_ERKLAERUNG[settings.timelineStyle]}
+            </p>
           </div>
 
           {/*
