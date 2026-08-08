@@ -61,7 +61,7 @@ function istKippbefehl(v: unknown): v is 1 | 2 | 3 | null {
 
 export function fotoRouten(
   app: FastifyInstance,
-  { project, sources, previews, decodes }: Kontext,
+  { project, sources, previews, decodes, abstaende }: Kontext,
 ): void {
   /** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
   app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
@@ -71,6 +71,93 @@ export function fotoRouten(
 
   /** Die Orte des Bestands, häufigste zuerst – Grundlage der Vervollständigung. */
   app.get('/api/photos/places', async () => ({ places: project.orte() }));
+
+  /**
+   * Doppel: mehrere Aufnahmen desselben Augenblicks, mit einem Vorschlag,
+   * welche davon zu behalten wäre.
+   *
+   * Bei jedem Aufruf frisch gerechnet — der Vorschlag hängt an den
+   * Datumskorrekturen, und ein gespeicherter wäre nach der nächsten falsch.
+   * Rund eine halbe Sekunde über den ganzen Bestand.
+   *
+   * `bestaetigt: false` heißt, dass kein Bildvergleich stattgefunden hat (kein
+   * `swiftc` auf dem Rechner) und die Vorschläge allein aus der Zeit stammen.
+   * Die Oberfläche soll das sagen können, statt eine ungeprüfte Liste wie eine
+   * geprüfte auszugeben.
+   */
+  app.get<{ Querystring: { fenster?: string; abstand?: string } }>(
+    '/api/photos/doppel',
+    async (req, reply) => {
+      const fenster = req.query.fenster === undefined ? undefined : Number(req.query.fenster);
+      const abstand = req.query.abstand === undefined ? undefined : Number(req.query.abstand);
+      if (fenster !== undefined && (!Number.isFinite(fenster) || fenster <= 0)) {
+        return reply.code(400).send({ error: 'fenster muss eine positive Zahl in Sekunden sein' });
+      }
+      if (abstand !== undefined && (!Number.isFinite(abstand) || abstand <= 0)) {
+        return reply.code(400).send({ error: 'abstand muss eine positive Zahl sein' });
+      }
+
+      try {
+        return await project.doppelVorschlagen(previews, abstaende, {
+          ...(fenster !== undefined ? { fensterSekunden: fenster } : {}),
+          ...(abstand !== undefined ? { hoechstabstand: abstand } : {}),
+        });
+      } catch (err) {
+        if (istDateiFehler(err)) {
+          return reply.code(503).send({ error: 'Die Bildquelle ist gerade nicht erreichbar.' });
+        }
+        throw err;
+      }
+    },
+  );
+
+  /**
+   * „Beide behalten": merkt ein Doppel als erledigt, ohne etwas zu löschen.
+   *
+   * Gebaut wie das Abnicken eines Befunds (`POST /api/book/pruefung/abnahmen`)
+   * und aus demselben Grund: Der Vorschlag entsteht bei jedem Aufruf neu, also
+   * käme er sonst nach jedem „Neu rechnen" wieder.
+   *
+   * Antwortet mit dem Schlüssel statt mit der neu gerechneten Liste: Die kostete
+   * anderthalb Sekunden für eine Auskunft, die die Oberfläche schon hat.
+   */
+  app.post<{ Body: { schluessel?: unknown } }>(
+    '/api/photos/doppel/behalten',
+    async (req, reply) => {
+      const schluessel = req.body?.schluessel;
+      if (typeof schluessel !== 'string' || schluessel.length === 0) {
+        return reply.code(400).send({ error: 'schluessel fehlt' });
+      }
+      const ergebnis = project.doppelMerken(schluessel);
+      if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+      void project.save();
+      return { ok: true, schluessel };
+    },
+  );
+
+  /**
+   * Nimmt ein „beide behalten" zurück — einzeln oder alle auf einmal.
+   *
+   * Ohne Schlüssel wird geleert: Wer die Doppel von vorn durchgehen will, soll
+   * das in einem Griff können. Beides ist ein Undo-Schritt, also nicht endgültig.
+   */
+  app.delete<{ Body: { schluessel?: unknown } | null }>(
+    '/api/photos/doppel/behalten',
+    async (req, reply) => {
+      const schluessel = req.body?.schluessel;
+      if (schluessel !== undefined && typeof schluessel !== 'string') {
+        return reply.code(400).send({ error: 'schluessel muss eine Zeichenkette sein' });
+      }
+      const anzahl = project.doppelMerkenZurueck(schluessel);
+      // Wie bei der Abnahme: `0` ist ein Misserfolg, sonst bliebe ein
+      // Undo-Schritt stehen, der nichts zurücknimmt.
+      if (anzahl === 0) {
+        return reply.code(409).send({ ok: false, error: 'Da war nichts auf „beide behalten"' });
+      }
+      void project.save();
+      return { ok: true, anzahl };
+    },
+  );
 
   /**
    * Korrigiert Datum, Ort oder Ausrichtung mehrerer Fotos.

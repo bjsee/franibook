@@ -20,7 +20,8 @@ const ALLE: Route[] = [
   { view: 'edit' },
   { view: 'edit', json: true },
   { view: 'cover' },
-  { view: 'abnahme' },
+  { view: 'pruefung' },
+  { view: 'pruefung', teil: 'doppel' },
   { view: 'spread', index: 17, slotId: 'r2c' },
 ];
 

@@ -139,6 +139,46 @@ describe('slotCost', () => {
     const imKleinen = slotCost(photo('a'), kleinSlot, slotGeometry(kleinSlot, profile), heroCtx);
     expect(imGroßen.weightMismatch).toBeLessThan(imKleinen.weightMismatch);
   });
+
+  describe('Bildqualität', () => {
+    const heroSlot = requireTemplate('spread.4up.hero-left').slots[0]!; // prominence 3
+    const kleinSlot = requireTemplate('spread.4up.hero-left').slots[1]!; // prominence 1
+
+    /** Ein Foto mit gemessener Schärfe; alles andere ist für den Test belanglos. */
+    function scharf(id: string, sharpness: number): Photo {
+      return {
+        ...photo(id),
+        quality: { sharpness, brightness: 110, contrast: 55, clippedDark: 0, clippedLight: 0 },
+      };
+    }
+
+    it('hält ein unscharfes Bild aus dem großen Platz heraus', () => {
+      const unscharf = slotCost(scharf('a', 100), heroSlot, slotGeometry(heroSlot, profile), ctx);
+      const gut = slotCost(scharf('b', 2000), heroSlot, slotGeometry(heroSlot, profile), ctx);
+
+      expect(unscharf.qualityPenalty).toBeGreaterThan(gut.qualityPenalty);
+      expect(gut.qualityPenalty).toBe(0);
+    });
+
+    it('lässt den kleinen Platz für jedes Bild offen', () => {
+      // Ein verwackeltes Foto soll nicht aus dem Buch fallen, es soll nur nicht
+      // die Seite tragen.
+      const c = slotCost(scharf('a', 100), kleinSlot, slotGeometry(kleinSlot, profile), ctx);
+      expect(c.qualityPenalty).toBe(0);
+    });
+
+    it('wiegt leichter als die falsche Ausrichtung', () => {
+      const c = slotCost(scharf('a', 0), heroSlot, slotGeometry(heroSlot, profile), ctx);
+      expect(c.qualityPenalty).toBeLessThan(0.6);
+    });
+
+    it('behandelt ein ungemessenes Foto wie ein gutes', () => {
+      // Fehlende Auskunft als Mangel zu werten hieße, dass ein frisch
+      // eingeworfenes Bild seinen Platz an ein gemessenes verliert.
+      const c = slotCost(photo('ohne'), heroSlot, slotGeometry(heroSlot, profile), ctx);
+      expect(c.qualityPenalty).toBe(0);
+    });
+  });
 });
 
 describe('distributeBudget', () => {

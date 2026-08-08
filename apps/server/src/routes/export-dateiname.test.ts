@@ -42,6 +42,7 @@ async function probe(): Promise<{ app: FastifyInstance; outDir: string }> {
     sources,
     previews: null as never,
     decodes: null as never,
+    abstaende: null as never,
     outDir: dir,
   } as Kontext;
 

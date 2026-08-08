@@ -22,6 +22,20 @@ interface Optionen {
 }
 
 /**
+ * Der Satz, auf den man sich beim Klicken verlässt.
+ *
+ * Er steht an einer Stelle, weil er überall dasselbe versprechen muss — und
+ * weil genau dieses Versprechen einmal falsch war: Vor der Merkliste verschob
+ * das Aussortieren die Datei, und ein Sync-Dienst spielte sie zurück
+ * (`.claude/rules/server.md`).
+ */
+const ZUSAGE =
+  'Die Datei bleibt unangetastet in ihrer Bildquelle liegen; das Foto wird nur aus dem ' +
+  'Projekt genommen und kommt bei keinem Einlesen zurück. ' +
+  'Unter „Bildquellen" steht es weiter in der Liste der aussortierten Fotos und lässt ' +
+  'sich von dort wieder aufnehmen.';
+
+/**
  * Fragt nach und löscht.
  *
  * @returns das Ergebnis, `null` bei Abbruch, oder eine Fehlermeldung.
@@ -37,15 +51,7 @@ export async function fotoLoeschen(
         ? '\n\nSteht es im Buch, bleibt dort der Platz leer.'
         : '';
 
-  if (
-    !window.confirm(
-      `„${name}" aussortieren?${folge}\n\n` +
-        'Die Datei bleibt unangetastet in ihrer Bildquelle liegen; das Foto wird nur aus dem ' +
-        'Projekt genommen und kommt bei keinem Einlesen zurück. ' +
-        'Unter „Bildquellen" steht es weiter in der Liste der aussortierten Fotos und lässt ' +
-        'sich von dort wieder aufnehmen.',
-    )
-  ) {
+  if (!window.confirm(`„${name}" aussortieren?${folge}\n\n${ZUSAGE}`)) {
     return null;
   }
 
@@ -54,6 +60,53 @@ export async function fotoLoeschen(
   } catch (e: unknown) {
     return { ok: false, fehler: fehlertext(e) };
   }
+}
+
+/**
+ * Sortiert mehrere Fotos auf einmal aus — für „von diesen das behalten".
+ *
+ * **Eine Bestätigung, aber mehrere Anfragen**, denn `DELETE /api/photos/:id`
+ * nimmt eine Kennung. Bei einem Doppel aus zwei Fotos ist das eine Löschung und
+ * ein Cmd+Z; bei vieren sind es drei. Eine mengenwertige Route wäre die
+ * sauberere Antwort (wie `PATCH /api/photos` beim Datum) — sie lohnt, sobald
+ * hier regelmäßig mehr als ein Bild fällt. Am Bestand sind 45 der 49 Doppel
+ * Paare.
+ *
+ * Bricht beim ersten Fehler ab und meldet, was bis dahin durchging: Ein halb
+ * ausgeführter Stapel, der sich als Erfolg ausgibt, wäre die schlechtere Hälfte
+ * beider Antworten.
+ */
+export async function fotosLoeschen(
+  ids: readonly string[],
+  { behalten }: { behalten: string },
+): Promise<
+  // Die Kennung steht daneben, weil `AussortierErgebnis` sie nicht trägt: Der
+  // Aufrufer muss wissen, *welche* Zeilen verschwinden, nicht nur wie viele.
+  | { ok: true; entfernt: { id: string; ergebnis: AussortierErgebnis }[] }
+  | { ok: false; fehler: string }
+  | null
+> {
+  if (ids.length === 0) return { ok: true, entfernt: [] };
+
+  const wieViele = ids.length === 1 ? 'das andere Foto' : `die anderen ${String(ids.length)} Fotos`;
+  if (
+    !window.confirm(
+      `„${behalten}" behalten und ${wieViele} dieses Doppels aussortieren?\n\n${ZUSAGE}`,
+    )
+  ) {
+    return null;
+  }
+
+  const entfernt: { id: string; ergebnis: AussortierErgebnis }[] = [];
+  for (const id of ids) {
+    try {
+      entfernt.push({ id, ergebnis: await fotoAussortieren(id) });
+    } catch (e: unknown) {
+      const bisher = entfernt.length > 0 ? ` (${String(entfernt.length)} schon aussortiert)` : '';
+      return { ok: false, fehler: `${fehlertext(e)}${bisher}` };
+    }
+  }
+  return { ok: true, entfernt };
 }
 
 /** Was passiert ist, in einem Satz. */
