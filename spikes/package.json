@@ -10,7 +10,9 @@
     "pdf": "tsx src/pdf-memory.ts",
     "exif": "tsx src/exif-throughput.ts",
     "typecheck": "tsc --noEmit",
-    "gesichter": "tsx src/gesichter-fokus.ts"
+    "gesichter": "tsx src/gesichter-fokus.ts",
+    "duplikate": "tsx src/duplikate-qualitaet.ts",
+    "serien": "tsx src/serien-featureprint.ts"
   },
   "dependencies": {
     "@franibook/core": "workspace:*",
