@@ -187,7 +187,22 @@ verschiebt nur den Ausschnitt und verkleinert ihn nicht, also darf er die
 Bildverteilung des Buchs nicht ändern.
 
 **Das Gewicht eines Fotos kennt sie** (`weightMismatch`, bis 0,5): `hero` will den
-Ankerslot, `filler` den kleinen. Gesetzt wird es von Hand in `PhotoOverride.weight`
+Ankerslot, `filler` den kleinen — **gemessen an der Buchseite, nicht an der
+Doppelseite** (`prominenceScale` in `layout/scoring.ts`). Die deklarierte Prominenz
+der Bibliothek meint die ganze Doppelseite, und dabei bleibt eine Buchseite
+regelmäßig ohne jede Abstufung: `spread.12up.mosaic-quer` gibt allen acht linken
+Plätzen `prominence: 1`, obwohl die oberen mehr als das Doppelte der unteren messen
+— links war die Auszeichnung damit wirkungslos, und zwar unsichtbar. Gerechnet wird
+die Kantenlänge, linear zwischen kleinstem und größtem Platz **derselben** Seite auf
+1 bis 3; die deklarierte Prominenz bleibt Untergrenze (die Bibliothek darf
+auszeichnen, nicht abwerten), eine Seite ohne Abstufung behält sie ganz, und ein
+Zehntel Doppelseitenanteil bricht den Gleichstand zwischen den Ankerplätzen beider
+Seiten — sonst landete ein einzelnes Hauptbild im kleineren der beiden.
+**Nur für ausgezeichnete Bilder**: Dieselbe Feinstufung auf `normal` angewandt legte
+am echten Stand 46 von 80 Doppelseiten anders, ohne dass jemand etwas ausgezeichnet
+hätte. Für ein ausgezeichnetes Bild rechnet dann aber **auch `qualityPenalty`**
+damit — zwei Begriffe von „großer Platz" in derselben Summe schoben ein leicht
+unscharfes Hauptbild aus dem Ankerplatz heraus. Gesetzt wird das Gewicht von Hand in `PhotoOverride.weight`
 (`PATCH /api/photos` mit `weight`), also am **Foto** und nicht am Slot — es gilt
 weiter, wenn eine Neuanordnung das Bild auf eine andere Doppelseite trägt, und ist
 darum keine Handarbeit im Sinne von `handwork()`. Wirksam wird es beim nächsten

@@ -10,6 +10,7 @@ import { coverCrop, cropToPixels } from '../model/crop.js';
 import type { Photo } from '../model/photo.js';
 import { aspectRatio, orientationOf } from '../model/photo.js';
 import type { TemplateSlot } from '../model/template.js';
+import { slotPage } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import type { PhotoWeight } from '../model/date.js';
 
@@ -29,6 +30,14 @@ export function slotGeometry(slot: TemplateSlot, profile: PrintProfile): SlotGeo
 export interface SlotCostContext {
   profile: PrintProfile;
   weightOf: (photoId: string) => PhotoWeight;
+  /**
+   * Wie prominent jeder Platz **tatsächlich** wirkt, aus `prominenceScale`.
+   *
+   * Ohne Angabe zählt allein die deklarierte Prominenz – für die Stellen, die
+   * von `slotCost` nur die Auflösung wollen (`layout/document.ts`,
+   * `kannAuftaktTragen`), ist das der kürzere Weg.
+   */
+  prominenceOf?: (slot: TemplateSlot) => number;
 }
 
 export interface SlotCostBreakdown {
@@ -44,6 +53,104 @@ export interface SlotCostBreakdown {
 }
 
 const WEIGHT_RANK: Record<PhotoWeight, number> = { filler: 1, normal: 2, hero: 3 };
+
+/**
+ * Wie prominent jeder Platz einer Anordnung **auf seiner Buchseite** wirkt.
+ *
+ * Die deklarierte Prominenz einer Vorlage ist auf die ganze Doppelseite
+ * gemünzt, und dabei bleibt eine Buchseite regelmäßig ohne jede Abstufung:
+ * `spread.12up.mosaic-quer` gibt allen acht linken Plätzen `prominence: 1`,
+ * obwohl die beiden oberen mit 127 × 95 mm mehr als das Doppelte der sechs
+ * unteren (82 × 61 mm) messen. Für die Zuordnung waren sie damit gleichwertig —
+ * ein Hauptbild landete im kleinsten und ein Beifoto im größten Platz, und die
+ * Auszeichnung blieb links wirkungslos. Wer aufschlägt, sieht aber eine
+ * Buchseite und nicht die Doppelseite: Dort muss die Hierarchie stimmen.
+ *
+ * Gerechnet wird die Kantenlänge (√Fläche), linear zwischen dem kleinsten und
+ * dem größten Platz **derselben** Buchseite auf 1 bis 3 gelegt. Die Kantenlänge
+ * und nicht die Fläche, weil das Auge Bilder nach ihrer Ausdehnung vergleicht
+ * und nicht nach ihrem Flächeninhalt — der halbiert schon bei 70 % Kantenlänge.
+ *
+ * Drei Grenzen hält die Rechnung ein, damit sie eine Verfeinerung bleibt und
+ * keine Umdeutung der Bibliothek:
+ *
+ * - **Sie zeichnet aus, sie wertet nicht ab.** Die deklarierte Prominenz bleibt
+ *   Untergrenze. `spread.12up.mosaic-quer` meint mit `r1b` (91 × 121 mm,
+ *   hochkant, `prominence: 2`) einen prominenten Platz, den die Fläche allein
+ *   nicht hergäbe — eine gestalterische Absicht, die die Rechnung nicht
+ *   überstimmen soll.
+ * - **Ohne Abstufung schweigt sie.** Sind alle Plätze einer Buchseite gleich
+ *   groß (ein Gitter, oder die drei kleinen rechts in `spread.4up.hero-left`),
+ *   gibt es nichts zu ordnen, und es bleibt bei der deklarierten Prominenz. Sie
+ *   dort auf einen Mittelwert zu setzen hieße, die einzige verbliebene Auskunft
+ *   — „das sind die kleinen Plätze" — gegen eine erfundene zu tauschen.
+ * - **Die Doppelseite bricht den Gleichstand** (`FALZ_ANTEIL`, ein Zehntel).
+ *   Ohne das war der größte linke Platz von `spread.12up.mosaic-quer` (127 ×
+ *   95 mm) dem Ankerplatz rechts (162 × 121 mm) gleichwertig, und ein einzelnes
+ *   Hauptbild landete im kleineren der beiden — 40 % Fläche verschenkt, weil
+ *   danach nur noch der Beschnitt entschied. Ein Zehntel reicht dafür und ist
+ *   zu wenig, um die Seitenhierarchie umzuwerfen: Der Abstand zwischen
+ *   benachbarten Rängen einer Seite ist ein Vielfaches davon.
+ *
+ * Ein Platz über dem Falz zählt zu beiden Seiten und nimmt den kleineren der
+ * beiden Anteile: prominent ist er erst, wenn er es auf beiden Seiten ist.
+ */
+export function prominenceScale(slots: readonly TemplateSlot[]): (slot: TemplateSlot) => number {
+  const kante = (s: TemplateSlot) => Math.sqrt(s.w * s.h);
+  const kanten = slots.map(kante);
+
+  const grenzen = new Map<'left' | 'right' | 'beide', Spanne>();
+  grenzen.set('beide', spanne(kanten));
+  for (const seite of ['left', 'right'] as const) {
+    const eigene = slots.filter((s) => seitenVon(s).includes(seite)).map(kante);
+    if (eigene.length > 0) grenzen.set(seite, spanne(eigene));
+  }
+
+  /** Anteil an einer Spanne, oder nichts, wenn dort alle Plätze gleich groß sind. */
+  const anteil = (k: number, wo: 'left' | 'right' | 'beide'): number[] => {
+    const g = grenzen.get(wo);
+    if (!g || g.max <= g.min) return [];
+    return [(k - g.min) / (g.max - g.min)];
+  };
+
+  const werte = new Map<string, number>();
+  slots.forEach((s, i) => {
+    const k = kanten[i]!;
+    const aufSeite = seitenVon(s).flatMap((seite) => anteil(k, seite));
+    if (aufSeite.length === 0) {
+      werte.set(s.id, s.prominence);
+      return;
+    }
+    const seitlich = Math.min(...aufSeite);
+    const ganz = anteil(k, 'beide')[0] ?? seitlich;
+    const gemischt = (1 - FALZ_ANTEIL) * seitlich + FALZ_ANTEIL * ganz;
+    werte.set(s.id, Math.max(s.prominence, 1 + 2 * gemischt));
+  });
+
+  return (slot) => werte.get(slot.id) ?? slot.prominence;
+}
+
+/**
+ * Wie stark die ganze Doppelseite in die Prominenz hineinredet.
+ *
+ * Klein genug, dass die Buchseite die Rangfolge bestimmt, groß genug, dass
+ * zwischen zwei gleich rangigen Plätzen der absolut größere gewinnt.
+ */
+const FALZ_ANTEIL = 0.1;
+
+interface Spanne {
+  min: number;
+  max: number;
+}
+
+function spanne(werte: readonly number[]): Spanne {
+  return { min: Math.min(...werte), max: Math.max(...werte) };
+}
+
+function seitenVon(slot: TemplateSlot): ('left' | 'right')[] {
+  const seite = slotPage(slot);
+  return seite === 'both' ? ['left', 'right'] : [seite];
+}
 
 /**
  * Ab welcher Schärfe ein Bild als gut gilt, und ab welcher als schwach.
@@ -81,7 +188,7 @@ const SHARPNESS_GUT = 1036;
  * normal (Nacht, Gegenlicht), und ein Zuschlag darauf benachteiligte richtig
  * belichtete dunkle Bilder.
  */
-function qualityCost(photo: Photo, prominence: 1 | 2 | 3): number {
+function qualityCost(photo: Photo, prominence: number): number {
   const sharpness = photo.quality?.sharpness;
   if (sharpness === undefined) return 0;
   const mangel = Math.min(
@@ -136,11 +243,30 @@ export function slotCost(
     dpiPenalty = (0.5 * (targetDpi - dpi)) / (targetDpi - minDpi);
   }
 
+  // Wie prominent dieser Platz für dieses Foto zählt.
+  //
+  // Für ein ausgezeichnetes Bild die gerechnete Prominenz seiner Buchseite
+  // (`prominenceScale`), sonst die deklarierte. Die feinere Rechnung auch auf
+  // `normal` anzuwenden legte am echten Stand 46 von 80 Doppelseiten anders,
+  // ohne dass jemand etwas ausgezeichnet hätte: Ein normales Foto bevorzugt
+  // dann mittelgroße Plätze, und das verschiebt jede Seite ein wenig. Eine
+  // Auszeichnung soll wirken, wo sie gesetzt ist, und sonst nichts bewegen.
+  //
+  // **Beide Terme darunter nehmen denselben Wert**, und das ist keine
+  // Bequemlichkeit: Rechnete die Schärfe weiter mit der deklarierten Prominenz,
+  // hielte sie `l1a` von `spread.12up.mosaic-quer` für einen kleinen Platz,
+  // während die Gewichtung ihn für den Ankerplatz seiner Seite hält. Am echten
+  // Buch schob genau das ein leicht unscharfes Hauptbild aus dem größten Platz
+  // der Doppelseite in den zweitgrößten — der große Platz war dort gratis.
+  const weight = ctx.weightOf(photo.id);
+  const prominence =
+    weight === 'normal' ? slot.prominence : (ctx.prominenceOf?.(slot) ?? slot.prominence);
+
   // 4. Gewichtung: ein Hauptbild gehört in einen prominenten Slot
-  const weightMismatch = Math.abs(WEIGHT_RANK[ctx.weightOf(photo.id)] - slot.prominence) * 0.25;
+  const weightMismatch = Math.abs(WEIGHT_RANK[weight] - prominence) * 0.25;
 
   // 5. Bildqualität: der große Platz für das schärfere Bild
-  const qualityPenalty = qualityCost(photo, slot.prominence);
+  const qualityPenalty = qualityCost(photo, prominence);
 
   return {
     total: cropLoss + orientationClash + dpiPenalty + weightMismatch + qualityPenalty,
