@@ -417,6 +417,31 @@ describe('setSpreadTemplate', () => {
     expect(platz.w / platz.h).toBeLessThan(1);
   });
 
+  it('lehnt „auto" an einer festgehaltenen Doppelseite ab', () => {
+    // `locked` heißt: Die Automatik lässt die Finger davon. `generateBook`
+    // übernimmt die Seite unverändert und `movePhotos` rührt sie nicht an — ein
+    // Knopf, der die Rechnung doch darüberlaufen lässt, hebelte das aus.
+    const p = projektMitDrei();
+    p.spreads[0] = { ...p.spreads[0]!, locked: true };
+
+    const r = p.setSpreadTemplate(0, 'auto');
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/festgehalten/);
+    expect(p.spreads[0]!.templateId).toBe('spread.3up.two-and-one');
+  });
+
+  it('lässt eine festgehaltene Doppelseite von Hand umstellen', () => {
+    // Der Unterschied: Jede eingefügte Doppelseite ist `locked`, also wäre sie
+    // sonst die einzige, die man nie gestalten könnte.
+    const p = projektMitDrei();
+    p.spreads[0] = { ...p.spreads[0]!, locked: true };
+
+    expect(p.setSpreadTemplate(0, 'spread.3up.hero-plus-two').ok).toBe(true);
+    expect(p.spreads[0]!.templateId).toBe('spread.3up.hero-plus-two');
+    expect(p.spreads[0]!.locked).toBe(true);
+  });
+
   it('lässt „auto" einen Auftakt ein Auftakt bleiben', () => {
     const p = projektMitDrei();
     p.spreads[0] = {

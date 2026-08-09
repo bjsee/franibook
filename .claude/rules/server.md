@@ -134,6 +134,12 @@ Drei Handgriffe folgen daraus:
 - **Ein Schlüssel gehört an das, was man zieht oder tippt.** Dort erzeugt eine
   Bewegung viele Anfragen (`ausschnitt:<seite>:<slot>`). Ohne Schlüssel
   verschmilzt nie, und das ist die richtige Vorgabe.
+- **Was nichts geändert hat, legt keinen Schritt an.** Der `onSend`-Haken prüft
+  das über `ohneWirkung`: ein Status ab 400, ein `{ ok: false }` mit Status 200 —
+  oder ein `"geaendert":0` in der Antwort, denn die mengenwertigen Griffe melden
+  ihren Misserfolg als Zahl und nicht als Fehler. Sie bleiben bewusst eine 200
+  mit voller Auskunft (welches Foto warum übersprungen wurde), und ein Cmd+Z
+  darauf sähe aus wie ein Fehler: Es geschähe nichts.
 - **Neue Haken vor den Routenmodulen anmelden.** Fastify bindet die Haken einer
   Instanz beim Anmelden einer Route an sie; später hinzugefügt greifen sie für
   keine einzige.
