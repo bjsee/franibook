@@ -1907,6 +1907,16 @@ export function useSpreadEditor({
     ueberSlot,
     verschieben,
     neuAnordnen,
+    /**
+     * Ob diese Doppelseite festgehalten ist.
+     *
+     * Im Model und nicht im Rahmen, obwohl der Schalter dafür dort steht: Wer
+     * `neuAnordnen` anbietet, muss wissen, dass der Server es an einer
+     * festgehaltenen Seite ablehnt (`project/anordnung.ts`) — und ein
+     * abgeblendeter Knopf mit Grund ist besser als eine Fehlermeldung nach dem
+     * Druck.
+     */
+    festgehalten: spread.locked === true,
     ausDemBuch,
     loeschen,
     anordnungUebernommen,

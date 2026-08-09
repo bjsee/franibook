@@ -106,6 +106,15 @@ export function dreheAusschnitte(
  * Ausrichtungskorrektur steht ein gekipptes Bild in einem Platz, der für seine
  * alte Lage gewählt wurde. Auftakte bleiben dabei unter sich (`chapterChoices`),
  * sonst verlöre die Seite ihre Textplätze.
+ *
+ * **An einer festgehaltenen Doppelseite lehnt `auto` ab.** `locked` heißt genau
+ * das: Die Automatik lässt die Finger davon – `generateBook` übernimmt sie
+ * unverändert (`layout/keep.ts`), und `movePhotos` nimmt sie weder als Ziel noch
+ * als Quelle. Ein Knopf, der die Rechnung doch darüberlaufen lässt, hebelte das
+ * aus; am echten Buch stehen dort selbst gebaute Seiten, deren Anordnung die
+ * Arbeit ist. **Eine namentlich gewählte Vorlage bleibt erlaubt**, und das ist
+ * der Unterschied: Jede eingefügte Doppelseite ist `locked` (`.claude/rules/
+ * anordnen.md`), also wäre sie sonst die einzige, die man nie gestalten könnte.
  */
 export function setSpreadTemplate(
   z: Bestand,
@@ -118,6 +127,13 @@ export function setSpreadTemplate(
   const auto = templateId === AUTO_TEMPLATE;
   if (!auto && !templateById(templateId)) {
     return { ok: false, error: `Vorlage ${templateId} gibt es nicht`, leftover: [] };
+  }
+  if (auto && spread.locked) {
+    return {
+      ok: false,
+      error: 'Die Doppelseite ist festgehalten — erst das Festhalten lösen, dann neu anordnen',
+      leftover: [],
+    };
   }
 
   const fotos = fotosVon(z, spread);

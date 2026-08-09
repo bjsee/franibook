@@ -172,7 +172,13 @@ trägt sie dort ein.
 **Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** `renderSpread`
 meldet `orientation-mismatch` mit dem sichtbaren Flächenanteil, und
 `PATCH /api/spreads/:index/template` mit `templateId: "auto"` ordnet diese eine
-Doppelseite neu an (Auftakte bleiben unter sich). Nicht automatisch beim Kippen:
+Doppelseite neu an (Auftakte bleiben unter sich). **An einer festgehaltenen
+Doppelseite lehnt `auto` ab** — `locked` heißt, dass die Automatik die Finger
+davon lässt, und ein Knopf, der die Rechnung doch darüberlaufen ließe, hebelte
+das aus. Eine **namentlich gewählte** Vorlage bleibt dort erlaubt: Jede
+eingefügte Doppelseite ist `locked`, also wäre sie sonst die einzige, die man nie
+gestalten könnte. Die Oberfläche blendet den Knopf entsprechend ab
+(`NeuAnordnenKnopf` in `spread/BildPanel.tsx`). Nicht automatisch beim Kippen:
 Das verwürfe die Ausschnitte der ganzen Seite. Begründung: `docs/konzept.md`,
 Abschnitt „Wenn Bild und Platz quer zueinander stehen".
 
