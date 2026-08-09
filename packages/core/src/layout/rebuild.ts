@@ -23,7 +23,7 @@ import {
   justifiedTemplateId,
 } from '../templates/justified.js';
 import { justifiedRects } from './justify.js';
-import { assign, slotCost, slotGeometry } from './scoring.js';
+import { assign, prominenceScale, slotCost, slotGeometry } from './scoring.js';
 
 export interface LayoutSpreadOptions {
   /** Die Fotos dieser Doppelseite. Die Reihenfolge entscheidet nur bei Gleichstand. */
@@ -160,8 +160,11 @@ function kostenmatrix(
   weightOf: (photoId: PhotoId) => PhotoWeight,
 ): number[][] {
   const geometries = slots.map((s) => slotGeometry(s, profile));
+  const prominenceOf = prominenceScale(slots);
   return photos.map((photo) =>
-    slots.map((slot, j) => slotCost(photo, slot, geometries[j]!, { profile, weightOf }).total),
+    slots.map(
+      (slot, j) => slotCost(photo, slot, geometries[j]!, { profile, weightOf, prominenceOf }).total,
+    ),
   );
 }
 
@@ -329,13 +332,19 @@ export function justifySpread(
   const template = templateById(templateId);
   if (!template) return undefined;
 
+  // Die Plätze tragen ihre Lage erst aus den gerechneten Rechtecken; die
+  // Prominenz muss also an ihnen hängen und nicht an den Platzhaltern der
+  // Trägervorlage, deren Koordinaten mit dieser Seite nichts zu tun haben.
+  const plaetze = template.slots.map((slot, i) => ({ ...slot, ...rects[i]! }));
+  const prominenceOf = prominenceScale(plaetze);
+
   let score = 0;
   const slots: SlotAssignment[] = template.slots.map((slot, i) => {
     const photo = photos[i]!;
     const rect = rects[i]!;
-    const platz = { ...slot, ...rect };
+    const platz = plaetze[i]!;
     const geometry = slotGeometry(platz, profile);
-    score += slotCost(photo, platz, geometry, { profile, weightOf }).total;
+    score += slotCost(photo, platz, geometry, { profile, weightOf, prominenceOf }).total;
     return {
       slotId: slot.id,
       photoId: photo.id,

@@ -7,7 +7,8 @@ import { buildStructure } from '../structure/segment.js';
 import { requireTemplate, supportedSlotCounts, templateById } from '../templates/index.js';
 import { isJustified } from '../templates/justified.js';
 import { distributeBudget, groupChapter } from './grouping.js';
-import { assign, slotCost, slotGeometry } from './scoring.js';
+import { assign, prominenceScale, slotCost, slotGeometry } from './scoring.js';
+import { layoutSpread } from './rebuild.js';
 import { generateBook, mehrheitsGruppe } from './generate.js';
 
 const profile = saal as PrintProfile;
@@ -178,6 +179,118 @@ describe('slotCost', () => {
       const c = slotCost(photo('ohne'), heroSlot, slotGeometry(heroSlot, profile), ctx);
       expect(c.qualityPenalty).toBe(0);
     });
+  });
+});
+
+describe('prominenceScale', () => {
+  const mosaik = requireTemplate('spread.12up.mosaic-quer');
+  const platz = (id: string) => mosaik.slots.find((s) => s.id === id)!;
+
+  it('stuft eine Buchseite ab, die keine deklarierte Hierarchie hat', () => {
+    // Alle acht Plätze der linken Seite tragen `prominence: 1`, obwohl die
+    // oberen (127 × 95 mm) mehr als das Doppelte der unteren (82 × 61 mm)
+    // messen. Genau daran blieb eine Auszeichnung links wirkungslos.
+    const prom = prominenceScale(mosaik.slots);
+    expect(platz('l1a').prominence).toBe(platz('l3b').prominence);
+    expect(prom(platz('l1a'))).toBeGreaterThan(prom(platz('l3b')));
+    expect(prom(platz('l1a'))).toBeGreaterThan(2.5);
+    expect(prom(platz('l3b'))).toBeCloseTo(1, 6);
+  });
+
+  it('misst je Buchseite und nicht über die Doppelseite', () => {
+    // Der größte linke Platz ist deutlich kleiner als der größte rechte. Über
+    // die Doppelseite gerechnet bliebe er ein Mittelmaß – und die linke Seite
+    // ohne Ankerplatz, obwohl sie beim Aufschlagen für sich steht. Er liegt
+    // deshalb fast gleichauf mit dem rechten Anker: knapp darunter, denn die
+    // Doppelseite bricht den Gleichstand.
+    const prom = prominenceScale(mosaik.slots);
+    expect(platz('l1a').w * platz('l1a').h).toBeLessThan(platz('r1a').w * platz('r1a').h);
+    expect(prom(platz('l1a'))).toBeGreaterThan(prom(platz('r2a')) + 1);
+    expect(prom(platz('l1a'))).toBeLessThan(prom(platz('r1a')));
+    expect(prom(platz('r1a')) - prom(platz('l1a'))).toBeLessThan(0.2);
+  });
+
+  it('lässt die Bibliothek auszeichnen, aber nicht abwerten', () => {
+    // `r1b` ist hochkant und flächenmäßig der kleinste Platz seiner Seite,
+    // trägt aber `prominence: 2`. Das ist eine gestalterische Absicht.
+    const prom = prominenceScale(mosaik.slots);
+    expect(prom(platz('r1b'))).toBe(2);
+    expect(prom(platz('r2a'))).toBeLessThan(2);
+  });
+
+  it('schweigt, wo eine Seite gar keine Abstufung hat', () => {
+    // Die drei kleinen Plätze rechts in `hero-left` sind gleich groß. Es gibt
+    // nichts zu ordnen, also bleibt die einzige Auskunft stehen, die es gibt:
+    // dass es die kleinen Plätze sind.
+    const heroLeft = requireTemplate('spread.4up.hero-left');
+    const prom = prominenceScale(heroLeft.slots);
+    expect(heroLeft.slots.map(prom)).toEqual(heroLeft.slots.map((s) => s.prominence));
+  });
+});
+
+describe('Das Gewicht wirkt auf der einzelnen Buchseite', () => {
+  // Der Fall aus dem echten Buch (Doppelseite 62): links ein Beifoto im
+  // größten Platz der Seite, ein Hauptbild im kleinsten – weil alle acht
+  // linken Plätze dieser Vorlage `prominence: 1` tragen und die Zuordnung
+  // deshalb keinen Unterschied sah.
+  const mosaik = requireTemplate('spread.12up.mosaic-quer');
+  const gross = ['l1a', 'l1b'];
+  const klein = ['l2a', 'l2b', 'l2c', 'l3a', 'l3b', 'l3c'];
+
+  /** Zwölf Querformate – die Vorlage ist durchweg auf quer gestellt. */
+  const zwoelf = Array.from({ length: 12 }, (_, i) => photo(`p${i}`, 2048, 1536));
+
+  function gelegt(weightOf: (id: string) => 'hero' | 'filler' | 'normal') {
+    const ergebnis = layoutSpread({
+      photos: zwoelf,
+      profile,
+      templateId: mosaik.id,
+      weightOf,
+    })!;
+    return (photoId: string) => ergebnis.slots.find((s) => s.photoId === photoId)!.slotId;
+  }
+
+  it('gibt jedem Hauptbild einen Ankerplatz, auch wenn die Vorlage nur einen ausweist', () => {
+    // Zwei Hauptbilder, ein deklarierter Ankerplatz (`r1a`): Das zweite darf
+    // nicht in einem der sechs kleinen landen, nur weil rechts schon vergeben
+    // ist – links tragen `l1a` und `l1b` ihre Seite genauso.
+    const wo = gelegt((id) => (id === 'p0' || id === 'p1' ? 'hero' : 'normal'));
+    const anker = [...gross, 'r1a'];
+    expect(anker).toContain(wo('p0'));
+    expect(anker).toContain(wo('p1'));
+  });
+
+  it('gibt ein einzelnes Hauptbild weiterhin in den größten Platz der Doppelseite', () => {
+    // Der Gleichstand, den die Seitenrechnung erzeugt: `l1a` trägt die linke
+    // Seite so, wie `r1a` die rechte trägt. Ohne den Falzanteil entschied
+    // danach nur noch der Beschnitt, und das Hauptbild landete im kleineren
+    // der beiden – 127 × 95 mm statt 162 × 121 mm.
+    for (const held of ['p0', 'p5']) {
+      const wo = gelegt((id) => (id === held ? 'hero' : 'normal'));
+      expect(wo(held)).toBe('r1a');
+    }
+  });
+
+  it('hält das Beifoto aus dem größten Platz seiner Seite heraus', () => {
+    const wo = gelegt((id) => (id === 'p0' ? 'filler' : 'normal'));
+    expect(klein).toContain(wo('p0'));
+  });
+
+  it('rührt Doppelseiten ohne Auszeichnung nicht an', () => {
+    // Die feinere Prominenz ist ein Werkzeug der Auszeichnung. Auch auf
+    // normale Bilder angewandt legte sie am echten Stand 46 von 80
+    // Doppelseiten anders – ungefragt, für nichts.
+    const platz = mosaik.slots.find((s) => s.id === 'l1a')!;
+    const kleiner = mosaik.slots.find((s) => s.id === 'l3b')!;
+    const ctx = {
+      profile,
+      weightOf: () => 'normal' as const,
+      prominenceOf: prominenceScale(mosaik.slots),
+    };
+
+    const oben = slotCost(photo('a'), platz, slotGeometry(platz, profile), ctx);
+    const unten = slotCost(photo('a'), kleiner, slotGeometry(kleiner, profile), ctx);
+    expect(oben.weightMismatch).toBe(unten.weightMismatch);
   });
 });
 
