@@ -28,7 +28,7 @@ import {
   templatesWithoutTitle,
 } from '../templates/index.js';
 import { type ChapterBudget, budgetByYear, distributeBudget, groupChapter } from './grouping.js';
-import { type TemplateFit, assign, slotCost, slotGeometry } from './scoring.js';
+import { type TemplateFit, assign, prominenceScale, slotCost, slotGeometry } from './scoring.js';
 import { bookStats } from './stats.js';
 
 export interface GenerateOptions {
@@ -263,10 +263,12 @@ function chooseTemplate(
 
   for (const template of candidates) {
     const geometries = template.slots.map((s) => slotGeometry(s, profile));
+    const prominenceOf = prominenceScale(template.slots);
 
     const cost = group.map((photo) =>
       template.slots.map(
-        (slot, j) => slotCost(photo, slot, geometries[j]!, { profile, weightOf }).total,
+        (slot, j) =>
+          slotCost(photo, slot, geometries[j]!, { profile, weightOf, prominenceOf }).total,
       ),
     );
 
@@ -277,6 +279,7 @@ function chooseTemplate(
       return slotCost(photo, template.slots[slotIndex]!, geometries[slotIndex]!, {
         profile,
         weightOf,
+        prominenceOf,
       });
     });
 

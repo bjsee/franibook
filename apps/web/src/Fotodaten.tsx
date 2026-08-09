@@ -404,7 +404,7 @@ export function Fotodaten({
         <div style={B.abschnitt}>
           <div style={B.titel}>Gewicht im Buch</div>
           <p style={B.leiser}>
-            Ein Hauptbild bekommt den größten Platz seiner Doppelseite, ein Beifoto einen kleinen.
+            Ein Hauptbild bekommt den größten Platz seiner Buchseite, ein Beifoto einen kleinen.
             Wirksam wird das beim nächsten Anordnen — das Buch bleibt stehen, bis es angeordnet
             wird.
           </p>
