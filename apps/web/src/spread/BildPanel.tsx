@@ -356,16 +356,41 @@ function Gewicht({ model }: { model: SpreadEditorModel }) {
         ))}
       </div>
       <p style={B.leiser}>{STUFEN.find((s) => s.id === gewicht)!.hinweis}</p>
-      {gewicht !== 'normal' && (
-        <button
-          onClick={() => void model.neuAnordnen()}
-          style={B.knopfKlein}
-          title="Die Plätze dieser Doppelseite neu vergeben"
-        >
-          Doppelseite neu anordnen
-        </button>
-      )}
+      {gewicht !== 'normal' && <NeuAnordnenKnopf model={model} />}
     </div>
+  );
+}
+
+/**
+ * „Doppelseite neu anordnen" — an einer festgehaltenen Seite abgeblendet.
+ *
+ * `locked` heißt, dass die Automatik die Finger davon lässt; der Server lehnt
+ * `auto` dort ab (`project/anordnung.ts`). Ein Knopf, der erst nach dem Druck
+ * eine Fehlermeldung bringt, wäre die schlechtere Auskunft — dieselbe Regel wie
+ * beim Neigungsregler am randabfallenden Bild: Ein fehlendes Bedienelement liest
+ * sich als Fehler, ein abgeblendetes als Regel.
+ *
+ * Eine Komponente und nicht zweimal derselbe Knopf: Lage- und Gewichtsabschnitt
+ * bieten ihn beide an, und zwei Fassungen wären zwei Gelegenheiten, die Sperre
+ * an nur einer davon nachzuziehen.
+ */
+function NeuAnordnenKnopf({ model }: { model: SpreadEditorModel }) {
+  if (model.festgehalten) {
+    return (
+      <p style={B.leiser}>
+        Festgehalten — zum Neuanordnen erst den Haken oben lösen. Bis dahin bleibt die Seite, wie
+        sie ist.
+      </p>
+    );
+  }
+  return (
+    <button
+      onClick={() => void model.neuAnordnen()}
+      style={B.knopf}
+      title="Die Plätze dieser Doppelseite neu vergeben"
+    >
+      Doppelseite neu anordnen
+    </button>
   );
 }
 
@@ -435,9 +460,7 @@ function LageWarnung({ model }: { model: SpreadEditorModel }) {
         verzerren.
       </p>
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <button onClick={() => void model.neuAnordnen()} style={B.knopf}>
-          Doppelseite neu anordnen
-        </button>
+        <NeuAnordnenKnopf model={model} />
         <AbnickKnopf model={model} art="lage-quer" />
       </span>
     </div>

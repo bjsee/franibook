@@ -151,6 +151,48 @@ describe('Verlauf am Server', () => {
     expect(project.verlauf.auskunft().tiefe.zurueck).toBe(1);
   });
 
+  it('legt für einen wirkungslosen Stapelgriff keinen Schritt an', async () => {
+    // Der Unterschied zur abgelehnten Anfrage: Diese hier *gelingt* — Status 200,
+    // mit der Liste, welches Foto warum übersprungen wurde. Geändert hat sie
+    // trotzdem nichts, und ein Schritt darauf nähme einen Stand zurück, der
+    // derselbe ist.
+    const { app, project } = await server();
+    project.photos.set('a', {
+      id: 'a',
+      relPath: 'a.jpg',
+      fileName: 'a.jpg',
+      bytes: 1000,
+      width: 4000,
+      height: 3000,
+      orientation: 1,
+    });
+
+    const erste = await app.inject({
+      method: 'PATCH',
+      url: '/api/photos',
+      payload: { ids: ['a'], weight: 'hero' },
+    });
+    expect(erste.json()).toMatchObject({ geaendert: 1 });
+    expect(project.verlauf.auskunft().tiefe.zurueck).toBe(1);
+
+    // Dasselbe Gewicht noch einmal: Die Antwort ist eine 200 mit Begründung.
+    const zweite = await app.inject({
+      method: 'PATCH',
+      url: '/api/photos',
+      payload: { ids: ['a'], weight: 'hero' },
+    });
+    expect(zweite.statusCode).toBe(200);
+    expect(zweite.json()).toMatchObject({
+      geaendert: 0,
+      uebersprungen: [{ id: 'a', grund: 'Schon Hauptbild' }],
+    });
+    expect(project.verlauf.auskunft().tiefe.zurueck).toBe(1);
+
+    // Und der eine Schritt, der steht, nimmt auch das Richtige zurück.
+    await app.inject({ method: 'POST', url: '/api/undo' });
+    expect(project.overrides['a']).toBeUndefined();
+  });
+
   it('weist eine Abnahme ohne brauchbaren Schlüssel ab', async () => {
     const { app } = await server();
 

@@ -346,14 +346,33 @@ export function eintragFuer(req: FastifyRequest): UndoEintrag | null | undefined
  */
 const angelegt = new WeakMap<FastifyRequest, boolean>();
 
-/** Ob eine Antwort ihren eigenen Misserfolg meldet. */
-function misserfolg(reply: FastifyReply, payload: unknown): boolean {
+/**
+ * Ob diese Antwort nichts hinterlassen hat, das sich zurücknehmen ließe.
+ *
+ * Zwei Fälle, und sie sind nicht dasselbe: Die Anfrage ist **gescheitert**, oder
+ * sie war **wirkungslos**. Für den Verlauf zählt nur das Ergebnis — ein Schritt,
+ * der nichts zurücknimmt, sieht beim Cmd+Z aus wie ein Fehler.
+ */
+function ohneWirkung(reply: FastifyReply, payload: unknown): boolean {
   if (reply.statusCode >= 400) return true;
+  if (typeof payload !== 'string') return false;
+
   // Ein Endpunkt, der `{ ok: false }` mit Status 200 schickt, ist kein Erfolg –
   // dieselbe Vorsicht wie in `api.ts`. Als Zeichenkettensuche und nicht als
   // `JSON.parse`: Eine Doppelseitenantwort ist ~100 KB, und die zweimal zu
   // deuten kostet mehr als der Griff selbst.
-  return typeof payload === 'string' && payload.includes('"ok":false');
+  if (payload.includes('"ok":false')) return true;
+
+  // Und die mengenwertigen Griffe (`PATCH /api/photos`) zählen mit, wie viele
+  // Fotos einen neuen Wert bekommen haben. Null heißt: Alle übersprungen, das
+  // Gewicht war schon gesetzt, der Ort schon derselbe. Die Antwort bleibt
+  // trotzdem eine 200 mit vollen Auskünften — welches Foto warum übersprungen
+  // wurde, will die Oberfläche zeigen, und ein 409 nähme ihr diese Liste.
+  //
+  // `"ungeaendert":0` triftt die Suche nicht: Das Anführungszeichen gehört zum
+  // gesuchten Text. Führende Nullen kennt JSON nicht, also gibt es auch kein
+  // `"geaendert":01`.
+  return payload.includes('"geaendert":0');
 }
 
 /** Herkunft, die eine mutierende Anfrage vom selben Rechner ausweist. */
@@ -448,7 +467,7 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
     const eintrag = eintragFuer(req);
     if (!eintrag) return payload;
 
-    if (misserfolg(reply, payload)) {
+    if (ohneWirkung(reply, payload)) {
       // Nichts geschehen, also auch kein Schritt: Ein Cmd+Z, das nichts tut,
       // sieht aus wie ein Fehler.
       if (angelegt.get(req)) project.verlauf.verwerfe();
