@@ -23,6 +23,11 @@ export interface TemplateSlot {
   /**
    * Wie prominent der Slot ist, 1 = klein bis 3 = Hauptbild. Die Engine
    * ordnet hoch gewichtete Fotos bevorzugt prominenten Slots zu.
+   *
+   * Die Angabe ist auf die ganze Doppelseite gemünzt und darf deshalb eine
+   * Buchseite ohne Abstufung lassen. Für ein ausgezeichnetes Bild rechnet
+   * `prominenceScale` (`layout/scoring.ts`) sie je Buchseite aus der Fläche
+   * nach; **abwerten kann die Rechnung nicht**, dieser Wert bleibt Untergrenze.
    */
   prominence: 1 | 2 | 3;
   /**

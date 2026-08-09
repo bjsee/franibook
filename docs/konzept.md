@@ -1144,6 +1144,54 @@ Fünfzehn Templates für den MVP – bewusst wenige und dafür durchgestaltet. A
 > zentriert stehen. Das ist Arithmetik, keine Nachlässigkeit; ein größerer Zoom
 > wäre mehr Beschnitt.
 
+> **Nachtrag (9. August 2026): prominent ist ein Platz auf seiner Buchseite
+> ([#7](https://github.com/bjsee/franibook/issues/7))**
+>
+> Die Auszeichnung wirkte, aber nur auf der halben Doppelseite. Am echten Buch
+> (Doppelseite 62, `spread.12up.mosaic-quer`) stand ein Beifoto im größten Platz
+> der linken Seite und ein Hauptbild im kleinsten — und ein Neuanordnen änderte
+> daran nichts. Der Grund steht in der Bibliothek: Alle acht linken Plätze dieser
+> Vorlage tragen `prominence: 1`, obwohl die beiden oberen mit 127 × 95 mm mehr
+> als das Doppelte der sechs unteren (82 × 61 mm) messen. Für `slotCost` waren sie
+> damit gleichwertig, `weightMismatch` war auf allen acht gleich, und die
+> Zuordnung entschied allein nach Beschnitt.
+>
+> Die deklarierte Prominenz meint die ganze Doppelseite; wer aufschlägt, sieht
+> eine Buchseite. `prominenceScale` (`layout/scoring.ts`) rechnet sie deshalb je
+> Seite nach: die Kantenlänge (√Fläche), linear zwischen kleinstem und größtem
+> Platz **derselben** Buchseite auf 1 bis 3 gelegt. Die Kantenlänge und nicht die
+> Fläche, weil das Auge Bilder nach ihrer Ausdehnung vergleicht — die Fläche
+> halbiert sich schon bei 70 % Kantenlänge.
+>
+> Drei Grenzen halten es bei einer Verfeinerung statt einer Umdeutung der
+> Bibliothek. **Sie zeichnet aus, sie wertet nicht ab**: Die deklarierte Prominenz
+> bleibt Untergrenze, denn `r1b` derselben Vorlage (91 × 121 mm, hochkant,
+> `prominence: 2`) ist eine gestalterische Absicht, die die Fläche allein nicht
+> hergäbe. **Ohne Abstufung schweigt sie**: Sind alle Plätze einer Seite gleich
+> groß — ein Gitter, die drei kleinen rechts in `spread.4up.hero-left` —, gibt es
+> nichts zu ordnen, und die einzige verbliebene Auskunft („das sind die kleinen
+> Plätze") gegen einen erfundenen Mittelwert zu tauschen wäre ein Verlust. **Und
+> die Doppelseite bricht den Gleichstand** (ein Zehntel): `l1a` trägt die linke
+> Seite genau so, wie `r1a` die rechte trägt — ohne diesen Anteil waren beide
+> gleichwertig, danach entschied nur noch der Beschnitt, und ein einzelnes
+> Hauptbild landete im kleineren der beiden. 127 × 95 statt 162 × 121 mm wäre
+> keine Verbesserung gewesen, sondern ein Rückschritt gegen den Zustand vorher.
+>
+> Und sie gilt **nur für ausgezeichnete Bilder**. Auf `normal` mit angewandt legte
+> sie am echten Stand 46 von 80 Doppelseiten anders — ungefragt und für nichts,
+> weil ein normales Foto dann mittelgroße Plätze bevorzugt. Für ein
+> ausgezeichnetes Bild rechnet dafür **auch die Schärfekennlinie** mit der
+> gerechneten Prominenz und nicht mehr mit der deklarierten: Sonst hielte der eine
+> Term `l1a` für einen kleinen Platz, während der andere ihn für den Ankerplatz
+> seiner Seite hält — und genau das schob am echten Buch ein leicht unscharfes
+> Hauptbild aus dem größten Platz heraus, weil der große Platz dort gratis war.
+>
+> Gemessen bleibt das Buch damit stehen, bis auf die zwei Doppelseiten, auf denen
+> jemand etwas gesagt hat (33 und 62 von 80). Auf 62 wandert das Hauptbild von
+> 77 × 57 mm in den Ankerplatz mit 151 × 113 mm, das zweite — hochkant, für den
+> querformatigen Anker also ungeeignet — auf 119 × 89 mm, und das Beifoto den
+> umgekehrten Weg.
+
 Bei 51,6 % Hochformat im Bestand braucht mindestens ein Template je Slotzahl eine hochformatorientierte Variante. Ein Vierer-Raster aus vier Querformaten ist bei diesem Bestand die Ausnahme, nicht die Regel.
 
 Zusätzlich existiert für den `subtle`-Fall kein eigenes Template: Jedes Template kann einen optionalen `year`-Textslot tragen. Ein Jahreswechsel braucht damit keine eigene Seite, wie gefordert.
