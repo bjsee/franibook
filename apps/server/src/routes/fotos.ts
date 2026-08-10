@@ -10,6 +10,7 @@ import { access } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { type DateEdit, type PhotoWeight, istDateEdit, normalisiereAdjust } from '@franibook/core';
+import { type Bestandsfilter, filterLeer } from '../project/filter.js';
 import { istDateiFehler, type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
 
 /**
@@ -71,14 +72,129 @@ function istGewicht(v: unknown): v is PhotoWeight {
   return v === 'hero' || v === 'normal' || v === 'filler';
 }
 
+/** `YYYY-MM-DD`, und nur das: Ein Zeitraum wird als Tag angegeben, nicht als Zeitpunkt. */
+const TAG = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Die Stufen der Kaskade, wie `model/date.ts` sie kennt. */
+const KONFIDENZEN = ['high', 'medium', 'low', 'none'] as const;
+
+/**
+ * Die Query, wie der Compiler sie sieht.
+ *
+ * Wie sie tatsächlich ankommt, weiß erst `filterAus`: Wiederholte Parameter
+ * werden zu Arrays, und deshalb steht dort eine Prüfung vor jeder Zuweisung.
+ */
+type Filterquery = {
+  problems?: string;
+  platziert?: string;
+  von?: string;
+  bis?: string;
+  ohneDatum?: string;
+  ort?: string;
+  quelle?: string;
+  datumsquelle?: string;
+  konfidenz?: string;
+  gruppe?: string;
+};
+
+/**
+ * Der Filter aus der Query – oder der Satz, warum sie nicht taugt.
+ *
+ * Ein unbrauchbarer Wert wird **nicht** stillschweigend übergangen, anders als
+ * bei den Zeitstrahlfassungen in `/api/settings`: Dort verlöre man eine
+ * Verzierung, hier bekäme man eine Liste, die etwas anderes zeigt als
+ * angefragt – und würde ihr glauben.
+ */
+function filterAus(query: Filterquery): { filter: Bestandsfilter } | { error: string } {
+  const filter: Bestandsfilter = {};
+
+  // **Jeder** Wert wird zuerst auf „genau einmal angegeben" geprüft. Fastify
+  // macht aus `?ort=a&ort=b` ein Array, und die Typangabe oben ist nur eine
+  // Behauptung des Compilers über eine Anfrage von außen: Ohne die Prüfung rief
+  // der Filter `toLocaleLowerCase` auf einem Array auf – ein 500er, wo ein
+  // Satz stehen sollte.
+  for (const [name, wert] of Object.entries(query)) {
+    if (wert !== undefined && typeof wert !== 'string') {
+      return { error: `${name} darf nur einmal angegeben werden` };
+    }
+  }
+
+  if (query.problems !== undefined) filter.problems = true;
+  if (query.ohneDatum !== undefined) filter.ohneDatum = true;
+
+  // Zwei Bedingungen, die einander widersprechen, werden nicht stillschweigend
+  // aufgelöst: Ein Foto ohne Datum liegt in keinem Zeitraum, die Antwort wäre
+  // also immer leer – und eine leere Liste sähe aus wie ein Befund.
+  if (filter.ohneDatum && (query.von !== undefined || query.bis !== undefined)) {
+    return { error: 'ohneDatum und ein Zeitraum schließen einander aus' };
+  }
+
+  if (query.platziert !== undefined) {
+    // `ja`/`nein` und nicht `true`/`false`: Die Adresse liest ein Mensch, und
+    // die Frage lautet „im Buch?".
+    if (query.platziert !== 'ja' && query.platziert !== 'nein') {
+      return { error: 'platziert muss „ja" oder „nein" sein' };
+    }
+    filter.platziert = query.platziert === 'ja';
+  }
+
+  for (const [name, wert] of [
+    ['von', query.von],
+    ['bis', query.bis],
+  ] as const) {
+    if (wert === undefined) continue;
+    if (!TAG.test(wert)) return { error: `${name} muss ein Datum der Form JJJJ-MM-TT sein` };
+    filter[name] = wert;
+  }
+
+  if (query.konfidenz !== undefined) {
+    // `none` gehört dazu, obwohl `ohneDatum` dieselbe Menge trifft: Es ist ein
+    // Wert der Kaskade (`model/date.ts`), er steht so in der Liste, und ihn als
+    // Formfehler abzuweisen wäre eine irreführende Auskunft.
+    const wert = KONFIDENZEN.find((k) => k === query.konfidenz);
+    if (wert === undefined) {
+      return { error: 'konfidenz muss high, medium, low oder none sein' };
+    }
+    filter.konfidenz = wert;
+  }
+
+  // Ort, Quelle, Datumsquelle und Gruppe bleiben ungeprüft: Sie sind Kennungen
+  // aus dem Bestand, und eine unbekannte liefert null Treffer – eine Antwort,
+  // keine Fehlbedienung. Die leere Gruppe heißt „in keiner", der leere Ort
+  // „ohne Ort"; beides sind Fragen, die man stellt.
+  if (query.ort !== undefined) filter.ort = query.ort;
+  if (query.quelle !== undefined) filter.quelle = query.quelle;
+  if (query.datumsquelle !== undefined) filter.datumsquelle = query.datumsquelle;
+  if (query.gruppe !== undefined) filter.gruppe = query.gruppe;
+
+  return { filter };
+}
+
 export function fotoRouten(
   app: FastifyInstance,
   { project, sources, previews, decodes, abstaende }: Kontext,
 ): void {
-  /** Fotos mit aufgelöstem Datum. `?problems` filtert auf zweifelhafte. */
-  app.get<{ Querystring: { problems?: string } }>('/api/photos', async (req) => {
-    const views = project.photoViews(req.query.problems !== undefined);
-    return { count: views.length, photos: views };
+  /**
+   * Fotos mit aufgelöstem Datum, wahlweise gefiltert.
+   *
+   * Die Bedingungen verunden sich und stehen als Query-Parameter, weil sie
+   * eine Ansicht beschreiben und keine Änderung — dieselbe Adresse zweimal
+   * gerufen gibt zweimal dieselbe Liste. `?problems` gibt es unverändert
+   * weiter: der Sonderfall „zweifelhaftes Datum", den es vor allen anderen gab.
+   *
+   * `gesamt` steht daneben, wenn gefiltert wurde: „42 von 830" beantwortet die
+   * Frage oft schon, ohne dass man ein einziges Bild ansieht.
+   */
+  app.get<{ Querystring: Filterquery }>('/api/photos', async (req, reply) => {
+    const gebaut = filterAus(req.query);
+    if ('error' in gebaut) return reply.code(400).send({ error: gebaut.error });
+
+    const views = project.fotosFiltern(gebaut.filter);
+    return {
+      count: views.length,
+      photos: views,
+      ...(filterLeer(gebaut.filter) ? {} : { gesamt: project.photos.size }),
+    };
   });
 
   /** Die Orte des Bestands, häufigste zuerst – Grundlage der Vervollständigung. */
