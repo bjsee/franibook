@@ -95,6 +95,7 @@ import type { Aussortiert, ImportDiff, QuellenBericht } from './project/bestand.
 import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
+import { type Bestandsfilter, filtereFotos, platzierteFotos } from './project/filter.js';
 import * as merkmale from './project/merkmale.js';
 import type { MerkmaleBericht } from './project/merkmale.js';
 import * as qualitaet from './project/qualitaet.js';
@@ -1833,10 +1834,9 @@ export class Project {
     width: number;
     height: number;
   }[] {
-    const platziert = new Set<PhotoId>();
-    for (const spread of this.spreads) {
-      for (const slot of spread.slots) if (slot.photoId) platziert.add(slot.photoId);
-    }
+    // Dieselbe Rechnung wie der Bestandsfilter: „übrig" darf nicht zweimal
+    // etwas anderes heißen (`project/filter.ts`).
+    const platziert = platzierteFotos(this.spreads);
 
     return (
       [...this.photos.values()]
@@ -2301,6 +2301,21 @@ export class Project {
       ...(override?.weight ? { weight: override.weight } : {}),
       ...(override?.adjust ? { adjust: override.adjust } : {}),
     };
+  }
+
+  /**
+   * Fotos nach Filter, mit allem, was die Oberfläche zum Anzeigen braucht.
+   *
+   * Der Filter läuft hier und nicht im Browser: Es ist dieselbe Frage, die
+   * `POST /api/export/abzug` und der Kontaktbogen stellen, und eine zweite
+   * Fassung derselben Bedingungen liefe irgendwann auseinander. Gerechnet wird
+   * über die schon aufgelösten Sichten — der Bestand liegt im Speicher.
+   */
+  fotosFiltern(filter: Bestandsfilter): PhotoView[] {
+    return filtereFotos(this.photoViews(), filter, {
+      spreads: this.spreads,
+      groups: this.groups,
+    });
   }
 
   /** Fotos mit Datumsangabe und Befunden, für Timeline und Problemliste. */
