@@ -78,6 +78,30 @@ Slot, damit er eine Neuanordnung auf eine andere Doppelseite überlebt; `normal`
 mengenwertige Route wie Datum und Ort, ein Fall mehr in ihrem „genau eines je
 Anfrage". Was daraus im Layout wird, steht in `.claude/rules/anordnen.md`.
 
+## Die Bildanpassung färbt, ohne umzustellen
+
+`adjust` (`model/adjust.ts`): Helligkeit, Kontrast, Sättigung, Wärme — je -100 bis
+100 — und eine Tonung (`sw`, `sepia`, `cyanotypie`). Wie das Gewicht am Foto und
+nicht am Slot, damit sie eine Neuanordnung überlebt; wie es über dieselbe
+mengenwertige Route, als weiterer Fall in deren „genau eines je Anfrage".
+
+**Alles daran ist eine einzige affine Farbmatrix** (`farbmatrix`), und das ist
+keine Bequemlichkeit, sondern die Bedingung für die Parity: `feColorMatrix` in
+sRGB und sharps `recomb` + `linear` sind derselbe exakt spezifizierte Begriff,
+eine „Helligkeit" auf beiden Wegen wäre zweimal definiert. Der Preis ist, was
+nicht geht — Gradationskurven, Lichter/Schatten getrennt, Lichterschutz bei der
+Tonung. Wer das will, braucht eine LUT, aus der beide Seiten lesen, und nicht
+eine zweite Rechnung je Renderer.
+
+Die Verkettung ist **Wärme → Sättigung → Helligkeit → Kontrast → Tonung**, und
+die Reihenfolge ist gemessen: Andersherum spreizt der Kontrast die Kanäle der
+Sepia-Rampe einzeln und macht das Bild bunter statt kontrastreicher.
+
+Wirksam wird sie **beim Rendern** als `ImageBox.colorMatrix` — also ohne
+Neuanordnen, anders als das Gewicht. Sie ändert die Gliederung nicht und meldet
+kein `structurePending`; `PhotoQuality` misst weiterhin die Datei und nicht die
+Anpassung.
+
 ## Der Fokus zielt auf Gesichter
 
 `model/focal.ts`, `focalForCrop`. Die Bildmitte schnitt am Bestand 16 % der Köpfe

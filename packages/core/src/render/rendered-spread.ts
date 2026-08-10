@@ -15,6 +15,7 @@
  * Endformats. Alle Boxen liegen damit im positiven Bereich, auch wenn sie
  * randabfallend sind.
  */
+import type { ColorMatrix } from '../model/adjust.js';
 import type { Crop } from '../model/crop.js';
 import type { PhotoId } from '../model/photo.js';
 import type { FrameId } from './frame.js';
@@ -57,6 +58,17 @@ export interface ImageBox extends Rect {
    * Mitte des Außenkastens. Dieselbe Festlegung wie bei mehrzeiligem Text.
    */
   rotateAboutMm?: { xMm: number; yMm: number };
+  /**
+   * Die Bildanpassung, als fertige Farbmatrix. Ohne Angabe unverändert.
+   *
+   * Die Matrix und nicht die fünf Regler, obwohl beide dasselbe sagen: Ein
+   * Renderer, der aus „Kontrast +30" selbst eine Abbildung ableitete, träfe eine
+   * Entscheidung — und zwei Renderer träfen sie zweimal. Dieselbe Machart wie
+   * `effectiveDpi`, das der Adapter auch nicht aus Ausschnitt und Kastenbreite
+   * nachrechnet. Was der Benutzer eingestellt hat, steht in `PhotoOverride`;
+   * hier steht, was daraus für die Pixel folgt.
+   */
+  colorMatrix?: ColorMatrix;
   /**
    * Ob Position und Größe von Hand gesetzt sind statt aus der Vorlage zu
    * kommen.

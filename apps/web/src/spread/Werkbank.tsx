@@ -18,6 +18,7 @@ import { B, T, dpiFarbe } from '../theme.js';
 import { BackgroundPicker } from '../BackgroundPicker.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
+import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
 import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
@@ -306,6 +307,7 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         {info?.camera && ` · ${info.camera}`}
       </p>
       <Bilddaten model={model} />
+      <Bildanpassung model={model} />
       <Bildbefunde model={model} />
 
       <div style={S.dpiZeile}>

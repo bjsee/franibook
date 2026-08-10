@@ -10,7 +10,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { type Crop, type PrintProfile, defaultProfile, targetPx } from '@franibook/core';
+import {
+  type ColorMatrix,
+  type Crop,
+  type PrintProfile,
+  defaultProfile,
+  farbmatrix,
+  targetPx,
+} from '@franibook/core';
 import { prepareImage } from './prepare-image.js';
 
 const profile = defaultProfile();
@@ -236,5 +243,85 @@ describe('prepareImage — Kodierung', () => {
       profile: alt,
     });
     expect(prepared.buffer.length).toBeLessThan(vorher.buffer.length * 0.75);
+  });
+});
+
+describe('prepareImage — Bildanpassung', () => {
+  /**
+   * Eine Fläche in einem Ton, verlustfrei durch die Aufbereitung geschickt.
+   *
+   * Verlustfrei heißt hier: Der JPEG-Encoder bekommt eine einzige Farbe zu
+   * sehen und gibt sie auf ein Digit genau zurück. Ein Verlauf ginge nicht —
+   * dann maßen wir die Kompression statt der Matrix.
+   */
+  async function durchgereicht(
+    farbe: [number, number, number],
+    colorMatrix?: ColorMatrix,
+  ): Promise<[number, number, number]> {
+    const kante = 64;
+    const pixel = Buffer.alloc(kante * kante * 3);
+    for (let i = 0; i < kante * kante; i++) {
+      pixel[i * 3] = farbe[0];
+      pixel[i * 3 + 1] = farbe[1];
+      pixel[i * 3 + 2] = farbe[2];
+    }
+    const png = await sharp(pixel, { raw: { width: kante, height: kante, channels: 3 } })
+      .png()
+      .toBuffer();
+
+    const prepared = await prepareImage(png, {
+      orientation: 1,
+      crop,
+      widthMm: 10,
+      heightMm: 10,
+      profile,
+      ...(colorMatrix ? { colorMatrix } : {}),
+    });
+    const { data } = await sharp(prepared.buffer).raw().toBuffer({ resolveWithObject: true });
+    return [data[0]!, data[1]!, data[2]!];
+  }
+
+  it('lässt das Bild ohne Anpassung unverändert', async () => {
+    const [r, g, b] = await durchgereicht([20, 200, 90]);
+    expect([r, g, b]).toEqual([20, 200, 90]);
+  });
+
+  it('trifft die Rechnung der Farbmatrix auf ein Digit', async () => {
+    // Der Kern der Parity: Was `farbmatrix` sagt, muss aus sharp
+    // herauskommen — und dasselbe muss der `feColorMatrix` der Vorschau
+    // liefern. Das eine Digit Spiel ist libvips' Abschneiden statt Runden
+    // beim Rückwandeln in 8 Bit; die Begründung steht in `core/model/adjust.ts`.
+    const adjust = { contrast: 40, warmth: 30, tone: 'sepia' as const };
+    const cm = farbmatrix(adjust);
+    for (const farbe of [
+      [20, 200, 90],
+      [200, 50, 10],
+      [128, 128, 128],
+    ] as [number, number, number][]) {
+      const ist = await durchgereicht(farbe, cm);
+      const soll = [0, 1, 2].map((zeile) => {
+        const v =
+          cm.m[zeile * 3]! * farbe[0] +
+          cm.m[zeile * 3 + 1]! * farbe[1] +
+          cm.m[zeile * 3 + 2]! * farbe[2] +
+          cm.o[zeile]! * 255;
+        return Math.round(Math.max(0, Math.min(255, v)));
+      });
+      ist.forEach((v, i) => expect(Math.abs(v - soll[i]!)).toBeLessThanOrEqual(1));
+    }
+  });
+
+  it('macht aus jeder Farbe denselben Grauwert, wenn schwarzweiß eingestellt ist', async () => {
+    const [r, g, b] = await durchgereicht([200, 50, 10], farbmatrix({ tone: 'sw' }));
+    expect(Math.abs(g - r)).toBeLessThanOrEqual(1);
+    expect(Math.abs(b - r)).toBeLessThanOrEqual(1);
+  });
+
+  it('klemmt am Anschlag, statt umzuschlagen', async () => {
+    // Ein Kanal, den die Matrix über 255 treibt, muss auf 255 stehenbleiben.
+    // Liefe er über, kippte ein überbelichtetes Bild stellenweise nach
+    // Schwarz — im Druck der auffälligste denkbare Fehler.
+    const [r, g, b] = await durchgereicht([240, 240, 240], farbmatrix({ brightness: 100 }));
+    expect([r, g, b]).toEqual([255, 255, 255]);
   });
 });
