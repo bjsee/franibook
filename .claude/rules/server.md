@@ -209,6 +209,25 @@ Doppelseite.
 übersprungen und gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu
 gelten. Ein nicht eingehängtes Netzlaufwerk darf kein Buch leeren.
 
+## Mengenwertige Züge
+
+Was vierzig Bilder auf einmal ändert, ist **eine** Route und ein Undo-Schritt:
+Datum, Ort, Ausrichtung, Gewicht und Bildanpassung über `PATCH /api/photos`,
+Bildunterschriften über `POST /api/book/captions` (`project/unterschriften.ts`).
+Vierzig Korrekturen sind ein Cmd+Z und nicht vierzig.
+
+Zwei Eigenschaften teilen sie sich, und beide sind erprobt:
+
+- **Sie melden ihre Wirkung als Zahl** (`geaendert`) und ihre Auslassungen mit
+  Grund — nicht als Fehler. Ein Bild ohne Ort ist der Bestand und kein
+  Fehlgriff; verschwiegen dürfte es trotzdem nicht werden, sonst sucht man nach
+  Zeilen, die absichtlich fehlen. Der `onSend`-Haken verwirft an `geaendert: 0`
+  den leeren Verlaufsschritt.
+- **Sie fassen keine Handarbeit an.** Eine getippte Unterschrift bleibt stehen,
+  bis jemand ausdrücklich `ueberschreiben` sagt; erkannt wird sie an
+  `captionAuto` und nicht am Wortlaut, denn wer „Sylt" tippt, hätte die
+  Automatik zufällig getroffen.
+
 ## Den Bestand durchsuchen
 
 `GET /api/photos` nimmt kombinierbare Bedingungen als Query-Parameter

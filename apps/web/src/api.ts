@@ -949,6 +949,32 @@ export const abnahmeZuruecknehmen = (schluessel?: string) =>
     schluessel === undefined ? {} : { schluessel },
   );
 
+/** Worauf der Unterschriftenzug wirkt. */
+export type Unterschriftenbereich =
+  { kind: 'spread'; index: number } | { kind: 'group'; id: string } | { kind: 'book' };
+
+/** Woraus die Zeile besteht – dieselben Namen wie im Kern (`model/caption.ts`). */
+export type CaptionForm = 'ort' | 'tag' | 'monat' | 'ort-tag' | 'ort-monat';
+
+export interface UnterschriftenErgebnis {
+  geaendert: number;
+  uebersprungen: { handarbeit: number; ohneAngabe: number; ohneFuss: number };
+  /** Die berührten Doppelseiten, fertig gerendert – wie bei `POST /api/book/move`. */
+  seiten: number[];
+  spreads: SpreadResponse[];
+}
+
+/** Füllt Bildunterschriften aus Ort und Datum. */
+export const unterschriftenSetzen = (
+  bereich: Unterschriftenbereich,
+  form: CaptionForm,
+  ueberschreiben = false,
+) => sende<UnterschriftenErgebnis>('POST', '/api/book/captions', { bereich, form, ueberschreiben });
+
+/** Nimmt die erzeugten Unterschriften wieder heraus; getippte bleiben. */
+export const unterschriftenEntfernen = (bereich: Unterschriftenbereich) =>
+  sende<UnterschriftenErgebnis>('DELETE', '/api/book/captions', { bereich });
+
 export const fotosDerSeiteLaden = (index: number) =>
   hole<{ photos: FotoInfo[] }>(`/api/spreads/${index}/photos`);
 
