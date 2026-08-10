@@ -244,6 +244,12 @@ echten Buch gemessen (80 Doppelseiten, 997 Bilder): **9,3 MB in 18,4 s** gegen
 benutzt, setzt `orientation: 1` und **keine** Vierteldrehung — die Vorschau liegt
 schon aufgerichtet im Cache, ein zweites Anwenden legte jedes gedrehte Bild quer.
 
+Hinter der letzten Doppelseite hängt der **Kontaktbogen** der nicht platzierten
+Fotos (`core/pruefung/kontaktbogen.ts`), gespeist aus derselben Bedingung wie die
+Filterleiste (`fotosFiltern({ platziert: false })`). Er ist kein Buchblatt und
+trägt deshalb einen Titel statt Seitenzahlen. `kontaktbogen: false` im Rumpf
+lässt ihn weg — 830 übrige Fotos sind vierzehn Bögen und ebenso viele Sekunden.
+
 Angesehen wird das Ergebnis über **`GET /api/export/:fileName`** — dieselbe
 Namensprüfung wie beim Schreiben, nur in Leserichtung, und `Content-Disposition:
 inline`, damit der Browser das PDF zeigt statt es abzulegen. Jede Export-Route gibt

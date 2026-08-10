@@ -134,3 +134,19 @@ describe('befundzeile', () => {
     expect(befundzeile([])).toBeUndefined();
   });
 });
+
+describe('Ein Blatt, das keine Buchseite ist', () => {
+  it('trägt einen Titel statt Seitenzahlen', () => {
+    // Der Kontaktbogen am Ende des Abzugs: Er hat keine Seitenzahl, die man
+    // notieren könnte, also sagt er stattdessen, was man ansieht.
+    const blatt = abzugsblatt(profile, { titel: 'Kontaktbogen — nicht im Buch' });
+    const texte = blatt.boxen.filter((b) => b.kind === 'text');
+
+    expect(texte).toHaveLength(1);
+    expect(texte[0]!.content).toBe('Kontaktbogen — nicht im Buch');
+    expect(texte[0]!.align).toBe('center');
+    expect(blatt.boxen.some((b) => b.kind === 'text' && b.slotId.includes('seitenzahl'))).toBe(
+      false,
+    );
+  });
+});
