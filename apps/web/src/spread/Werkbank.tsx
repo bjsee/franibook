@@ -23,6 +23,7 @@ import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
 import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
+import { Unterschriften } from './Unterschriften.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
@@ -478,6 +479,21 @@ function SeitenKarte({
             }}
             onSpread={(neu) => model.spreadGeaendert(neu as RenderedSpread)}
             onFehler={model.setNote}
+          />
+          {/*
+            Dieselbe Funktion wie im Inspektor: Eine Funktion, die nur in einem
+            der drei Rahmen erreichbar ist, macht den Vergleich zwischen ihnen
+            wertlos — man wechselte dann nicht, weil eine Anordnung besser liegt,
+            sondern weil man etwas braucht.
+          */}
+          <Unterschriften
+            index={aussen.index}
+            gruppen={aussen.gruppen.filter((g) => g.active)}
+            onErgebnis={(satz) => model.setNote(satz)}
+            onFehler={(satz) => model.setNote(`Nicht gefüllt: ${satz}`)}
+            onGeaendert={(neu) => {
+              if (neu) model.spreadGeaendert(neu as RenderedSpread);
+            }}
           />
         </>
       )}

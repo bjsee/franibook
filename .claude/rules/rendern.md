@@ -94,7 +94,10 @@ harter Versatzschatten mit Deckkraft. Alle Boxen eines Rahmens tragen denselben
 `rotateAboutMm` – beim Polaroid ist die Kartonmitte nicht die Bildmitte.
 
 **Die Bildunterschrift steht im Fuß des Polaroids** (`SlotAssignment.caption`), in
-Handschrift und mittig. Sie ist am Slot und kein freier `TextBlock`, weil sie zum
+Handschrift und mittig. Gefüllt wird sie wahlweise aus Ort und Datum
+(`model/caption.ts`, mengenwertig über `POST /api/book/captions`); was daraus
+entstanden ist, trägt `captionAuto` — und nur das überschreibt der Zug beim
+zweiten Klick. Getippt bleibt getippt. Sie ist am Slot und kein freier `TextBlock`, weil sie zum
 Bild gehört und mit ihm wandert – ein Block bliebe liegen. Nur das Polaroid hat
 einen Fuß; bei anderen Rahmen bleibt der Text gespeichert und unsichtbar. Messwerte
 und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Rahmen um die Bilder".

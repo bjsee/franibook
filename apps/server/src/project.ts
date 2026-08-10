@@ -16,6 +16,7 @@ import {
   type DateEdit,
   type Ebenenzug,
   type FrameId,
+  imageBoxes,
   type GenerateResult,
   type LayoutDocument,
   type LayoutIssue,
@@ -96,6 +97,14 @@ import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
 import { type Bestandsfilter, filtereFotos, platzierteFotos } from './project/filter.js';
+import {
+  type Unterschriftenbereich,
+  type UnterschriftenErgebnis,
+  type UnterschriftenOptionen,
+  type Unterschriftenstand,
+  loescheUnterschriften,
+  setzeUnterschriften,
+} from './project/unterschriften.js';
 import * as merkmale from './project/merkmale.js';
 import type { MerkmaleBericht } from './project/merkmale.js';
 import * as qualitaet from './project/qualitaet.js';
@@ -1518,7 +1527,62 @@ export class Project {
     const text = caption.trim().slice(0, 80);
     if (text.length === 0) delete slot.caption;
     else slot.caption = text;
+    // Von Hand getippt, also keine Automatik mehr: Der mengenwertige Zug lässt
+    // sie danach stehen, bis jemand ausdrücklich überschreiben sagt.
+    delete slot.captionAuto;
     return { ok: true };
+  }
+
+  /**
+   * Füllt Bildunterschriften aus Ort und Datum – über eine Doppelseite, eine
+   * Gruppe oder das ganze Buch (`project/unterschriften.ts`).
+   */
+  setzeUnterschriften(opts: UnterschriftenOptionen): UnterschriftenErgebnis {
+    return setzeUnterschriften(this.unterschriftenstand(), opts);
+  }
+
+  /** Nimmt die erzeugten Unterschriften wieder heraus; getippte bleiben. */
+  loescheUnterschriften(bereich: Unterschriftenbereich): UnterschriftenErgebnis {
+    return loescheUnterschriften(this.unterschriftenstand(), bereich);
+  }
+
+  private unterschriftenstand(): Unterschriftenstand {
+    const ctx = this.dateContext();
+    const rahmenCache = new Map<number, Map<string, FrameId>>();
+    return {
+      spreads: this.spreads,
+      groups: this.groups,
+      // Ort und Datum in derselben Fassung, die die Oberfläche zeigt – eine
+      // zweite Auflösung derselben Kaskade wäre eine zweite Wahrheit.
+      angabenVon: (photoId) => {
+        const photo = this.photos.get(photoId);
+        if (!photo) return { date: null };
+        const override = this.overrides[photoId];
+        const wirksam = effectivePhoto(photo, override);
+        return {
+          ...(wirksam.place ? { place: wirksam.place } : {}),
+          date: resolveEffectiveDate(photo, override, ctx).value,
+        };
+      },
+      // Aus dem gerenderten Modell: Nur dort steht, welcher Rahmen wirklich
+      // wirkt – ein randabfallender Kasten hat keinen, auch wenn am Slot einer
+      // gewählt ist. Einmal je Doppelseite gerendert; über das ganze Buch sind
+      // das 21 ms (dieselbe Messung wie beim Abnahmebericht).
+      rahmenVon: (spreadIndex, slotId) => {
+        const rsm = rahmenCache.get(spreadIndex) ?? this.rahmenJeSlot(spreadIndex);
+        rahmenCache.set(spreadIndex, rsm);
+        return rsm.get(slotId) ?? 'keiner';
+      },
+    };
+  }
+
+  /** Der wirkende Rahmen je Platz einer Doppelseite, aus ihrem RSM. */
+  private rahmenJeSlot(index: number): Map<string, FrameId> {
+    const gerendert = this.render(index);
+    const map = new Map<string, FrameId>();
+    if (!gerendert) return map;
+    for (const box of imageBoxes(gerendert)) map.set(box.slotId, box.frame ?? 'keiner');
+    return map;
   }
 
   /**
