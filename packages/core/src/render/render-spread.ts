@@ -204,6 +204,13 @@ function tiltOf(assignment: SlotAssignment, rect: Rect, photoId: PhotoId, ctx: R
   if (randabfallend(rect, flaeche)) return 0;
   if (assignment.rotateDeg !== undefined) return assignment.rotateDeg;
   if (!ctx.tilt) return 0;
+  // Ein Bild über der Falzachse steht gerade, solange das Profil einen
+  // Falzzuschlag führt: Der Zuschlag teilt an einer senkrechten Achse, und
+  // schon 1,2° Vorgabeneigung nähmen ihn dem Bild wieder. `randabfallend`
+  // deckt das nicht ab – es prüft die Papierkante, nicht den Bund. Eine von
+  // Hand gesetzte Neigung steht oben und gilt weiter; sie ist eine Aussage
+  // über dieses Bild, und dann bleibt der Falz eben unversorgt.
+  if (falzverlustMm(rect, 0, ctx.profile) > 0) return 0;
   // Slot *und* Foto im Schlüssel: Ein Bild soll seinen Winkel behalten, wenn
   // die Nachbarseite umgebaut wird, ihn aber wechseln, wenn es selbst
   // umzieht – sonst stünden zwei getauschte Bilder identisch schief.
@@ -354,7 +361,97 @@ function slotBoxes(
     frame,
   });
 
-  return [...rahmen.hinter, bild, ...rahmen.davor];
+  return [...rahmen.hinter, ...bild, ...rahmen.davor];
+}
+
+/**
+ * Was dieses Bild an der Bindung verliert – oder 0, wenn der Zuschlag hier
+ * nicht greift.
+ *
+ * Der Verlust ist eine Eigenschaft der Bindung und steht im Profil
+ * (`page.gutterLossMm`); ob er ein Bild trifft, entscheidet allein dessen Lage.
+ * Zwei Fälle bleiben ausgenommen, und beide aus demselben Grund – der Zuschlag
+ * rechnet mit einer senkrechten Achse mitten im Kasten:
+ *
+ *  - **Ein geneigtes Bild.** Seine Kanten stehen schräg zur Achse, eine
+ *    senkrechte Teilung schnitte quer durchs Motiv. Aus der Automatik ist der
+ *    Fall ausgeschlossen – `tiltOf` stellt ein Bild über der Achse gerade,
+ *    sobald das Profil einen Verlust führt. Bleibt die Handneigung, und dann
+ *    ist ein unversorgter Falz das kleinere Übel gegenüber einem Versatz quer
+ *    durchs Bild.
+ *  - **Eine Hälfte schmaler als der Verlust.** Der Zuschlag verlangte dort mehr
+ *    Motiv, als das Bild hergibt – die schmale Hälfte müsste einen Streifen
+ *    zeigen, der jenseits ihres eigenen Ausschnitts liegt.
+ *
+ * `!(verlust > 0)` und nicht `verlust <= 0`: Ein Profil ohne das Feld – die
+ * JSON-Dateien kommen per Typzusicherung herein, die ein fehlendes Feld nicht
+ * bemerkt – ergäbe sonst `NaN` für **jede** Bildbox des Buches statt für keine.
+ */
+function falzverlustMm(rect: Rect, drehung: number, profile: PrintProfile): number {
+  const verlust = profile.page.gutterLossMm;
+  if (!(verlust > 0) || drehung !== 0) return 0;
+
+  const gutterX = profile.page.bleedMm + profile.page.trimWidthMm;
+  const links = gutterX - rect.xMm;
+  const rechts = rect.xMm + rect.wMm - gutterX;
+  if (links < verlust || rechts < verlust) return 0;
+
+  return verlust;
+}
+
+/**
+ * Ein Bild über der Falzachse als zwei Boxen, die einander um den Verlust
+ * überlappen.
+ *
+ * Das ist der ganze Zuschlag: Der Streifen, den die Bindung schluckt, wird
+ * **doppelt gedruckt** – einmal am rechten Rand der linken Seite, einmal am
+ * linken der rechten. Im gebundenen Buch stoßen dann genau die Motivstellen
+ * aneinander, die auch im Foto benachbart sind, und das Motiv reißt nicht
+ * auseinander.
+ *
+ * Zwei Boxen und keine Sonderbehandlung in den Renderern: Beide zeichnen
+ * gewöhnliche Bildboxen mit gewöhnlichem Ausschnitt, für die die Parity längst
+ * gilt. Dieselbe Machart wie beim Rahmen, der auch nicht als Begriff im Modell
+ * steht, sondern als mehr Boxen. Einen **eigenen** Parity-Fall hat die Teilung
+ * trotzdem nicht: Der Test rendert mit dem Vorgabeprofil, und keines der acht
+ * führt einen Verlust. Er entsteht mit dem ersten gemessenen Wert.
+ *
+ * Die Skala bleibt in beiden Hälften dieselbe – sie verzerren also nicht.
+ * Bezahlt wird der Zuschlag mit Motiv: Der Ausschnitt ist für die **sichtbare**
+ * Breite gerechnet (`wMm - verlust`), das Bild steht damit etwas größer im
+ * Kasten als ohne Bindung.
+ */
+function falzTeilung(box: ImageBox, verlustMm: number, gutterXMm: number): ImageBox[] {
+  const sichtbarMm = box.wMm - verlustMm;
+  const linksMm = gutterXMm - box.xMm;
+  const rechtsMm = box.xMm + box.wMm - gutterXMm;
+  const anteilLinks = linksMm / sichtbarMm;
+  const anteilRechts = rechtsMm / sichtbarMm;
+
+  return [
+    {
+      ...box,
+      wMm: linksMm,
+      crop: { ...box.crop, w: box.crop.w * anteilLinks },
+      gutterPart: 'links',
+    },
+    {
+      ...box,
+      xMm: gutterXMm,
+      wMm: rechtsMm,
+      crop: {
+        ...box.crop,
+        x: box.crop.x + box.crop.w * (1 - anteilRechts),
+        w: box.crop.w * anteilRechts,
+      },
+      gutterPart: 'rechts',
+      // Die Warnungen bleiben bei der linken Hälfte. Sie gelten dem Bild und
+      // nicht der Fläche – doppelt gemeldet stünde jede zweimal im
+      // Abnahmebericht, und `below-min-dpi` gälte für eine Breite, die es so
+      // nicht gibt.
+      warnings: [],
+    },
+  ];
 }
 
 /** Die Geometrie, die `slotBoxes` schon ausgerechnet hat. */
@@ -386,10 +483,15 @@ function buildImageBox(
   ctx: RenderContext,
   gerechnet: boolean,
   geo: SlotGeometrie,
-): ImageBox {
+): ImageBox[] {
   const { profile } = ctx;
   const { aussen, innen: rect, drehung } = geo;
-  const slotAr = rect.wMm / rect.hMm;
+  // Sichtbar ist bei einem Bild über der Falzachse weniger als der Kasten breit
+  // ist – der Rest verschwindet im Bund. Der Ausschnitt richtet sich nach dem
+  // Sichtbaren, sonst stünde das Motiv nach der Bindung gestaucht.
+  const verlustMm = falzverlustMm(rect, drehung, profile);
+  const sichtbarMm = rect.wMm - verlustMm;
+  const slotAr = sichtbarMm / rect.hMm;
 
   // Ein `auto-cover`-Ausschnitt wird für die aktuellen Slotmaße neu gerechnet.
   // Ein von Hand gesetzter bleibt in seiner Lage und Vergrößerung, wird aber in
@@ -415,7 +517,7 @@ function buildImageBox(
   // liegen. Gerechnet wird über die tatsächlich extrahierten Pixel, damit die
   // Zahl mit dem übereinstimmt, was der PDF-Renderer später verarbeitet.
   const px = cropToPixels(crop, photo.width, photo.height);
-  const dpi = effectiveDpi(px.width, rect.wMm);
+  const dpi = effectiveDpi(px.width, sichtbarMm);
 
   const warnings: RenderWarning[] = [];
   if (dpi < profile.resolution.minDpi) {
@@ -452,7 +554,7 @@ function buildImageBox(
 
   const colorMatrix = matrixVon(photo.id, ctx);
 
-  return {
+  const box: ImageBox = {
     kind: 'image',
     ...rect,
     slotId: slot.id,
@@ -473,6 +575,9 @@ function buildImageBox(
     ...(assignment.caption ? { caption: assignment.caption } : {}),
     warnings,
   };
+
+  if (verlustMm === 0) return [box];
+  return falzTeilung(box, verlustMm, profile.page.bleedMm + profile.page.trimWidthMm);
 }
 
 /**
@@ -509,18 +614,36 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     // nicht daran, wo es liegt – und ein schwarzweißer Hintergrund unter
     // farbigen Bildern ist genau der Fall, für den man sie einstellt.
     const hintergrundMatrix = matrixVon(backgroundPhoto.id, ctx);
-    boxes.push({
+    // Und auch er bekommt den Falzzuschlag. Er ist sogar der Regelfall dafür:
+    // Ein flächenfüllender Hintergrund kreuzt die Achse immer, und ohne
+    // Zuschlag reißt er an der Bindung wie jedes andere Motiv. Die Auflösung
+    // bleibt die der ganzen Fläche – der Unterschied liegt unter einem Prozent
+    // und `backgroundFit` misst das Papier, nicht den Ausschnitt.
+    const hintergrundVerlust = falzverlustMm(flaeche, 0, profile);
+    const hintergrund: ImageBox = {
       kind: 'image',
       ...flaeche,
       slotId: BACKGROUND_SLOT_ID,
       photoId: backgroundPhoto.id,
-      crop: coverCrop(aspectRatio(backgroundPhoto), flaeche.wMm / flaeche.hMm),
+      crop: coverCrop(
+        aspectRatio(backgroundPhoto),
+        (flaeche.wMm - hintergrundVerlust) / flaeche.hMm,
+      ),
       effectiveDpi: fit.dpi,
       ...(hintergrundMatrix ? { colorMatrix: hintergrundMatrix } : {}),
       warnings: fit.taugt
         ? []
         : [{ code: 'background-low-dpi', dpi: fit.dpi, recommendedDpi: BACKGROUND_MIN_DPI }],
-    });
+    };
+    boxes.push(
+      ...(hintergrundVerlust === 0
+        ? [hintergrund]
+        : falzTeilung(
+            hintergrund,
+            hintergrundVerlust,
+            profile.page.bleedMm + profile.page.trimWidthMm,
+          )),
+    );
   }
 
   const bySlotId = new Map(spread.slots.map((s) => [s.slotId, s]));

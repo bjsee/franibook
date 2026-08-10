@@ -17,6 +17,7 @@
  * Link an jemand anderen.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { imageBoxes } from '@franibook/core';
 import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
@@ -623,7 +624,7 @@ export function App() {
    */
   async function removeSpread() {
     if (!info) return;
-    const bilder = spread?.boxes.filter((b) => b.kind === 'image').length ?? 0;
+    const bilder = spread ? imageBoxes(spread).length : 0;
     if (
       !window.confirm(
         `Doppelseite ${index + 1} aus dem Buch nehmen?` +
