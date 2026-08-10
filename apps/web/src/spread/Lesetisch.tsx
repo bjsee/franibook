@@ -23,6 +23,7 @@ import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
 import { TemplatePicker } from '../TemplatePicker.js';
 import type { TextBlockData } from '../TextBlocks.js';
+import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
 import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
@@ -237,6 +238,7 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
         {info ? (zeitpunkt(info) ?? 'ohne Datum') : '…'}
       </span>
       <Bilddaten model={model} />
+      <Bildanpassung model={model} />
       <Bildbefunde model={model} />
       <span style={B.trenner} />
       {/*

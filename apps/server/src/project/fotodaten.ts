@@ -20,17 +20,20 @@
  * Das **Gewicht** fällt aus der Reihe: Es korrigiert nichts, sondern zeichnet
  * aus. Es steht trotzdem hier, weil es im selben `PhotoOverride` wohnt und über
  * dieselbe mengenwertige Route kommt — zwei Wege in dasselbe Feld wären zwei
- * Gelegenheiten, es unterschiedlich aufzuräumen.
+ * Gelegenheiten, es unterschiedlich aufzuräumen. Für die **Bildanpassung** gilt
+ * dasselbe: Sie berichtigt nichts, sie gestaltet.
  */
 import {
   type DateContext,
   type DateEdit,
   type NaiveDateTime,
   type Photo,
+  type PhotoAdjust,
   type PhotoId,
   type PhotoOverride,
   type PhotoWeight,
   applyDateEdit,
+  gleicheAnpassung,
   manualPlaceKey,
   resolveEffectiveDate,
   validateDateEdit,
@@ -275,6 +278,56 @@ export function setzeGewicht(
       else z.overrides[id] = rest;
     } else {
       z.overrides[id] = { ...bestand, weight: gewicht };
+    }
+    geaendert++;
+  }
+
+  return { geaendert, uebersprungen, unbekannt };
+}
+
+/**
+ * Setzt Helligkeit, Kontrast, Sättigung, Wärme und Tonung – oder nimmt sie weg.
+ *
+ * Der Befehl trägt die **ganze** Einstellung, nicht einen einzelnen Regler:
+ * Sonst müsste die Route sagen können, wie „Kontrast unverändert lassen" sich
+ * von „Kontrast auf 0" unterscheidet, und beides käme als dieselbe fehlende
+ * Zahl an. Die Oberfläche hat den vollen Stand ohnehin vor sich.
+ *
+ * `undefined` nimmt die Anpassung zurück. Wie beim Gewicht wird der
+ * Override-Eintrag dabei aufgeräumt, wenn nichts mehr darin steht – ein leeres
+ * Objekt im gespeicherten Projekt wäre eine Korrektur, die keine ist.
+ */
+export function setzeAnpassung(
+  z: Fotodatenstand,
+  ids: readonly PhotoId[],
+  adjust: PhotoAdjust | undefined,
+): Korrekturergebnis | { fehler: string } {
+  if (ids.length === 0) return { fehler: 'Keine Fotos ausgewählt' };
+
+  const unbekannt: PhotoId[] = [];
+  const uebersprungen: { id: PhotoId; grund: string }[] = [];
+  let geaendert = 0;
+
+  for (const id of ids) {
+    if (!z.photos.has(id)) {
+      unbekannt.push(id);
+      continue;
+    }
+    const bestand = z.overrides[id] ?? {};
+    if (gleicheAnpassung(bestand.adjust, adjust)) {
+      uebersprungen.push({
+        id,
+        grund: adjust ? 'Schon so eingestellt' : 'Keine Bildanpassung vorhanden',
+      });
+      continue;
+    }
+
+    if (adjust) {
+      z.overrides[id] = { ...bestand, adjust };
+    } else {
+      const { adjust: _weg, ...rest } = bestand;
+      if (Object.keys(rest).length === 0) delete z.overrides[id];
+      else z.overrides[id] = rest;
     }
     geaendert++;
   }

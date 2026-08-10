@@ -7,7 +7,8 @@ import { panCrop, zoomCrop } from '../model/crop.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
 import { imageBoxes } from './rendered-spread.js';
-import { dpiInSlot, photoPixelsOf, withCrop, withTextBlock } from './inspect.js';
+import { dpiInSlot, photoPixelsOf, withAdjust, withCrop, withTextBlock } from './inspect.js';
+import { farbmatrix } from '../model/adjust.js';
 
 const profile = saal as PrintProfile;
 const template = requireTemplate('spread.4up.grid');
@@ -177,5 +178,47 @@ describe('withTextBlock', () => {
     const ohne = renderSpread({ ...spread, blocks: [leer] }, { profile, template, photos: PHOTOS });
     expect(textBoxen(ohne)).toHaveLength(0);
     expect(textBoxen(withTextBlock(ohne, block))).toHaveLength(2);
+  });
+});
+
+describe('withAdjust', () => {
+  it('setzt die Farbmatrix an allen Boxen desselben Fotos', () => {
+    const neu = withAdjust(rsm, 'p1', { tone: 'sepia' });
+    const box = imageBoxes(neu).find((b) => b.photoId === 'p1')!;
+    expect(box.colorMatrix).toEqual(farbmatrix({ tone: 'sepia' }));
+  });
+
+  it('lässt die anderen Fotos unangetastet', () => {
+    const neu = withAdjust(rsm, 'p1', { tone: 'sepia' });
+    for (const box of imageBoxes(neu).filter((b) => b.photoId !== 'p1')) {
+      expect(box.colorMatrix).toBeUndefined();
+    }
+  });
+
+  it('geht nach dem Foto und nicht nach dem Slot', () => {
+    // Der Unterschied zu `withCrop` und `withRotation`: Liegt dasselbe Bild
+    // zweimal auf einer Doppelseite, färbt der Regler beide Vorkommen – so wie
+    // es hinterher im Buch steht.
+    const doppelt: Spread = {
+      ...spread,
+      slots: spread.slots.map((s) => ({ ...s, photoId: 'p1' })),
+    };
+    const neu = withAdjust(renderSpread(doppelt, { profile, template, photos: PHOTOS }), 'p1', {
+      contrast: 30,
+    });
+    expect(imageBoxes(neu).every((b) => b.colorMatrix)).toBe(true);
+  });
+
+  it('nimmt die Anpassung sichtbar zurück, statt das Feld stehenzulassen', () => {
+    // Ein weggelassenes Feld bliebe beim Spread der vorigen Antwort stehen, und
+    // der Regler zöge ins Leere.
+    const mit = withAdjust(rsm, 'p1', { tone: 'sw' });
+    const ohne = withAdjust(mit, 'p1', undefined);
+    expect(imageBoxes(ohne).find((b) => b.photoId === 'p1')!.colorMatrix).toBeUndefined();
+  });
+
+  it('setzt für eine wirkungslose Anpassung keine Matrix', () => {
+    const neu = withAdjust(rsm, 'p1', { brightness: 0, contrast: 0 });
+    expect(imageBoxes(neu).find((b) => b.photoId === 'p1')!.colorMatrix).toBeUndefined();
   });
 });

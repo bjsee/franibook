@@ -469,6 +469,7 @@ async function drawImage(
       widthMm: box.wMm,
       heightMm: box.hMm,
       profile,
+      ...(box.colorMatrix ? { colorMatrix: box.colorMatrix } : {}),
       ...(ctx.abzugDpi !== undefined ? { abzug: { targetDpi: ctx.abzugDpi } } : {}),
     });
 

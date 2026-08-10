@@ -261,14 +261,37 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   },
   'DELETE /api/photos/:id': { label: 'Foto aussortiert' },
   'DELETE /api/photos/aussortiert/:id': { label: 'Foto wieder aufgenommen' },
-  // Kein Verschmelzschlüssel: Eine Korrektur ist eine Anfrage über die ganze
-  // Auswahl, kein Regler. Ein Anker fällt bei einer Serie – wer vierzig Bilder
-  // eines Kamera-Resets verschiebt und sich vertut, soll das auch nach einem
-  // Serverneustart noch heilen können.
+  // Ein Verschmelzschlüssel nur für die Bildanpassung: Sie ist der einzige Fall
+  // dieser Route, der an einem Regler hängt, und ohne Schlüssel wäre jede
+  // Zwischenstellung ein eigener Schritt. Die übrigen Korrekturen bleiben ohne –
+  // sie sind je eine Anfrage über die ganze Auswahl. Der Schlüssel nennt die
+  // Fotos, damit das Weiterziehen am nächsten Bild nicht mit dem vorigen
+  // verschmilzt.
+  //
+  // Ein Anker fällt bei einer Serie – wer vierzig Bilder eines Kamera-Resets
+  // verschiebt und sich vertut, soll das auch nach einem Serverneustart noch
+  // heilen können.
   'PATCH /api/photos': {
+    schluessel: (_p, body) => {
+      const b = (body ?? {}) as { adjust?: unknown; ids?: unknown };
+      if (b.adjust === undefined) return undefined;
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      return `anpassung:${ids.join(',')}`;
+    },
     label: (_p, body) => {
-      const b = (body ?? {}) as { place?: unknown; orientation?: unknown; weight?: unknown };
+      const b = (body ?? {}) as {
+        place?: unknown;
+        orientation?: unknown;
+        weight?: unknown;
+        adjust?: unknown;
+      };
       if (b.orientation !== undefined) return 'Bild gekippt';
+      // Wie beim Gewicht nennt der Wortlaut die Richtung: „Bild angepasst"
+      // gälte auch für das Zurücknehmen, und dann sagt das Zurücknehmen des
+      // Zurücknehmens nichts mehr.
+      if (b.adjust !== undefined) {
+        return b.adjust === null ? 'Bildanpassung zurückgenommen' : 'Bild angepasst';
+      }
       // Der Wortlaut nennt die Richtung, weil das Zurücknehmen sonst nicht sagt,
       // *was* es zurücknimmt: „Gewicht gesetzt" gilt für alle drei Fälle.
       if (b.weight !== undefined) {

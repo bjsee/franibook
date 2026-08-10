@@ -31,6 +31,7 @@ import {
   type Befund,
   type PhotoGroup,
   type PhotoOverride,
+  type PhotoAdjust,
   type PhotoWeight,
   type PrintProfile,
   type RenderedCover,
@@ -435,6 +436,8 @@ export interface PhotoView extends Photo {
    * als Zustand ausgeben.
    */
   weight?: PhotoWeight;
+  /** Eingestellte Bildanpassung, wenn eine gesetzt ist. Fehlt wie `weight` sonst. */
+  adjust?: PhotoAdjust;
 }
 
 export class Project {
@@ -1178,6 +1181,21 @@ export class Project {
     gewicht: PhotoWeight,
   ): fotodaten.Korrekturergebnis | { fehler: string } {
     return fotodaten.setzeGewicht(this, ids, gewicht);
+  }
+
+  /**
+   * Stellt Helligkeit, Kontrast, Sättigung, Wärme und Tonung ein.
+   *
+   * Wie das Gewicht ohne Neuanordnen — aber anders als dieses auch **ohne
+   * Warten**: Die Anpassung wird beim Rendern angewandt (`ImageBox.colorMatrix`)
+   * und ist damit sofort im Buch, in der Vorschau wie im PDF. Sie verschiebt
+   * kein Foto und wählt keine Vorlage; sie färbt nur, was schon liegt.
+   */
+  setzeAnpassung(
+    ids: readonly PhotoId[],
+    adjust: PhotoAdjust | undefined,
+  ): fotodaten.Korrekturergebnis | { fehler: string } {
+    return fotodaten.setzeAnpassung(this, ids, adjust);
   }
 
   /**
@@ -2264,6 +2282,7 @@ export class Project {
       issues: e.issues,
       ...(override?.placeOverride ? { placeManual: true } : {}),
       ...(override?.weight ? { weight: override.weight } : {}),
+      ...(override?.adjust ? { adjust: override.adjust } : {}),
     };
   }
 

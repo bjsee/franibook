@@ -183,6 +183,7 @@ async function drawImage(
       widthMm: box.wMm,
       heightMm: box.hMm,
       profile,
+      ...(box.colorMatrix ? { colorMatrix: box.colorMatrix } : {}),
     });
 
     doc.image(prepared.buffer, mmToPt(box.xMm), mmToPt(box.yMm), {

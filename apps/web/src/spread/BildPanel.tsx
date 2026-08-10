@@ -11,6 +11,7 @@
  */
 import { FRAMES, photoPixelsOf, type PhotoWeight } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
+import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
 import { AbnickKnopf, Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
@@ -241,6 +242,15 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
           </>
         )}
       </div>
+
+      {/*
+        Die Anpassung steht hinter dem Rahmen und vor der Neigung: Sie ist wie
+        der Rahmen eine Aussage über das Aussehen des Bildes, anders als Neigung
+        und Ebene aber keine über seine Lage. Und sie steht weit unten, weil sie
+        selten gebraucht wird — die häufige Frage an dieser Spalte ist die
+        Auflösung, nicht die Farbe.
+      */}
+      <Bildanpassung model={model} />
 
       <div style={B.abschnitt}>
         <div style={S.kopfzeile}>

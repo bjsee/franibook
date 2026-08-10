@@ -27,6 +27,7 @@ import type {
   FrameId,
   MoveSource,
   MoveTarget,
+  PhotoAdjust,
   PhotoWeight,
   Rect,
   RenderedSpread,
@@ -38,10 +39,12 @@ import {
   frameHatFuss,
   imageBoxes,
   MAX_TILT_DEG,
+  normalisiereAdjust,
   normalizeRotation,
   panCrop,
   photoPixelsOf,
   randabfallend,
+  withAdjust,
   withCrop,
   withRect,
   withRotation,
@@ -52,6 +55,7 @@ import {
   befundAbnicken,
   ausschnittSetzen,
   doppelseiteLaden,
+  anpassungSetzen,
   ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
   bildEinwerfen,
@@ -163,6 +167,17 @@ export function useSpreadEditor({
   const [pendingCrop, setPendingCrop] = useState<Crop | null>(null);
   /** Stellung des Neigungsreglers, solange sie noch nicht beim Server ist. */
   const [pendingTilt, setPendingTilt] = useState<number | null>(null);
+  /**
+   * Stellung der Bildregler, solange sie noch nicht beim Server ist.
+   *
+   * Trägt die Fotokennung mit, weil die Anpassung am Foto hängt und nicht am
+   * Platz: Ohne sie färbte ein Wechsel des ausgewählten Bildes das neue Bild mit
+   * den Werten des alten, bis der Server antwortet.
+   */
+  const [pendingAdjust, setPendingAdjust] = useState<{
+    photoId: string;
+    adjust: PhotoAdjust | undefined;
+  } | null>(null);
   const [zug, setZug] = useState<Zug | null>(null);
   /**
    * Der Platz unter dem Zeiger, solange gezogen wird.
@@ -290,6 +305,10 @@ export function useSpreadEditor({
       if (text) s = mitOffenemStand(s, text, pendingText);
     }
 
+    // Vor der Slotprüfung, weil die Anpassung am Foto hängt: Sie färbt jedes
+    // Vorkommen dieses Bildes auf der Doppelseite, auch das im Hintergrund.
+    if (pendingAdjust) s = withAdjust(s, pendingAdjust.photoId, pendingAdjust.adjust);
+
     if (!selectedSlotId) return s;
     if (pendingCrop) s = withCrop(s, selectedSlotId, pendingCrop);
     if (pendingTilt !== null) s = withRotation(s, selectedSlotId, pendingTilt);
@@ -326,6 +345,7 @@ export function useSpreadEditor({
     spread,
     pendingCrop,
     pendingTilt,
+    pendingAdjust,
     pendingRect,
     pendingText,
     texte,
@@ -459,6 +479,60 @@ export function useSpreadEditor({
       abmelden();
     };
   }, [pendingTilt, selectedSlotId, index, onSpread, onChanged]);
+
+  /**
+   * Die Bildregler, mit derselben Verzögerung wie Ausschnitt und Neigung.
+   *
+   * Anders als dort steht der Zwischenstand aber nicht nur in der Vorschau,
+   * sondern schon im Buch, sobald er ankommt: Die Anpassung wirkt beim Rendern.
+   * Die Doppelseite wird deshalb danach **gezielt nachgeladen** und der offene
+   * Stand erst dann verworfen – zwei Gründe, beide gemessen:
+   *
+   * - `onNeuRendern` wäre der falsche Griff. Es setzt den Spread auf `null` und
+   *   holt ihn neu, für Zurücknehmen und Vorlagenwechsel richtig; hier riss es
+   *   die Werkzeugspalte für einen Durchlauf leer, und der Bildlauf sprang bei
+   *   jeder Reglerbewegung an den Anfang. Dasselbe Muster wie beim Abnicken:
+   *   Seite holen, Spalte stehen lassen.
+   * - Erst nachladen, dann `setPendingAdjust(null)`. Andersherum blitzt
+   *   zwischen dem Verwerfen und dem neuen Spread das ungefärbte Bild auf.
+   *
+   * Die Seite muss überhaupt nachgeladen werden, obwohl die Vorschau den Stand
+   * schon zeigt: Der offene Stand ist eine Anzeige, verbindlich ist das RSM vom
+   * Server. Beide rechnen mit `farbmatrix` dasselbe – und genau deshalb sieht
+   * man beim Wechsel nichts.
+   */
+  const zuletztAdjust = useRef<{ photoId: string; adjust: PhotoAdjust | undefined } | null>(null);
+
+  useEffect(() => {
+    zuletztAdjust.current = pendingAdjust;
+    if (!pendingAdjust) return;
+
+    const gesendet = pendingAdjust;
+    const senden = async () => {
+      try {
+        const e = await anpassungSetzen([gesendet.photoId], gesendet.adjust ?? null);
+        // Zwischenzeitlich weitergezogen: Die spätere Anfrage hat das Wort.
+        if (zuletztAdjust.current !== gesendet) return;
+        const neu = e.photos.find((p) => p.id === gesendet.photoId);
+        if (neu) setInfos((bestand) => new Map(bestand).set(gesendet.photoId, neu));
+        onSpread(await doppelseiteLaden(index));
+        if (zuletztAdjust.current === gesendet) setPendingAdjust(null);
+        onChanged();
+      } catch (e) {
+        setNote(`Bildanpassung nicht gespeichert: ${fehlertext(e)}`);
+      }
+    };
+    const timer = setTimeout(() => void senden(), SPEICHER_VERZOEGERUNG_MS);
+    const abmelden = planeSofort(async () => {
+      clearTimeout(timer);
+      await senden();
+    });
+
+    return () => {
+      clearTimeout(timer);
+      abmelden();
+    };
+  }, [pendingAdjust, index, onSpread, onChanged]);
 
   /**
    * Die Bildunterschrift, während sie getippt wird.
@@ -1696,6 +1770,36 @@ export function useSpreadEditor({
     }
   }
 
+  /**
+   * Die Bildanpassung, die gerade gilt – offener Stand vor gespeichertem.
+   *
+   * Immer ein Objekt und nie `undefined`: Die Regler brauchen eine Zahl, und
+   * „nicht gesetzt" ist für sie dasselbe wie 0. Die Unterscheidung, die im
+   * Projekt zählt, trifft `normalisiereAdjust` beim Speichern.
+   */
+  const aktuelleAnpassung: PhotoAdjust = (() => {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return {};
+    if (pendingAdjust?.photoId === photoId) return pendingAdjust.adjust ?? {};
+    return infoVon(photoId)?.adjust ?? {};
+  })();
+
+  /**
+   * Stellt einen Regler oder die Tonung; `null` nimmt die ganze Anpassung
+   * zurück.
+   *
+   * Nimmt die **ganze** Einstellung entgegen und nicht einen einzelnen Wert –
+   * dieselbe Festlegung wie an der Route, und aus demselben Grund: Ein fehlender
+   * Regler wäre nicht von einem auf null gestellten zu unterscheiden. Die
+   * Bedienung hat den vollen Stand vor sich (`aktuelleAnpassung`).
+   */
+  function anpassungStellen(adjust: PhotoAdjust | null): void {
+    const photoId = gewaehlteBox?.photoId;
+    if (!photoId) return;
+    setNote(null);
+    setPendingAdjust({ photoId, adjust: normalisiereAdjust(adjust) });
+  }
+
   /** Die Neigung, die gerade wirkt – auch die automatisch bestimmte. */
   const aktuelleNeigung = pendingTilt ?? gewaehlteBox?.rotateDeg ?? 0;
   /**
@@ -1841,6 +1945,8 @@ export function useSpreadEditor({
     ortSetzen,
     ausrichtungKippen,
     gewichtSetzen,
+    aktuelleAnpassung,
+    anpassungStellen,
     ausschnittHinweis,
     kastenHinweis,
 

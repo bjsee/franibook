@@ -436,3 +436,68 @@ describe('structurePending', () => {
     expect(p.structurePending()).toBe(false);
   });
 });
+
+describe('Bild anpassen', () => {
+  it('legt die Anpassung in den Overrides ab', () => {
+    const p = projekt();
+    p.setzeAnpassung(['a'], { brightness: 20, tone: 'sepia' });
+    expect(p.overrides['a']).toEqual({ adjust: { brightness: 20, tone: 'sepia' } });
+  });
+
+  it('räumt den Eintrag mit „ohne Anpassung" wieder weg', () => {
+    const p = projekt();
+    p.setzeAnpassung(['a'], { contrast: 30 });
+    p.setzeAnpassung(['a'], undefined);
+    expect(p.overrides['a']).toBeUndefined();
+  });
+
+  it('lässt andere Korrekturen am selben Foto stehen', () => {
+    const p = projekt();
+    p.setzeOrte(['a'], { label: 'Kreta' });
+    p.setzeAnpassung(['a'], { warmth: -40 });
+    p.setzeAnpassung(['a'], undefined);
+    expect(p.overrides['a']).toEqual({ placeOverride: { key: 'manual:Kreta', label: 'Kreta' } });
+  });
+
+  it('meldet ein Foto ohne Anpassung, statt still nichts zu tun', () => {
+    const p = projekt();
+    const r = p.setzeAnpassung(['a'], undefined);
+    expect(r).toEqual({
+      geaendert: 0,
+      uebersprungen: [{ id: 'a', grund: 'Keine Bildanpassung vorhanden' }],
+      unbekannt: [],
+    });
+  });
+
+  it('meldet eine unveränderte Einstellung, statt sie erneut zu schreiben', () => {
+    // Der Regler steht beim Ziehen oft für einen Moment still, und jede
+    // Wiederholung wäre sonst ein weiterer Schreibvorgang auf das Projekt-JSON.
+    const p = projekt();
+    p.setzeAnpassung(['a'], { saturation: 50 });
+    const r = p.setzeAnpassung(['a'], { saturation: 50 });
+    expect(r).toMatchObject({
+      geaendert: 0,
+      uebersprungen: [{ id: 'a', grund: 'Schon so eingestellt' }],
+    });
+  });
+
+  it('ändert die Gliederung nicht – eine Farbe sagt nichts über die Zeit', () => {
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    p.setzeAnpassung(['a'], { tone: 'sw' });
+    expect(p.structurePending()).toBe(false);
+  });
+
+  it('wirkt ohne Neuanordnen im gerenderten Buch', () => {
+    // Der Unterschied zum Gewicht, und der Grund, warum die Anpassung beim
+    // Rendern und nicht beim Anordnen greift: Ein bestehendes Buch bekommt sie
+    // sofort, ohne dass die Ausschnitte einer Seite verlorengehen.
+    const p = projekt();
+    p.settings.targetPages = 12;
+    p.generate();
+    const vorher = JSON.stringify(p.render(0));
+    p.setzeAnpassung([...p.photos.keys()], { tone: 'sepia' });
+    expect(JSON.stringify(p.render(0))).not.toBe(vorher);
+  });
+});
