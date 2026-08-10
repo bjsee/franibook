@@ -106,6 +106,30 @@ export interface AbzugOptionen {
   befundzeile?: string;
 }
 
+/**
+ * Beschriftung statt Seitenzahlen – für ein Blatt, das keine Buchseite ist.
+ *
+ * Genau ein Fall: der Kontaktbogen am Ende (`pruefung/kontaktbogen.ts`). Er
+ * gehört in den Abzug und nicht ins Buch, hat also keine Seitenzahl, die man
+ * notieren könnte; was er braucht, ist eine Zeile, die sagt, was man ansieht.
+ */
+export interface AbzugTitelOptionen {
+  titel: string;
+  befundzeile?: string;
+}
+
+/**
+ * Entweder Seitenzahlen **oder** ein Titel — nie beides und nie keines von
+ * beiden.
+ *
+ * Als Union und nicht als zwei optionale Felder: Sonst typecheckt
+ * `abzugsblatt(flaeche, {})` und liefert lautlos ein Blatt ohne jede
+ * Beschriftung, und `{ linkeSeite, titel }` verwürfe den Titel stillschweigend.
+ * Genau diese wirkungslose Freundlichkeit lehnt `server.md` an anderer Stelle
+ * ausdrücklich ab.
+ */
+export type AbzugBeschriftung = AbzugOptionen | AbzugTitelOptionen;
+
 export interface Abzugsblatt {
   breiteMm: number;
   hoeheMm: number;
@@ -137,7 +161,7 @@ export interface Abzugsblatt {
  * Reine Rechnung aus den Maßen der Doppelseite und ihrer Seitennummer —
  * dieselben Eingaben ergeben dasselbe Blatt.
  */
-export function abzugsblatt(flaeche: Abzugsflaeche, opts: AbzugOptionen): Abzugsblatt {
+export function abzugsblatt(flaeche: Abzugsflaeche, opts: AbzugBeschriftung): Abzugsblatt {
   // Das Endformat, nicht die Beschnittfläche: Der Abzug zeigt, was nach dem
   // Schneiden übrig ist.
   const buchBreite = flaeche.widthMm - 2 * flaeche.bleedMm;
@@ -162,24 +186,41 @@ export function abzugsblatt(flaeche: Abzugsflaeche, opts: AbzugOptionen): Abzugs
   // Die Zahl steht **außen** unter ihrer Seite, wie im gebundenen Buch: links
   // linksbündig an der Außenkante, rechts rechtsbündig. Innen, an der Falzachse,
   // stünden beide Zahlen nebeneinander und sähen aus wie eine.
-  const boxen: RenderBox[] = [
-    seitenzahl('links', opts.linkeSeite, {
-      xMm,
-      yMm: zahlOben,
-      wMm: wMm / 2,
-      hMm: ZAHL_HOEHE_MM,
-      align: 'left',
-      fontSizePt: zahlSchrift,
-    }),
-    seitenzahl('rechts', opts.linkeSeite + 1, {
-      xMm: xMm + wMm / 2,
-      yMm: zahlOben,
-      wMm: wMm / 2,
-      hMm: ZAHL_HOEHE_MM,
-      align: 'right',
-      fontSizePt: zahlSchrift,
-    }),
-  ];
+  const boxen: RenderBox[] =
+    'titel' in opts
+      ? [
+          {
+            kind: 'text',
+            slotId: 'abzug:titel',
+            xMm,
+            yMm: zahlOben,
+            wMm,
+            hMm: ZAHL_HOEHE_MM,
+            content: opts.titel,
+            fontSizePt: zahlSchrift,
+            weight: ZAHL_STIL.weight,
+            align: 'center',
+            color: ZAHL_STIL.color,
+          },
+        ]
+      : [
+          seitenzahl('links', opts.linkeSeite, {
+            xMm,
+            yMm: zahlOben,
+            wMm: wMm / 2,
+            hMm: ZAHL_HOEHE_MM,
+            align: 'left',
+            fontSizePt: zahlSchrift,
+          }),
+          seitenzahl('rechts', opts.linkeSeite + 1, {
+            xMm: xMm + wMm / 2,
+            yMm: zahlOben,
+            wMm: wMm / 2,
+            hMm: ZAHL_HOEHE_MM,
+            align: 'right',
+            fontSizePt: zahlSchrift,
+          }),
+        ];
 
   if (opts.befundzeile) {
     // Unter die Zahlen und über den Notizstreifen, mittig: Sie gehört zur
