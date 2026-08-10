@@ -41,6 +41,27 @@ wirkt Auflösen oder Umbenennen einer `PhotoGroup` sofort, ohne Neuanordnen.
 Dieselbe Funktion zeichnet `ZeitleisteMini` in der Oberfläche — sie ist keine
 Nachbildung.
 
+## Die Seitenzahl wird gerechnet, nicht gesetzt
+
+`render/page-number.ts`, geschaltet über `RenderContext.pageNumbers` — wie beim
+Zeitstrahl lebt der globale Schalter beim Aufrufer. Die Zahl folgt aus
+`Spread.index` und der Seitenparität; kein Feld im Modell hält sie fest. Damit
+stimmt sie nach jedem Einschub von selbst, und ein Einschub verschiebt
+tatsächlich alle folgenden: Gezählt wird die **Buchseite**, nicht das Blatt.
+
+Sie steht außen im Fußraum, mit der Unterkante auf der Sicherheitslinie — weiter
+zur Papierkante wäre typografisch schöner und im Druck ein Risiko, das der
+Abnahmebericht zu Recht meldete. Weil dort auch der Fußstrahl sitzt, **rückt die
+Achse ein** (`TimelineInput.insetMm`), und zwar auf jeder Doppelseite gleich:
+Eine Achse, die von Seite zu Seite unterschiedlich weit reicht, sähe man beim
+Blättern zappeln.
+
+Ausgespart bleiben Auftakte (Kapitel wie Gruppe) und jede Seite, auf der ein
+Bild bis in den Fuß reicht — je Seite geprüft, denn ein randabfallendes Bild
+steht meist nur auf einer von beiden. Die Zahl ist ein Wegweiser, kein
+Gestaltungselement: Auf einer Zäsur stört sie, im Motiv entschiede das Foto, ob
+sie lesbar ist.
+
 ## Neigung
 
 `render/tilt.ts` dreht jedes Bild leicht aus der Waagerechten, damit das Raster

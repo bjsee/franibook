@@ -295,6 +295,14 @@ export interface TimelineInput {
   accentColor?: string;
   /** Fassung der Zeichnung. Ohne Angabe der Bestand. */
   variant?: TimelineFootVariant;
+  /**
+   * Zusätzliche Einrückung der Achse je Seite, in Millimetern.
+   *
+   * Für die Seitenzahlen: Sie stehen in derselben Zeile am Satzspiegelrand, und
+   * die Achse macht ihnen Platz statt umgekehrt (`render/page-number.ts`).
+   * Ohne Angabe reicht sie wie bisher von Sicherheitslinie zu Sicherheitslinie.
+   */
+  insetMm?: number;
 }
 
 /**
@@ -313,8 +321,9 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   if (year === undefined || !Number.isFinite(year)) return [];
 
   const { bleedMm, trimWidthMm, safetyMm, gutterSafeMm } = profile.page;
-  const axisX0 = bleedMm + safetyMm;
-  const axisX1 = bleedMm + 2 * trimWidthMm - safetyMm;
+  const inset = input.insetMm ?? 0;
+  const axisX0 = bleedMm + safetyMm + inset;
+  const axisX1 = bleedMm + 2 * trimWidthMm - safetyMm - inset;
   const axisLen = axisX1 - axisX0;
   const gutterX = bleedMm + trimWidthMm;
   const top = timelineFootTopMm(profile);

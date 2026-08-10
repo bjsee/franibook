@@ -39,6 +39,7 @@ import {
 } from '../cover/rendered-cover.js';
 import { isValidPageCount, nextValidPageCount, type PrintProfile } from '../print/profile.js';
 import { BACKGROUND_SLOT_ID } from '../render/render-spread.js';
+import { PAGE_NUMBER_SLOT_PREFIX } from '../render/page-number.js';
 import { SIDE_TIMELINE_SLOT_PREFIX } from '../render/side-timeline.js';
 import { TIMELINE_SLOT_PREFIX } from '../render/timeline.js';
 import { imageBoxes, type RenderedSpread, type RenderWarning } from '../render/rendered-spread.js';
@@ -551,7 +552,9 @@ function textbefunde(
  */
 function textSchluessel(art: 'im-rand' | 'im-falz', slotId: string, index: number): string {
   const ausDerEngine =
-    slotId.startsWith(TIMELINE_SLOT_PREFIX) || slotId.startsWith(SIDE_TIMELINE_SLOT_PREFIX);
+    slotId.startsWith(TIMELINE_SLOT_PREFIX) ||
+    slotId.startsWith(SIDE_TIMELINE_SLOT_PREFIX) ||
+    slotId.startsWith(PAGE_NUMBER_SLOT_PREFIX);
   return ausDerEngine ? `${art}#text:${slotId}` : `${art}#text:${slotId}@seite:${index}`;
 }
 

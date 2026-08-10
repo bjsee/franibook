@@ -128,6 +128,8 @@ export interface Einstellungen {
   tilt: number;
   /** Rahmen aller Bilder ohne eigenen; `keiner` ist die Vorgabe. */
   frame: FrameId;
+  /** Seitenzahlen im Fuß jeder Buchseite. */
+  pageNumbers: boolean;
   seed: number;
   /** Kennung des Druckprofils, also das Buchformat. */
   printProfileId: string;
