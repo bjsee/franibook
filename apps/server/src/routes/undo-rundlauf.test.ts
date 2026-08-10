@@ -384,6 +384,31 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     };
   },
 
+  // Der mengenwertige Zug wirkt nur, wo ein Rahmen mit Fuß steht — sonst
+  // übersprünge er jeden Slot und änderte nichts, und der Rundlauf prüfte eine
+  // Gleichheit, die schon vorher galt.
+  'POST /api/book/captions': ({ project }) => {
+    project.settings.frame = 'polaroid';
+    return {
+      method: 'POST',
+      url: '/api/book/captions',
+      payload: { bereich: { kind: 'book' }, form: 'ort-monat' },
+    };
+  },
+
+  'DELETE /api/book/captions': ({ project }) => {
+    project.settings.frame = 'polaroid';
+    const { index, slotId } = ersterSlot(project);
+    const slot = project.spreads[index]!.slots.find((s) => s.slotId === slotId)!;
+    slot.caption = 'Juni 2017';
+    slot.captionAuto = true;
+    return {
+      method: 'DELETE',
+      url: '/api/book/captions',
+      payload: { bereich: { kind: 'book' } },
+    };
+  },
+
   'PATCH /api/spreads/:index/slots/:slotId/rect': ({ project }) => {
     const { index, slotId } = ersterSlot(project);
     return {

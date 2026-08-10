@@ -461,6 +461,9 @@ describe('setHalfPage', () => {
       rotateDeg: 3 + i,
       frame: 'polaroid' as const,
       caption: `Bild ${i}`,
+      // Die Herkunft der Unterschrift gehört dazu: Ohne sie gälte jede gefüllte
+      // Zeile nach dem ersten Einschub als Handarbeit.
+      captionAuto: true as const,
       layer: i,
     }));
     return s;
