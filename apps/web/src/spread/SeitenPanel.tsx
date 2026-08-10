@@ -10,6 +10,7 @@
  * sondern ihren Platz im Buch. „Festgehalten" ist der einzige davon, der über der
  * Bühne steht, weil man ihn beim Durchblättern setzt.
  */
+import { imageBoxes } from '@franibook/core';
 import type { RenderedSpread } from '@franibook/core';
 import { B, T } from '../theme.js';
 import { BackgroundPicker } from '../BackgroundPicker.js';
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export function SeitenPanel({ model, aussen, spread }: Props) {
-  const bilder = spread.boxes.filter((b) => b.kind === 'image').length;
+  const bilder = imageBoxes(spread).length;
   const gruppen = aussen.gruppen.filter((g) => g.active);
 
   return (

@@ -12,6 +12,7 @@
  * anderen zwei und nicht statt ihnen.
  */
 import { useState } from 'react';
+import { imageBoxes } from '@franibook/core';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
@@ -53,7 +54,7 @@ interface Props {
 export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
   const [panel, setPanel] = useState<Panel>(null);
 
-  const bilder = spread.boxes.filter((b) => b.kind === 'image').length;
+  const bilder = imageBoxes(spread).length;
   const zuKlein = spread.boxes.filter(
     (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'below-min-dpi'),
   ).length;
@@ -431,7 +432,7 @@ function SeitenKarte({
       {panel === 'anordnung' && (
         <TemplatePicker
           index={aussen.index}
-          photoCount={spread.boxes.filter((b) => b.kind === 'image').length}
+          photoCount={imageBoxes(spread).length}
           version={model.buchVersion}
           onFehler={model.setNote}
           onApplied={({ spread: neu }) => model.anordnungUebernommen(neu as RenderedSpread)}

@@ -8,7 +8,8 @@
     "trimHeightMm": 197,
     "bleedMm": 3,
     "safetyMm": 10,
-    "gutterSafeMm": 7
+    "gutterSafeMm": 7,
+    "gutterLossMm": 0
   },
   "pageCount": {
     "min": 26,
@@ -52,6 +53,6 @@
   "provenance": {
     "source": "Profibereich Fotobücher, Gruppe „Fotobuch Hardcover\", Reiter „15×21\", Einheit mm bzw. Pixel bei angegebener Auflösung; Cover glänzend, unwattiert, Innenseiten Fotopapier glänzend, ohne Barcode, ohne Logo, keine Spezialveredelung.",
     "verifiedAt": "2026-08-05",
-    "notes": "Endformat je Seite 148×197 mm, hergeleitet aus dem Rohformat der Doppelseite (3579×2406 px bei 301 dpi) abzüglich zweimal Beschnitt. Der Produktname des Anbieters ist gerundet. Umschlagformel trifft seine Tabelle auf 1.46 mm genau — er gibt die Werte in ganzen Pixeln an und stuft den Rücken, seine eigenen Zeilen sind untereinander um bis zu 1,2 mm inkonsistent; das liegt innerhalb seines Beschnitts von 14.73 mm. safetyMm=10 aus der InDesign-Anleitung („etwa 1 cm zur Beschnittlinie\"), gutterSafeMm=7 ist dagegen Gestaltungsreserve dieses Projekts: Für die Innenseiten weist der Anbieter bei Layflat keinen Falzbereich aus. resolution.minDpi=240 und encoding sind Projektentscheidungen, siehe docs/spikes/bestandsanalyse.md und Issue #3. Der Umschlag wird beim Anbieter mit 300–302 dpi geführt; wir rechnen durchgehend in mm."
+    "notes": "Endformat je Seite 148×197 mm, hergeleitet aus dem Rohformat der Doppelseite (3579×2406 px bei 301 dpi) abzüglich zweimal Beschnitt. Der Produktname des Anbieters ist gerundet. Umschlagformel trifft seine Tabelle auf 1.46 mm genau — er gibt die Werte in ganzen Pixeln an und stuft den Rücken, seine eigenen Zeilen sind untereinander um bis zu 1,2 mm inkonsistent; das liegt innerhalb seines Beschnitts von 14.73 mm. safetyMm=10 aus der InDesign-Anleitung („etwa 1 cm zur Beschnittlinie\"), gutterSafeMm=7 ist dagegen Gestaltungsreserve dieses Projekts: Für die Innenseiten weist der Anbieter bei Layflat keinen Falzbereich aus. gutterLossMm=0 ist keine Messung, sondern die Weigerung zu raten: Was ein Bild über der Achse im Bund verliert, sagt erst ein Testdruck (Issue #16). resolution.minDpi=240 und encoding sind Projektentscheidungen, siehe docs/spikes/bestandsanalyse.md und Issue #3. Der Umschlag wird beim Anbieter mit 300–302 dpi geführt; wir rechnen durchgehend in mm."
   }
 }

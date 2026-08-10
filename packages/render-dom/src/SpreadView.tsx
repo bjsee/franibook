@@ -283,7 +283,11 @@ export function SpreadView({
         const missing = box.warnings.some((w) => w.code === 'photo-missing');
         return (
           <div
-            key={box.slotId}
+            // Ein Bild über der Falzachse steht als zwei Boxen im Modell –
+            // beide mit derselben Kennung. Ohne die Hälfte im Schlüssel trügen
+            // zwei Geschwister denselben React-Key, und die Rekonziliation
+            // dürfte eines von beiden fallen lassen.
+            key={box.gutterPart ? `${box.slotId}:${box.gutterPart}` : box.slotId}
             data-testid={`slot-${box.slotId}`}
             data-dpi={Math.round(box.effectiveDpi)}
             onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
@@ -345,7 +349,9 @@ export function SpreadView({
                 {box.slotId} · {Math.round(box.effectiveDpi)} dpi
               </span>
             )}
-            {slotOverlay?.({ slotId: box.slotId, kind: 'image' })}
+            {/* Nur einmal je Bild: Über der Falzachse gäbe es sonst zwei
+                Auswahlringe und zwei Sätze Griffe für dasselbe Foto. */}
+            {box.gutterPart !== 'rechts' && slotOverlay?.({ slotId: box.slotId, kind: 'image' })}
           </div>
         );
       }

@@ -13,6 +13,7 @@
  * ist als eine Galerie: Sie zeigt, wo im Buch nachzuarbeiten ist.
  */
 import { useMemo, useState } from 'react';
+import { imageBoxes } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T } from './theme.js';
 import { Link } from './router.js';
@@ -67,7 +68,7 @@ export function Overview({
         const spread = geladen.get(i);
         const jahr = jahrAn.get(i);
         const gruppe = gruppeAn.get(i);
-        const bilder = spread?.boxes.filter((b) => b.kind === 'image').length;
+        const bilder = spread ? imageBoxes(spread).length : undefined;
         const zuKlein = spread?.boxes.filter(
           (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'below-min-dpi'),
         ).length;

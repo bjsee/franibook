@@ -22,6 +22,23 @@ export interface PrintProfile {
     safetyMm: number;
     /** Schutzzone je Seite der Falzachse. */
     gutterSafeMm: number;
+    /**
+     * Was ein Bild über der Falzachse an der Bindung verliert, insgesamt über
+     * beide Seiten gerechnet.
+     *
+     * Nicht dasselbe wie `gutterSafeMm`: Die Schutzzone sagt, wo nichts
+     * Wesentliches stehen soll, dieser Wert dagegen, wieviel Papier im Bund
+     * tatsächlich verschwindet. Ein durchlaufendes Motiv reißt dort um genau
+     * diesen Betrag auseinander, wenn niemand ihn einrechnet – bei Layflat wenig
+     * bis nichts, bei einer Klebebindung messbar.
+     *
+     * `0` heißt „kein Verlust" und lässt das Rendern unverändert. Für alle acht
+     * Profile steht hier 0, und das ist kein Versäumnis: Sie sind sämtlich
+     * layflat, und ein geratener Zuschlag wäre schlimmer als keiner – er
+     * dupliziert einen Streifen, der dann sichtbar bleibt. Der Wert wird nach
+     * dem ersten Druck am Papier gemessen (Issue #16).
+     */
+    gutterLossMm: number;
   };
 
   pageCount: { min: number; max: number; step: number };

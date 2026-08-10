@@ -21,6 +21,7 @@ import type { PhotoId } from '../model/photo.js';
 import type { TextBlock, TextElement } from '../model/spread.js';
 import type { TemplateTextSlot } from '../model/template.js';
 import type { ImageBox, Rect, RenderBox, RenderedSpread } from './rendered-spread.js';
+import { slotImageBox } from './rendered-spread.js';
 import type { TextBlockArea } from './render-spread.js';
 import { textBlockBoxes, textElementBoxes } from './render-spread.js';
 
@@ -37,14 +38,46 @@ import { textBlockBoxes, textElementBoxes } from './render-spread.js';
  * verbindliche Fassung samt Warnungen.
  */
 export function withCrop(spread: RenderedSpread, slotId: string, crop: Crop): RenderedSpread {
-  return {
-    ...spread,
-    boxes: spread.boxes.map((box) =>
-      box.kind === 'image' && box.slotId === slotId
-        ? { ...box, crop, effectiveDpi: scaledDpi(box, crop) }
-        : box,
-    ),
-  };
+  return mitGeaendertemBild(spread, slotId, (box) => ({
+    ...box,
+    crop,
+    effectiveDpi: scaledDpi(box, crop),
+  }));
+}
+
+/**
+ * Ersetzt die Bildbox eines Slots durch eine geänderte – und macht dabei aus
+ * einem über die Falzachse geteilten Bild wieder eines.
+ *
+ * Beide Hälften dieselbe Änderung tragen zu lassen ergäbe zwei deckungsgleiche
+ * Bilder übereinander; die Teilung neu zu rechnen ginge nicht, weil der
+ * Verlust im Druckprofil steht und nicht im Modell. Für die Ziehvorschau ist
+ * das kein Verlust: Sie zeigt den Kasten, dem die Hand folgt. Beim Loslassen
+ * liefert der Server die verbindliche Fassung samt Teilung – wie bei jeder
+ * anderen Änderung auch.
+ */
+function mitGeaendertemBild(
+  spread: RenderedSpread,
+  slotId: string,
+  aendern: (box: ImageBox) => ImageBox,
+): RenderedSpread {
+  const ganz = slotImageBox(spread, slotId);
+  if (!ganz) return spread;
+
+  const geaendert = aendern(ganz);
+  let gesetzt = false;
+  const boxes: RenderBox[] = [];
+  for (const box of spread.boxes) {
+    if (box.kind !== 'image' || box.slotId !== slotId) {
+      boxes.push(box);
+      continue;
+    }
+    if (!gesetzt) {
+      boxes.push(geaendert);
+      gesetzt = true;
+    }
+  }
+  return { ...spread, boxes };
 }
 
 /**
@@ -60,14 +93,10 @@ export function withRect(
   slotId: string,
   rect: { xMm: number; yMm: number; wMm: number; hMm: number },
 ): RenderedSpread {
-  return {
-    ...spread,
-    boxes: spread.boxes.map((box) => {
-      if (box.kind !== 'image' || box.slotId !== slotId) return box;
-      const px = box.effectiveDpi * (box.wMm / 25.4);
-      return { ...box, ...rect, effectiveDpi: px / (rect.wMm / 25.4) };
-    }),
-  };
+  return mitGeaendertemBild(spread, slotId, (box) => {
+    const px = box.effectiveDpi * (box.wMm / 25.4);
+    return { ...box, ...rect, effectiveDpi: px / (rect.wMm / 25.4) };
+  });
 }
 
 /**
@@ -84,12 +113,7 @@ export function withRotation(
   slotId: string,
   rotateDeg: number,
 ): RenderedSpread {
-  return {
-    ...spread,
-    boxes: spread.boxes.map((box) =>
-      box.kind === 'image' && box.slotId === slotId ? { ...box, rotateDeg } : box,
-    ),
-  };
+  return mitGeaendertemBild(spread, slotId, (box) => ({ ...box, rotateDeg }));
 }
 
 /**
