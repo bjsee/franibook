@@ -10,7 +10,7 @@
  * dem man am Bildschirm nicht sieht, was im Druck passiert: Dort verschwindet
  * bei der Bindung real Fläche.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import { type CSSProperties, type ReactNode, useId } from 'react';
 import {
   CSS_FONT_WEIGHT,
   type CoverBox,
@@ -22,6 +22,7 @@ import {
   resolveWeight,
   textBaselineOffsetMm,
 } from '@franibook/core';
+import { Farbfilter, farbfilterStil, filterPraefix } from './farbfilter.js';
 
 export interface CoverGuideVisibility {
   bleed?: boolean;
@@ -75,6 +76,9 @@ export function CoverView({
 }: CoverViewProps) {
   // Der einzige Maßstab der gesamten Ansicht.
   const pxPerMm = widthPx / cover.widthMm;
+  // Wie in der Doppelseitenvorschau: Die Filterkennungen müssen im Dokument
+  // eindeutig sein, auch wenn Umschlag und Innenteil nebeneinanderstehen.
+  const filterId = filterPraefix(useId());
   const mm = (v: number) => `${v * pxPerMm}px`;
 
   const rect = (b: { xMm: number; yMm: number; wMm: number; hMm: number }): CSSProperties => ({
@@ -96,6 +100,8 @@ export function CoverView({
         overflow: 'hidden',
       }}
     >
+      <Farbfilter praefix={filterId} boxes={cover.boxes} />
+
       {cover.boxes.map((box, i) => renderBox(box, i))}
 
       {cover.guides.map((guide, i) => {
@@ -140,7 +146,12 @@ export function CoverView({
             }}
           >
             {!fehlt && (
-              <img src={imageSrc(box.photoId)} alt="" style={cropStyle(box)} draggable={false} />
+              <img
+                src={imageSrc(box.photoId)}
+                alt=""
+                style={{ ...cropStyle(box), ...farbfilterStil(filterId, box) }}
+                draggable={false}
+              />
             )}
             {guides.diagnostics && (
               <span style={{ ...LABEL, background: schlecht ? '#dc2626' : 'rgba(0,0,0,0.6)' }}>

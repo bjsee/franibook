@@ -13,8 +13,11 @@
  * gar nicht erst aus der Parity laufen.
  */
 import { effectiveDpi } from '../geometry/units.js';
+import type { PhotoAdjust } from '../model/adjust.js';
+import { farbmatrix, wirktAdjust } from '../model/adjust.js';
 import { coverCrop, cropToPixels } from '../model/crop.js';
 import type { Crop } from '../model/crop.js';
+import type { PhotoId } from '../model/photo.js';
 import type { TextBlock, TextElement } from '../model/spread.js';
 import type { TemplateTextSlot } from '../model/template.js';
 import type { ImageBox, Rect, RenderBox, RenderedSpread } from './rendered-spread.js';
@@ -86,6 +89,35 @@ export function withRotation(
     boxes: spread.boxes.map((box) =>
       box.kind === 'image' && box.slotId === slotId ? { ...box, rotateDeg } : box,
     ),
+  };
+}
+
+/**
+ * Dieselbe Doppelseite mit einer anderen Bildanpassung an einem **Foto**.
+ *
+ * Am Foto und nicht am Slot – als einzige dieser Funktionen. Die Anpassung
+ * hängt am Bild, und dasselbe Bild kann auf derselben Doppelseite zweimal
+ * liegen; ein Regler, der nur den ausgewählten Platz einfärbte, zeigte dann
+ * etwas anderes, als hinterher im Buch steht. Aus demselben Grund erfasst sie
+ * auch ein Hintergrundbild.
+ *
+ * `undefined` nimmt die Anpassung zurück, und zwar sichtbar: Ein weggelassenes
+ * Feld bliebe beim Spread der vorigen Antwort stehen und der Regler zöge ins
+ * Leere.
+ */
+export function withAdjust(
+  spread: RenderedSpread,
+  photoId: PhotoId,
+  adjust: PhotoAdjust | undefined,
+): RenderedSpread {
+  const colorMatrix = wirktAdjust(adjust) ? farbmatrix(adjust) : undefined;
+  return {
+    ...spread,
+    boxes: spread.boxes.map((box) => {
+      if (box.kind !== 'image' || box.photoId !== photoId) return box;
+      const { colorMatrix: _weg, ...ohne } = box;
+      return colorMatrix ? { ...ohne, colorMatrix } : ohne;
+    }),
   };
 }
 

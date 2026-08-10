@@ -144,6 +144,32 @@ const MAX_DIFF_TIMELINE = Number(process.env['PARITY_MAX_DIFF_TIMELINE'] ?? 0.00
  */
 const MAX_DIFF_FRAMES = Number(process.env['PARITY_MAX_DIFF_FRAMES'] ?? 0.005);
 
+/**
+ * Schwelle für die Bildanpassung.
+ *
+ * Der Fall, für den dieser Test gebaut ist: Die Anpassung ist die einzige
+ * Eigenschaft des Buches, die nicht Geometrie ist, sondern **Pixelwerte** – und
+ * damit die einzige, bei der Vorschau und PDF nicht nur an derselben Stelle,
+ * sondern in derselben Farbe landen müssen. Beide Seiten bekommen dieselbe
+ * affine Matrix aus `core/model/adjust.ts`; der Browser setzt sie als
+ * `feColorMatrix` in sRGB um, sharp als `recomb` + `linear`.
+ *
+ * Zwei bekannte Abweichungen bleiben, beide unterhalb dessen, was die
+ * Farbtoleranz meldet: libvips schneidet beim Rückwandeln in 8 Bit ab, wo der
+ * Browser rundet (höchstens ein Digit), und die beiden wenden die Matrix in
+ * verschiedener Reihenfolge zur Skalierung an – gleichwertig, außer wo ein
+ * Kanal am Anschlag klemmt.
+ *
+ * Gemessen 0,233 % über vier angepasste Bilder – Regler, Wärme, Sepia und
+ * Schwarzweiß zusammen – gegen 0,198 % im Hauptfall desselben Laufs. Die
+ * Anpassung kostet also 0,035 Punkte, weniger als ein gedrehter Text. Die
+ * Schwelle bleibt deshalb bei denselben 0,5 %: Ein Farbfehler in einem der
+ * beiden Wege – linearer statt sRGB-Interpolation im SVG-Filter etwa – färbte
+ * ganze Bildflächen um und läge nicht knapp darüber, sondern um
+ * Größenordnungen.
+ */
+const MAX_DIFF_ADJUST = Number(process.env['PARITY_MAX_DIFF_ADJUST'] ?? 0.005);
+
 async function toPng(buffer: Buffer, width: number, height: number): Promise<PNG> {
   const normalized = await sharp(buffer)
     // Beide Bilder exakt gleich groß machen. Browser und pdftoppm runden die
@@ -820,6 +846,68 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     await request.patch(`http://127.0.0.1:5174/api/spreads/0/slots/a/caption`, {
       data: { caption: '' },
     });
+  });
+
+  test('angepasste Bilder decken sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    // Die Fotokennungen stehen im RSM – über sie geht die Anpassung, denn sie
+    // hängt am Bild und nicht am Platz.
+    const vorher = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const photoIds: string[] = vorher.boxes
+      .filter((b: { kind: string }) => b.kind === 'image')
+      .map((b: { photoId: string }) => b.photoId);
+    expect(photoIds).toHaveLength(4);
+
+    // Vier Fälle, die zusammen jeden Teil der Matrix bewegen: die reinen
+    // Tonwertregler, die Kanalspreizung der Wärme, die Luminanzrampe der Tonung
+    // und die Entsättigung. Bewusst ohne Anschlagswerte – ein voll
+    // ausgereizter Regler klemmt Kanäle, und dann misst der Test das Klemmen
+    // statt die Matrix.
+    const faelle = [
+      { brightness: 25, contrast: 40 },
+      { warmth: 60, saturation: -30 },
+      { tone: 'sepia' as const, contrast: 20 },
+      { tone: 'sw' as const, brightness: -15 },
+    ];
+    for (const [i, adjust] of faelle.entries()) {
+      const res = await request.patch('http://127.0.0.1:5174/api/photos', {
+        data: { ids: [photoIds[i]], adjust },
+      });
+      expect(res.ok()).toBe(true);
+    }
+
+    // Angekommen? Ohne diese Prüfung wäre der Test grün, weil er zwei
+    // unangetastete Seiten vergleicht – derselbe Fallstrick wie bei den Rahmen.
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const matrizen = rsm.boxes
+      .filter((b: { kind: string; colorMatrix?: unknown }) => b.kind === 'image' && b.colorMatrix)
+      .map((b: { colorMatrix: { m: number[]; o: number[] } }) => b.colorMatrix);
+    expect(matrizen).toHaveLength(4);
+    // Und keine davon ist die Identität – ein leerer Regler käme sonst
+    // unbemerkt durch.
+    for (const m of matrizen) {
+      expect(m.m).toHaveLength(9);
+      expect(m.m.join()).not.toBe([1, 0, 0, 0, 1, 0, 0, 0, 1].join());
+    }
+
+    const ratio = await messeParitaet(page, request, 'adjust');
+    console.log(`Parity (Bildanpassung): ${(ratio * 100).toFixed(3)} % abweichend`);
+
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit Bildanpassung um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_ADJUST);
+
+    // Wieder abnehmen: Die folgenden Fälle messen gegen ihre eigenen Schwellen,
+    // und ein stehengebliebenes Sepia wäre dort eine fremde Ursache.
+    for (const id of photoIds) {
+      await request.patch('http://127.0.0.1:5174/api/photos', {
+        data: { ids: [id], adjust: null },
+      });
+    }
   });
 
   test('Textblöcke in den Zusatzschriften decken sich', async ({ page, request }) => {

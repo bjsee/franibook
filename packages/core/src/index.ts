@@ -11,6 +11,7 @@ export * from './print/profile.js';
 export * from './print/profiles/index.js';
 
 export * from './model/photo.js';
+export * from './model/adjust.js';
 export * from './model/crop.js';
 export * from './model/date.js';
 export * from './model/date-correction.js';

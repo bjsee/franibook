@@ -13,8 +13,14 @@
  * 288 MB vorher, 160 MB nachher, 55 % also. An der Auflösung wird dafür nichts
  * gedreht, 300 dpi bleiben 300 dpi – nachgeprüft mit `pdfimages -list`.
  */
-import sharp from 'sharp';
-import { type Crop, type PrintProfile, cropToPixels, targetPx } from '@franibook/core';
+import sharp, { type Sharp } from 'sharp';
+import {
+  type ColorMatrix,
+  type Crop,
+  type PrintProfile,
+  cropToPixels,
+  targetPx,
+} from '@franibook/core';
 import { sharpFarbraum } from './farbe.js';
 
 export interface PreparedImage {
@@ -37,6 +43,14 @@ export interface PrepareOptions {
   widthMm: number;
   heightMm: number;
   profile: PrintProfile;
+  /**
+   * Bildanpassung aus dem RSM. Ohne Angabe bleibt das Bild, wie es ist.
+   *
+   * Der Adapter rechnet die Matrix nicht aus – sie steht fertig in der
+   * `ImageBox` (siehe `model/adjust.ts`). Hier wird sie nur an sharp
+   * weitergereicht.
+   */
+  colorMatrix?: ColorMatrix;
   /**
    * Ausgabe für den Korrekturabzug statt für den Druck.
    *
@@ -63,6 +77,46 @@ export interface PrepareOptions {
  *   Währung, beim Durchsehen genau die falsche.
  */
 const ABZUG_JPEG = { quality: 65, chromaSubsampling: '4:2:0' } as const;
+
+/**
+ * Legt die Bildanpassung in die sharp-Kette.
+ *
+ * `recomb` trägt die Matrix, `linear` den additiven Anteil – sharp kennt keine
+ * affine Abbildung in einem Aufruf. Die **Aufrufreihenfolge ist dabei
+ * bedeutungslos**: libvips wendet beide in seiner eigenen festen Ordnung an
+ * (`recomb`, dann `linear`), und zwar nachweislich – dieselbe Kette in beiden
+ * Reihenfolgen aufgerufen liefert bitgleiche Pixel. Verlassen wird sich darauf
+ * trotzdem nicht: Der Offset steht hier hinter der Matrix, wie er auch in der
+ * Rechnung dahinter steht.
+ *
+ * Gemessen an sechs Farben gegen die Rechnung von Hand: höchstens ein Digit
+ * Abweichung, immer nach unten – libvips schneidet beim Rückwandeln in 8 Bit ab,
+ * wo der Browser rundet. Der `feColorMatrix` derselben Matrix in Chromium trifft
+ * die Rechnung exakt. Die Tabelle steht in `core/model/adjust.ts`.
+ *
+ * Der Platz in der Kette ist nach dem Skalieren gewählt, weil der Browser den
+ * Filter ebenfalls auf das dargestellte, also skalierte Bild legt. Bei einer
+ * linearen Abbildung wäre die Reihenfolge gleichgültig – außer dort, wo ein
+ * Kanal am Anschlag klemmt, und genau dort soll beides gleich klemmen.
+ */
+function mitAnpassung(bild: Sharp, cm: ColorMatrix | undefined): Sharp {
+  if (!cm) return bild;
+  const [rr, rg, rb, gr, gg, gb, br, bg, bb] = cm.m;
+  const angewandt = bild.recomb([
+    [rr, rg, rb],
+    [gr, gg, gb],
+    [br, bg, bb],
+  ]);
+  const hatVersatz = cm.o.some((v) => v !== 0);
+  // Der Offset steht im Modell in 0..1, sharp erwartet ihn in der Skala der
+  // Pixel.
+  return hatVersatz
+    ? angewandt.linear(
+        [1, 1, 1],
+        cm.o.map((v) => v * 255),
+      )
+    : angewandt;
+}
 
 /**
  * Bereitet ein Bild für die Einbettung ins PDF auf.
@@ -118,9 +172,10 @@ export async function prepareImage(
     outHeight = Math.max(1, Math.round(outHeight * factor));
   }
 
-  const buffer = await sharp(input)
-    .extract(region)
-    .resize({ width: outWidth, height: outHeight, fit: 'fill' })
+  const buffer = await mitAnpassung(
+    sharp(input).extract(region).resize({ width: outWidth, height: outHeight, fit: 'fill' }),
+    opts.colorMatrix,
+  )
     // Der Farbraum, den das Druckprofil ansagt – und die Absicherung, dass er
     // nicht unbemerkt verlorengeht. sharp wandelt ein Bild mit eingebettetem
     // Profil schon beim Einlesen selbst um; das hier ist danach ein zweiter,

@@ -11,6 +11,7 @@
  * Urlaubsfoto vom Vormittag gehört vor das Mittagsfoto, unabhängig davon, in
  * welcher Zeitzone es entstand.
  */
+import type { PhotoAdjust } from './adjust.js';
 import type { NaiveDateTime, Photo } from './photo.js';
 
 export type DateSource =
@@ -74,6 +75,16 @@ export interface PhotoOverride {
    * `effectivePhoto`, das dann auch `width`/`height` tauscht.
    */
   orientationTurns?: 1 | 2 | 3;
+  /**
+   * Helligkeit, Kontrast, Sättigung, Wärme und Tonung.
+   *
+   * Am Foto und nicht am Slot – dieselbe Überlegung wie beim Gewicht: Eine
+   * Anpassung gilt dem Bild, nicht dem Platz, und muss eine Neuanordnung auf
+   * eine andere Doppelseite überleben. Wirksam wird sie beim Rendern als
+   * `ImageBox.colorMatrix`; was daraus im Einzelnen folgt, steht in
+   * `model/adjust.ts`.
+   */
+  adjust?: PhotoAdjust;
   /** Sortierung innerhalb derselben Sekunde, ohne das Datum zu verändern. */
   orderNudge?: number;
   excluded?: boolean;

@@ -29,6 +29,7 @@ import type {
   PhotoGroup,
   PhotoMove,
   PhotoQuality,
+  PhotoAdjust,
   PhotoWeight,
   RenderedCover,
   RenderedSpread,
@@ -617,6 +618,13 @@ export interface FotoInfo {
    * getroffene Auszeichnung zeigen, nicht die Vorgabe als Zustand.
    */
   weight?: PhotoWeight;
+  /**
+   * Eingestellte Bildanpassung, sofern eine gesetzt ist.
+   *
+   * Fehlt wie `weight`, wenn nichts eingestellt ist – die Regler stehen dann
+   * auf ihrer Mitte, und das ist kein Zustand, den der Server mitteilen müsste.
+   */
+  adjust?: PhotoAdjust;
 }
 
 // ─── Doppel ─────────────────────────────────────────────────────────────────
@@ -822,6 +830,20 @@ export const ausrichtungKippen = (ids: string[], orientation: 1 | 2 | 3 | null) 
  */
 export const gewichtSetzen = (ids: string[], weight: PhotoWeight) =>
   sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, weight });
+
+/**
+ * Stellt Helligkeit, Kontrast, Sättigung, Wärme und Tonung ein; `null` nimmt
+ * alles zurück.
+ *
+ * Der Befehl trägt die **ganze** Einstellung und nicht einen einzelnen Regler:
+ * „Kontrast unverändert" und „Kontrast auf 0" kämen sonst als dieselbe fehlende
+ * Zahl an.
+ *
+ * Anders als beim Gewicht folgt das Buch **sofort** — die Anpassung wird beim
+ * Rendern angewandt und steht in der Antwort schon drin.
+ */
+export const anpassungSetzen = (ids: string[], adjust: PhotoAdjust | null) =>
+  sende<Korrekturergebnis>('PATCH', '/api/photos', { ids, adjust });
 
 /** Was das Aussortieren eines Fotos bewirkt hat. */
 export interface AussortierErgebnis {

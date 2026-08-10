@@ -10,7 +10,7 @@
  * könnte. Fehlt es, zeigt die Vorschau eine Systemschrift – auffällig genug,
  * und der Parity-Test schlägt an.
  */
-import type { CSSProperties, DragEvent, ReactNode } from 'react';
+import { type CSSProperties, type DragEvent, type ReactNode, useId } from 'react';
 import {
   CSS_FONT_WEIGHT,
   type Crop,
@@ -23,6 +23,7 @@ import {
   resolveWeight,
   textBaselineOffsetMm,
 } from '@franibook/core';
+import { Farbfilter, farbfilterStil, filterPraefix } from './farbfilter.js';
 
 export interface GuideVisibility {
   bleed?: boolean;
@@ -197,6 +198,10 @@ export function SpreadView({
 }: SpreadViewProps) {
   // Der einzige Maßstab der gesamten Vorschau.
   const pxPerMm = widthPx / spread.widthMm;
+
+  // Filterkennungen müssen im ganzen Dokument eindeutig sein, und in der
+  // Übersicht stehen Dutzende Doppelseiten nebeneinander.
+  const filterId = filterPraefix(useId());
   const mm = (v: number) => `${v * pxPerMm}px`;
 
   const rect = (b: { xMm: number; yMm: number; wMm: number; hMm: number }): CSSProperties => ({
@@ -219,6 +224,8 @@ export function SpreadView({
         overflow: 'hidden',
       }}
     >
+      <Farbfilter praefix={filterId} boxes={spread.boxes} />
+
       {spread.boxes.map((box, i) => renderBox(box, i))}
 
       {spread.guides.map((guide, i) => {
@@ -313,7 +320,7 @@ export function SpreadView({
               <img
                 src={imageSrc(box.photoId)}
                 alt=""
-                style={cropStyle(box.crop)}
+                style={{ ...cropStyle(box.crop), ...farbfilterStil(filterId, box) }}
                 draggable={false}
               />
             )}

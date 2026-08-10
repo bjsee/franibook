@@ -6,6 +6,8 @@
  * Ergebnis – keiner rechnet selbst.
  */
 import { effectiveDpi, ptToMm } from '../geometry/units.js';
+import type { ColorMatrix } from '../model/adjust.js';
+import { farbmatrix, wirktAdjust } from '../model/adjust.js';
 import { coverCrop, cropToPixels, fitCropToAspect } from '../model/crop.js';
 import { focalForCrop, focusRectOnPage, visibleShare } from '../model/focal.js';
 import type { EffectiveDate, PhotoOverride } from '../model/date.js';
@@ -366,6 +368,17 @@ interface SlotGeometrie {
   frame: FrameId;
 }
 
+/**
+ * Die Farbmatrix eines Fotos, oder `undefined`, wenn nichts eingestellt ist.
+ *
+ * Aus dem Override und nicht aus dem aufgelösten Foto: Eine Bildanpassung ist
+ * keine Aussage über die Datei, und `Photo` bleibt das Importergebnis.
+ */
+function matrixVon(photoId: PhotoId, ctx: RenderContext): ColorMatrix | undefined {
+  const adjust = ctx.overrides?.[photoId]?.adjust;
+  return wirktAdjust(adjust) ? farbmatrix(adjust) : undefined;
+}
+
 function buildImageBox(
   slot: TemplateSlot,
   assignment: SlotAssignment,
@@ -437,6 +450,8 @@ function buildImageBox(
   const versetzt =
     Math.abs(mitte.xMm - eigeneMitte.xMm) > 1e-6 || Math.abs(mitte.yMm - eigeneMitte.yMm) > 1e-6;
 
+  const colorMatrix = matrixVon(photo.id, ctx);
+
   return {
     kind: 'image',
     ...rect,
@@ -444,6 +459,7 @@ function buildImageBox(
     photoId: photo.id,
     crop,
     effectiveDpi: dpi,
+    ...(colorMatrix ? { colorMatrix } : {}),
     ...(drehung !== 0 ? { rotateDeg: drehung } : {}),
     ...(drehung !== 0 && versetzt ? { rotateAboutMm: mitte } : {}),
     // Auf justierten Doppelseiten trägt jeder Slot ein Rechteck, aber keines
@@ -489,6 +505,10 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       hMm: spreadHeightMm(profile),
     };
     const fit = backgroundFit(backgroundPhoto, profile);
+    // Auch der Hintergrund trägt die Anpassung seines Fotos: Sie hängt am Bild,
+    // nicht daran, wo es liegt – und ein schwarzweißer Hintergrund unter
+    // farbigen Bildern ist genau der Fall, für den man sie einstellt.
+    const hintergrundMatrix = matrixVon(backgroundPhoto.id, ctx);
     boxes.push({
       kind: 'image',
       ...flaeche,
@@ -496,6 +516,7 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
       photoId: backgroundPhoto.id,
       crop: coverCrop(aspectRatio(backgroundPhoto), flaeche.wMm / flaeche.hMm),
       effectiveDpi: fit.dpi,
+      ...(hintergrundMatrix ? { colorMatrix: hintergrundMatrix } : {}),
       warnings: fit.taugt
         ? []
         : [{ code: 'background-low-dpi', dpi: fit.dpi, recommendedDpi: BACKGROUND_MIN_DPI }],
