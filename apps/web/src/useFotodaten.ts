@@ -11,24 +11,47 @@
  * Ein weiteres Foto würde die Handordnung sonst still zerwerfen. Es kommt
  * hinten an, und `nachDateinamen()` stellt die Vorgabe wieder her.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { PhotoWeight } from '@franibook/core';
 import {
+  type Bestandsfilter,
   type Datumskorrektur,
   type FotoInfo,
   type Korrekturergebnis,
+  type Bildquelle,
+  type Gruppe,
   type Ort,
   ausrichtungKippen,
   datumKorrigieren,
   fehlertext,
   fotosLaden,
   gewichtSetzen,
+  gruppenLaden,
   ortSetzen,
   ortsListeLaden,
+  quellenLaden,
 } from './api.js';
 
 /** Welche Fotos die Liste zeigt. */
 export type Filter = 'zweifelhaft' | 'geschaetzt' | 'alle';
+
+/**
+ * Die drei Schnellfilter als Bedingung für den Server.
+ *
+ * `zweifelhaft` ist `?problems` und damit derselbe Begriff wie `needsAttention`
+ * im Kern — die Schwelle steht dort und nicht hier.
+ */
+function schnellfilter(filter: Filter): Bestandsfilter {
+  switch (filter) {
+    case 'zweifelhaft':
+      return { problems: true };
+    case 'geschaetzt':
+      return { datumsquelle: 'interpolated' };
+    case 'alle':
+      return {};
+  }
+}
 
 /** Natürliche Sortierung, damit `IMG_9` vor `IMG_10` steht. */
 const NACH_NAMEN = new Intl.Collator('de', { numeric: true });
@@ -37,6 +60,19 @@ export interface FotodatenModell {
   fotos: FotoInfo[] | null;
   filter: Filter;
   setFilter: (f: Filter) => void;
+  /** Die feineren Bedingungen neben dem Schnellfilter. */
+  suche: Bestandsfilter;
+  /**
+   * Auch als Funktion aufrufbar (`setSuche((alt) => …)`), und das ist gebraucht:
+   * Das Ortsfeld setzt verzögert, und die Closure eines Timers hielte sonst
+   * einen veralteten Stand fest.
+   */
+  setSuche: Dispatch<SetStateAction<Bestandsfilter>>;
+  /** Wie viele Fotos der Bestand insgesamt hat – „42 von 830". */
+  gesamt: number;
+  /** Auswahllisten der Filterzeile. */
+  quellen: Bildquelle[];
+  gruppen: Gruppe[];
   /** Die Auswahl in Verteilreihenfolge. */
   auswahl: string[];
   /** Die gewählten Fotos, in derselben Reihenfolge. */
@@ -79,21 +115,42 @@ export function useFotodaten(opts: {
 
   const [alle, setAlle] = useState<FotoInfo[] | null>(null);
   const [orte, setOrte] = useState<Ort[]>([]);
+  const [quellen, setQuellen] = useState<Bildquelle[]>([]);
+  const [gruppen, setGruppen] = useState<Gruppe[]>([]);
   const [filter, setFilter] = useState<Filter>('zweifelhaft');
+  const [suche, setSuche] = useState<Bestandsfilter>({});
+  const [gesamt, setGesamt] = useState(0);
+  const laufRef = useRef(0);
   const [auswahl, setAuswahl] = useState<string[]>([]);
   const [handOrdnung, setHandOrdnung] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
 
-  // Immer den ganzen Bestand holen und im Browser filtern: `?problems` liefert
-  // nur die zweifelhaften, und ein Filterwechsel wäre sonst ein Rundgang zum
-  // Server. Achthundert Zeilen sind für die Liste kein Gewicht.
+  /**
+   * Gefiltert wird auf dem Server, nicht im Browser.
+   *
+   * Vorher holte die Ansicht den ganzen Bestand und filterte selbst — bei drei
+   * Schnellfiltern war das eine Anfrage weniger. Seit es Zeitraum, Ort, Quelle
+   * und Gruppe gibt, wäre es eine zweite Fassung derselben Bedingungen neben
+   * der des Servers, und die beantwortet dieselbe Frage irgendwann anders. Der
+   * Server bindet an `127.0.0.1`; ein Rundgang kostet nichts.
+   */
   const laden = useCallback(() => {
-    fotosLaden()
-      .then((d) => setAlle(d.photos))
-      .catch((e: unknown) => setFehler(fehlertext(e)));
-  }, []);
+    // Ein Zähler gegen überholte Antworten: Beim Tippen im Ortsfeld laufen
+    // mehrere Anfragen, und die Antwort auf „Syl" darf die auf „Sylt" nicht
+    // überschreiben — die Liste zeigte sonst etwas anderes, als im Feld steht.
+    const lauf = ++laufRef.current;
+    fotosLaden({ ...schnellfilter(filter), ...suche })
+      .then((d) => {
+        if (lauf !== laufRef.current) return;
+        setAlle(d.photos);
+        setGesamt(d.gesamt ?? d.photos.length);
+      })
+      .catch((e: unknown) => {
+        if (lauf === laufRef.current) setFehler(fehlertext(e));
+      });
+  }, [filter, suche]);
 
   useEffect(laden, [laden, standVersion]);
 
@@ -117,19 +174,26 @@ export function useFotodaten(opts: {
 
   useEffect(orteLaden, [orteLaden, standVersion]);
 
-  const fotos = useMemo(() => {
-    if (!alle) return null;
-    switch (filter) {
-      case 'zweifelhaft':
-        // Dieselbe Schwelle wie `needsAttention` im Kern – nur eben hier, weil
-        // die Liste zwischen den Filtern wechseln soll, ohne neu zu laden.
-        return alle.filter((f) => f.dateConfidence === 'none' || f.dateConfidence === 'low');
-      case 'geschaetzt':
-        return alle.filter((f) => f.dateSource === 'interpolated');
-      case 'alle':
-        return alle;
-    }
-  }, [alle, filter]);
+  /**
+   * Quellen und Gruppen für die Auswahllisten der Filterzeile.
+   *
+   * Beide vom Server und nicht aus den geladenen Fotos abgeleitet — aus einer
+   * gefilterten Liste ließen sich nur die Werte ablesen, die gerade übrig sind,
+   * und der Filter zeigte nach dem ersten Klick nicht mehr alle Möglichkeiten.
+   * Ein Fehlschlag bleibt hier still: Ohne die Listen fehlen zwei Auswahlfelder,
+   * die Ansicht selbst arbeitet weiter.
+   */
+  useEffect(() => {
+    quellenLaden()
+      .then((d) => setQuellen(d.sources))
+      .catch(() => setQuellen([]));
+    gruppenLaden()
+      .then((d) => setGruppen(d.groups.filter((g) => g.active)))
+      .catch(() => setGruppen([]));
+  }, [standVersion]);
+
+  // Die Liste kommt fertig gefiltert vom Server.
+  const fotos = alle;
 
   const nachIndex = useMemo(() => {
     const map = new Map<string, FotoInfo>();
@@ -241,13 +305,18 @@ export function useFotodaten(opts: {
       setNote(null);
       aufruf(auswahl)
         .then((e) => {
-          // Die zurückgegebenen Sichten einsetzen statt alles neu zu laden: Der
-          // Filter und der Scrollstand bleiben damit stehen, und ein korrigiertes
-          // Foto verlässt die Liste *zweifelhaft* von selbst.
+          // Erst die zurückgegebenen Sichten einsetzen, damit die Zeilen sofort
+          // das neue Datum zeigen …
           setAlle(
             (bestand) =>
               bestand?.map((f) => e.photos.find((neu) => neu.id === f.id) ?? f) ?? bestand,
           );
+          // … und dann neu laden, denn welche Fotos in die Auswahl gehören,
+          // entscheidet seit dem Serverfilter der Server: Ein korrigiertes Foto
+          // verlässt die Liste *zweifelhaft* sonst nicht mehr, und die
+          // Trefferzahl bliebe falsch stehen. Der Scrollstand überlebt das,
+          // weil die Ansicht nicht neu eingehängt wird.
+          laden();
           // Die Auswahl ist abgearbeitet. Sie stehen zu lassen wäre gefährlicher
           // als bequem: Ein zweiter Klick auf ein anderes Werkzeug träfe dann
           // dieselben, schon korrigierten Bilder – und die sind aus der Liste
@@ -263,7 +332,7 @@ export function useFotodaten(opts: {
         .catch((err: unknown) => setFehler(fehlertext(err)))
         .finally(() => setBusy(false));
     },
-    [auswahl, onChanged, onBildGeaendert, orteLaden],
+    [auswahl, onChanged, onBildGeaendert, orteLaden, laden],
   );
 
   const anwenden = useCallback(
@@ -303,6 +372,11 @@ export function useFotodaten(opts: {
     fotos,
     filter,
     setFilter,
+    suche,
+    setSuche,
+    gesamt,
+    quellen,
+    gruppen,
     auswahl,
     gewaehlt,
     umschalten,

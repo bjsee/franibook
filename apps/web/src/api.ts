@@ -952,8 +952,62 @@ export const abnahmeZuruecknehmen = (schluessel?: string) =>
 export const fotosDerSeiteLaden = (index: number) =>
   hole<{ photos: FotoInfo[] }>(`/api/spreads/${index}/photos`);
 
-export const fotosLaden = (nurProbleme = false) =>
-  hole<{ photos: FotoInfo[] }>(`/api/photos${nurProbleme ? '?problems=1' : ''}`);
+/**
+ * Was sich am Bestand filtern lässt. Die Bedingungen verunden sich.
+ *
+ * Dieselben Namen wie die Query-Parameter des Servers, damit die Adresse
+ * lesbar bleibt und `bestandsAdresse` nichts übersetzen muss.
+ */
+export interface Bestandsfilter {
+  /** `true`: im Buch. `false`: der Fotopool. */
+  platziert?: boolean;
+  von?: string;
+  bis?: string;
+  ohneDatum?: boolean;
+  /** Ortskennung, Name oder Wortteil; `''` sucht die Fotos ohne Ort. */
+  ort?: string;
+  quelle?: string;
+  datumsquelle?: string;
+  konfidenz?: 'high' | 'medium' | 'low';
+  /** Gruppenkennung; `''` sucht die Fotos in keiner Gruppe. */
+  gruppe?: string;
+  problems?: boolean;
+}
+
+/** Die Query eines Bestandsfilters – leere Angaben fallen weg, nicht der leere Text. */
+function bestandsQuery(filter: Bestandsfilter): string {
+  const p = new URLSearchParams();
+  if (filter.platziert !== undefined) p.set('platziert', filter.platziert ? 'ja' : 'nein');
+  if (filter.von) p.set('von', filter.von);
+  if (filter.bis) p.set('bis', filter.bis);
+  if (filter.ohneDatum) p.set('ohneDatum', '1');
+  // `!== undefined` und nicht `if (filter.ort)`: Der leere Text ist hier eine
+  // Frage („ohne Ort", „in keiner Gruppe") und kein fehlender Wert.
+  if (filter.ort !== undefined) p.set('ort', filter.ort);
+  if (filter.quelle) p.set('quelle', filter.quelle);
+  if (filter.datumsquelle) p.set('datumsquelle', filter.datumsquelle);
+  if (filter.konfidenz) p.set('konfidenz', filter.konfidenz);
+  if (filter.gruppe !== undefined) p.set('gruppe', filter.gruppe);
+  if (filter.problems) p.set('problems', '1');
+  const query = p.toString();
+  return query ? `?${query}` : '';
+}
+
+/**
+ * Der Bestand, wahlweise gefiltert.
+ *
+ * Gefiltert wird auf dem Server und nicht im Browser: Dieselben Bedingungen
+ * beantworten dort auch andere Fragen (der Kontaktbogen der nicht platzierten
+ * Fotos), und zwei Fassungen derselben Rechnung liefen auseinander. Der Server
+ * bindet an `127.0.0.1`, ein Rundgang kostet nichts.
+ *
+ * `gesamt` steht in der Antwort, sobald gefiltert wurde – „42 von 830" ist oft
+ * schon die Antwort.
+ */
+export const fotosLaden = (filter: Bestandsfilter = {}) =>
+  hole<{ photos: FotoInfo[]; count: number; gesamt?: number }>(
+    `/api/photos${bestandsQuery(filter)}`,
+  );
 
 export const fotoAussortieren = (photoId: string) =>
   sende<AussortierErgebnis>('DELETE', `/api/photos/${photoId}`);
