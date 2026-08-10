@@ -11,6 +11,12 @@
  * *Gestalt* der Seite, aber auf 248 px erkennt man nicht, *welches* Bild das
  * ist. Die Übersicht bleibt für die Gestalt zuständig, der Baum für den Inhalt.
  *
+ * **Gruppieren gehört auch hierher**, obwohl die Gruppenansicht es kann. Dort
+ * steht der Bestand chronologisch, hier steht er so, wie er im Buch liegt — und
+ * dass diese acht Bilder zusammengehören, sieht man beim Verteilen und nicht
+ * beim Durchsehen. Für den Weg dahin wechselte man die Ansicht, verlöre die
+ * Auswahl und suchte die Bilder in einer anderen Reihenfolge wieder.
+ *
  * Das Ausklappen ist ein Werkzeug, keine Ordnung: Vorgabe ist alles offen, und
  * Jahrgänge klappt man zu, um Seite 3 und Seite 60 nebeneinanderzubekommen.
  * Monat und Segment sind bewusst **keine** dritte Ebene — sie schnitten die
@@ -74,6 +80,20 @@ export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Pro
   }
 
   /**
+   * Die Auswahl als Gruppe benennen.
+   *
+   * `prompt` wie in der Gruppenansicht: Ein eigener Dialog für ein einzelnes
+   * Textfeld wäre hier dieselbe Handlung in zwei Bauarten, und der Titel ist
+   * das Einzige, was die Gruppe zum Anlegen braucht.
+   */
+  function gruppieren() {
+    const anzahl = model.selected.size;
+    const titel = prompt(`${anzahl === 1 ? 'Ein Bild' : `${anzahl} Bilder`} gruppieren als:`);
+    if (!titel?.trim()) return;
+    void model.gruppeAusAuswahl(titel.trim());
+  }
+
+  /**
    * Alles auf oder alles zu – ein Knopf, der kippt.
    *
    * Zwei Knöpfe nebeneinander wären der halbe Weg: Einer von beiden ist immer
@@ -127,6 +147,14 @@ export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Pro
             {model.selected.size > 0 && (
               <>
                 <span style={B.leiser}>{model.selected.size} gewählt</span>
+                <button
+                  style={B.knopf}
+                  disabled={model.busy}
+                  onClick={gruppieren}
+                  title="Aus den gewählten Bildern eine benannte Gruppe – sie beschriftet das Buch. Bilder, die schon in einer Gruppe stehen, wechseln dabei in die neue."
+                >
+                  Gruppe bilden
+                </button>
                 <button
                   style={B.knopf}
                   disabled={model.busy}

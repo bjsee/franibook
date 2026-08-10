@@ -26,6 +26,7 @@ import {
   fotopoolLaden,
   fotosLaden,
   fotosVerschieben,
+  gruppeErstellen,
 } from '../api.js';
 import { auswahlKlick, zugMenge, type Klicklage } from '../auswahl.js';
 
@@ -58,6 +59,15 @@ export interface BaumModell {
   auswahlInDenPool: () => Promise<void>;
 
   /**
+   * Fasst die ausgewählten Bilder zu einer neuen Gruppe zusammen.
+   *
+   * Bilder aus dem Fotopool dürfen dabei sein: Eine Gruppe sagt, was
+   * zusammengehört, und nicht, was im Buch steht — die Verteilung folgt beim
+   * Neuanordnen und holt sie dann mit.
+   */
+  gruppeAusAuswahl: (titel: string) => Promise<void>;
+
+  /**
    * Wirft eine Datei aus dem Dateisystem ins Buch.
    *
    * **Auf eine Zeile geworfen wird die Seite neu angeordnet** – anders als in der
@@ -68,6 +78,24 @@ export interface BaumModell {
    * jeder andere in dieser Ansicht, nur mit einer Datei als Quelle.
    */
   dateiEinwerfen: (datei: File, ziel: Herkunft) => Promise<void>;
+}
+
+/** Ob das Nachladen nach einer Änderung geklappt hat. */
+type Ladestand = { ok: true } | { ok: false; fehler: string };
+
+/**
+ * Der Satz zu einer geglückten Handlung – mit Zusatz, wenn das Nachladen
+ * danach scheiterte.
+ *
+ * Die Handlung ist dann durch, der angezeigte Stand aber veraltet: Beides muss
+ * dastehen, sonst hält man das eine für das andere. Als eine Funktion, weil
+ * inzwischen drei Griffe denselben Nachsatz brauchen und drei Fassungen davon
+ * dreimal die Gelegenheit wären, ihn auseinanderlaufen zu lassen.
+ */
+function mitStand(satz: string, stand: Ladestand): string {
+  return stand.ok
+    ? satz
+    : `${satz} Aber: Der Baum ließ sich danach nicht neu laden (${stand.fehler}) — der angezeigte Stand ist veraltet.`;
 }
 
 /**
@@ -94,7 +122,7 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
    * blind über einen Ladefehler zu schreiben – „Zug erfolgreich" und „Nachladen
    * fehlgeschlagen" sind zwei verschiedene Sätze, und nur einer passt.
    */
-  const laden = useCallback(async (): Promise<{ ok: true } | { ok: false; fehler: string }> => {
+  const laden = useCallback(async (): Promise<Ladestand> => {
     try {
       const [baum, alle, frei] = await Promise.all([baumLaden(), fotosLaden(), fotopoolLaden()]);
       setSeiten(baum.spreads);
@@ -173,11 +201,7 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
         // Der Zug selbst ist durch, auch wenn das Nachladen scheitert – eine
         // Erfolgsmeldung darf das dann nicht verdecken, sonst hält man den
         // angezeigten (veralteten) Stand für den aktuellen.
-        setNote(
-          stand.ok
-            ? zugText
-            : `${zugText} Aber: Der Baum ließ sich danach nicht neu laden (${stand.fehler}) — der angezeigte Stand ist veraltet.`,
-        );
+        setNote(mitStand(zugText, stand));
       } catch (e: unknown) {
         setNote(fehlertext(e));
       } finally {
@@ -242,11 +266,7 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
         const satz = ergebnis.dupliziert
           ? `„${datei.name}" lag inhaltlich schon im Bestand und ${wohin} – es wurde keine Datei angelegt.`
           : `„${datei.name}" ${wohin}.`;
-        setNote(
-          stand.ok
-            ? satz
-            : `${satz} Aber: Der Baum ließ sich danach nicht neu laden (${stand.fehler}) — der angezeigte Stand ist veraltet.`,
-        );
+        setNote(mitStand(satz, stand));
       } catch (e: unknown) {
         setNote(`„${datei.name}" ließ sich nicht einwerfen: ${fehlertext(e)}`);
       } finally {
@@ -267,6 +287,51 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
     await schicken(moves, (n) => `${n === 1 ? 'Ein Bild' : `${n} Bilder`} aus dem Buch genommen.`);
   }, [selected, quelleVon, schicken]);
 
+  /**
+   * Legt aus der Auswahl eine Gruppe an.
+   *
+   * Nicht über `schicken`: Das ist der Weg für Züge und rechnet mit
+   * `PhotoMove`s, leergezogenen Seiten und berührten Doppelseiten. Hier bewegt
+   * sich kein Bild – die Aufteilung bleibt Zeile für Zeile dieselbe, es kommt
+   * eine Marke dazu. Neu geladen wird trotzdem, denn `groupTitle` steht am
+   * Baum und nicht in dieser Antwort.
+   */
+  const gruppeAusAuswahl = useCallback(
+    async (titel: string) => {
+      // In Buchreihenfolge und nicht in Klickreihenfolge: Ohne gesetztes
+      // Hauptbild wird das **erste** Foto einer Gruppe ihr Auftaktbild
+      // (`layout/generate.ts`). Welches das ist, darf nicht davon abhängen, ob
+      // man von hinten nach vorn geklickt oder einen Bereich aufgezogen hat –
+      // `selected` ist ein Set in Klickreihenfolge. Nebenbei fallen dabei
+      // Kennungen heraus, die es nicht mehr gibt.
+      const bilder = reihenfolge.filter((id) => selected.has(id));
+      if (bilder.length === 0) return;
+      setBusy(true);
+      try {
+        await gruppeErstellen(titel, bilder);
+        const stand = await laden();
+        onChanged();
+        // Die Auswahl ist mit dem Anlegen erledigt; stehenbliebe sie, wäre der
+        // nächste Griff versehentlich auf denselben Bildern.
+        auswahlLoeschen();
+        // Was die Gruppe sofort tut (Zeitstrahl beschriften) und was erst beim
+        // Neuanordnen folgt (Verteilung, Auftaktseite), sagt der Hinweis in den
+        // Kennzahlen – hier steht nur, was geschehen ist.
+        setNote(
+          mitStand(
+            `Gruppe „${titel}" aus ${bilder.length === 1 ? 'einem Bild' : `${bilder.length} Bildern`} angelegt.`,
+            stand,
+          ),
+        );
+      } catch (e: unknown) {
+        setNote(`Die Gruppe „${titel}" ließ sich nicht anlegen: ${fehlertext(e)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selected, reihenfolge, auswahlLoeschen, laden, onChanged],
+  );
+
   return {
     seiten,
     pool,
@@ -283,6 +348,7 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
     zugBeenden,
     fallenlassen,
     auswahlInDenPool,
+    gruppeAusAuswahl,
     dateiEinwerfen,
   };
 }
