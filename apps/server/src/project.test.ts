@@ -1536,6 +1536,23 @@ describe('Aussortieren', () => {
     expect(p.aussortierte()).toEqual([]);
   });
 
+  it('gibt einem Projekt ohne das Feld Seitenzahlen', async () => {
+    // Kein Schemasprung für ein neues Feld: `{ ...this.settings, ...geladen }`
+    // ergänzt die Vorgabe. Für die Seitenzahl ist das eine sichtbare Änderung
+    // am bestehenden Buch, und die ist gewollt — abschalten geht im Buchpanel.
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-seitenzahlen-'));
+    const p = new Project(new Sources([]), null as never, null as never, dir);
+    await p.save();
+
+    const roh = JSON.parse(await readFile(join(dir, 'project.json'), 'utf8'));
+    delete roh.settings.pageNumbers;
+    await writeFile(join(dir, 'project.json'), JSON.stringify(roh));
+
+    const geladen = new Project(new Sources([]), null as never, null as never, dir);
+    await geladen.load();
+    expect(geladen.settings.pageNumbers).toBe(true);
+  });
+
   it('überlebt das Speichern und Laden', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'franibook-aussortiert-'));
     const p = new Project(new Sources([]), null as never, null as never, dir);

@@ -5,6 +5,7 @@ import type { NaiveDateTime, Photo } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from '../render/render-spread.js';
+import { PAGE_NUMBER_SLOT_PREFIX } from '../render/page-number.js';
 import { sideTimelineBoxes } from '../render/side-timeline.js';
 import type { RenderBox, RenderedSpread } from '../render/rendered-spread.js';
 import { pruefeBuch, seitenbefunde, type Befundart } from './abnahme.js';
@@ -223,6 +224,21 @@ describe('Abnahmebericht', () => {
     // Sprungziel ist die erste betroffene Seite, die Zahl steht im Satz.
     expect(rand[0]!.ort).toEqual({ kind: 'spread', index: 0, slotId: 'side-timeline-from' });
     expect(rand[0]!.text).toContain('ebenso auf 2 weiteren Doppelseiten');
+  });
+
+  it('bündelt auch die Seitenzahl über das ganze Buch', () => {
+    // Sie steht auf jeder Doppelseite nach derselben Rechnung. Rutschte sie
+    // je zu weit nach außen, wären es sonst 160 gleichlautende Zeilen — genau
+    // der Fall, für den die Bündelung gebaut ist.
+    const knapp = profile.page.bleedMm + 1;
+    const drei = [0, 1, 2].map(() =>
+      leeresBlatt([textbox(knapp, 40, '7', `${PAGE_NUMBER_SLOT_PREFIX}-left`)]),
+    );
+    const bericht = pruefeBuch({ spreads: drei, profile });
+
+    const rand = bericht.befunde.filter((b) => b.art === 'im-rand');
+    expect(rand).toHaveLength(1);
+    expect(rand[0]!.schluessel).toBe(`im-rand#text:${PAGE_NUMBER_SLOT_PREFIX}-left`);
   });
 
   it('bündelt nicht, was auf jeder Seite von Hand steht', () => {

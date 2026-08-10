@@ -140,7 +140,7 @@ const CAP_PER_EM_BY_FAMILY: Record<FontFamilyId, number> = {
 };
 
 export type TextStyleName =
-  'yearLarge' | 'groupTitle' | 'body' | 'timelineYear' | 'timelineLabel' | 'caption';
+  'yearLarge' | 'groupTitle' | 'body' | 'timelineYear' | 'timelineLabel' | 'caption' | 'pageNumber';
 
 export interface TextStyle {
   weight: FontWeight;
@@ -193,6 +193,12 @@ export const TEXT_STYLES: Record<TextStyleName, TextStyle> = {
   // Seite. Auf einer Doppelseite in Anthrazit stünde sonst weiße Schrift auf
   // weißem Karton.
   caption: { weight: 'regular', capHeightRatio: 0.3, color: '#52525b' },
+  // Seitenzahl im Fuß: 3,5-mm-Kasten → 1,6 mm Versalhöhe, also 7 pt. Dieselbe
+  // Größe und dieselbe Farbe wie das Label des Zeitstrahls, denn beide stehen
+  // in derselben Zeile — zwei fast gleiche Grade nebeneinander liest man als
+  // Versehen. Regular: Eine Ziffer, die man beim Blättern sucht, muss auffindbar
+  // sein und nicht auffallen.
+  pageNumber: { weight: 'regular', capHeightRatio: 0.462, color: '#3f3f46' },
 };
 
 /**

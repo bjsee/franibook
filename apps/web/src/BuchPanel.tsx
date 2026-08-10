@@ -41,6 +41,7 @@ export interface BuchEinstellungen {
   chapterColors: boolean;
   tilt: number;
   frame: FrameId;
+  pageNumbers: boolean;
   seed: number;
   /** Kennung des Druckprofils, also das Buchformat. */
   printProfileId: string;
@@ -151,6 +152,7 @@ interface Props {
     timelineAccent?: string;
     tilt?: number;
     frame?: FrameId;
+    pageNumbers?: boolean;
   }) => void;
   onNeuEinlesen: () => void;
   /** Nach dem Zurückholen eines Notankers: alles neu laden. */
@@ -377,6 +379,19 @@ export function BuchPanel({
           />
           Zeitstrahl
         </label>
+        <label style={B.haken}>
+          <input
+            type="checkbox"
+            checked={settings.pageNumbers}
+            onChange={(e) => onDarstellung({ pageNumbers: e.target.checked })}
+          />
+          Seitenzahlen
+        </label>
+        <p style={B.leiser}>
+          Die Zahl steht außen im Fuß und wird aus dem Platz der Doppelseite gerechnet — ein
+          eingeschobenes Blatt verschiebt alle folgenden von selbst. Auf Auftakten und über
+          randabfallenden Bildern bleibt sie weg.
+        </p>
       </div>
 
       {settings.timeline && (
@@ -437,6 +452,7 @@ export function BuchPanel({
                   >
                     {name}
                     <ZeitleisteMini
+                      seitenzahlen={settings.pageNumbers}
                       printProfileId={settings.printProfileId}
                       ort="foot"
                       fassung={id}
@@ -455,6 +471,7 @@ export function BuchPanel({
                     }}
                   >
                     <ZeitleisteMini
+                      seitenzahlen={settings.pageNumbers}
                       printProfileId={settings.printProfileId}
                       ort="side"
                       fassung={id}
