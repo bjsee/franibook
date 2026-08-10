@@ -7,6 +7,7 @@ import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
 import { DEFAULT_TILT_DEG } from './tilt.js';
 import { imageBoxes, slotImageBox } from './rendered-spread.js';
+import { PAGE_NUMBER_SLOT_PREFIX } from './page-number.js';
 import { photoPixelsOf } from './inspect.js';
 import { estimatedTextWidthMm } from './typography.js';
 
@@ -1303,5 +1304,150 @@ describe('Falzzuschlag für Bilder über der Falzachse', () => {
     const bilder = rsm.boxes.filter((b) => b.kind === 'image');
     expect(bilder[0]!.xMm + bilder[0]!.wMm).toBeGreaterThan(achseMm);
     expect(bilder).toHaveLength(1);
+  });
+});
+
+describe('Seitenzahlen im Fuß', () => {
+  const mitZahlen = { ...ctx, pageNumbers: {} };
+  const zahlen = (rsm: ReturnType<typeof renderSpread>) =>
+    rsm.boxes
+      .filter((b) => b.kind === 'text')
+      .filter((b) => b.slotId.startsWith(PAGE_NUMBER_SLOT_PREFIX));
+
+  it('bleibt weg, solange sie niemand anfordert', () => {
+    // Ein Buch von vor dieser Rechnung zeichnet Box für Box wie vorher.
+    expect(zahlen(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), ctx))).toHaveLength(0);
+  });
+
+  it('zählt Buchseiten und nicht Blätter', () => {
+    const erste = zahlen(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), mitZahlen));
+    expect(erste.map((b) => b.content)).toEqual(['1', '2']);
+
+    const vierte = renderSpread({ ...spreadWith(['p1', 'p2', 'p3', 'p4']), index: 3 }, mitZahlen);
+    expect(zahlen(vierte).map((b) => b.content)).toEqual(['7', '8']);
+  });
+
+  it('beginnt, wo der Aufrufer es sagt', () => {
+    // Ein Vorsatzblatt verschiebt alle Zahlen gleichermaßen.
+    const rsm = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), {
+      ...ctx,
+      pageNumbers: { startAt: 3 },
+    });
+    expect(zahlen(rsm).map((b) => b.content)).toEqual(['3', '4']);
+  });
+
+  it('stellt sie außen an die Sicherheitslinie', () => {
+    const gesetzt = zahlen(renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), mitZahlen));
+    const links = gesetzt[0]!;
+    const rechts = gesetzt[1]!;
+    const { bleedMm, trimWidthMm, trimHeightMm, safetyMm } = profile.page;
+
+    expect(links.xMm).toBeCloseTo(bleedMm + safetyMm, 9);
+    expect(links.align).toBe('left');
+    expect(rechts.xMm + rechts.wMm).toBeCloseTo(bleedMm + 2 * trimWidthMm - safetyMm, 9);
+    expect(rechts.align).toBe('right');
+    // Innerhalb der Sicherheitszone: Was darunter läge, meldete der
+    // Abnahmebericht zu Recht.
+    expect(links.yMm + links.hMm).toBeLessThanOrEqual(bleedMm + trimHeightMm - safetyMm + 1e-9);
+  });
+
+  it('spart den Kapitelauftakt aus', () => {
+    const auftakt = requireTemplate('spread.chapter.2up');
+    const spread: Spread = {
+      id: 's1',
+      index: 4,
+      templateId: auftakt.id,
+      slots: auftakt.slots.map((slot) => ({
+        slotId: slot.id,
+        photoId: 'p1',
+        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+      })),
+    };
+    expect(zahlen(renderSpread(spread, { ...mitZahlen, template: auftakt }))).toHaveLength(0);
+  });
+
+  it('lässt die Zahl weg, wo ein Bild bis in den Fuß reicht — und nur dort', () => {
+    // Ein von Hand über den Fuß gezogener Kasten auf der linken Seite.
+    const s = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const ueberDenFuss: Spread = {
+      ...s,
+      slots: s.slots.map((slot, i) =>
+        i === 0 ? { ...slot, rect: { x: 0.02, y: 0.5, w: 0.4, h: 0.5 } } : slot,
+      ),
+    };
+    expect(zahlen(renderSpread(ueberDenFuss, mitZahlen)).map((b) => b.content)).toEqual(['2']);
+  });
+
+  it('spart auch den Gruppenauftakt aus', () => {
+    // Über den Tag `gruppenauftakt` und nicht über `chapterOnly` — der
+    // fragilere der beiden Wege, weil er an einer Zeichenkette hängt.
+    const auftakt = requireTemplate('spread.group.opener');
+    const spread: Spread = {
+      id: 's1',
+      index: 6,
+      templateId: auftakt.id,
+      slots: auftakt.slots.map((slot) => ({
+        slotId: slot.id,
+        photoId: 'p1',
+        crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const },
+      })),
+    };
+    expect(zahlen(renderSpread(spread, { ...mitZahlen, template: auftakt }))).toHaveLength(0);
+  });
+
+  it('schweigt ganz, wenn ein Hintergrundbild die Seite füllt', () => {
+    // Es liegt über die ganze Beschnittfläche, ist also auf beiden Seiten
+    // randabfallend — und die Schriftfarbe kommt aus der Papierfarbe, die man
+    // dann gar nicht mehr sieht.
+    const spread = { ...spreadWith([null, null, null, null]), backgroundPhotoId: 'p1' };
+    expect(zahlen(renderSpread(spread, mitZahlen))).toHaveLength(0);
+  });
+
+  it('lässt sich von einem leeren Kasten im Fuß nicht beirren', () => {
+    // Der Kasten steht im Fuß, trägt aber kein Foto: Gezeichnet wird dort
+    // nichts, also darf auch die Zahl nicht verschwinden.
+    const s = spreadWith([null, 'p2', 'p3', 'p4']);
+    const leerImFuss: Spread = {
+      ...s,
+      slots: s.slots.map((slot, i) =>
+        i === 0 ? { ...slot, rect: { x: 0.02, y: 0.5, w: 0.4, h: 0.5 } } : slot,
+      ),
+    };
+    expect(zahlen(renderSpread(leerImFuss, mitZahlen)).map((b) => b.content)).toEqual(['1', '2']);
+  });
+
+  it('schweigt, wenn beide Seiten belegt sind', () => {
+    const s = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const beide: Spread = {
+      ...s,
+      slots: s.slots.map((slot, i) =>
+        i === 0
+          ? { ...slot, rect: { x: 0.02, y: 0.5, w: 0.4, h: 0.5 } }
+          : i === 1
+            ? { ...slot, rect: { x: 0.9, y: 0.5, w: 0.1, h: 0.5 } }
+            : slot,
+      ),
+    };
+    expect(zahlen(renderSpread(beide, mitZahlen))).toHaveLength(0);
+  });
+
+  it('rückt den Zeitstrahl ein, damit beide in dieselbe Zeile passen', () => {
+    const tl = {
+      dateOf: () => ({ value: '2015-06-12T10:00:00', source: 'exif', confidence: 'high' }) as never,
+    };
+    const ohne = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), { ...ctx, timeline: tl });
+    const mit = renderSpread(spreadWith(['p1', 'p2', 'p3', 'p4']), {
+      ...ctx,
+      timeline: tl,
+      pageNumbers: {},
+    });
+    const achse = (rsm: typeof ohne) =>
+      rsm.boxes
+        .filter((b) => b.kind === 'rect')
+        .filter((b) => b.wMm > 100)
+        .map((b) => b.xMm)
+        .sort((a, b) => a - b)[0]!;
+
+    expect(achse(mit)).toBeGreaterThan(achse(ohne));
   });
 });

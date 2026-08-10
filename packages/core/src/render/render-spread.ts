@@ -43,6 +43,12 @@ import type { TimelineSideVariant } from './side-timeline.js';
 import { sideTimelineBoxes } from './side-timeline.js';
 import type { TimelineFootVariant } from './timeline.js';
 import { timelineBoxes, timelineFootTopMm } from './timeline.js';
+import {
+  leftPageNumber,
+  pageNumberBoxes,
+  pageNumberInsetMm,
+  pageNumberRect,
+} from './page-number.js';
 import { randabfallend, tiltDeg } from './tilt.js';
 import { estimatedTextWidthMm, resolveWeight, textFontSizePt, textStyle } from './typography.js';
 
@@ -114,6 +120,24 @@ export interface TiltContext {
   seed: number;
 }
 
+/**
+ * Seitenzahlen im Fuß jeder Buchseite.
+ *
+ * Fehlt der Kontext, trägt das Buch keine – wie beim Zeitstrahl lebt der
+ * globale Schalter beim Aufrufer und nicht in der Engine.
+ */
+export interface PageNumberContext {
+  /**
+   * Buchseitenzahl der linken Seite der **ersten** Doppelseite. Ohne Angabe 1.
+   *
+   * Der Zähler und nicht die Zahl dieser Seite: Welche Nummer eine Doppelseite
+   * trägt, folgt aus ihrem Platz im Buch, und den kennt sie selbst
+   * (`Spread.index`). Ein Aufrufer, der sie mitgäbe, könnte sie falsch angeben;
+   * ein Vorsatzblatt verschiebt dagegen alle gleichermaßen und gehört hierher.
+   */
+  startAt?: number;
+}
+
 export interface RenderContext {
   profile: PrintProfile;
   template: Template;
@@ -128,6 +152,7 @@ export interface RenderContext {
   /** Hintergrund der Doppelseite. Weiß, solange nichts anderes gesetzt ist. */
   background?: string;
   timeline?: TimelineContext;
+  pageNumbers?: PageNumberContext;
   tilt?: TiltContext;
   /**
    * Rahmen für alle Bilder, die keinen eigenen tragen.
@@ -703,6 +728,13 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
     boxes.push(...buildTimeline(spread, ctx, ctx.timeline, background));
   }
 
+  // Die Seitenzahl steht neben dem Zeitstrahl in derselben Zeile und kommt
+  // nach ihm: Wo beide zusammenfallen könnten, gewinnt die Zahl, weil sie sich
+  // nicht verschieben lässt.
+  if (ctx.pageNumbers) {
+    boxes.push(...buildPageNumbers(spread, ctx, ctx.pageNumbers, background));
+  }
+
   return {
     spreadId: spread.id,
     widthMm: spreadWidthMm(profile),
@@ -863,6 +895,72 @@ export function textBlockBoxes(
 const TEXT_DEFAULT_COLOR = '#3f3f46';
 
 /**
+ * Die beiden Seitenzahlen dieser Doppelseite – oder keine.
+ *
+ * Ausgespart bleiben Auftakte und jede Seite, auf der ein Bild bis in den Fuß
+ * reicht. Beides aus demselben Grund: Die Zahl ist ein Wegweiser und kein
+ * Gestaltungselement. Auf einem Auftakt, der eine Zäsur setzen soll, stört sie;
+ * auf einem Bild stünde sie im Motiv, und ob sie dort noch zu lesen ist,
+ * entschiede das Foto – die Schriftfarbe kommt aus der **Papierfarbe** und
+ * weiß von Bildern nichts.
+ *
+ * Je Seite geprüft und nicht je Doppelseite: Ein randabfallendes Bild steht
+ * meist auf einer von beiden, und die Zahl der anderen soll deshalb nicht
+ * mitverschwinden. Nur ein Hintergrundbild nimmt beide – es liegt über die
+ * ganze Beschnittfläche und ist damit randabfallend auf jeder Seite.
+ */
+function buildPageNumbers(
+  spread: Spread,
+  ctx: RenderContext,
+  pn: PageNumberContext,
+  background: string,
+): RenderBox[] {
+  const { profile, template } = ctx;
+  if (templateMeta(template.id).chapterOnly) return [];
+  if (template.tags?.includes('gruppenauftakt')) return [];
+  if (spread.backgroundPhotoId && ctx.photos.has(spread.backgroundPhotoId)) return [];
+
+  // Die tatsächlichen Rechtecke und nicht die der Vorlage: Wer ein Bild von
+  // Hand in den Fuß zieht, verdeckt die Zahl genauso. Und nur belegte Plätze —
+  // ein leerer Kasten wird nirgends gezeichnet, sein Rechteck bleibt nach einem
+  // Umhängen aber stehen und nähme der Seite sonst dauerhaft ihre Zahl.
+  const bySlotId = new Map(spread.slots.map((s) => [s.slotId, s]));
+  const bilder: Rect[] = [];
+  for (const slot of wirksamePlaetze(template, spread)) {
+    const zuweisung = bySlotId.get(slot.id);
+    const photoId = zuweisung?.photoId;
+    if (!photoId || !ctx.photos.has(photoId)) continue;
+    bilder.push(toMm(zuweisung.rect ?? slot, profile));
+  }
+
+  const verdeckt = (seite: 'links' | 'rechts') => {
+    const zahl = pageNumberRect(seite, profile);
+    return bilder.some(
+      (r) =>
+        r.xMm < zahl.xMm + zahl.wMm &&
+        r.xMm + r.wMm > zahl.xMm &&
+        r.yMm < zahl.yMm + zahl.hMm &&
+        r.yMm + r.hMm > zahl.yMm,
+    );
+  };
+
+  const weglassen = { links: verdeckt('links'), rechts: verdeckt('rechts') };
+  if (weglassen.links && weglassen.rechts) return [];
+
+  return pageNumberBoxes(
+    {
+      // Jede Doppelseite ist zwei Buchseiten – auch die, in der eine leere
+      // Halbseite steht. Ein Einschub verschiebt deshalb alles Folgende, und
+      // genau das ist der Grund, die Zahl zu rechnen statt zu tippen.
+      leftPage: leftPageNumber(spread.index, pn.startAt),
+      background,
+      weglassen,
+    },
+    profile,
+  );
+}
+
+/**
  * Sammelt aus der Doppelseite, was der Zeitstrahl braucht.
  *
  * Die Auswahl der Daten steckt hier und nicht im Zeitstrahl selbst: Sie ist
@@ -974,6 +1072,11 @@ function buildTimeline(
       // kann ihn weiterhin übersteuern.
       accentColor: tl.accentColor ?? accentOn(background),
       ...(tl.footVariant ? { variant: tl.footVariant } : {}),
+      // Die Achse rückt ein, sobald das Buch Seitenzahlen trägt – und zwar auf
+      // jeder Doppelseite gleich, auch wo die Zahl gerade entfällt. Eine Achse,
+      // die von Seite zu Seite unterschiedlich weit reicht, sähe man beim
+      // Blättern zappeln.
+      ...(ctx.pageNumbers ? { insetMm: pageNumberInsetMm() } : {}),
     },
     profile,
   );

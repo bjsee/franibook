@@ -25,6 +25,7 @@
  * Der Abzug zeigt das **Endformat**: kein Beschnitt, keine Hilfslinien, keine
  * Marken. Wer durchsieht, soll das Buch sehen und nicht die Druckvorstufe.
  */
+import { leftPageNumber } from '../render/page-number.js';
 import type { RenderBox, Rect, TextBox } from '../render/rendered-spread.js';
 import { textFontSizePt, type TextStyle } from '../render/typography.js';
 
@@ -236,9 +237,14 @@ function seitenzahl(
  * dessen Innenteil als Doppelseiten hochgeladen wird, die einzige Zählung, die
  * ohne Annahme über ein Vorsatzblatt auskommt — und der Abzug soll die Seiten
  * genauso zählen wie die Oberfläche, nicht wie eine Buchbinderei.
+ *
+ * Die Rechnung steht in `render/page-number.ts`, weil die Seitenzahl im Buch
+ * dieselbe ist: Zweimal `2 * index + 1` ginge gut, bis jemand dort einen
+ * anderen Anfang setzt — und dann trüge das Blatt, auf dem man „Seite 44, das
+ * Bild raus" notiert, eine andere Zahl als das Buch.
  */
 export function linkeSeitenzahl(spreadIndex: number): number {
-  return 2 * spreadIndex + 1;
+  return leftPageNumber(spreadIndex);
 }
 
 /**

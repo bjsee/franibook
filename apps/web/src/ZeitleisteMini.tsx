@@ -22,6 +22,7 @@ import { useMemo } from 'react';
 import {
   accentOn,
   defaultProfile,
+  pageNumberInsetMm,
   profileById,
   sideTimelineBoxes,
   spreadHeightMm,
@@ -98,6 +99,11 @@ export interface ZeitleisteMiniProps {
   background: string;
   /** Kennung des Druckprofils; ohne Angabe die Vorgabe. */
   printProfileId?: string;
+  /**
+   * Ob das Buch Seitenzahlen trägt. Dann rückt die Achse ein, hier wie dort —
+   * die Miniatur ist keine Nachbildung, sondern dieselbe Rechnung.
+   */
+  seitenzahlen?: boolean;
 }
 
 export function ZeitleisteMini({
@@ -106,6 +112,7 @@ export function ZeitleisteMini({
   akzent,
   background,
   printProfileId,
+  seitenzahlen,
 }: ZeitleisteMiniProps) {
   const profile = profilVon(printProfileId);
   const spread = useMemo<RenderedSpread>(() => {
@@ -130,6 +137,11 @@ export function ZeitleisteMini({
               label: BEISPIEL.label,
               variant: fassung as TimelineFootVariant,
               accentColor,
+              // Genau wie im Buch: Trägt es Seitenzahlen, rückt die Achse ein.
+              // Ohne das zeigte die Miniatur, an der man die Fassung wählt, eine
+              // andere Achse als die Seite darunter — und die Miniatur ist
+              // ausdrücklich keine Nachbildung.
+              ...(seitenzahlen ? { insetMm: pageNumberInsetMm() } : {}),
             },
             profile,
           );
@@ -144,7 +156,7 @@ export function ZeitleisteMini({
       boxes,
       guides: [],
     };
-  }, [ort, fassung, akzent, background, profile]);
+  }, [ort, fassung, akzent, background, profile, seitenzahlen]);
 
   const a = AUSSCHNITT[ort];
   const breite = (a.x1 - a.x0) * a.pxPerMm;
