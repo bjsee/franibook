@@ -9,7 +9,7 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { type DateEdit, type PhotoWeight, istDateEdit } from '@franibook/core';
+import { type DateEdit, type PhotoWeight, istDateEdit, normalisiereAdjust } from '@franibook/core';
 import { istDateiFehler, type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
 
 /**
@@ -181,9 +181,9 @@ export function fotoRouten(
    * **Die Reihenfolge der Liste ist die Reihenfolge der Verteilung.** Sortiert
    * wird in der Oberfläche, nicht hier (`project/fotodaten.ts`).
    *
-   * Genau **eines** von `date`, `place`, `orientation` und `weight` je Anfrage:
-   * Zwei zusammen wären ein Schritt, der zwei Dinge zurücknimmt, und die Meldung
-   * könnte nicht sagen, welches davon gewirkt hat.
+   * Genau **eines** von `date`, `place`, `orientation`, `weight` und `adjust` je
+   * Anfrage: Zwei zusammen wären ein Schritt, der zwei Dinge zurücknimmt, und
+   * die Meldung könnte nicht sagen, welches davon gewirkt hat.
    *
    * Das Buch bleibt unangetastet. Ob ein Neuaufbau jetzt etwas ändern würde,
    * steht als `structurePending` in der Antwort – so muss die Oberfläche nach
@@ -196,6 +196,7 @@ export function fotoRouten(
       place?: unknown;
       orientation?: unknown;
       weight?: unknown;
+      adjust?: unknown;
     };
   }>('/api/photos', async (req, reply) => {
     // Ein laufender Import endet mit `z.photos.clear()` und einer
@@ -211,15 +212,28 @@ export function fotoRouten(
     const ort = req.body?.place;
     const kippen = req.body?.orientation;
     const gewicht = req.body?.weight;
-    const genannt = [datum, ort, kippen, gewicht].filter((f) => f !== undefined).length;
+    // `null` ist hier eine Aussage und kein Fehlen: Es nimmt die Anpassung
+    // zurück. Deshalb zählt es mit, wenn geprüft wird, wie viele Dinge die
+    // Anfrage anfassen will.
+    const anpassung = req.body?.adjust;
+    const genannt = [datum, ort, kippen, gewicht, anpassung].filter((f) => f !== undefined).length;
     if (genannt > 1) {
-      return reply
-        .code(400)
-        .send({ error: 'Datum, Ort, Ausrichtung und Gewicht bitte getrennt setzen' });
+      return reply.code(400).send({
+        error: 'Datum, Ort, Ausrichtung, Gewicht und Bildanpassung bitte getrennt setzen',
+      });
     }
 
     let ergebnis: Awaited<ReturnType<typeof project.korrigiereDaten>>;
-    if (gewicht !== undefined) {
+    if (anpassung !== undefined) {
+      if (anpassung !== null && typeof anpassung !== 'object') {
+        return reply
+          .code(400)
+          .send({ error: 'Bildanpassung ist ein Objekt mit Reglern, oder null zum Zurücknehmen' });
+      }
+      // Normalisiert im Kern, damit Server und Oberfläche dieselbe Vorstellung
+      // davon haben, was „nichts eingestellt" heißt.
+      ergebnis = project.setzeAnpassung(ids, normalisiereAdjust(anpassung));
+    } else if (gewicht !== undefined) {
       if (!istGewicht(gewicht)) {
         return reply.code(400).send({ error: 'Gewicht ist hero, normal oder filler' });
       }

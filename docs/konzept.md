@@ -517,12 +517,18 @@ Liste ist die Reihenfolge der Verteilung** — sortiert wird in der Oberfläche
 (Vorgabe Dateiname, umsortierbar per Ziehen), nicht im Server; ein
 Server-Sortierbegriff könnte der Ansicht widersprechen.
 
-Dieselbe Route setzt auch den Ort (siehe „Den Ort von Hand setzen"), aber **nie
-beides in einer Anfrage**: Das wäre ein Undo-Schritt, der zwei Dinge zurücknimmt,
-und die Meldung könnte nicht sagen, welches gewirkt hat. Daraus folgt, dass
-`UndoEintrag.label` eine Funktion sein darf — „Datum korrigiert" wäre am
-Undo-Knopf sonst die Hälfte der Zeit falsch, und ein Label, das lügt, ist
-schlimmer als kein Knopf.
+Dieselbe Route setzt auch den Ort (siehe „Den Ort von Hand setzen"), die
+Ausrichtung, das Gewicht und die Bildanpassung — aber **nie zwei davon in einer
+Anfrage**: Das wäre ein Undo-Schritt, der zwei Dinge zurücknimmt, und die Meldung
+könnte nicht sagen, welches gewirkt hat. Daraus folgt, dass `UndoEintrag.label`
+eine Funktion sein darf — „Datum korrigiert" wäre am Undo-Knopf sonst die Hälfte
+der Zeit falsch, und ein Label, das lügt, ist schlimmer als kein Knopf.
+
+Einen **Verschmelzschlüssel** bekommt von diesen Fällen nur die Bildanpassung,
+und zwar genau nach der Regel, wo einer hingehört: an das, was man zieht. Sie ist
+der einzige Fall dieser Route, der an einem Regler hängt; ohne Schlüssel wäre
+jede Zwischenstellung ein eigener Undo-Schritt. Die übrigen Korrekturen bleiben
+ohne — sie sind je eine Anfrage über die ganze Auswahl.
 
 ### Doppel: mehrere Aufnahmen desselben Augenblicks
 
@@ -1551,6 +1557,38 @@ Drei Festlegungen daran:
 - **Passt der Satz nicht in die Breite, wird die Schrift kleiner.** Nicht abgeschnitten und nicht umgebrochen: Zwei Zeilen sind im Fuß eines Sofortbilds kein Gestaltungsmittel, und ein gekürzter Satz verschweigt, dass etwas fehlt. Die Breite kommt aus `estimatedTextWidthMm` und entscheidet damit nur über die Größe, nie über die Position — genau die Rolle, für die die Schätzung gedacht ist.
 
 Die Farbe kommt aus dem Stil und **nicht** aus `textColorOn`: Dieser Text steht auf dem hellen Karton, nicht auf dem Seitenhintergrund. Auf einer Doppelseite in Anthrazit stünde sonst weiße Schrift auf weißem Grund. Im RSM steht die Unterschrift zweimal — als gezeichnete `TextBox` und als `ImageBox.caption`. Das ist keine zweite Wahrheit, sondern der Unterschied zwischen _gezeichnet_ und _gespeichert_: Die TextBox gibt es nur, solange ein Rahmen mit Fuß gewählt ist, das Feld an der Bildbox dagegen immer — der Editor braucht es, um den Satz auch dann zu zeigen, wenn er gerade nicht gedruckt würde.
+
+### Bildanpassung: Helligkeit, Kontrast, Tonung
+
+Was jede Fotobuchanwendung anbietet — Regler für Helligkeit, Kontrast, Sättigung und Wärme, dazu Schwarzweiß und Sepia — stellt hier eine Frage, die anderswo keine ist: **Vorschau und PDF entstehen auf zwei völlig verschiedenen Pixelwegen.** Der Browser zeigt ein `<img>`, der Export läuft durch sharp. Eine „Helligkeit" auf beiden Seiten zu implementieren hieße, sie zweimal zu definieren, und sie liefen auseinander, sobald eine der beiden eine Kurve anders krümmt. Genau das soll Architekturregel 2 verhindern.
+
+Die Antwort ist eine Einschränkung, die zugleich die Lösung ist: **Alles, was die Anpassung tut, ist eine einzige affine Farbmatrix** — `out = m · in + o` auf sRGB-Werten (`model/adjust.ts`). Diese Form kennen beide Seiten als denselben, exakt spezifizierten Begriff: als `feColorMatrix` in SVG und als `recomb` + `linear` in sharp. Gemessen an sechs Farben gegen die Rechnung von Hand:
+
+| Weg                               | maximale Abweichung |
+| --------------------------------- | ------------------- |
+| Chromium, `feColorMatrix` in sRGB | 0                   |
+| sharp 0.35, `recomb` + `linear`   | 1                   |
+
+Das eine Digit ist kein Fehler, sondern libvips' Abschneiden statt Runden (178,67 → 178, wo der Browser 179 setzt). Im Parity-Test kostet die Anpassung über vier angepasste Bilder **0,233 %** gegen 0,198 % im Hauptfall desselben Laufs — weniger als ein gedrehter Text.
+
+Zwei Angaben am SVG-Filter sind daran nicht verhandelbar. `color-interpolation-filters="sRGB"` ist Pflicht, weil SVG Filter ohne diese Angabe in linearem Licht rechnet; und der Filterbereich steht auf `0%/0%/100%/100%` statt auf der Vorgabe von 110 %, die die Rasterung der gefilterten Fläche gegen die ungefilterte verschöbe.
+
+**Der Preis der Festlegung ist, was nicht geht:** Gradationskurven, Lichter und Schatten getrennt, Klarheit, ein Lichterschutz bei der Tonung. Alles das ist nichtlinear und damit auf beiden Wegen nicht identisch herstellbar. Wer es später will, braucht einen anderen Mechanismus — eine LUT, die beide Seiten aus derselben Tabelle lesen — und nicht eine zweite Rechnung je Renderer.
+
+Innerhalb der Affinität lässt sich mehr machen, als es zunächst aussieht. Vier Beobachtungen aus der Umsetzung:
+
+- **Die Reihenfolge der Verkettung ist eine Entscheidung, keine Beliebigkeit.** Sie lautet Wärme → Sättigung → Helligkeit → Kontrast → Tonung. Die Tonung steht zuletzt, und das ist gemessen: Andersherum spreizt der Kontrast die drei Kanäle der Sepia-Rampe einzeln, weil sie nach der Tonung verschieden weit vom Drehpunkt entfernt liegen — bei Mittelgrau stiege Rot auf 0,82, während Blau auf 0,34 fiele. Der Kontrastregler machte das Bild dann bunter statt kontrastreicher. Dass die Sättigung vor der Tonung wirkungslos wird, ist dagegen richtig so: Wer schwarzweiß wählt, hat die Farbe weggeworfen.
+- **Eine Tonung ist eine Farbrampe, kein Farbstich.** Die bekannte Sepia-Matrix aus Filter Effects hat drei zueinander proportionale Zeilen — sie _ist_ Luminanz mal Farbstich, ohne das je zu sagen. Für die Cyanotypie genügt das nicht: Als reiner Stich klemmt Blau in den Lichtern am Anschlag, und jede helle Fläche kippt ins Knallcyan. Das ist an der laufenden Oberfläche aufgefallen, nicht im Test. Ein Blaudruck sieht andersherum aus — die _Schatten_ sind tiefblau, die Lichter bleiben Papier —, und genau das ist eine Rampe mit einem Fuß: von (0,02 / 0,15 / 0,35) nach (0,85 / 0,95 / 1,00). Der Farbstich sitzt unten, wo Platz dafür ist, statt oben, wo er anschlägt. Ein Fuß ist affin; der Lichterschutz, den man sich zusätzlich wünschte, wäre es nicht.
+- **Die Luminanz ist BT.709, auch für Sepia.** Die CSS-Sepia rechnet mit BT.601; ihre Zahlen zu übernehmen hieße, zwei Begriffe von „grau" in derselben Datei zu haben — einen für die Sättigung, einen für die Tonung. Übernommen wird deshalb nur der Farbstich, nicht die Grauwertbildung.
+- **Die Wärme ist kein Weißabgleich.** Kelvin wäre eine Aussage über die Lichtquelle und bräuchte den Farbraum des Aufnahmegeräts. Was der Regler tut, ist Bildwirkung: Rot hoch, Blau herunter, Grün unangetastet, um höchstens ein Viertel.
+
+Im Modell steht die Anpassung als `PhotoOverride.adjust` — **am Foto und nicht am Slot**, dieselbe Überlegung wie beim Gewicht: Sie gilt dem Bild und muss eine Neuanordnung auf eine andere Doppelseite überleben. Im RSM steht dagegen die fertige Matrix (`ImageBox.colorMatrix`) und nicht die fünf Regler: Ein Renderer, der aus „Kontrast +30" selbst eine Abbildung ableitete, träfe eine Entscheidung — und zwei Renderer träfen sie zweimal. Dieselbe Machart wie `effectiveDpi`. Der Umschlag trägt dieselbe Matrix; dasselbe Bild sepia im Buch und farbig auf dem Deckel wäre keine Entscheidung, sondern eine vergessene Stelle.
+
+Wie Neigung und Rahmen wirkt sie **beim Rendern** und damit ohne Neuaufbau — anders als das Gewicht, das erst beim nächsten Anordnen zählt. Sie ändert die Gliederung nicht und meldet kein `structurePending`. Und `PhotoQuality` misst weiterhin die Datei: Wer ein flaues Foto aufhellt, ändert nichts an der Zahl, nach der die Engine den großen Platz vergibt — die Zahl beschreibt, wie das Bild aufgenommen wurde.
+
+In der Bedienung ist es ein aufklappbarer Kasten neben „Daten ändern", in allen drei Rahmen (`spread/Bildanpassung.tsx`). Getrennt von `Bilddaten` und nicht als sechster Abschnitt darin, weil die beiden verschiedene Fragen beantworten: Dort geht es darum, _was das Bild ist_ — und eine Datumskorrektur verschiebt das Foto im Buch; hier darum, _wie es aussehen soll_. In einer Karte stünde der Kamera-Reset neben dem Sepia-Knopf.
+
+Die Regler schreiben verzögert wie Ausschnitt und Neigung, und die Doppelseite wird danach **gezielt nachgeladen**. `onNeuRendern` wäre der falsche Griff: Es setzt den Spread auf `null` und holt ihn neu — für Zurücknehmen und Vorlagenwechsel richtig, hier riss es die Werkzeugspalte für einen Durchlauf leer, und der Bildlauf sprang bei jeder Reglerbewegung an den Anfang. Auch das ist erst an der laufenden Oberfläche aufgefallen.
 
 ### Bildquellen
 
@@ -3156,6 +3194,7 @@ Der Server bindet ausschließlich an `127.0.0.1` und legt keine Authentifizierun
 > | `/api/groups`, `/api/groups/:id`            | POST/PATCH/DELETE | anlegen, ändern, löschen                |
 > | `/api/groups/:id/merge`, `/add`, `/ungroup` | POST              | zusammenführen, zuordnen, herauslösen   |
 > | `/api/photos`                               | GET               | Fotos mit Datum, `?problems` filtert    |
+> | `/api/photos`                               | PATCH             | Datum, Ort, Ausrichtung, Gewicht, Farbe |
 > | `/api/book/unplaced`                        | GET               | Fotopool: Fotos in keinem Slot          |
 > | `/api/book/pruefung`                        | GET               | Abnahmebericht über Buch und Umschlag   |
 > | `/api/book/pruefung/abnahmen`               | POST/DELETE       | Befund abnicken, einen oder alle zurück |

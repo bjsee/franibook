@@ -9,6 +9,7 @@
  * Deterministisch: gleiche Eingaben ergeben exakt dasselbe Cover.
  */
 import { effectiveDpi } from '../geometry/units.js';
+import { farbmatrix, wirktAdjust } from '../model/adjust.js';
 import { FULL_CROP, coverCrop, cropToPixels } from '../model/crop.js';
 import type { Crop } from '../model/crop.js';
 import type { PhotoOverride } from '../model/date.js';
@@ -140,7 +141,22 @@ function imageBox(
     });
   }
 
-  return { kind: 'image', ...rect, slotId, photoId, crop, effectiveDpi: dpi, warnings };
+  // Dieselbe Bildanpassung wie im Innenteil: Sie hängt am Foto, und dasselbe
+  // Bild sepia im Buch und farbig auf dem Umschlag wäre keine Entscheidung,
+  // sondern eine vergessene Stelle.
+  const adjust = ctx.overrides?.[photoId]?.adjust;
+  const colorMatrix = wirktAdjust(adjust) ? farbmatrix(adjust) : undefined;
+
+  return {
+    kind: 'image',
+    ...rect,
+    slotId,
+    photoId,
+    crop,
+    effectiveDpi: dpi,
+    ...(colorMatrix ? { colorMatrix } : {}),
+    warnings,
+  };
 }
 
 function textBox(

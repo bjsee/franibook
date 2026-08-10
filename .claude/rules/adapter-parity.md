@@ -45,6 +45,25 @@ Dieselben Schriftdateien aus `packages/fonts/files/` gehen ins PDF
 Fassung — auch eine „gleich aussehende" Systemschrift — wäre eine
 Parity-Abweichung mit Ansage.
 
+## Farbe wird nicht zweimal bestimmt
+
+Dieselbe Regel wie bei der Schrift, nur für Pixel: Die Bildanpassung steht als
+fertige Matrix in der `ImageBox` (`colorMatrix`). Die Vorschau schreibt sie in
+einen `feColorMatrix`, der PDF-Adapter in sharps `recomb` + `linear` — beide
+zeichnen nur nach.
+
+Zwei Angaben sind daran nicht verhandelbar, weil sie stillschweigend etwas
+anderes rechnen ließen:
+
+- **`color-interpolation-filters="sRGB"`** am SVG-Filter. Ohne sie rechnet SVG
+  in linearem Licht, und das Ergebnis weicht sichtbar ab — nicht um ein Digit.
+- **Der Filterbereich auf `0%/0%/100%/100%`.** Die Vorgabe wäre 110 % in jede
+  Richtung und verschiebt die Rasterung der gefilterten Fläche gegen die
+  ungefilterte.
+
+Beides steht an einer Stelle (`render-dom/src/farbfilter.tsx`), die Doppelseite
+und Umschlag gemeinsam benutzen.
+
 ## Der Parity-Test ist Pflicht, nicht Kür
 
 Jede Änderung an Templates, Geometrie oder einem der beiden Renderer gehört mit

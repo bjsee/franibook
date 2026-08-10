@@ -94,6 +94,28 @@ Zeitstrahl bleiben darüber. Wirkt beim Rendern wie Neigung und Rahmen, wird vom
 Neuaufbau aber verworfen (`handwork().ebenen`). Begründung: `docs/konzept.md`,
 Abschnitt „Ebenen: wer liegt vor wem".
 
+## Bildanpassung
+
+Helligkeit, Kontrast, Sättigung, Wärme und Tonung eines Fotos stehen als
+**fertige Farbmatrix** in der `ImageBox` (`colorMatrix`), gerechnet aus
+`PhotoOverride.adjust` (`model/adjust.ts`). Wie `effectiveDpi` eine abgeleitete
+Zahl, die vorher gerechnet wird, damit kein Adapter sie nachrechnet — aus „Kontrast
++30" selbst eine Abbildung abzuleiten wäre eine Entscheidung, und zwei Renderer
+träfen sie zweimal.
+
+**Alles daran muss affin bleiben** (`out = m·in + o`, in sRGB): Genau diese Form
+kennen `feColorMatrix` und sharps `recomb`/`linear` als denselben exakt
+spezifizierten Begriff. Eine Gradationskurve oder ein Lichterschutz wäre auf
+beiden Wegen nicht identisch herstellbar — dafür bräuchte es eine LUT, aus der
+beide lesen. Gemessen: Chromium trifft die Rechnung exakt, sharp bis auf ein
+Digit (libvips schneidet ab, wo der Browser rundet).
+
+Wie Neigung und Rahmen wirkt sie **ohne Neuaufbau** — sie hängt am Foto, nicht am
+Slot, und überlebt damit auch eine Neuanordnung auf eine andere Doppelseite. Der
+Umschlag trägt dieselbe Matrix (`cover/render-cover.ts`): Dasselbe Bild sepia im
+Buch und farbig auf dem Deckel wäre keine Entscheidung, sondern eine vergessene
+Stelle.
+
 ## Was das RSM meldet
 
 Warnungen sind **Auskunft, keine Korrektur** — das Buch wird nie hinter dem Rücken
