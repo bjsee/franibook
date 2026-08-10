@@ -6,7 +6,8 @@ import type { Spread, TextElement } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
 import { DEFAULT_TILT_DEG } from './tilt.js';
-import { imageBoxes } from './rendered-spread.js';
+import { imageBoxes, slotImageBox } from './rendered-spread.js';
+import { photoPixelsOf } from './inspect.js';
 import { estimatedTextWidthMm } from './typography.js';
 
 const profile = saal as PrintProfile;
@@ -1085,5 +1086,222 @@ describe('Rahmen um die Bilder', () => {
     const spread = { ...spreadWith(alle), backgroundPhotoId: 'p1' };
     const rsm = renderSpread(spread, gerahmt);
     expect(rsm.boxes[0]).toMatchObject({ kind: 'image', slotId: 'background' });
+  });
+});
+
+describe('Falzzuschlag für Bilder über der Falzachse', () => {
+  /** Was die Bindung schluckt, insgesamt über beide Seiten. */
+  const VERLUST_MM = 4;
+  const mitVerlust = {
+    ...profile,
+    binding: 'perfect' as const,
+    page: { ...profile.page, gutterLossMm: VERLUST_MM },
+  };
+  const achseMm = profile.page.bleedMm + profile.page.trimWidthMm;
+
+  /**
+   * Ein Bild über der Falzachse. Keine Vorlage der Bibliothek hat einen solchen
+   * Platz – die Flussvorlagen zerfallen an der Achse –, also derselbe Weg wie
+   * beim echten Fall: ein von Hand aufgezogener Kasten.
+   */
+  function ueberDenFalz(
+    rect = { x: 0.3, y: 0.2, w: 0.4, h: 0.5 },
+    rotateDeg?: number,
+    photoId = 'p1',
+  ): Spread {
+    const s = spreadWith([photoId, null, null, null]);
+    return {
+      ...s,
+      slots: s.slots.map((slot, i) =>
+        i === 0 ? { ...slot, rect, ...(rotateDeg !== undefined ? { rotateDeg } : {}) } : slot,
+      ),
+    };
+  }
+
+  it('lässt das Bild ungeteilt, solange das Profil keinen Verlust führt', () => {
+    // Alle acht ausgelieferten Profile sind layflat und führen 0 – ein Buch von
+    // heute muss also Box für Box so aussehen wie vor dieser Rechnung.
+    const bilder = renderSpread(ueberDenFalz(), ctx).boxes.filter((b) => b.kind === 'image');
+    expect(bilder).toHaveLength(1);
+    expect(bilder[0]!.gutterPart).toBeUndefined();
+  });
+
+  it('teilt das Bild an der Achse und füllt den Kasten lückenlos', () => {
+    const bilder = renderSpread(ueberDenFalz(), { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    expect(bilder.map((b) => b.gutterPart)).toEqual(['links', 'rechts']);
+
+    const [links, rechts] = bilder as [(typeof bilder)[0], (typeof bilder)[0]];
+    expect(links.xMm + links.wMm).toBeCloseTo(achseMm, 9);
+    expect(rechts.xMm).toBeCloseTo(achseMm, 9);
+    // Zusammen so breit wie der Kasten: Der Zuschlag verschiebt kein Papier, er
+    // ändert nur, welches Motiv darauf steht.
+    const ganz = renderSpread(ueberDenFalz(), ctx).boxes.filter((b) => b.kind === 'image')[0]!;
+    expect(links.wMm + rechts.wMm).toBeCloseTo(ganz.wMm, 9);
+    expect(links.yMm).toBe(ganz.yMm);
+    expect(links.hMm).toBe(ganz.hMm);
+  });
+
+  it('lässt die Motivkanten im gebundenen Buch aneinanderstoßen', () => {
+    const bilder = renderSpread(ueberDenFalz(), { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    const [links, rechts] = bilder as [(typeof bilder)[0], (typeof bilder)[0]];
+
+    // Nach der Bindung verschwindet je Seite die Hälfte des Verlusts im Bund.
+    // Was dann noch zu sehen ist, stößt physisch aneinander – und muss
+    // dieselbe Stelle des Fotos zeigen, sonst reißt das Motiv.
+    const sichtbarBisLinks = links.wMm - VERLUST_MM / 2;
+    const motivLinks = links.crop.x + links.crop.w * (sichtbarBisLinks / links.wMm);
+    const motivRechts = rechts.crop.x + rechts.crop.w * (VERLUST_MM / 2 / rechts.wMm);
+    expect(motivRechts).toBeCloseTo(motivLinks, 9);
+  });
+
+  it('zeichnet beide Hälften im selben Maßstab', () => {
+    // Sonst wäre der Zuschlag eine Stauchung: Die Naht säße richtig, das Motiv
+    // liefe links und rechts verschieden schnell.
+    const bilder = renderSpread(ueberDenFalz(), { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    const [links, rechts] = bilder as [(typeof bilder)[0], (typeof bilder)[0]];
+    expect(rechts.crop.w / rechts.wMm).toBeCloseTo(links.crop.w / links.wMm, 9);
+  });
+
+  it('nimmt den Zuschlag aus dem Motiv und nicht aus dem Papier', () => {
+    // `p3` ist breiter als sein Platz, sein Ausschnitt beschneidet also
+    // seitlich – nur daran ist abzulesen, was der Zuschlag kostet.
+    const spread = ueberDenFalz(undefined, undefined, 'p3');
+    const ohne = renderSpread(spread, ctx).boxes.filter((b) => b.kind === 'image')[0]!;
+    const mit = renderSpread(spread, { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    const sichtbarMm = ohne.wMm - VERLUST_MM;
+
+    // Der Ausschnitt ist für die sichtbare Breite gerechnet: Zusammen zeigen
+    // beide Hälften – ohne den doppelt gedruckten Streifen – schmaler Motiv als
+    // die ungeteilte Box, und zwar genau im Verhältnis der Breiten.
+    const gesamt = (mit[0]!.crop.w * sichtbarMm) / mit[0]!.wMm;
+    expect(gesamt).toBeLessThan(ohne.crop.w);
+    expect(gesamt).toBeCloseTo((ohne.crop.w * sichtbarMm) / ohne.wMm, 9);
+    // Die Auflösung bleibt dabei dieselbe: weniger Pixel auf entsprechend
+    // weniger Papier. Der Zuschlag kostet Motiv, keine Schärfe.
+    expect(mit[0]!.effectiveDpi).toBeCloseTo(ohne.effectiveDpi, 0);
+    expect(mit[0]!.effectiveDpi).toBe(mit[1]!.effectiveDpi);
+  });
+
+  it('zählt die beiden Hälften als ein Bild', () => {
+    const rsm = renderSpread(ueberDenFalz(), { ...ctx, profile: mitVerlust });
+    expect(rsm.boxes.filter((b) => b.kind === 'image')).toHaveLength(2);
+    expect(imageBoxes(rsm)).toHaveLength(1);
+    // Die Warnungen hängen am Bild, nicht an der Fläche: sonst stünde jede
+    // zweimal im Abnahmebericht.
+    expect(imageBoxes(rsm)[0]!.warnings.some((w) => w.code === 'crosses-gutter')).toBe(true);
+  });
+
+  it('stellt ein Bild über der Achse gerade, statt ihm den Zuschlag zu nehmen', () => {
+    // Die Vorgabeneigung von 1,2° hätte den Zuschlag stumm ausgeschaltet:
+    // `randabfallend` prüft die Papierkante, nicht den Bund.
+    const geneigt = { ...ctx, profile: mitVerlust, tilt: { maxDeg: DEFAULT_TILT_DEG, seed: 1 } };
+    const bilder = renderSpread(ueberDenFalz(), geneigt).boxes.filter((b) => b.kind === 'image');
+    expect(bilder).toHaveLength(2);
+    expect(bilder[0]!.rotateDeg).toBeUndefined();
+    // Die Bilder daneben stehen weiterhin schief.
+    const nebenan = renderSpread(spreadWith(['p1', 'p2', null, null]), geneigt).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    expect(nebenan.some((b) => (b.rotateDeg ?? 0) !== 0)).toBe(true);
+  });
+
+  it('behält eine von Hand gesetzte Neigung und verzichtet dann auf den Zuschlag', () => {
+    const rsm = renderSpread(ueberDenFalz(undefined, 3), { ...ctx, profile: mitVerlust });
+    const bilder = rsm.boxes.filter((b) => b.kind === 'image');
+    expect(bilder).toHaveLength(1);
+    expect(bilder[0]!.rotateDeg).toBe(3);
+  });
+
+  it('teilt auch das Hintergrundbild', () => {
+    // Der Regelfall: Ein flächenfüllender Hintergrund kreuzt die Achse immer.
+    const spread = { ...spreadWith([null, null, null, null]), backgroundPhotoId: 'p1' };
+    const boxen = renderSpread(spread, { ...ctx, profile: mitVerlust })
+      .boxes.filter((b) => b.kind === 'image')
+      .filter((b) => b.slotId === 'background');
+    expect(boxen.map((b) => b.gutterPart)).toEqual(['links', 'rechts']);
+    expect(boxen[0]!.xMm + boxen[0]!.wMm).toBeCloseTo(achseMm, 9);
+  });
+
+  it('teilt auch einen von Hand gesetzten Ausschnitt', () => {
+    const s = ueberDenFalz();
+    const manuell: Spread = {
+      ...s,
+      slots: s.slots.map((slot, i) =>
+        i === 0
+          ? { ...slot, crop: { x: 0.1, y: 0.1, w: 0.7, h: 0.5, mode: 'manual' as const } }
+          : slot,
+      ),
+    };
+    const bilder = renderSpread(manuell, { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    expect(bilder).toHaveLength(2);
+    expect(bilder[1]!.crop.w / bilder[1]!.wMm).toBeCloseTo(bilder[0]!.crop.w / bilder[0]!.wMm, 9);
+  });
+
+  it('fügt die beiden Hälften für den Editor wieder zu einem Kasten', () => {
+    const spread = ueberDenFalz();
+    const ohne = renderSpread(spread, ctx).boxes.filter((b) => b.kind === 'image')[0]!;
+    const ganz = slotImageBox(renderSpread(spread, { ...ctx, profile: mitVerlust }), 'a')!;
+
+    // Kasten und Ausschnitt wie ohne Teilung – bis auf das, was der Zuschlag
+    // am Motiv kostet.
+    expect(ganz.gutterPart).toBeUndefined();
+    expect(ganz.xMm).toBeCloseTo(ohne.xMm, 9);
+    expect(ganz.wMm).toBeCloseTo(ohne.wMm, 9);
+    expect(ganz.crop.x).toBeCloseTo(ohne.crop.x, 9);
+    expect(ganz.crop.w).toBeLessThanOrEqual(ohne.crop.w + 1e-9);
+
+    // Kasten, Ausschnitt und Auflösung passen zueinander: `photoPixelsOf`
+    // rechnet daraus die Bildmaße zurück, und daran hängen „Trägt bis X × Y mm"
+    // und jede Vorhersage beim Ziehen.
+    const px = photoPixelsOf(ganz)!;
+    expect(px.width).toBeCloseTo(PHOTOS.get('p1')!.width, 0);
+  });
+
+  it('greift noch, wenn eine Hälfte genau so breit ist wie der Verlust', () => {
+    // Grenzfall des Wächters: Der Ausschnitt der breiten Hälfte reicht dann
+    // gerade eben über das ganze Motiv.
+    const breiteMm = 2 * profile.page.trimWidthMm;
+    const rect = {
+      x: (achseMm - VERLUST_MM - profile.page.bleedMm) / breiteMm,
+      y: 0.2,
+      w: VERLUST_MM / breiteMm + 0.3,
+      h: 0.5,
+    };
+    const bilder = renderSpread(ueberDenFalz(rect), { ...ctx, profile: mitVerlust }).boxes.filter(
+      (b) => b.kind === 'image',
+    );
+    expect(bilder).toHaveLength(2);
+    expect(bilder[0]!.wMm).toBeCloseTo(VERLUST_MM, 6);
+    // Die breite Hälfte zeigt dann das ganze Motiv, die schmale nur den
+    // Streifen, der ohnehin doppelt gedruckt wird – beide im selben Maßstab.
+    expect(bilder[1]!.crop.x).toBeCloseTo(bilder[0]!.crop.x, 9);
+    expect(bilder[1]!.crop.w / bilder[1]!.wMm).toBeCloseTo(bilder[0]!.crop.w / bilder[0]!.wMm, 9);
+  });
+
+  it('lässt ein geneigtes Bild ungeteilt', () => {
+    // Seine Kanten stehen schräg zur Achse; eine senkrechte Teilung schnitte
+    // quer durchs Motiv.
+    const rsm = renderSpread(ueberDenFalz(undefined, 3), { ...ctx, profile: mitVerlust });
+    expect(rsm.boxes.filter((b) => b.kind === 'image')).toHaveLength(1);
+  });
+
+  it('lässt ein Bild ungeteilt, dessen Überstand schmaler ist als der Verlust', () => {
+    // Der Streifen jenseits der Achse verschwindet ohnehin ganz im Bund – ein
+    // Zuschlag verlangte mehr Motiv, als das Bild hergibt.
+    const knapp = { x: 0.2, y: 0.2, w: 0.3025, h: 0.5 };
+    const rsm = renderSpread(ueberDenFalz(knapp), { ...ctx, profile: mitVerlust });
+    const bilder = rsm.boxes.filter((b) => b.kind === 'image');
+    expect(bilder[0]!.xMm + bilder[0]!.wMm).toBeGreaterThan(achseMm);
+    expect(bilder).toHaveLength(1);
   });
 });

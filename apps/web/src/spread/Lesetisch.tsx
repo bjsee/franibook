@@ -18,6 +18,7 @@
  * nicht schon tun.
  */
 import { useEffect, useState } from 'react';
+import { imageBoxes } from '@franibook/core';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
@@ -159,7 +160,7 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
           </div>
           <TemplatePicker
             index={aussen.index}
-            photoCount={spread.boxes.filter((b) => b.kind === 'image').length}
+            photoCount={imageBoxes(spread).length}
             version={model.buchVersion}
             onFehler={model.setNote}
             onApplied={({ spread: neu }) => model.anordnungUebernommen(neu as RenderedSpread)}

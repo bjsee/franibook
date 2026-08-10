@@ -17,7 +17,7 @@
  */
 import type { ReactNode } from 'react';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
-import { dpiInSlot, istSchwer } from '@franibook/core';
+import { dpiInSlot, istSchwer, slotImageBox } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { ABSICHT_WORT, absichtVon } from './absicht.js';
 import { textName } from './bewegtext.js';
@@ -144,7 +144,9 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
       );
     }
 
-    const box = angezeigt.boxes.find((b) => b.kind === 'image' && b.slotId === slotId);
+    // `slotImageBox` und nicht der erste Treffer: Ein Bild über der Falzachse
+    // steht als zwei Boxen im Modell, und gefragt ist der ganze Kasten.
+    const box = slotImageBox(angezeigt, slotId);
     const zuKlein =
       box?.kind === 'image' &&
       box.warnings.some((w) => w.code === 'below-min-dpi' || w.code === 'photo-missing');

@@ -94,6 +94,38 @@ Zeitstrahl bleiben darüber. Wirkt beim Rendern wie Neigung und Rahmen, wird vom
 Neuaufbau aber verworfen (`handwork().ebenen`). Begründung: `docs/konzept.md`,
 Abschnitt „Ebenen: wer liegt vor wem".
 
+## Der Falz frisst mit
+
+`page.gutterLossMm` sagt, wieviel Papier ein Bild über der Falzachse an der
+Bindung verliert — nicht zu verwechseln mit `gutterSafeMm`, das nur sagt, wo
+nichts Wesentliches stehen soll. Ist der Wert größer als 0, steht ein solches
+Bild als **zwei Boxen** im RSM (`gutterPart: 'links' | 'rechts'`), deren
+Ausschnitte einander um genau diesen Betrag überlappen: Der Streifen, den der
+Bund schluckt, wird doppelt gedruckt, und im gebundenen Buch stoßen dieselben
+Motivstellen aneinander, die auch im Foto benachbart sind.
+
+Zwei Boxen und kein neuer Begriff — dieselbe Machart wie beim Rahmen. Beide
+Renderer zeichnen gewöhnliche Bildboxen, für die die Parity längst gilt; einen
+eigenen Parity-Fall hat die Teilung dagegen noch nicht, weil der Test mit dem
+Vorgabeprofil rendert und keines der acht einen Verlust führt. Wer den ersten
+Wert misst, ergänzt ihn.
+
+Der Ausschnitt rechnet mit der **sichtbaren** Breite (`wMm - Verlust`),
+der Zuschlag kostet also Motiv und keine Schärfe. Ausgenommen bleiben ein von
+Hand geneigtes Bild (seine Kanten stehen schräg zur senkrechten Achse; die
+Automatik stellt ein Bild über der Achse dafür gerade) und eine Hälfte, die
+schmaler ist als der Verlust — der Zuschlag verlangte dort mehr Motiv, als das
+Bild hergibt.
+
+**Wer Bilder zählt, nimmt `imageBoxes()`; wer am Kasten rechnet, `slotImageBox()`.**
+Die erste liefert ein Ergebnis je Bild statt je gezeichneter Fläche, die zweite
+fügt die beiden Hälften wieder zu einem Kasten zusammen — Griffe, Zoom, „größer",
+`photoPixelsOf` und jede dpi-Vorhersage hängen daran. Ein roher
+`boxes.find(b => b.slotId === …)` trifft dagegen die linke Hälfte und rechnet mit
+halber Breite. Für alle acht Profile steht dort 0: Sie sind
+layflat, und ein geratener Zuschlag wäre schlimmer als keiner. Der Wert wird nach
+dem ersten Druck am Papier gemessen.
+
 ## Bildanpassung
 
 Helligkeit, Kontrast, Sättigung, Wärme und Tonung eines Fotos stehen als
