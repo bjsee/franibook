@@ -65,6 +65,21 @@ export interface SlotAssignment {
    */
   caption?: string;
   /**
+   * Ob die Unterschrift von der Automatik stammt (`model/caption.ts`) und nicht
+   * getippt wurde.
+   *
+   * Daran entscheidet der mengenwertige Zug, was er überschreiben darf: Was ein
+   * Mensch geschrieben hat, bleibt stehen, bis er ausdrücklich etwas anderes
+   * sagt. Ohne das Feld – jedes vor diesem Zug gespeicherte Projekt – gilt die
+   * Unterschrift als Handarbeit, und das ist die vorsichtige Antwort: Lieber
+   * einmal zu wenig überschrieben als eine getippte Zeile verloren.
+   *
+   * Ein eigenes Feld und kein Vergleich mit dem, was die Automatik erzeugen
+   * würde: Der Vergleich hinge an der gewählten Form, und wer „Sylt" von Hand
+   * tippt, hätte sie zufällig getroffen.
+   */
+  captionAuto?: true;
+  /**
    * Ebene im Stapel: Wer liegt vor wem, wenn sich zwei Bilder überlappen?
    *
    * Ohne Angabe gilt `0`, und damit entscheidet die Reihenfolge der Vorlage –

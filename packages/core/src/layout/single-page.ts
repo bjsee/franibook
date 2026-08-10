@@ -177,6 +177,10 @@ function zerlege(spread: Spread): [BookPage, BookPage] | undefined {
         // stumm heraus, und ein Polaroid verlor beim Umpaaren seinen Karton.
         ...(bestand?.frame !== undefined ? { frame: bestand.frame } : {}),
         ...(bestand?.caption !== undefined ? { caption: bestand.caption } : {}),
+        // Mit der Unterschrift auch ihre Herkunft: Ohne sie gälte jede gefüllte
+        // Zeile nach dem ersten Seiteneinschub als Handarbeit, und der
+        // mengenwertige Zug ließe sie fortan stehen, ohne sagen zu können warum.
+        ...(bestand?.captionAuto !== undefined ? { captionAuto: bestand.captionAuto } : {}),
         ...(bestand?.layer !== undefined ? { layer: bestand.layer } : {}),
       });
     }

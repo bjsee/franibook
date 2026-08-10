@@ -8,10 +8,50 @@ import { createReadStream } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { abzugsblatt, kontaktboegen, linkeSeitenzahl } from '@franibook/core';
+import { CAPTION_FORMEN, abzugsblatt, kontaktboegen, linkeSeitenzahl } from '@franibook/core';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
+import type { Unterschriftenbereich } from '../project/unterschriften.js';
 import { renderPdf } from '@franibook/render-pdf';
 import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
+
+/**
+ * Der Bereich aus dem Rumpf – oder der Satz, warum er nicht taugt.
+ *
+ * Die Seitenzahl wird hier geprüft und nicht erst beim Zug: Eine Doppelseite,
+ * die es nicht gibt, ist eine Fehlbedienung und keine leere Antwort.
+ */
+function bereichAus(
+  wert: unknown,
+  spreadCount: number,
+): { bereich: Unterschriftenbereich } | { error: string } {
+  // Kein Rückfall auf „das ganze Buch", wenn nichts dasteht: Beim Löschen wäre
+  // die weiteste Wirkung die stillste Vorgabe, und ein vergessenes Feld nähme
+  // dem Buch alle gefüllten Zeilen.
+  if (typeof wert !== 'object' || wert === null) {
+    return { error: 'bereich fehlt — spread, group oder book' };
+  }
+  if ((wert as { kind?: unknown }).kind === 'book') return { bereich: { kind: 'book' } };
+
+  const kind = (wert as { kind?: unknown }).kind;
+  if (kind === 'spread') {
+    const index = (wert as { index?: unknown }).index;
+    if (
+      typeof index !== 'number' ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= spreadCount
+    ) {
+      return { error: 'Diese Doppelseite gibt es nicht' };
+    }
+    return { bereich: { kind: 'spread', index } };
+  }
+  if (kind === 'group') {
+    const id = (wert as { id?: unknown }).id;
+    if (typeof id !== 'string' || id.length === 0) return { error: 'Der Gruppe fehlt die Kennung' };
+    return { bereich: { kind: 'group', id } };
+  }
+  return { error: 'bereich muss spread, group oder book sein' };
+}
 
 export function buchRouten(
   app: FastifyInstance,
@@ -117,6 +157,63 @@ export function buchRouten(
       return { ok: true, anzahl, bericht: project.abnahme() };
     },
   );
+
+  /**
+   * Füllt Bildunterschriften aus Ort und Datum — oder nimmt sie wieder heraus.
+   *
+   * Mengenwertig wie `PATCH /api/photos`, und aus demselben Grund: Vierzig
+   * Unterschriften sind ein Cmd+Z und nicht vierzig. Der Bereich sagt, worauf
+   * der Zug wirkt (eine Doppelseite, eine Gruppe, das Buch), die Form, woraus
+   * die Zeile besteht.
+   *
+   * Ein `DELETE` daneben und kein `form: null`: Löschen ist der andere Zug, und
+   * er nimmt nur, was die Automatik gesetzt hat. Beide melden ihre Wirkung als
+   * Zahl (`geaendert`) und ihre Auslassungen mit Grund — der Haken in
+   * `routes/undo.ts` verwirft daran den leeren Schritt.
+   */
+  app.post<{
+    Body?: { bereich?: unknown; form?: string; ueberschreiben?: boolean };
+  }>('/api/book/captions', async (req, reply) => {
+    const bereich = bereichAus(req.body?.bereich, project.spreads.length);
+    if ('error' in bereich) return reply.code(400).send({ error: bereich.error });
+
+    const form = CAPTION_FORMEN.find((f) => f === req.body?.form);
+    if (form === undefined) {
+      return reply.code(400).send({ error: `form muss eine von: ${CAPTION_FORMEN.join(', ')}` });
+    }
+
+    const ergebnis = project.setzeUnterschriften({
+      bereich: bereich.bereich,
+      form,
+      ...(req.body?.ueberschreiben ? { ueberschreiben: true } : {}),
+    });
+    if (ergebnis.unbekannteGruppe) {
+      return reply.code(404).send({ error: 'Diese Fotogruppe gibt es nicht' });
+    }
+    if (ergebnis.geaendert > 0) void project.save();
+
+    return {
+      ...ergebnis,
+      spreads: ergebnis.seiten.map((index) => spreadAntwort(project, index)),
+    };
+  });
+
+  /** Nimmt die erzeugten Unterschriften wieder heraus; getippte bleiben stehen. */
+  app.delete<{ Body?: { bereich?: unknown } }>('/api/book/captions', async (req, reply) => {
+    const bereich = bereichAus(req.body?.bereich, project.spreads.length);
+    if ('error' in bereich) return reply.code(400).send({ error: bereich.error });
+
+    const ergebnis = project.loescheUnterschriften(bereich.bereich);
+    if (ergebnis.unbekannteGruppe) {
+      return reply.code(404).send({ error: 'Diese Fotogruppe gibt es nicht' });
+    }
+    if (ergebnis.geaendert > 0) void project.save();
+
+    return {
+      ...ergebnis,
+      spreads: ergebnis.seiten.map((index) => spreadAntwort(project, index)),
+    };
+  });
 
   /** Fotos, die derzeit in keinem Slot liegen. */
   app.get('/api/book/unplaced', async () => {

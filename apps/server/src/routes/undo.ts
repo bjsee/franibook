@@ -198,6 +198,10 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     label: 'Rahmen gesetzt',
     spreadIndex: ausIndex,
   },
+  // Der mengenwertige Zug: ein Schritt für vierzig Zeilen, ohne
+  // Verschmelzschlüssel — zweimal gesetzt sind zwei Entscheidungen.
+  'POST /api/book/captions': { label: 'Bildunterschriften gefüllt' },
+  'DELETE /api/book/captions': { label: 'Bildunterschriften entfernt' },
   'PATCH /api/spreads/:index/slots/:slotId/caption': {
     label: 'Bildunterschrift geändert',
     spreadIndex: ausIndex,

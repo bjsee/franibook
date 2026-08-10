@@ -18,6 +18,7 @@ import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import type { SpreadAussen } from './types.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
+import { Unterschriften } from './Unterschriften.js';
 import { Vorlagentexte } from './Vorlagentexte.js';
 
 interface Props {
@@ -96,6 +97,18 @@ export function SeitenPanel({ model, aussen, spread }: Props) {
           model={model}
           onSpread={(neu) => model.spreadGeaendert(neu)}
           onFehler={model.setNote}
+        />
+        <Unterschriften
+          index={aussen.index}
+          gruppen={gruppen}
+          onErgebnis={(satz) => model.setNote(satz)}
+          onFehler={(satz) => model.setNote(`Nicht gefüllt: ${satz}`)}
+          // Die Antwort trägt die berührte Doppelseite fertig gerendert; über
+          // Gruppe und Buch trifft der Zug aber auch fremde Seiten, deren
+          // Miniaturen dann veraltet sind. `spreadGeaendert` zieht beides nach.
+          onGeaendert={(neu) => {
+            if (neu) model.spreadGeaendert(neu as RenderedSpread);
+          }}
         />
         <TextBlocks
           index={aussen.index}
