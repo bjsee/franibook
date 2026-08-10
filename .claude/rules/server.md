@@ -209,6 +209,26 @@ Doppelseite.
 übersprungen und gemeldet; ihre Fotos bleiben stehen, statt als gelöscht zu
 gelten. Ein nicht eingehängtes Netzlaufwerk darf kein Buch leeren.
 
+## Den Bestand durchsuchen
+
+`GET /api/photos` nimmt kombinierbare Bedingungen als Query-Parameter
+(`project/filter.ts`): platziert, Zeitraum, ohne Datum, Ort, Quelle,
+Datumsquelle, Konfidenz, Gruppe — und `?problems` unverändert weiter. Sie
+**verunden** sich, und `gesamt` steht neben `count`, sobald gefiltert wurde:
+„42 von 830" ist oft schon die Antwort.
+
+Zwei Festlegungen, die man beim Erweitern beibehält:
+
+- **Ein unbrauchbarer Wert ist ein `400`, keine stille Auslassung.** Anders als
+  bei den Zeitstrahlfassungen in `/api/settings`, wo eine Verzierung entfiele:
+  Hier bekäme man eine Liste, die etwas anderes zeigt als angefragt, und würde
+  ihr glauben. Eine unbekannte _Kennung_ (Quelle, Gruppe, Ort) ist dagegen kein
+  Fehler, sondern eine Frage mit der Antwort „nichts".
+- **Gefiltert wird hier und nicht im Browser.** Die Oberfläche holte früher den
+  ganzen Bestand und filterte selbst; mit Zeitraum, Ort und Gruppe wäre das eine
+  zweite Fassung derselben Bedingungen. Der leere Text ist dabei eine eigene
+  Frage — `?ort=` sucht die Fotos ohne Ort, `?gruppe=` die in keiner Gruppe.
+
 ## Bilder ausliefern
 
 Vorschauen (`previews.ts`) sind WebP mit 320 px bzw. 1600 px langer Kante. **Die

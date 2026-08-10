@@ -25,10 +25,32 @@
  * sagt es die Meldung; der Neuaufbau bleibt ein ausdrücklicher Griff, sonst
  * verwürfe eine Serienkorrektur vierzigmal jede Handarbeit.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DATUMSQUELLE } from './spread/SpreadStage.js';
 import { B, T } from './theme.js';
+import type { Bestandsfilter } from './api.js';
 import { type Filter, useFotodaten } from './useFotodaten.js';
+
+/** Eine Bedingung setzen – oder sie fallen lassen, wenn das Feld leer ist. */
+function ohneLeere<K extends 'von' | 'bis' | 'ort' | 'quelle'>(
+  suche: Bestandsfilter,
+  name: K,
+  wert: string,
+): Bestandsfilter {
+  return wert ? { ...suche, [name]: wert } : entferne(suche, name);
+}
+
+/**
+ * Eine Bedingung entfernen.
+ *
+ * Entfernen und nicht auf `undefined` setzen: Ein Feld mit `undefined` stünde
+ * in `Object.keys` und ließe „zurücksetzen" wirkungslos aussehen — und die
+ * Adresse trüge einen Parameter ohne Wert.
+ */
+function entferne(suche: Bestandsfilter, name: keyof Bestandsfilter): Bestandsfilter {
+  const { [name]: _, ...rest } = suche;
+  return rest;
+}
 
 const FILTER: { id: Filter; label: string; titel: string }[] = [
   { id: 'zweifelhaft', label: 'zweifelhaft', titel: 'Ohne Datum oder mit schwacher Quelle' },
@@ -57,7 +79,17 @@ export function Fotodaten({
   const [von, setVon] = useState('');
   const [bis, setBis] = useState('');
   const [ortname, setOrtname] = useState('');
+  // Der Ortsfilter tippt sich, also läuft er verzögert los: Ohne das wäre jeder
+  // Anschlag eine Anfrage samt vollständiger Liste. 250 ms sind kürzer, als man
+  // zwischen zwei Buchstaben pausiert, und kürzer als die Antwort dauert.
+  const [ortsuche, setOrtsuche] = useState('');
   const [gezogen, setGezogen] = useState<number | null>(null);
+
+  const setSuche = m.setSuche;
+  useEffect(() => {
+    const timer = setTimeout(() => setSuche((alt) => ohneLeere(alt, 'ort', ortsuche)), 250);
+    return () => clearTimeout(timer);
+  }, [ortsuche, setSuche]);
 
   const n = m.auswahl.length;
   const gesperrt = n === 0 || m.busy;
@@ -79,7 +111,13 @@ export function Fotodaten({
               </button>
             ))}
           </div>
-          <span style={B.leise}>{m.fotos ? `${m.fotos.length} Fotos` : 'lädt …'}</span>
+          <span style={B.leise}>
+            {m.fotos
+              ? m.fotos.length === m.gesamt
+                ? `${m.fotos.length} Fotos`
+                : `${m.fotos.length} von ${m.gesamt} Fotos`
+              : 'lädt …'}
+          </span>
           <div style={B.dehner} />
           <button type="button" style={B.knopfKlein} onClick={m.alleWaehlen} disabled={!m.fotos}>
             alle wählen
@@ -89,12 +127,139 @@ export function Fotodaten({
           </button>
         </div>
 
+        {/*
+          Die feineren Bedingungen unter den Schnellfiltern: Sie beantworten die
+          Fragen, die beim Gestalten aufkommen — was ist nicht im Buch, was ist
+          von Sylt, was kam aus der zweiten Quelle. Alle verunden sich, und alle
+          rechnet der Server: Zwei Fassungen derselben Bedingung liefen
+          auseinander.
+        */}
+        <div style={S.filterzeile}>
+          <div style={B.segRahmen}>
+            {(
+              [
+                { wert: undefined, label: 'überall' },
+                { wert: true, label: 'im Buch' },
+                { wert: false, label: 'übrig' },
+              ] as const
+            ).map(({ wert, label }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  // Die Bedingung *entfernen* und nicht auf `undefined` setzen:
+                  // Ein Feld mit `undefined` stünde in `Object.keys` und ließe
+                  // „zurücksetzen" wirkungslos aussehen.
+                  const { platziert: _, ...rest } = m.suche;
+                  m.setSuche(wert === undefined ? rest : { ...rest, platziert: wert });
+                }}
+                style={m.suche.platziert === wert ? B.segAn : B.segAus}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="date"
+            title="ab diesem Tag"
+            value={m.suche.von ?? ''}
+            onChange={(e) => m.setSuche(ohneLeere(m.suche, 'von', e.target.value))}
+            style={{ ...B.feld, width: 130 }}
+          />
+          <input
+            type="date"
+            title="bis zu diesem Tag"
+            value={m.suche.bis ?? ''}
+            onChange={(e) => m.setSuche(ohneLeere(m.suche, 'bis', e.target.value))}
+            style={{ ...B.feld, width: 130 }}
+          />
+          <input
+            list="orte-filter"
+            placeholder="Ort"
+            title="Ortsname oder ein Teil davon"
+            value={ortsuche}
+            onChange={(e) => setOrtsuche(e.target.value)}
+            style={{ ...B.feld, width: 120 }}
+          />
+          <datalist id="orte-filter">
+            {m.orte.map((o) => (
+              <option key={o.key} value={o.label} />
+            ))}
+          </datalist>
+          {m.quellen.length > 1 && (
+            <select
+              title="Aus welcher Bildquelle"
+              value={m.suche.quelle ?? ''}
+              onChange={(e) => m.setSuche(ohneLeere(m.suche, 'quelle', e.target.value))}
+              style={{ ...B.auswahl, width: 130 }}
+            >
+              <option value="">jede Quelle</option>
+              {m.quellen.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            title="In welcher Fotogruppe"
+            value={m.suche.gruppe ?? '\u0000'}
+            onChange={(e) =>
+              // Der leere Wert ist hier eine Frage („in keiner Gruppe") und
+              // deshalb nicht derselbe wie „egal" — dafür steht ein Wert, den
+              // keine Kennung hat.
+              m.setSuche(
+                e.target.value === '\u0000'
+                  ? entferne(m.suche, 'gruppe')
+                  : { ...m.suche, gruppe: e.target.value },
+              )
+            }
+            style={{ ...B.auswahl, width: 150 }}
+          >
+            <option value={'\u0000'}>jede Gruppe</option>
+            <option value="">in keiner Gruppe</option>
+            {m.gruppen.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            title="Fotos, für die das Buch die Zeit raten muss"
+            onClick={() =>
+              m.setSuche(
+                m.suche.ohneDatum
+                  ? entferne(m.suche, 'ohneDatum')
+                  : { ...m.suche, ohneDatum: true },
+              )
+            }
+            style={m.suche.ohneDatum ? B.pilleAn : B.pilleAus}
+          >
+            ohne Datum
+          </button>
+          <button
+            type="button"
+            title="Alle Bedingungen zurücknehmen"
+            onClick={() => {
+              setOrtsuche('');
+              m.setSuche({});
+            }}
+            style={B.knopfKlein}
+            disabled={Object.keys(m.suche).length === 0}
+          >
+            zurücksetzen
+          </button>
+        </div>
+
         <div style={S.rollen}>
           {m.fotos?.length === 0 && (
             <p style={S.leer}>
-              {m.filter === 'zweifelhaft'
-                ? 'Kein Foto mit zweifelhaftem Datum. Der Bestand ist in Ordnung.'
-                : 'Nichts in dieser Auswahl.'}
+              {Object.keys(m.suche).length > 0
+                ? 'Kein Foto erfüllt diese Bedingungen.'
+                : m.filter === 'zweifelhaft'
+                  ? 'Kein Foto mit zweifelhaftem Datum. Der Bestand ist in Ordnung.'
+                  : 'Nichts in dieser Auswahl.'}
             </p>
           )}
           {m.fotos?.map((f) => {
@@ -489,6 +654,7 @@ const S = {
   },
   liste: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: 8 },
   kopf: { display: 'flex', alignItems: 'center', gap: 8 },
+  filterzeile: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const },
   rollen: { flex: 1, overflowY: 'auto' as const, minHeight: 0 },
   leer: { ...B.leise, padding: 24, textAlign: 'center' as const },
   zeile: {
