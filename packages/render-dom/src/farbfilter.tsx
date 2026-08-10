@@ -31,7 +31,16 @@ import type { ColorMatrix, CoverBox, ImageBox, RenderBox } from '@franibook/core
  * `kind === 'image'` sie aufzuweichen wäre der falsche Tausch.
  */
 function angepassteBilder(boxes: readonly (RenderBox | CoverBox)[]): ImageBox[] {
-  return boxes.filter((b): b is ImageBox => b.kind === 'image' && !!b.colorMatrix);
+  return boxes.filter(
+    (b): b is ImageBox =>
+      b.kind === 'image' &&
+      !!b.colorMatrix &&
+      // Ein Bild über der Falzachse steht als zwei Boxen mit derselben Kennung;
+      // die Filterkennung entsteht daraus. Zwei `<filter id="…">` mit gleicher
+      // Kennung wären ein doppelt vergebener Name, und beide Hälften brauchen
+      // ohnehin dieselbe Matrix – eine Definition genügt für beide.
+      b.gutterPart !== 'rechts',
+  );
 }
 
 /** Die zwanzig Werte einer `feColorMatrix` aus der affinen Abbildung. */

@@ -41,6 +41,19 @@ Millimetern des Zielformats anlegt, nimmt sie dem Buch.
 `cover.bleed` und `cover.overhang` sind deshalb Paare aus `sideMm`/`topMm`; ein
 gemeinsamer Wert traf die Umschlagbreite um 4 mm daneben.
 
+## Zwei Zahlen am Falz, und sie meinen Verschiedenes
+
+`page.gutterSafeMm` ist eine **Gestaltungsreserve**: die Zone je Seite der Achse,
+in der nichts Wesentliches stehen soll. `page.gutterLossMm` ist dagegen ein
+**Messwert der Bindung**: was ein durchlaufendes Bild dort tatsächlich an Papier
+verliert. Das erste warnt, das zweite rechnet — es lässt den verschluckten
+Streifen doppelt drucken (`.claude/rules/rendern.md`, „Der Falz frisst mit").
+
+In allen acht Profilen steht 0, weil sie layflat sind und niemand gemessen hat.
+Das ist Absicht: Ein geratener Zuschlag dupliziert einen Streifen, der dann
+sichtbar bleibt — schlimmer als kein Zuschlag. Wer einen Wert einträgt, nennt in
+`provenance` den Testdruck, an dem er ihn gemessen hat.
+
 `cover.hingeSafeMm` ist der Falzbereich des Anbieters — die Zone links und rechts
 des Rückens, in der kein Text stehen darf. Sie ist breiter als das Gelenkfeld und
 ragt in die Deckelflächen hinein, weshalb `safeArea()` Vorder- und Rückseite zur

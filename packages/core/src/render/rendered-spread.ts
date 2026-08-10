@@ -103,6 +103,20 @@ export interface ImageBox extends Rect {
    * gelöscht. Wie `frame` und `manualRect` sehen die Renderer es nie an.
    */
   caption?: string;
+  /**
+   * Welche Hälfte eines über die Falzachse laufenden Bildes das hier ist.
+   *
+   * Gesetzt nur, wenn das Profil einen Falzzuschlag führt
+   * (`page.gutterLossMm > 0`): Dann steht dasselbe Foto als zwei Boxen im
+   * Modell, links und rechts der Achse, und die beiden zeigen einen um den
+   * Verlust überlappenden Ausschnitt. Wie `manualRect` und `frame` keine
+   * Geometrie, sondern Herkunft – die Renderer zeichnen zwei gewöhnliche
+   * Bildboxen und sehen das Feld nie an.
+   *
+   * Wer Bilder **zählt**, nimmt `imageBoxes()`: Zwei Boxen sind hier ein Bild,
+   * und eine Doppelseite mit neun Fotos soll nicht zehn melden.
+   */
+  gutterPart?: 'links' | 'rechts';
   warnings: RenderWarning[];
 }
 
@@ -293,9 +307,60 @@ export interface RenderedSpread {
   guides: Guide[];
 }
 
-/** Alle Bildboxen eines Spreads. */
+/**
+ * Alle Bildboxen eines Spreads – ein Eintrag je Bild, nicht je gezeichneter
+ * Fläche.
+ *
+ * Die rechte Hälfte eines Bildes über der Falzachse (`gutterPart`) fehlt
+ * deshalb: Sie ist die Fortsetzung derselben Aufnahme und trägt weder eigene
+ * Warnungen noch einen eigenen Platz. Wer wirklich jede Fläche braucht –
+ * genau ein Fall, das Zeichnen –, liest `spread.boxes`.
+ */
 export function imageBoxes(spread: RenderedSpread): ImageBox[] {
-  return spread.boxes.filter((b): b is ImageBox => b.kind === 'image');
+  return spread.boxes.filter((b): b is ImageBox => b.kind === 'image' && b.gutterPart !== 'rechts');
+}
+
+/**
+ * Die Bildbox eines Slots – bei einem Bild über der Falzachse als **ein**
+ * Kasten, nicht als die Hälfte, die zufällig zuerst kommt.
+ *
+ * Die Oberfläche rechnet daran: Griffe, Zoom, Drehung und „größer/kleiner"
+ * beziehen sich auf das ganze Bild. Nähme der Editor die linke Hälfte, schrumpfte
+ * ein Klick auf „größer" den Kasten auf die halbe Doppelseite und der Zoom
+ * zeigte einen Teilausschnitt als den ganzen.
+ *
+ * Die Vereinigung ist verlustfrei: Der Kasten ist die Summe beider Hälften, der
+ * Ausschnitt reicht von der linken Kante der linken bis zur rechten der rechten
+ * – der doppelt gedruckte Streifen fällt dabei heraus, und übrig bleibt genau
+ * der Ausschnitt, aus dem die Teilung entstanden ist.
+ */
+export function slotImageBox(spread: RenderedSpread, slotId: string): ImageBox | undefined {
+  const teile = spread.boxes.filter(
+    (b): b is ImageBox => b.kind === 'image' && b.slotId === slotId,
+  );
+  const links = teile[0];
+  if (!links) return undefined;
+  if (links.gutterPart === undefined) return links;
+
+  const rechts = teile[1];
+  if (!rechts) return links;
+
+  const { gutterPart: _, ...ganz } = links;
+  const crop = { ...links.crop, w: rechts.crop.x + rechts.crop.w - links.crop.x };
+  // Die Auflösung wird auf den ganzen Kasten umgerechnet, obwohl die Hälften
+  // die höhere, tatsächlich gedruckte Dichte tragen: In dieser Box müssen
+  // Kasten, Ausschnitt und Auflösung zueinander passen, sonst schlägt der
+  // Zuschlag auf alles durch, was daran weiterrechnet – `photoPixelsOf` und
+  // damit „Trägt bis X × Y mm", die Vorhersage beim Ziehen und die
+  // Ausschnittsnachführung. Der Faktor steckt in den Teilen selbst: Die beiden
+  // Ausschnittsbreiten überlappen um genau den Verlust.
+  const ueberlappt = links.crop.w + rechts.crop.w;
+  return {
+    ...ganz,
+    wMm: rechts.xMm + rechts.wMm - links.xMm,
+    crop,
+    ...(ueberlappt > 0 ? { effectiveDpi: (links.effectiveDpi * crop.w) / ueberlappt } : {}),
+  };
 }
 
 /** Sammelt alle Warnungen eines Spreads mit ihrer Box. */

@@ -44,6 +44,7 @@ import {
   panCrop,
   photoPixelsOf,
   randabfallend,
+  slotImageBox,
   withAdjust,
   withCrop,
   withRect,
@@ -282,8 +283,7 @@ export function useSpreadEditor({
    * `bildBox` unten fragt immer die *angezeigte* – hier wird auch die Fassung
    * gebraucht, die vom Server kam.
    */
-  const bildBoxVon = (s: RenderedSpread, slotId: string) =>
-    imageBoxes(s).find((b) => b.slotId === slotId);
+  const bildBoxVon = (s: RenderedSpread, slotId: string) => slotImageBox(s, slotId);
 
   /**
    * Die beweglichen Texte dieser Doppelseite: Blöcke und Vorlagentexte.
@@ -357,11 +357,13 @@ export function useSpreadEditor({
 
   const pxPerMm = stageBreite / spread.widthMm;
   const bildBox = (slotId: string | null) =>
-    slotId === null ? undefined : imageBoxes(angezeigt).find((b) => b.slotId === slotId);
+    slotId === null ? undefined : slotImageBox(angezeigt, slotId);
   const slotRect = (slotId: string): Rect | undefined =>
-    angezeigt.boxes.find(
-      (b) => (b.kind === 'image' || b.kind === 'empty') && b.slotId === slotId,
-    ) as Rect | undefined;
+    // Über `slotImageBox`, nicht über den ersten Treffer: Bei einem Bild über
+    // der Falzachse wäre das die linke Hälfte, und die Auflösung am Ablegeziel
+    // (`dpiInSlot`) rechnete mit halber Kastenbreite.
+    slotImageBox(angezeigt, slotId) ??
+    (angezeigt.boxes.find((b) => b.kind === 'empty' && b.slotId === slotId) as Rect | undefined);
 
   const gewaehlteBox = bildBox(selectedSlotId);
   /** Ob dieses Bild seinen Platz nicht mehr aus der Vorlage hat. */
