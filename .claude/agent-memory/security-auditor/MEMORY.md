@@ -2,3 +2,5 @@
 - [Persisted JSON sanitizing](persisted_json_sanitizing.md) — why **proto** in project.json isn't real proto pollution here; project's abnahmenAus() sanitizer pattern to expect/require
 - [Settings route typing](settings_route_typing.md) — /api/settings & /api/generate: TS body types aren't runtime validation; missing typeof-boolean checks are convention, not per-feature findings
 - [Query type confusion](query_type_confusion.md) — repeated query keys become arrays (no Fastify schema validation); confirmed 500 in GET /api/photos?ort=a&ort=b, silent empty-result for quelle/gruppe
+- [PDF renderer streaming](render_pdf_streaming.md) — renderPdf streams images one at a time (4.9GB→495MB spike finding); more spreads/images isn't a memory-DoS on its own
+- [Kontaktbogen feature review](kontaktbogen_review.md) — no findings on POST /api/export/abzug contact-sheet addition; why each candidate concern was ruled out

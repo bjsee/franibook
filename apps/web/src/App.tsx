@@ -952,7 +952,7 @@ export function App() {
               onClick={() => void exportAbzug()}
               disabled={!!busy}
               style={B.knopf}
-              title="Das ganze Buch klein und blätterbar, mit Seitenzahlen zum Notieren — aus den Vorschauen, ohne Beschnitt."
+              title="Das ganze Buch klein und blätterbar, mit Seitenzahlen zum Notieren — dahinter ein Kontaktbogen der Fotos, die nicht im Buch stehen."
             >
               Korrekturabzug
             </button>

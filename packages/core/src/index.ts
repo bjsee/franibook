@@ -58,6 +58,7 @@ export * from './cover/render-cover.js';
 
 export * from './pruefung/abnahme.js';
 export * from './pruefung/abzug.js';
+export * from './pruefung/kontaktbogen.js';
 
 export * from './templates/index.js';
 export * from './templates/halves.js';

@@ -2054,6 +2054,27 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > fehlen: Was man gesehen und für gut befunden hat, ist beim Durchsehen genau das
 > Rauschen, das man dann überliest.
 >
+> **Am Ende der Kontaktbogen.** Ein Buchentwurf lässt Fotos übrig, und man sieht nicht,
+> welche. Hinter der letzten Doppelseite hängen deshalb Blätter mit den nicht platzierten
+> Bildern — sechs mal fünf Zellen je Buchseite, das Datum darunter, sechzig je Bogen
+> (`core/pruefung/kontaktbogen.ts`). Gespeist werden sie aus derselben Bedingung wie die
+> Filterleiste im Bestand (`platziert: false`), damit „übrig" nicht zweimal etwas anderes
+> heißt.
+>
+> **Nur im Abzug, nicht im Buch.** Ein Kontaktbogen im fertigen Buch sähe aus wie ein
+> Rest, und ein Rest gehört nicht gedruckt; als Werkzeug zum Durchsehen ist er sofort
+> nützlich. Deshalb ist er auch keine Vorlage in der Bibliothek, aus der die Automatik je
+> wählen dürfte, sondern ein fertiges `RenderedSpread` — dieselben Bild- und Textboxen wie
+> überall, nur dichter gesetzt, und damit ohne eine Zeile Sonderfall in einem der beiden
+> Renderer. Sein Blatt trägt statt der Seitenzahlen einen Titel: Es ist keine Buchseite,
+> also gibt es dort nichts zu notieren.
+>
+> Der Ausschnitt zielt auch hier auf Gesichter (`focalForCrop`) — die Zellen sind fast
+> quadratisch, ein Querformat verliert darin ein Drittel seiner Fläche, und aus der Mitte
+> geschnitten fiele das Motiv oft genau heraus. Der Preis steht in der Laufzeit: 830
+> übrige Fotos sind vierzehn Bögen und ebenso viele Sekunden zusätzlich. Wer sie nicht
+> will, sendet `kontaktbogen: false`.
+>
 > **Und er lässt sich öffnen.** Jeder Export endete vorher mit einem Dateipfad in einer
 > Meldung, den man von Hand in den Finder tippte — beim Druck-PDF verschmerzbar, beim
 > Abzug der Bruch mitten im Handgriff, denn er ist zum sofortigen Durchsehen da.
