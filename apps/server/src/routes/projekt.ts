@@ -89,6 +89,7 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
       background?: string;
       tilt?: number;
       frame?: string;
+      pageNumbers?: boolean;
     };
   }>('/api/settings', async (req) => {
     if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
@@ -125,6 +126,9 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     // aber kein Foto. Gegen die geschlossene Liste aus dem Kern geprüft, ein
     // unbekannter Wert wird wie bei den Zeitstrahlfassungen übergangen.
     if (isFrameId(req.body.frame)) project.settings.frame = req.body.frame;
+    // Die Seitenzahl aus demselben Grund: Sie wird beim Zeichnen aus dem Platz
+    // der Doppelseite gerechnet und rührt die Verteilung nicht an.
+    if (req.body.pageNumbers !== undefined) project.settings.pageNumbers = req.body.pageNumbers;
     await project.save();
     return { settings: project.settings };
   });

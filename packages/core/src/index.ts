@@ -49,6 +49,7 @@ export * from './render/tilt.js';
 export * from './render/frame.js';
 export * from './render/typography.js';
 export * from './render/inspect.js';
+export * from './render/page-number.js';
 
 export * from './cover/cover.js';
 export * from './cover/geometry.js';

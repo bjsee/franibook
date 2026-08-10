@@ -198,6 +198,15 @@ export interface ProjectSettings {
    * Umstellen erfordert deshalb kein Neugenerieren.
    */
   frame: FrameId;
+  /**
+   * Seitenzahlen im Fuß jeder Buchseite.
+   *
+   * Wie Neigung und Rahmen eine reine Rendereinstellung: Die Zahl wird beim
+   * Zeichnen aus dem Platz der Doppelseite gerechnet, nichts am Buch ändert
+   * sich. Ein Projekt ohne dieses Feld bekommt sie – ein Buch mit Seitenzahlen
+   * ist der Normalfall, und wer sie nicht will, schaltet sie ab.
+   */
+  pageNumbers: boolean;
   seed: number;
   /**
    * Das Buchformat, als Kennung eines Druckprofils.
@@ -536,6 +545,11 @@ export class Project {
     // ausdrücklich. Ein geladenes Projekt ohne dieses Feld sieht damit aus wie
     // vorher – siehe render/frame.ts.
     frame: DEFAULT_FRAME,
+    // An: Ohne Seitenzahlen gibt es keinen Verweis auf eine Seite – kein
+    // Register, keine Jahresübersicht, kein „siehe Seite 44". Ein geladenes
+    // Projekt ohne dieses Feld bekommt sie damit, und das ist gewollt: Sie sind
+    // im Buch der Normalfall, nicht die Ausnahme.
+    pageNumbers: true,
     seed: 1,
     // Das gewählte Buchformat. Ein geladenes Projekt ohne dieses Feld bekommt
     // es hier – die Vorgabe ist dasselbe Format, mit dem vorher gerechnet
@@ -1870,6 +1884,9 @@ export class Project {
       overrides: this.overrides,
       background: this.settings.background,
       ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
+      // Ohne Angabe trägt das Buch keine Zahlen – der Schalter lebt hier und
+      // nicht in der Engine, wie beim Zeitstrahl.
+      ...(this.settings.pageNumbers ? { pageNumbers: {} } : {}),
       // Derselbe Seed wie beim Generieren: Ein neu angeordnetes Buch bekommt
       // damit auch neue Winkel, ein unverändertes behält seine.
       ...(this.settings.tilt > 0

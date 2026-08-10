@@ -540,6 +540,7 @@ export function App() {
     timelineSideVariant?: TimelineSideVariant;
     timelineAccent?: string;
     tilt?: number;
+    pageNumbers?: boolean;
   }) {
     await einstellungenAendern(patch);
     loadInfo();
