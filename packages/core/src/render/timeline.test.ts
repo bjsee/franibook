@@ -3,7 +3,14 @@ import type { PrintProfile } from '../print/profile.js';
 import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import type { NaiveDateTime } from '../model/photo.js';
 import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
-import { TIMELINE_FOOT_HEIGHT_MM, timelineBoxes, timelineFootTopMm } from './timeline.js';
+import {
+  TIMELINE_FOOT_HEIGHT_MM,
+  TIMELINE_FOOT_VARIANTS,
+  timelineBoxes,
+  timelineFootPreviewWindowMm,
+  timelineFootTopMm,
+} from './timeline.js';
+import { allProfiles } from '../print/profiles/index.js';
 
 const profile = saal as PrintProfile;
 
@@ -298,6 +305,56 @@ describe('Zeitstrahl: Fassungen', () => {
         expect(box.yMm + box.hMm, variant).toBeLessThanOrEqual(unten);
       }
     }
+  });
+
+  it('legt das Vorschaufenster über den Fußraum, in jedem Format', () => {
+    // Der Fehler, den dieser Test festhält: Der Ausschnitt der Miniatur stand
+    // als vier feste Millimeterwerte in der Oberfläche, gerechnet gegen ein
+    // 30 × 30er Format, das es unter den acht Profilen nicht gibt. Am
+    // Vorgabeformat liegt der Fußraum 30 mm höher — das Fenster zeigte Papier,
+    // und der Wähler bot vier leere Kästen an statt vier Zeichnungen.
+    for (const p of allProfiles()) {
+      const fenster = timelineFootPreviewWindowMm(p);
+      const top = timelineFootTopMm(p);
+      expect(fenster.y0, p.id).toBeLessThanOrEqual(top);
+      expect(fenster.y1, p.id).toBeGreaterThanOrEqual(top + TIMELINE_FOOT_HEIGHT_MM);
+
+      for (const variant of TIMELINE_FOOT_VARIANTS) {
+        const boxen = timelineBoxes(
+          { dates: SPANNE as NaiveDateTime[], label: 'Pfingsten am Meer', variant },
+          p,
+        );
+        // Der Fußstrahl zeichnet keine Polygone; der Typ erlaubt sie, und nur
+        // Rechtecke und Texte haben einen Kasten, gegen den ein Fenster prüfbar ist.
+        const sichtbar = boxen
+          .filter((b): b is RectBox | TextBox => b.kind !== 'polygon')
+          .filter(
+            (b) =>
+              b.xMm + b.wMm > fenster.x0 &&
+              b.xMm < fenster.x1 &&
+              b.yMm + b.hMm > fenster.y0 &&
+              b.yMm < fenster.y1,
+          );
+        // Genug, dass die Fassung erkennbar ist: Grund, Marker und mindestens
+        // eine Beschriftung. Bei `ribbon` sind es am wenigsten — die Fläche ist
+        // eine Box, wo `band` achtzehn Felder zeichnet.
+        expect(sichtbar.length, `${p.id} ${variant}`).toBeGreaterThan(3);
+        // Der Marker gehört dazu: Er ist der Grund, warum das Fenster dort
+        // liegt und nicht am Anfang der Achse.
+        const m = perle(boxen)!;
+        expect(m.xMm, `${p.id} ${variant}`).toBeGreaterThanOrEqual(fenster.x0);
+        expect(m.xMm + m.wMm, `${p.id} ${variant}`).toBeLessThanOrEqual(fenster.x1);
+      }
+    }
+  });
+
+  it('rückt das Vorschaufenster mit der Achse ein, wenn das Buch Seitenzahlen trägt', () => {
+    // Sonst zeigte die Miniatur, an der man die Fassung wählt, eine andere
+    // Achse als die Seite darunter — und sie ist ausdrücklich keine Nachbildung.
+    const ohne = timelineFootPreviewWindowMm(profile);
+    const mit = timelineFootPreviewWindowMm(profile, { insetMm: 6 });
+    expect(mit.x0).toBeGreaterThan(ohne.x0);
+    expect(mit.x1 - mit.x0).toBeLessThan(ohne.x1 - ohne.x0);
   });
 
   it('lässt in jeder Fassung den Marker weg, wo keiner hingehört', () => {

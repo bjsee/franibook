@@ -25,9 +25,11 @@ import {
   pageNumberInsetMm,
   profileById,
   sideTimelineBoxes,
+  sideTimelinePreviewWindowMm,
   spreadHeightMm,
   spreadWidthMm,
   timelineBoxes,
+  timelineFootPreviewWindowMm,
   type NaiveDateTime,
   type RenderedSpread,
   type TimelineFootVariant,
@@ -69,21 +71,23 @@ const BEISPIEL = {
 };
 
 /**
- * Die Ausschnitte, in Millimetern der Druckfläche.
+ * Wie groß die Miniatur auf dem Bildschirm wird.
  *
- * Am Fuß von der Jahresgrenze (108 mm) bis kurz hinter den Marker: Damit sind
- * die Jahreszahl, der Wechsel zwischen Randmonat und Kapiteljahr und der Marker
- * gleichzeitig zu sehen – die drei Stellen, an denen die vier Fassungen
- * auseinandergehen. Am Rand von der Beschnittkante bis in den Sicherheitsrand,
- * senkrecht um den Marker herum und weit genug, dass die Jahresleiter noch eine
- * ihrer Zahlen zeigt (alle fünf Jahre).
+ * Der Ausschnitt selbst kommt aus dem Kern (`timelineFootPreviewWindowMm`,
+ * `sideTimelinePreviewWindowMm`) und ist damit in jedem der acht Formate der
+ * Bereich, in dem die Fassungen auseinandergehen. Nur der Maßstab gehört der
+ * Oberfläche, denn er hängt an der Spalte und nicht am Papier: Am Fuß gibt die
+ * Zeilenbreite den Maßstab (336 px Spalte minus Polsterung von Abschnitt und
+ * Knopf), am Rand die Zeilenhöhe.
+ *
+ * Vorher standen hier vier feste Millimeterwerte, gerechnet gegen ein
+ * 30 × 30er Format, das es unter den Profilen nicht gibt — am Vorgabeformat
+ * 28 × 28 lag das Fenster 30 mm unter dem Fußraum und neben dem Band der
+ * Randachse, und alle acht Miniaturen waren leer.
  */
-const AUSSCHNITT = {
-  // 200 mm auf 272 px: die Zeilenbreite der Seitenspalte (336 minus Polsterung
-  // des Abschnitts und des Knopfes). Breiter geriete die Zeichnung über den
-  // Rahmen des Knopfes hinaus.
-  foot: { x0: 100, x1: 300, y0: 280.5, y1: 295.5, pxPerMm: 1.36 },
-  side: { x0: 2.5, x1: 11.5, y0: 118, y1: 176, pxPerMm: 2.2 },
+const MASS = {
+  foot: { breitePx: 272 },
+  side: { hoehePx: 128 },
 } as const;
 
 export interface ZeitleisteMiniProps {
@@ -158,9 +162,24 @@ export function ZeitleisteMini({
     };
   }, [ort, fassung, akzent, background, profile, seitenzahlen]);
 
-  const a = AUSSCHNITT[ort];
-  const breite = (a.x1 - a.x0) * a.pxPerMm;
-  const hoehe = (a.y1 - a.y0) * a.pxPerMm;
+  // Das Fenster rechnet der Kern, der Maßstab folgt der Spalte: Am Fuß aus der
+  // Zeilenbreite, am Rand aus der Zeilenhöhe. So bleibt die Zeile in jedem
+  // Format gleich groß, obwohl der Ausschnitt in Millimetern verschieden ist.
+  const fenster =
+    ort === 'side'
+      ? sideTimelinePreviewWindowMm(profile, {
+          fromYear: BEISPIEL.bookYears.from,
+          toYear: BEISPIEL.bookYears.to,
+          at: BEISPIEL.at,
+        })
+      : timelineFootPreviewWindowMm(profile, {
+          ...(seitenzahlen ? { insetMm: pageNumberInsetMm() } : {}),
+        });
+  const spanneX = fenster.x1 - fenster.x0;
+  const spanneY = fenster.y1 - fenster.y0;
+  const pxPerMm = ort === 'side' ? MASS.side.hoehePx / spanneY : MASS.foot.breitePx / spanneX;
+  const breite = spanneX * pxPerMm;
+  const hoehe = spanneY * pxPerMm;
 
   return (
     <div
@@ -178,13 +197,13 @@ export function ZeitleisteMini({
       <div
         style={{
           position: 'absolute',
-          left: -a.x0 * a.pxPerMm,
-          top: -a.y0 * a.pxPerMm,
+          left: -fenster.x0 * pxPerMm,
+          top: -fenster.y0 * pxPerMm,
         }}
       >
         <SpreadView
           spread={spread}
-          widthPx={spreadWidthMm(profile) * a.pxPerMm}
+          widthPx={spreadWidthMm(profile) * pxPerMm}
           imageSrc={() => ''}
         />
       </div>
