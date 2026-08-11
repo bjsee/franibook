@@ -3,9 +3,14 @@ import saal from '../print/profiles/format-28x28.json' with { type: 'json' };
 import type { PrintProfile } from '../print/profile.js';
 import type { NaiveDateTime } from '../model/photo.js';
 import type { RectBox, RenderBox, TextBox } from './rendered-spread.js';
-import { profileById } from '../print/profiles/index.js';
+import { allProfiles, profileById } from '../print/profiles/index.js';
 import { libraryOuterMarginMm } from '../templates/index.js';
-import { SIDE_AXIS_BAND_MM, sideAxisPasst, sideTimelineBoxes } from './side-timeline.js';
+import {
+  SIDE_AXIS_BAND_MM,
+  sideAxisPasst,
+  sideTimelineBoxes,
+  sideTimelinePreviewWindowMm,
+} from './side-timeline.js';
 
 const profile = saal as PrintProfile;
 const rects = (b: RenderBox[]) => b.filter((x): x is RectBox => x.kind === 'rect');
@@ -189,6 +194,56 @@ describe('Randachse: Fassungen', () => {
 
     expect(sideAxisPasst(profile)).toBe(true);
     expect(libraryOuterMarginMm(profile)).toBeCloseTo(19.8, 1);
+  });
+
+  it('legt das Vorschaufenster über die Achse, in jedem Format', () => {
+    // Der Fehler, den dieser Test festhält: Der Ausschnitt der Miniatur stand
+    // als vier feste Millimeterwerte in der Oberfläche, gerechnet gegen ein
+    // 30 × 30er Format, das es unter den Profilen nicht gibt. Nach dem Umzug des
+    // Bandes vom Sicherheitsrand ins Papier zeigte er neben die Achse, und der
+    // Wähler bot vier leere Kästen an statt vier Zeichnungen.
+    const at = '2017-05-21T16:40:00' as NaiveDateTime;
+    for (const p of allProfiles()) {
+      const boxen = sideTimelineBoxes({ fromYear: 2008, toYear: 2026, at, variant: 'ladder' }, p);
+      // An den fünf kleinen Formaten gibt es die Achse nicht — dort ist auch
+      // nichts vorzuführen, und die Oberfläche bietet sie nicht an.
+      if (!sideAxisPasst(p)) {
+        expect(boxen, p.id).toEqual([]);
+        continue;
+      }
+      const f = sideTimelinePreviewWindowMm(p, { fromYear: 2008, toYear: 2026, at });
+      // Die Achse zeichnet keine Polygone; der Typ erlaubt sie, und nur Rechtecke
+      // und Texte haben einen Kasten, gegen den sich ein Fenster prüfen lässt.
+      const kaesten = boxen.filter((b): b is RectBox | TextBox => b.kind !== 'polygon');
+      const sichtbar = kaesten.filter(
+        (b) => b.xMm + b.wMm > f.x0 && b.xMm < f.x1 && b.yMm + b.hMm > f.y0 && b.yMm < f.y1,
+      );
+      expect(sichtbar.length, p.id).toBeGreaterThan(5);
+      // Das Band passt in die Breite des Fensters, waagerecht wird nichts
+      // abgeschnitten: Die Miniatur zeigt die Achse ganz, nur einen Abschnitt
+      // ihrer Länge.
+      for (const b of kaesten) {
+        expect(b.xMm, p.id).toBeGreaterThanOrEqual(f.x0);
+        expect(b.xMm + b.wMm, p.id).toBeLessThanOrEqual(f.x1);
+      }
+      // Und der Marker liegt darin — er ist der Grund für den Ausschnitt.
+      const p2 = perle(boxen)!;
+      expect(p2.yMm, p.id).toBeGreaterThanOrEqual(f.y0);
+      expect(p2.yMm + p2.hMm, p.id).toBeLessThanOrEqual(f.y1);
+    }
+  });
+
+  it('hält das Vorschaufenster in der Achse, auch am Anfang des Buches', () => {
+    // Ohne Klemmung liefe das Fenster über den Achsenanfang hinaus in die Ecke
+    // der Seite, und die Miniatur zeigte oben Papier.
+    const anfang = sideTimelinePreviewWindowMm(profile, {
+      fromYear: 2008,
+      toYear: 2026,
+      at: '2008-01-01T00:00:00' as NaiveDateTime,
+    });
+    const senkrecht = rects(achse('2015-07-01T12:00:00')).find((r) => r.hMm > 100)!;
+    expect(anfang.y0).toBeGreaterThanOrEqual(senkrecht.yMm);
+    expect(anfang.y1).toBeLessThanOrEqual(senkrecht.yMm + senkrecht.hMm);
   });
 
   it('lässt in jeder Fassung den Marker weg, wenn die Seite kein Datum hat', () => {

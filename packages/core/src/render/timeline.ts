@@ -80,6 +80,59 @@ export const TIMELINE_FOOT_VARIANTS = ['classic', 'band', 'ruler', 'ribbon'] as 
 export type TimelineFootVariant = (typeof TIMELINE_FOOT_VARIANTS)[number];
 
 /**
+ * Die Achse: Anfang, Ende und Breite eines Monatsfeldes.
+ *
+ * Eigene Funktion, weil außer der Zeichnung auch das Vorschaufenster diese drei
+ * Zahlen braucht. Zweimal gerechnet wären sie zwei Wahrheiten über dieselbe
+ * Geometrie — und die Miniatur im Wähler zeigte dann etwas anderes als die
+ * Seite darunter.
+ */
+function footAxis(profile: PrintProfile, insetMm: number) {
+  const { bleedMm, trimWidthMm, safetyMm } = profile.page;
+  const x0 = bleedMm + safetyMm + insetMm;
+  const x1 = bleedMm + 2 * trimWidthMm - safetyMm - insetMm;
+  return { x0, x1, monthWidth: (x1 - x0) / WINDOW_MONTHS };
+}
+
+/**
+ * Das Fenster, in dem die vier Fassungen auseinandergehen — in Monatsfeldern.
+ *
+ * Ganz gezeigt wäre der Strahl ein Strich: 584 mm auf die Breite einer
+ * Seitenspalte. Gezeigt wird deshalb der Ausschnitt, an dem sich die Fassungen
+ * unterscheiden — die Jahresgrenze bei Feld 3 und der Marker, der beim Median
+ * des Bestands (2,6 Monate Spanne) um Feld 7,6 steht. Ein Viertelfeld Vorlauf
+ * davor, damit die Grenze nicht auf der Schnittkante des Fensters sitzt.
+ */
+const PREVIEW_FROM_MONTH = 2.75;
+const PREVIEW_TO_MONTH = 9;
+
+/**
+ * Fenster für eine Miniatur des Fußstrahls, in Millimetern der Druckfläche.
+ *
+ * **Warum im Kern und nicht in der Oberfläche.** Der Ausschnitt hing dort
+ * einmal als vier feste Millimeterwerte, gerechnet gegen ein 30 × 30er Format,
+ * das es unter den acht Profilen nicht gibt. Am Vorgabeformat 28 × 28 liegt der
+ * Fußraum 30 mm höher — das Fenster zeigte Papier, und der Wähler, der eine
+ * Zeichnung statt eines Wortes anbieten soll, zeigte vier leere Kästen. Wer die
+ * Lage der Achse kennt, ist diese Datei; also rechnet sie das Fenster.
+ */
+export function timelineFootPreviewWindowMm(
+  profile: PrintProfile,
+  opts: { insetMm?: number } = {},
+): { x0: number; x1: number; y0: number; y1: number } {
+  const { x0, monthWidth } = footAxis(profile, opts.insetMm ?? 0);
+  const top = timelineFootTopMm(profile);
+  return {
+    x0: x0 + PREVIEW_FROM_MONTH * monthWidth,
+    x1: x0 + PREVIEW_TO_MONTH * monthWidth,
+    // Ein halber Millimeter Luft oben und unten: Die Perle sitzt bei `ruler`
+    // 0,6 mm unter der Oberkante des Fußraums, das Label endet bündig.
+    y0: top - 0.5,
+    y1: top + TIMELINE_FOOT_HEIGHT_MM + 0.5,
+  };
+}
+
+/**
  * Aufteilung der 14 mm, gemessen von der Oberkante des Fußraums.
  *
  * Die Perle sitzt auf dem Spannbalken, dieser auf der Achse, das Label steht
@@ -320,11 +373,8 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   const year = median ? Number(median.slice(0, 4)) : input.fallbackYear;
   if (year === undefined || !Number.isFinite(year)) return [];
 
-  const { bleedMm, trimWidthMm, safetyMm, gutterSafeMm } = profile.page;
-  const inset = input.insetMm ?? 0;
-  const axisX0 = bleedMm + safetyMm + inset;
-  const axisX1 = bleedMm + 2 * trimWidthMm - safetyMm - inset;
-  const axisLen = axisX1 - axisX0;
+  const { bleedMm, trimWidthMm, gutterSafeMm } = profile.page;
+  const { x0: axisX0, x1: axisX1, monthWidth } = footAxis(profile, input.insetMm ?? 0);
   const gutterX = bleedMm + trimWidthMm;
   const top = timelineFootTopMm(profile);
 
@@ -340,7 +390,6 @@ export function timelineBoxes(input: TimelineInput, profile: PrintProfile): Rend
   // versetzt, und die Falzachse träfe den 1. Juli nur ungefähr. Der Preis ist
   // umgekehrt, dass ein Tag je nach Monat 1,05 bis 1,16 mm entspricht – bei
   // dieser Strichstärke unsichtbar.
-  const monthWidth = axisLen / WINDOW_MONTHS;
   const x = (offset: number) => axisX0 + offset * monthWidth;
   /** Monatsfelder ab Fensterbeginn, also ab dem 1. Oktober des Vorjahres. */
   const offsetOf = (value: NaiveDateTime) => {

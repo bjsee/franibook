@@ -4,6 +4,14 @@ Die verbindliche Maßtabelle zu `render/timeline.ts` (Fußstrahl) und
 `render/side-timeline.ts` (Randachse). Alle Werte in Millimetern der Druckseite,
 Profil `saal-30x30` (Trim 300 × 300, Bleed 3, Sicherheit 8, Falzschutz 7).
 
+**Dieses Profil gibt es unter den acht nicht.** Es war das Rechenformat des
+Entwurfs; im Repo ist die Vorgabe `format-28x28`, und der Fußraum liegt dort 30 mm
+höher. Die Zahlen unten sind deshalb durchweg **Abstände** — am Fuß zu
+`timelineFootTopMm(profile)`, am Rand zur Außenkante des Bandes —, und keine
+Position im Blatt. Wer sie als Absolutwert übernimmt, baut eine Zeichnung, die
+in genau einem Format sitzt: So lagen die Ausschnitte der Miniaturen im Wähler
+neben ihren Achsen, und alle acht zeigten leeres Papier.
+
 Herkunft: Entwurfsbündel „Zeitleisten zur Wahl" (Claude Design, August 2026).
 Der HTML-Prototyp des Bündels ist nicht Teil des Repos – verbindlich sind die
 Zahlen hier, nicht seine Nachbildung der Geometrie in `div`s.
@@ -218,9 +226,23 @@ getrennt.
 Die Miniaturen (`ZeitleisteMini.tsx`) rufen `timelineBoxes` bzw.
 `sideTimelineBoxes` im Kern auf und lassen `SpreadView` zeichnen — dieselbe
 Kette wie die Bühne, nur mit kleinerem `pxPerMm` und auf einen Ausschnitt
-beschnitten (Fuß 100–300 mm bei 1,36 px/mm, Rand 2,5–11,5 mm bei 2,2 px/mm). Sie
-sind damit kein dritter Renderer. Möglich ist das, weil `core` I/O-frei und im
-Browser lauffähig ist.
+beschnitten. Sie sind damit kein dritter Renderer. Möglich ist das, weil `core`
+I/O-frei und im Browser lauffähig ist.
+
+**Den Ausschnitt rechnet der Kern**, nicht die Oberfläche:
+`timelineFootPreviewWindowMm` gibt den Fußraum samt der Monatsfelder 2,75 bis 9 —
+Jahresgrenze und Marker, die drei Stellen, an denen die Fassungen auseinandergehen
+—, `sideTimelinePreviewWindowMm` das ganze Band und 58 mm um den Marker. Der
+Oberfläche bleibt nur der Maßstab, denn der hängt an der Spalte und nicht am
+Papier: 272 px Zeilenbreite am Fuß, 128 px Zeilenhöhe am Rand.
+
+Vorher standen die vier Fenstergrenzen als absolute Millimeter in der Oberfläche,
+gerechnet gegen `saal-30x30`. Am Vorgabeformat lag das Fußfenster 30 mm zu tief,
+und das Randfenster stammte noch aus der Zeit, als das Band im Sicherheitsrand
+lag — beide Achsen zeichneten, aber außerhalb des sichtbaren Kastens. Festgehalten
+ist das jetzt als Test über **alle acht Profile** (`timeline.test.ts`,
+`side-timeline.test.ts`): Das Fenster muss den Marker und mindestens vier weitere
+Boxen der Fassung enthalten.
 
 Jede Änderung zeichnet die aufgeschlagene Doppelseite neu (`onNeuRendern`) —
 dieselbe Kette, die `timeline` schon benutzt. Kein Nachladen des Buches, keine
