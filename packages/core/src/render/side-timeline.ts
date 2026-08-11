@@ -133,6 +133,78 @@ export const TIMELINE_SIDE_VARIANTS = ['classic', 'ladder', 'bar', 'column'] as 
 
 export type TimelineSideVariant = (typeof TIMELINE_SIDE_VARIANTS)[number];
 
+/**
+ * Lage des Bandes: Außenkante, Anfang und Länge der Achse.
+ *
+ * Eigene Funktion aus demselben Grund wie `footAxis` im Fußstrahl: Außer der
+ * Zeichnung braucht das Vorschaufenster dieselben Zahlen, und zweimal gerechnet
+ * wären sie zwei Wahrheiten über einen Ort, der sich schon einmal verschoben
+ * hat — vom Sicherheitsrand hinter die Sicherheitslinie, siehe `sideAxisPasst`.
+ */
+function sideBand(profile: PrintProfile) {
+  const { bleedMm, trimHeightMm, safetyMm } = profile.page;
+  const y0 = bleedMm + AXIS_MARGIN_MM;
+  return {
+    aussen: bleedMm + safetyMm - BAND_AUSSEN_MM,
+    y0,
+    laenge: bleedMm + trimHeightMm - AXIS_MARGIN_MM - y0,
+  };
+}
+
+/**
+ * Anteil eines Datums an der Buchspanne, auf 0..1 geklemmt.
+ *
+ * Monatsgenau plus Tagesanteil: Auf 13 mm im Jahr ist ein Tag ein dreißigstel
+ * Millimeter – die Genauigkeit spielt keine Rolle, aber die Rechnung soll nicht
+ * an Monatsgrenzen springen.
+ */
+export function sideAxisFraction(fromYear: number, toYear: number, at: NaiveDateTime): number {
+  const jahre = toYear - fromYear + 1;
+  if (!(jahre > 0)) return 0;
+  const jahr = Number(at.slice(0, 4));
+  const monat = Number(at.slice(5, 7));
+  const tag = Number(at.slice(8, 10));
+  const seit = Math.max(0, Math.min(jahre, jahr - fromYear + (monat - 1 + (tag - 1) / 31) / 12));
+  return seit / jahre;
+}
+
+/** Höhe des Vorschaufensters. Vier Jahrgänge am 28×28, genug für eine Zahl der Jahresleiter. */
+const PREVIEW_HEIGHT_MM = 58;
+
+/**
+ * Fenster für eine Miniatur der Randachse, in Millimetern der Druckfläche.
+ *
+ * Ganz gezeigt wäre die Achse ein Strich – 248 mm auf die Höhe einer
+ * Knopfzeile. Gezeigt wird das Band in seiner ganzen Breite und senkrecht der
+ * Abschnitt um den Marker, weit genug, dass die Jahresleiter noch eine ihrer
+ * Zahlen trägt (sie beschriftet jedes fünfte Jahr).
+ *
+ * Wie beim Fußstrahl rechnet das der Kern und nicht die Oberfläche: Der
+ * Ausschnitt dort stammte noch aus der Zeit, als das Band im Sicherheitsrand
+ * lag, und zeigte nach dessen Verschiebung ins Papier neben die Achse.
+ */
+export function sideTimelinePreviewWindowMm(
+  profile: PrintProfile,
+  input: { fromYear: number; toYear: number; at?: NaiveDateTime },
+): { x0: number; x1: number; y0: number; y1: number } {
+  const { aussen, y0, laenge } = sideBand(profile);
+  const anteil = input.at ? sideAxisFraction(input.fromYear, input.toYear, input.at) : 0.5;
+  // Um den Marker zentriert und in die Achse geklemmt: Steht er am Anfang des
+  // Buches, rutscht das Fenster nicht über die Achse hinaus in die Ecke.
+  const mitte = Math.max(
+    y0 + PREVIEW_HEIGHT_MM / 2,
+    Math.min(y0 + laenge - PREVIEW_HEIGHT_MM / 2, y0 + anteil * laenge),
+  );
+  return {
+    // Ein halber Millimeter Luft außen, damit die Perle der `bar` nicht auf der
+    // Kante des Fensters sitzt.
+    x0: aussen - 0.5,
+    x1: aussen + SIDE_AXIS_BAND_MM + 0.5,
+    y0: mitte - PREVIEW_HEIGHT_MM / 2,
+    y1: mitte + PREVIEW_HEIGHT_MM / 2,
+  };
+}
+
 export interface SideTimelineInput {
   /** Hintergrund der Doppelseite – auf dunklem Grund kehrt die Achse ihre Helligkeit um. */
   background?: string;
@@ -163,10 +235,7 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
   // Kein Platz, keine Achse: Sie läge sonst auf den Bildern oder im Beschnitt.
   if (!sideAxisPasst(profile)) return [];
 
-  const { bleedMm, trimHeightMm, safetyMm } = profile.page;
-  const y0 = bleedMm + AXIS_MARGIN_MM;
-  const y1 = bleedMm + trimHeightMm - AXIS_MARGIN_MM;
-  const laenge = y1 - y0;
+  const { aussen, y0, laenge } = sideBand(profile);
   if (laenge <= 0) return [];
 
   const jahre = toYear - fromYear + 1;
@@ -176,18 +245,10 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
   const dunkel = luminance(papier) <= 0.45;
 
   /** Jahrgänge seit dem Beginn des Buches, als Bruch. */
-  const seit = (wert: NaiveDateTime): number => {
-    const jahr = Number(wert.slice(0, 4));
-    const monat = Number(wert.slice(5, 7));
-    const tag = Number(wert.slice(8, 10));
-    // Monatsgenau plus Tagesanteil: Auf 13 mm im Jahr ist ein Tag ein
-    // dreißigstel Millimeter – die Genauigkeit spielt keine Rolle, aber die
-    // Rechnung soll nicht an Monatsgrenzen springen.
-    return Math.max(0, Math.min(jahre, jahr - fromYear + (monat - 1 + (tag - 1) / 31) / 12));
-  };
+  const seit = (wert: NaiveDateTime): number => sideAxisFraction(fromYear, toYear, wert) * jahre;
 
   /** Anteil eines Datums an der Buchspanne, auf 0..1 geklemmt. */
-  const anteil = (wert: NaiveDateTime): number => seit(wert) / jahre;
+  const anteil = (wert: NaiveDateTime): number => sideAxisFraction(fromYear, toYear, wert);
 
   const ctx: SideContext = {
     /**
@@ -199,7 +260,7 @@ export function sideTimelineBoxes(input: SideTimelineInput, profile: PrintProfil
      * stand hier `bleedMm + insetMm`, das Band also im Beschnittrand — siehe
      * `sideAxisPasst`.
      */
-    x: (insetMm: number) => bleedMm + safetyMm - BAND_AUSSEN_MM + insetMm,
+    x: (insetMm: number) => aussen + insetMm,
     y0,
     laenge,
     jahre,
