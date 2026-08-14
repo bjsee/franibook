@@ -219,6 +219,24 @@ export function App() {
   const [guides, setGuides] = useState<GuideVisibility>(() =>
     bare ? {} : { trim: true, safety: true, gutter: true, diagnostics: true },
   );
+  /**
+   * Aufnahmezeit und Ort über den Bildern (`i`).
+   *
+   * Wie die Hilfslinien hier und nicht im Editor: Blättern setzt `spread` kurz
+   * auf `null`, der Editor hängt dabei aus, und sein Zustand ginge mit. Der
+   * Schalter ist aber eine Aussage über die Darstellung und nicht über diese eine
+   * Doppelseite.
+   */
+  const [infosSichtbar, setInfosSichtbar] = useState(false);
+  /**
+   * Ob der Fotopool aufgeklappt ist — aus demselben Grund hier.
+   *
+   * Er beantwortet eine Frage über den *Bestand* („wohin gehört dieses Bild,
+   * wenn nicht hierhin?"), und die stellt man über mehrere Doppelseiten hinweg.
+   * Ein Zustand, der mit dem Editor ausfiel, hätte ihn bei jedem Blättern wieder
+   * zugeklappt — mitten im Verteilen von Bildern der schlechteste Moment.
+   */
+  const [poolOffen, setPoolOffen] = useState(false);
 
   const imageSrc = useImageSrc(bildVersion);
 
@@ -503,6 +521,11 @@ export function App() {
         if (e.key === 'Escape') {
           if (selectedSlotId) waehlePlatz(null);
           else navigieren({ view: 'overview' });
+        }
+        // Die Aufnahmedaten aller Bilder am Stück, auch ohne gewählten Platz.
+        // Ohne Zusatztasten: Cmd+I und Alt+I gehören dem Browser.
+        if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          setInfosSichtbar((v) => !v);
         }
       }
       if (e.key === 'g') {
@@ -816,6 +839,10 @@ export function App() {
           targetDpi: info.profile.resolution.targetDpi,
           guides,
           onGuides: setGuides,
+          infosSichtbar,
+          onInfosSichtbar: setInfosSichtbar,
+          poolOffen,
+          onPoolOffen: setPoolOffen,
           onIndex: blaettern,
           onLocked: (v) => void setSpreadLocked(v),
           onZeitstrahl: (v) => void setSpreadTimeline(v),
