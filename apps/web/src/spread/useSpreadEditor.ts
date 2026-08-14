@@ -124,6 +124,18 @@ export interface SpreadEditorArgs {
   targetDpi: number;
   selectedSlotId: string | null;
   onSelect: (slotId: string | null) => void;
+  /**
+   * Ob Aufnahmezeit und Ort über den Bildern stehen.
+   *
+   * Kommt von außen, obwohl nur die Bühne ihn zeichnet: Der Editor hängt beim
+   * Blättern aus (`spread` ist kurz `null`), und ein Schalter in seinem Zustand
+   * fiele jedes Mal mit ihm weg. Siehe `types.ts`.
+   */
+  infosSichtbar: boolean;
+  onInfosSichtbar: (sichtbar: boolean) => void;
+  /** Ob der Fotopool aufgeklappt ist — von außen, aus demselben Grund. */
+  poolOffen: boolean;
+  onPoolOffen: (offen: boolean) => void;
   /** Nach jeder Änderung: Kennzahlen der Kopfzeile neu laden. */
   onChanged: () => void;
   /**
@@ -148,6 +160,10 @@ export function useSpreadEditor({
   targetDpi,
   selectedSlotId,
   onSelect,
+  infosSichtbar,
+  onInfosSichtbar,
+  poolOffen,
+  onPoolOffen,
   onChanged,
   onNeuRendern,
   onBildGeaendert,
@@ -189,11 +205,8 @@ export function useSpreadEditor({
    */
   const [ueberSlot, setUeberSlot] = useState<string | null>(null);
   const [pool, setPool] = useState<PoolPhoto[] | null>(null);
-  const [poolOffen, setPoolOffen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [infos, setInfos] = useState<Map<string, PhotoInfo>>(new Map());
-  /** Aufnahmezeit und Ort über den Bildern, umschaltbar mit `i`. */
-  const [infosSichtbar, setInfosSichtbar] = useState(false);
   /**
    * Zählt hoch, sobald sich am Buch etwas geändert hat.
    *
@@ -1256,18 +1269,6 @@ export function useSpreadEditor({
     setGriffModus((m) => naechsterGriffmodus(m, neigungGesperrt));
   }
 
-  // Eigener Handler, weil er auch ohne ausgewählten Slot gelten soll: Die
-  // Aufnahmedaten aller Bilder einer Doppelseite will man am Stück sehen.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'i' || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-      setInfosSichtbar((v) => !v);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
   /** Pfeiltasten justieren fein, `+`/`−` zoomen, `0` setzt zurück. */
   useEffect(() => {
     if (!selectedSlotId) return;
@@ -1532,7 +1533,7 @@ export function useSpreadEditor({
     try {
       const data = await bildEinwerfen(datei, { kind: 'pool' });
       poolLaden();
-      setPoolOffen(true);
+      onPoolOffen(true);
       onChanged();
       setNote(
         data.dupliziert
@@ -2031,7 +2032,9 @@ export function useSpreadEditor({
     spreadGeaendert,
     pool,
     poolOffen,
-    setPoolOffen,
+    // Wie beim Bildinfo-Schalter durchgereicht: Die Rahmen kennen weiter nur das
+    // Modell, gehalten wird der Stand außerhalb.
+    setPoolOffen: onPoolOffen,
     poolAblage,
     /** Ob gerade ein Bild aus der Doppelseite gezogen wird – der Pool wird dann Ziel. */
     poolIstZiel: zug?.source.kind === 'slot',
@@ -2047,7 +2050,10 @@ export function useSpreadEditor({
 
     // Anzeige
     infosSichtbar,
-    setInfosSichtbar,
+    // Durchgereicht, damit die drei Rahmen weiter nur das Modell kennen — dass
+    // der Schalter außerhalb liegt, ist eine Frage der Lebensdauer und keine
+    // ihrer Bedienung.
+    setInfosSichtbar: onInfosSichtbar,
     note,
     setNote,
   };
