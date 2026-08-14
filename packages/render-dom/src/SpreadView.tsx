@@ -249,10 +249,29 @@ export function SpreadView({
    * „Bild verschieben" und „Ausschnitt verschieben" zu unterscheiden – ein
    * Klick als Umschalter ist ohne Erklärung verständlich.
    */
+  /** Ob an diesem Slot gezogen werden kann – die Bedingung für Cursor und `draggable`. */
+  function ziehbar(slotId: string, hasPhoto: boolean): boolean {
+    return !!slotDrag && hasPhoto && selectedSlotId !== slotId;
+  }
+
+  /**
+   * Was die Hand an diesem Slot tun kann.
+   *
+   * Ziehbar heißt greifbar. Vorher trug ein tauschbares Bild denselben `pointer`
+   * wie jede andere klickbare Fläche, und dass zwei Bilder ihre Plätze tauschen,
+   * indem man eines auf das andere zieht, stand allein im Fließtext eines Panels
+   * – im Lesetisch und in der Werkbank also nirgends. Ein Cursor sagt es dort,
+   * wo die Hand schon liegt.
+   */
+  function slotCursor(slotId: string, hasPhoto: boolean): 'grab' | 'pointer' | undefined {
+    if (ziehbar(slotId, hasPhoto)) return 'grab';
+    return onSlotClick ? 'pointer' : undefined;
+  }
+
   function dragProps(slotId: string, hasPhoto: boolean) {
     if (!slotDrag) return {};
     return {
-      draggable: hasPhoto && selectedSlotId !== slotId,
+      draggable: ziehbar(slotId, hasPhoto),
       onDragStart: (e: DragEvent<HTMLDivElement>) => {
         e.dataTransfer.effectAllowed = 'move';
         // Ohne Nutzlast bricht Firefox den Zug sofort ab.
@@ -307,7 +326,7 @@ export function SpreadView({
                     transformOrigin: `${mm(box.rotateAboutMm.xMm - box.xMm)} ${mm(box.rotateAboutMm.yMm - box.yMm)}`,
                   }
                 : {}),
-              cursor: onSlotClick ? 'pointer' : undefined,
+              cursor: slotCursor(box.slotId, true),
               background: missing
                 ? 'repeating-linear-gradient(45deg,#fbf1ee,#fbf1ee 6px,#f3ded8 6px,#f3ded8 12px)'
                 : undefined,
@@ -366,7 +385,9 @@ export function SpreadView({
             style={{
               ...rect(box),
               border: '1px dashed rgba(84,76,70,0.25)',
-              cursor: onSlotClick ? 'pointer' : undefined,
+              // Über dieselbe Funktion, obwohl ein leerer Platz nie ziehbar ist:
+              // eine Regel für den Cursor, nicht zwei.
+              cursor: slotCursor(box.slotId, false),
               outline: selectedSlotId === box.slotId ? '2px solid #00afcb' : undefined,
               outlineOffset: '-2px',
             }}
