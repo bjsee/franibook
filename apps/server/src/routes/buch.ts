@@ -95,7 +95,20 @@ export function buchRouten(
    * Start 46 ms — kein Grund für einen Zwischenspeicher, der nach jeder
    * Änderung ungültig wäre.
    */
-  app.get('/api/book/pruefung', async () => project.abnahme());
+  /**
+   * Die Bilddateien werden dabei nachgesehen (`?dateien=0` lässt es weg).
+   *
+   * Ein `stat` je Bild ist die einzige Frage dieses Berichts, die an die Platte
+   * geht — am echten Bestand 830 Anfragen, über ein eingehängtes Netzlaufwerk
+   * spürbar. Sie steht trotzdem in der Vorgabe: Wer die Abnahme öffnet, will
+   * vor einer Bestellung wissen, ob alle Bilder noch da sind, und eine Prüfung,
+   * die man erst einschalten muss, ist genau dann aus, wenn man sie braucht.
+   */
+  app.get<{ Querystring: { dateien?: string } }>('/api/book/pruefung', async (req) => {
+    if (req.query.dateien === '0') return project.abnahme();
+    const { fehlend } = await project.fehlendeDateien();
+    return project.abnahme(new Set(fehlend));
+  });
 
   /**
    * „Weiß ich, ist ok" — ein Befund wird abgenickt.

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "sources": [
+    {
+      "id": "a1b2c3d4",
+      "label": "buch",
+      "root": "/Users/nutzer/fotos/buch",
+      "addedAt": "2026-08-02T09:14:55.412Z"
+    },
+    {
+      "id": "e5f6a7b8",
+      "label": "nachzuegler",
+      "root": "/Users/see/Pictures/nachzuegler",
+      "addedAt": "2026-08-04T20:11:03.780Z"
+    }
+  ],
+  "settings": {
+    "targetPages": 160,
+    "chapterOpeners": true,
+    "chapterOpenersDense": false,
+    "groupOpeners": "auto",
+    "groupOpenerMinPhotos": 6,
+    "timeline": true,
+    "background": "#faf7f2",
+    "chapterColors": true,
+    "tilt": 1.2,
+    "seed": 1,
+    "birthDate": "1999-03-14",
+    "subjectName": "Frani"
+  },
+  "photos": [
+    {
+      "id": "3f9a1c2b",
+      "sourceId": "a1b2c3d4",
+      "relPath": "2019/IMG_0421.jpeg",
+      "fileName": "IMG_0421.jpeg",
+      "bytes": 2841233,
+      "width": 2048,
+      "height": 1536,
+      "orientation": 1,
+      "takenAt": "2019-04-21T11:04:12",
+      "takenAtSource": "exif"
+    },
+    {
+      "id": "c0ffee11",
+      "sourceId": "e5f6a7b8",
+      "relPath": "IMG_9001.jpeg",
+      "fileName": "IMG_9001.jpeg",
+      "bytes": 1904322,
+      "width": 2048,
+      "height": 1536,
+      "orientation": 1,
+      "takenAt": "2020-07-02T15:22:09",
+      "takenAtSource": "exif"
+    }
+  ],
+  "overrides": {
+    "c0ffee11": { "weight": "hero" }
+  },
+  "groups": [
+    {
+      "id": "g-sylt-2020",
+      "title": "Sylt",
+      "photoIds": ["c0ffee11"],
+      "active": true
+    }
+  ],
+  "groupStamp": "g1:sylt",
+  "yearEvents": {
+    "2019": ["Einschulung", "Erstes Fahrrad"]
+  },
+  "book": {
+    "spreads": [
+      {
+        "id": "spread-0",
+        "index": 0,
+        "templateId": "spread.4up.grid",
+        "slots": [
+          {
+            "slotId": "a",
+            "photoId": "3f9a1c2b",
+            "crop": { "x": 0, "y": 0, "w": 1, "h": 1, "mode": "auto-cover" }
+          },
+          {
+            "slotId": "b",
+            "photoId": "c0ffee11",
+            "crop": { "x": 0.05, "y": 0.1, "w": 0.9, "h": 0.8, "mode": "manual" }
+          }
+        ],
+        "texts": [
+          {
+            "id": "spread-0-title",
+            "role": "eventTitle",
+            "content": "Sylt",
+            "slotId": "t-title"
+          }
+        ],
+        "locked": true,
+        "background": "#e8f0f4"
+      }
+    ]
+  },
+  "cover": {
+    "title": "Frani",
+    "photoId": "3f9a1c2b"
+  },
+  "importedAt": "2026-08-02T09:14:55.412Z"
+}

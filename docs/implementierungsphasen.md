@@ -378,12 +378,41 @@ Eine Doppelseite lässt sich vollständig ohne Umweg über andere Ansichten übe
 
 Das Projekt darf unter keinen Umständen verloren gehen.
 
-> **Stand: nicht begonnen**
+> **Stand: umgesetzt ✅ (15. August 2026)**
 >
-> Geschrieben wird atomar über `*.tmp` und `rename`, und das Projekt trägt eine
-> `schemaVersion`. Alles Weitere fehlt: keine Migrationskette (bei abweichender
-> Version wird das gespeicherte Projekt verworfen und neu importiert), kein
-> `history/`, kein Backup, kein Test gegen einen unterbrochenen Schreibvorgang.
+> - **Migrationskette** 1 → 2 → 3 (`migriere()` in `project.ts`), geprüft gegen
+>   **eingefrorene Projektdateien** (`apps/server/src/fixtures/projekt-schema*.json`)
+>   über den ganzen Ladeweg, nicht nur gegen `migriere` allein. Die
+>   Objektliterale daneben bleiben: Sie prüfen, dass Korrekturen, Gruppen und
+>   Buch überleben; die Dateien prüfen, dass die Kette mit der realen Form von
+>   damals umgeht.
+> - **Sicherung vor der Migration**: `project.json.schema<n>-<zeit>`, per
+>   `copyFile`, einmal je Schemasprung. Eine Migration ist der eine
+>   Schreibvorgang, den niemand ausgelöst hat.
+> - **Rollierende `history/`-Snapshots** samt Wiederherstellung gab es schon als
+>   **Notanker** (`project/notanker.ts`, die letzten zehn, Reiter in der
+>   Oberfläche) — vor den großen Griffen statt vor jedem Schreiben, begründet im
+>   Modulkopf.
+> - **Fehlende Bilddateien**: `GET /api/photos/fehlend` prüft per `stat` (983
+>   Dateien in 18 ms), der Abnahmebericht meldet sie als `datei-fehlt`, und in
+>   den Bildquellen sieht ein Knopf nach. Fotos abgehängter Quellen werden
+>   übergangen — ein nicht eingehängtes NAS ist kein Datenverlust.
+> - **Quelle neu zuordnen**: `PATCH /api/sources/:id` mit `root`
+>   (`Sources.reroot`), der Pfad ist in den Bildquellen editierbar. Die Quelle
+>   behält dabei ihre Kennung; über Entfernen und Neuanlegen verlöre jedes Foto
+>   seine Zuordnung.
+> - **Der unterbrochene Schreibvorgang** ist geprüft: `project/speichern.ts`
+>   nimmt austauschbare Werkzeuge, `speichern.test.ts` bricht an jeder Stelle ab
+>   und sieht an echten Dateien nach — Abbruch im Schreiben lässt den alten Stand
+>   ganz und räumt die Nebendatei weg, Abbruch vor dem Umbenennen hinterlässt
+>   zwei vollständige Dateien.
+>
+> Dabei fiel ein stiller Verlustweg auf, der nichts mit Migration zu tun hatte:
+> `load()` beantwortete jeden Lesefehler wie „es gibt noch kein Projekt". Ein
+> abgeschnittenes JSON — abgebrochener Schreibvorgang, Sync-Konflikt, Griff von
+> Hand — führte damit zum stillen Neuimport, und der nächste `save()` schrieb
+> über die Reste. Jetzt schweigt nur `ENOENT`; alles andere wird gemeldet und
+> beiseitegelegt.
 
 **Inhalt**
 
@@ -539,7 +568,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 | 4     | Ereignisse erkannt und editierbar             | ✅ anders gelöst: Kalender + Gruppen | ~1 d  |
 | 5     | **Vollständiger automatischer Buchentwurf**   | ✅ erledigt, 80 Doppelseiten         | ~1 d  |
 | 6     | Buch komfortabel korrigierbar                 | teilweise, JSON statt Direktgriff    | 4–5 d |
-| 7     | Persistenz belastbar                          | offen                                | 2–3 d |
+| 7     | Persistenz belastbar                          | ✅ erledigt                          | —     |
 | 8     | **Druckfertiges PDF**                         | teilweise, Innenteil läuft           | 3–4 d |
 | 9     | Texte, Kapitel, Cover                         | angefangen, Schrift steht            | 3–4 d |
 | 10    | Politur                                       | offen                                | 3–4 d |

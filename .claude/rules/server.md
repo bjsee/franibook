@@ -101,9 +101,17 @@ sieht aus wie Datenverlust.
 
 ## Persistenz
 
-Genau ein Projekt im Speicher, atomar als JSON geschrieben (`writeFile` in eine
-temporäre Datei, dann `rename`). Keine Datenbank. Jeder Endpunkt speichert mit
-`void project.save()`, also nebenläufig.
+Genau ein Projekt im Speicher, atomar als JSON geschrieben — erst in eine
+Nebendatei, dann `rename` (`project/speichern.ts`). Keine Datenbank. Jeder
+Endpunkt speichert mit `void project.save()`, also nebenläufig.
+
+**Die Zusage lautet: `project.json` ist zu jedem Zeitpunkt ganz der alte oder
+ganz der neue Stand.** Sie hängt daran, dass `rename` innerhalb eines
+Verzeichnisses unteilbar ist, und sie ist geprüft — `speichern.test.ts` bricht
+den Vorgang an jeder Stelle ab und sieht an echten Dateien nach, was liegen
+bleibt. Deshalb ist das Schreiben ein eigenes Modul mit austauschbaren
+Werkzeugen und keine Methode in `Project`: Eine Zusage, die man nicht abbrechen
+lassen kann, kann man auch nicht prüfen.
 
 **`SCHEMA_VERSION` erhöhen ist ein Eingriff, kein Detail.** Ein gespeicherter
 Stand mit unbekannter Version wird verworfen; `migriere()` in `project.ts` ist der
@@ -111,8 +119,36 @@ Ort, an dem ein alter Stand angehoben wird. Vor einer Schemaänderung den echten
 Projektstand sichern und den laufenden Entwicklungsserver beenden — er speichert
 sonst im Hintergrund über den alten Stand.
 
+**Vor der Migration sichert der Server selbst** (`project.json.schema<n>-<zeit>`,
+`copyFile` statt `rename`): Eine Migration ist der eine Schreibvorgang, den
+niemand ausgelöst hat, sie läuft beim Start, und ihr Ergebnis ersetzt den
+einzigen Stand, den es gibt. Geprüft wird die Kette gegen **eingefrorene
+Projektdateien** (`fixtures/projekt-schema*.json`) und nicht nur gegen
+Objektliterale: Ein Literal ist an den heutigen Typ gebunden und wandert mit ihm
+mit, eine Datei ist die Form von damals. Wer eine Fixture anpasst, damit ein
+Test wieder grün wird, hat den Test abgeschafft.
+
+**Nicht lesbar ist nicht dasselbe wie nicht vorhanden.** Nur `ENOENT` ist der
+erste Start und schweigt; ein Rechtefehler, ein I/O-Fehler oder ein
+abgeschnittenes JSON wird gemeldet und die Datei beiseitegelegt
+(`project.json.unlesbar-<zeit>`). Sonst importiert der Server neu und der nächste
+`save()` schreibt über Reste, die jemand von Hand hätte retten können.
+
 Foto-Kennung ist `contentHash` (Dateigröße + SHA-256 über die ersten und letzten
 64 KB). Umbenennen und Verschieben bleiben damit folgenlos, Duplikate fallen auf.
+
+**Dass eine Datei noch da ist, weiß niemand von selbst.** Die Vorschau liegt im
+Cache und zeigt weiter, was längst gelöscht ist; auffallen würde es beim Export.
+`GET /api/photos/fehlend` (`bestand.fehlendeDateien`) stellt die eine Frage per
+`stat` — am echten Bestand 983 Dateien in 18 ms — und der Abnahmebericht nimmt
+das Ergebnis als `datei-fehlt` auf. Fotos einer **nicht erreichbaren** Quelle
+werden dabei übergangen: Ein abgehängtes Netzlaufwerk ist kein Datenverlust.
+
+**Ein umgezogener Ordner ist kein neuer Ordner.** `PATCH /api/sources/:id` nimmt
+neben `label` auch `root` (`Sources.reroot`) — die Quelle zeigt danach woanders
+hin und **behält ihre Kennung**. Über Entfernen und Neuanlegen ginge jedes Foto
+seiner `sourceId` verlustig; die Kennung leitet sich beim Anlegen aus dem Pfad
+ab, ist aber eine Identität und kein abgeleiteter Wert.
 
 ## Zurücknehmen
 

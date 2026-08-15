@@ -32,6 +32,8 @@ import {
   quelleHinzufuegen,
   quellenLaden,
   quelleUmbenennen,
+  quelleUmziehen,
+  fehlendeDateienLaden,
 } from './api.js';
 import { B, T } from './theme.js';
 import { useBildSrc } from './bildadresse.js';
@@ -148,6 +150,42 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
     await anfrage('Benenne um …', () => quelleUmbenennen(source.id, label));
   }
 
+  /**
+   * Der Ordner ist umgezogen.
+   *
+   * Bewusst kein Einlesen hinterher: Die Fotos sind alle noch da, nur ihr Weg
+   * war falsch. Ob sie jetzt wieder auffindbar sind, sagt der Knopf darunter in
+   * einem Bruchteil der Zeit, die ein Reimport bräuchte.
+   */
+  async function umziehen(source: Source, root: string) {
+    if (!root.trim() || root.trim() === source.root) return;
+    const d = await anfrage(`Ziehe „${source.label}" um …`, () =>
+      quelleUmziehen(source.id, root.trim()),
+    );
+    if (d) setNote(`„${d.source.label}" zeigt jetzt auf ${d.source.root}`);
+  }
+
+  /** Sieht nach, welche Bilddateien noch an ihrem Platz liegen. */
+  async function dateienPruefen() {
+    const d = await anfrage('Sehe die Bilddateien durch …', fehlendeDateienLaden);
+    if (!d) return;
+    const teile =
+      d.count === 0
+        ? [`Alle ${d.geprueft} Bilddateien sind da`]
+        : [
+            `${d.count} von ${d.geprueft} Bilddateien fehlen`,
+            // Die Namen und nicht nur die Zahl: Danach sucht man im Finder.
+            d.photos
+              .slice(0, 5)
+              .map((p) => p.fileName)
+              .join(', ') + (d.count > 5 ? ` und ${d.count - 5} weitere` : ''),
+          ];
+    for (const q of d.offline) {
+      teile.push(`„${q.label}" nicht erreichbar, ${q.photoCount} Fotos daraus ungeprüft`);
+    }
+    setNote(teile.join(' — '));
+  }
+
   async function wiederAufnehmen(eintrag: AussortiertesFoto) {
     const d = await anfrage(`Nehme „${eintrag.photo.fileName}" wieder auf …`, () =>
       fotoWiederAufnehmen(eintrag.photo.id),
@@ -186,14 +224,26 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
                   style={S.name}
                   title="Anzeigename"
                 />
-                <p style={S.pfad}>{q.root}</p>
+                <input
+                  // Änderbar aus demselben Grund wie der Name, und mit
+                  // demselben Kniff am Schlüssel: Ein umgezogener Ordner soll
+                  // sich hier zurechtrücken lassen, ohne dass die Quelle ihre
+                  // Kennung verliert — daran hängt jedes Foto.
+                  key={`${q.id}-${q.root}`}
+                  defaultValue={q.root}
+                  onBlur={(e) => void umziehen(q, e.target.value)}
+                  spellCheck={false}
+                  style={S.pfad}
+                  title="Ordner dieser Quelle — ändern, wenn er umgezogen ist"
+                />
                 <p style={{ ...B.leise, marginTop: 6 }}>
                   {q.photoCount} Fotos
                   {q.inBookCount > 0 && ` · ${q.inBookCount} im Buch`}
                 </p>
                 {!q.erreichbar && (
                   <p style={{ ...B.leise, marginTop: 8, color: T.warn }}>
-                    Nicht erreichbar — die Fotos bleiben im Buch, bis der Ordner wieder da ist.
+                    Nicht erreichbar — die Fotos bleiben im Buch, bis der Ordner wieder da ist. Ist
+                    er umgezogen, hilft der Pfad darüber: Die Fotos behalten dabei ihre Zuordnung.
                   </p>
                 )}
               </div>
@@ -251,9 +301,19 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
 
         <div style={S.fuss}>
           <span style={B.leise}>{gesamt} Fotos insgesamt</span>
-          <button onClick={() => void einlesen()} disabled={!!busy} style={B.knopf}>
-            Alle Quellen neu einlesen
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => void dateienPruefen()}
+              disabled={!!busy}
+              style={B.knopf}
+              title="Sieht nach, ob jede Bilddatei noch an ihrem Platz liegt. Am Bildschirm fällt das sonst nicht auf — die Vorschauen liegen im Zwischenspeicher."
+            >
+              Bilddateien prüfen
+            </button>
+            <button onClick={() => void einlesen()} disabled={!!busy} style={B.knopf}>
+              Alle Quellen neu einlesen
+            </button>
+          </div>
         </div>
 
         {aussortiert.length > 0 && (
@@ -338,11 +398,17 @@ const S = {
     color: T.fg1,
   },
   pfad: {
-    margin: '4px 0 0',
+    marginTop: 4,
+    marginLeft: -6,
+    padding: '2px 6px',
     fontSize: 13,
     color: T.fg3,
     fontFamily: T.mono,
-    wordBreak: 'break-all' as const,
+    border: '1px solid transparent',
+    borderRadius: T.rMd,
+    background: 'transparent',
+    width: '100%',
+    maxWidth: '30rem',
   },
   aus: { color: T.fg4, cursor: 'not-allowed' },
   gitter: { display: 'flex', flexDirection: 'column' as const, gap: 8 },
