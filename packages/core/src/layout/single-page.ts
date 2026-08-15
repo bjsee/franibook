@@ -35,6 +35,12 @@ import {
   pairId,
   splitPairId,
 } from '../templates/halves.js';
+import {
+  chapterHalfById,
+  chapterHalfOfTemplate,
+  chapterPairId,
+  isChapterHalf,
+} from '../templates/chapter-halves.js';
 import { isJustified } from '../templates/justified.js';
 import { templateById, templateMeta } from '../templates/index.js';
 import { einwurfPlatzId } from './einwurf.js';
@@ -416,6 +422,131 @@ function alsFreieKaesten(
   }
 
   return { ok: true, spread: { ...spread, templateId, slots }, leftover: angeordnet.leftover };
+}
+
+/**
+ * Ordnet **eine** Seite einer Jahresseite neu an.
+ *
+ * Bis hierher war eine Jahresseite unteilbar, und der Grund war gut: Die
+ * Halbseiten des Flusses tragen keine Textplätze, also verlöre sie Jahreszahl
+ * und Ereigniszeilen. `chapter-halves.ts` hebt das auf — es führt die
+ * **Texthälften** als eigene Familie und setzt sie mit einer beliebigen
+ * Halbseite zu `kapitel:<links>+<rechts>` zusammen. Was hier bleibt, ist die
+ * Buchhaltung: welche Seite gewählt wurde, was auf der anderen stehenbleibt.
+ *
+ * **Jede Seite wählt in ihrer eigenen Familie.** Auf der Textseite stehen die
+ * Jahresseiten-Fassungen (Jahreszahl, dazu 0 bis n Bilder), gegenüber die
+ * gewöhnlichen Halbseiten. Eine Flusshälfte auf der Textseite wäre genau der
+ * Griff, der die Jahreszahl nimmt — er wird abgelehnt und nicht angeboten.
+ *
+ * **Die Gegenseite behält jedes Bild in seinem Platz.** Ihre Zuweisungen werden
+ * über die Geometrie auf die Plätze der neuen Vorlage umgehängt, samt Ausschnitt,
+ * Rahmen, Neigung, Ebene und Bildunterschrift. Wo die neue Vorlage keinen
+ * gleichen Platz kennt — die Bildseite mancher Auftaktvorlage ist keine bekannte
+ * Halbseite —, trägt der Kasten seine Lage selbst (`SlotAssignment.rect`), wie
+ * bei `alsFreieKaesten`. Der Preis steht in `handwork().positionen`.
+ */
+export function setChapterHalf(
+  spread: Spread,
+  opts: SetHalfPageOptions,
+): { ok: boolean; error?: string; spread?: Spread; leftover: PhotoId[] } {
+  const nein = (error: string) => ({ ok: false, error, leftover: [] as PhotoId[] });
+
+  const template = templateById(spread.templateId);
+  if (!template) return nein(`Die Vorlage ${spread.templateId} gibt es nicht`);
+  const jetzt = chapterHalfOfTemplate(template);
+  if (!jetzt) {
+    return nein('Diese Jahresseite lässt sich nicht in zwei Buchseiten zerlegen');
+  }
+  if (spread.backgroundPhotoId) {
+    return nein(
+      'Auf dieser Doppelseite liegt ein Bild über beide Seiten – sie lässt sich nur als Ganzes anordnen',
+    );
+  }
+
+  const textseite = jetzt.seite === opts.side;
+  if (textseite && !isChapterHalf(opts.halfId)) {
+    return nein(
+      'Auf dieser Seite stehen Jahreszahl und Ereigniszeilen – wählbar sind hier nur die Fassungen der Jahresseite',
+    );
+  }
+  if (!textseite && isChapterHalf(opts.halfId)) {
+    return nein('Die Jahreszahl steht auf der anderen Seite dieser Doppelseite');
+  }
+  const gewaehlt = textseite ? chapterHalfById(opts.halfId) : halfPageById(opts.halfId);
+  if (!gewaehlt) return nein(`Anordnung ${opts.halfId} gibt es nicht`);
+
+  // Was auf der Gegenseite steht, behält seine Kennung — beim ersten Griff auf
+  // einer Vorlage aus der Bibliothek gibt es dafür aber keine: Deren Bildhälfte
+  // ist in `halves.ts` bewusst nicht enthalten. Dann tritt die leere Halbseite
+  // an ihre Stelle, und die Bilder behalten ihre Lage als freie Kästen.
+  const gegenId = textseite
+    ? (halvesOfTemplate(template)[opts.side === 'left' ? 'right' : 'left'] ?? HALF_BLANK_ID)
+    : jetzt.id;
+
+  const neueId =
+    opts.side === 'left'
+      ? chapterPairId(opts.halfId, gegenId)
+      : chapterPairId(gegenId, opts.halfId);
+  const neu = templateById(neueId);
+  if (!neu) return nein(`Die Anordnung ${opts.halfId} lässt sich hier nicht einsetzen`);
+
+  // Alte Zuweisungen nach Buchseite trennen — über die Geometrie, denn bei einer
+  // Vorlage aus der Bibliothek sagt allein das Rechteck, wo ein Bild steht.
+  const geo = new Map(template.slots.map((s) => [s.id, s]));
+  const eigene: SlotAssignment[] = [];
+  const gegen: { slot: SlotAssignment; platz: { x: number; y: number; w: number; h: number } }[] =
+    [];
+  for (const slot of spread.slots) {
+    const platz = slot.rect ?? geo.get(slot.slotId);
+    if (!platz) return nein(`Der Platz ${slot.slotId} hat keine Geometrie`);
+    if (platz.x < 0.4999 && platz.x + platz.w > 0.5001) {
+      return nein(
+        'Auf dieser Doppelseite liegt ein Bild über dem Falz – sie lässt sich nur als Ganzes anordnen',
+      );
+    }
+    const liegtRechts = platz.x + platz.w / 2 >= 0.5;
+    if (liegtRechts === (opts.side === 'right')) eigene.push(slot);
+    else gegen.push({ slot, platz: { x: platz.x, y: platz.y, w: platz.w, h: platz.h } });
+  }
+
+  const prefix = opts.side === 'left' ? 'l-' : 'r-';
+  const nachKennung = new Map(opts.photos.map((p) => [p.id, p]));
+  const angeordnet = layoutHalf({
+    photos: eigene
+      .map((s) => (s.photoId ? nachKennung.get(s.photoId) : undefined))
+      .filter((p): p is Photo => p !== undefined),
+    slots: neu.slots.filter((s) => s.id.startsWith(prefix)),
+    profile: opts.profile,
+    ...(opts.weightOf ? { weightOf: opts.weightOf } : {}),
+  });
+
+  // Die Gegenseite auf die Plätze der neuen Vorlage umhängen: gleiche Geometrie,
+  // gleicher Platz. Die Kennungen wechseln dabei (`a` → `r-a`), der Inhalt nicht.
+  const gegenPlaetze = new Map(
+    neu.slots.filter((s) => !s.id.startsWith(prefix)).map((s) => [key(s), s.id]),
+  );
+  const slots: SlotAssignment[] = [...angeordnet.slots];
+  for (const { slot, platz } of gegen) {
+    const treffer = gegenPlaetze.get(key(platz));
+    if (treffer && !slots.some((v) => v.slotId === treffer)) {
+      slots.push({ ...slot, slotId: treffer });
+      continue;
+    }
+    // Kein gleicher Platz in der neuen Vorlage: Der Kasten trägt seine Lage
+    // selbst. Die Kennung muss frei sein — sonst hinge ein zweiter Ausschnitt am
+    // selben Platz.
+    const frei = slots.some((v) => v.slotId === slot.slotId)
+      ? einwurfPlatzId({ slots })
+      : slot.slotId;
+    slots.push({ ...slot, slotId: frei, rect: platz });
+  }
+
+  return {
+    ok: true,
+    spread: { ...spread, templateId: neueId, slots },
+    leftover: angeordnet.leftover,
+  };
 }
 
 /**

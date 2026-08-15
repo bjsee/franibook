@@ -63,4 +63,5 @@ export * from './pruefung/kontaktbogen.js';
 
 export * from './templates/index.js';
 export * from './templates/halves.js';
+export * from './templates/chapter-halves.js';
 export * from './templates/justified.js';

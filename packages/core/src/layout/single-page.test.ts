@@ -3,8 +3,15 @@ import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import { defaultProfile } from '../print/profiles/index.js';
 import { HALF_BLANK_ID, HALF_ONE_ID, halvesOfTemplate } from '../templates/halves.js';
-import { requireTemplate } from '../templates/index.js';
-import { insertSinglePage, removeSinglePage, setHalfPage, zerlegbar } from './single-page.js';
+import { requireTemplate, templateMeta } from '../templates/index.js';
+import { chapterHalves } from '../templates/chapter-halves.js';
+import {
+  insertSinglePage,
+  removeSinglePage,
+  setChapterHalf,
+  setHalfPage,
+  zerlegbar,
+} from './single-page.js';
 
 const AUTO = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
 
@@ -673,5 +680,114 @@ describe('setHalfPage', () => {
     expect(kasten?.x).toBeCloseTo(0.6, 10);
     expect(kasten?.y).toBe(0.1);
     expect(kasten?.w).toBe(0.2);
+  });
+});
+
+describe('setChapterHalf', () => {
+  const profile = defaultProfile();
+
+  const foto = (id: string): Photo =>
+    ({ id, relPath: id, fileName: id, bytes: 1_000_000, width: 4000, height: 3000 }) as Photo;
+
+  /** Eine Jahresseite aus der Bibliothek: links das Jahr, rechts vier Bilder. */
+  function jahresseite(): Spread {
+    const s = blatt('s0', 'spread.chapter.4up', 0);
+    s.chapterYear = 2008;
+    s.texts = [
+      { id: 's0-y', role: 'year', content: '2008', slotId: 't-year' },
+      { id: 's0-e', role: 'freeText', content: 'Geburt', slotId: 't-events' },
+    ];
+    return s;
+  }
+
+  /** Welche Textplätze die Vorlage dieser Doppelseite anbietet. */
+  function textplaetze(spread: Spread) {
+    return (requireTemplate(spread.templateId).textSlots ?? []).map((t) => t.id);
+  }
+
+  it('ordnet die Bildseite neu an und behält Jahreszahl und Ereigniszeilen', () => {
+    // Der Grund, aus dem eine Jahresseite bisher unteilbar war: Die Halbseiten
+    // des Flusses tragen keinen Textplatz, und ein Text ohne Platz wird nicht
+    // gezeichnet — stillschweigend.
+    const vorher = jahresseite();
+
+    const r = setChapterHalf(vorher, {
+      side: 'right',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(textplaetze(r.spread!)).toEqual(textplaetze(vorher));
+    // Und die Texte hängen weiter an ihren Plätzen.
+    for (const text of r.spread!.texts ?? []) {
+      expect(textplaetze(r.spread!)).toContain(text.slotId);
+    }
+    // Rechts steht jetzt die gewählte Halbseite, drei Bilder gingen in den Pool.
+    expect(r.spread!.slots.filter((s) => s.slotId.startsWith('r-'))).toHaveLength(1);
+    expect(r.leftover).toHaveLength(3);
+  });
+
+  it('bleibt eine Jahresseite', () => {
+    // Sonst bekäme sie nach dem ersten Griff Seitenzahlen und stünde in der
+    // Vorlagenwahl des Flusses.
+    const r = setChapterHalf(jahresseite(), {
+      side: 'right',
+      halfId: HALF_ONE_ID,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(templateMeta(r.spread!.templateId).chapterOnly).toBe(true);
+  });
+
+  it('wechselt die Fassung der Textseite und lässt die Bildseite stehen', () => {
+    const vorher = jahresseite();
+    const rechtsVorher = vorher.slots.map((s) => s.photoId);
+    const andere = chapterHalves().find((h) => h.slots.length > 0);
+    expect(andere, 'keine Textseite mit Bildplatz in der Bibliothek').toBeDefined();
+
+    const r = setChapterHalf(vorher, {
+      side: 'left',
+      halfId: andere!.id,
+      photos: ['p0', 'p1', 'p2', 'p3'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(textplaetze(r.spread!)).toEqual(expect.arrayContaining(['t-year']));
+    // Die vier Bilder rechts stehen unverändert – nur ihre Kennung wechselt.
+    const rechts = r
+      .spread!.slots.filter((s) => s.photoId && rechtsVorher.includes(s.photoId))
+      .map((s) => s.photoId);
+    expect(rechts).toHaveLength(4);
+  });
+
+  it('lehnt eine Flusshälfte auf der Textseite ab', () => {
+    // Genau der Griff, der die Jahreszahl nähme. Er wird in der Oberfläche gar
+    // nicht angeboten; abgelehnt wird er trotzdem, mit einem Satz.
+    const r = setChapterHalf(jahresseite(), {
+      side: 'left',
+      halfId: HALF_ONE_ID,
+      photos: ['p0'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Jahreszahl/);
+  });
+
+  it('lehnt eine Jahresseiten-Fassung auf der Bildseite ab', () => {
+    const links = chapterHalves()[0]!;
+    const r = setChapterHalf(jahresseite(), {
+      side: 'right',
+      halfId: links.id,
+      photos: ['p0'].map(foto),
+      profile,
+    });
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/anderen Seite/);
   });
 });
