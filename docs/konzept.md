@@ -1737,6 +1737,39 @@ Zwei Vorgänge, die leicht verwechselt werden und deshalb getrennt sind:
 - **Neu einlesen** (`POST /api/import`) liest die Bildquellen erneut und lässt das Buch stehen. Weil die Foto-Kennung der Inhaltshash ist, bleiben unveränderte Dateien dieselben Fotos — auch umbenannt, in einen Unterordner verschoben oder in eine andere Quelle umgezogen. Neue landen im Fotopool, verschwundene werden gemeldet; steht eines noch in einer Doppelseite, bleibt dort der Platz leer (`photo-missing`), statt die Seite umzubauen. `PhotoOverride` bleibt in jedem Fall erhalten.
 - **Neu anordnen** (`POST /api/generate` mit erhöhtem Seed) baut das Buch komplett neu und verwirft jede Handarbeit an den Doppelseiten: manuelle Ausschnitte, von Hand gesetzte Neigungen, verschobene Fotos, Hintergründe, Zeitstrahlausnahmen. `project.handwork()` zählt sie, damit die Oberfläche vorher sagen kann, was verloren geht. Erhalten bleiben Fotos, Korrekturen, Gruppen, Jahresereignisse und die Einstellungen.
 
+### Die Anordnungsprobe: erst ansehen, dann entscheiden
+
+Neu anordnen ist der teuerste Griff am Buch und war der einzige blinde: Der Knopf sagte, was an Handarbeit verloren geht, aber nicht, was dafür herauskommt. Wer achtzig Doppelseiten durchgearbeitet hat, drückt so einen Knopf nicht — und wer ihn drückt, sieht hinterher nicht, was sich geändert hat. Beides ist dieselbe Lücke: Es fehlte das Ergebnis vor der Entscheidung.
+
+Die **Probe** (`apps/server/src/project/probe.ts`, Routen unter `/api/anordnung/…`) rechnet das neue Buch, setzt es aber nicht ein. Die Oberfläche zeigt es Doppelseite für Doppelseite im Vorher/Nachher (`apps/web/src/Neuanordnen.tsx`, Route `/neuanordnen`); übernommen wird auf Klick, verworfen ebenso.
+
+Vier Festlegungen tragen das:
+
+- **Was gezeigt wird, wird eingesetzt.** Die Probe hält ihr gerechnetes Buch, und `POST /api/anordnung/uebernehmen` schiebt genau diese Doppelseiten in den Zustand. Auf die Determinismusregel allein wollten wir uns nicht verlassen: Sie sagt „gleiche Eingaben, gleiches Buch“, und zwischen Ansehen und Übernehmen liegt eine Sitzung, in der sich Eingaben ändern. Dagegen steht ein **Abdruck** der Eingaben (Doppelseiten, Einstellungen, Gliederungsfingerabdruck, Gruppen, Korrekturen, Fotoliste); stimmt er nicht mehr, wird abgelehnt statt stillschweigend etwas anderes eingesetzt.
+- **Verglichen wird über die Fotos, nicht über die Nummer** (`core/layout/vergleich.ts`). Eine eingeschobene Doppelseite verschiebt alles dahinter; nach Nummer verglichen wären achtzig Seiten „geändert“, obwohl achtundsiebzig davon dieselben Bilder in derselben Vorlage tragen. Zugeordnet wird gierig nach der größten Schnittmenge, ein zweiter Durchgang paart bildlose Auftakte über Vorlage und Kapiteljahr. Das Ergebnis ist deterministisch wie die Engine selbst.
+- **Der Preis steht an der einzelnen Seite.** `handwork()` nennt eine Summe über das Buch; die Probe rechnet sie je Doppelseite aus dem Vergleich (`project/handarbeit.ts`). „Zwölf Ausschnitte“ sagt einem, dass es teuer wird — „ausgerechnet die Seite, an der du gestern eine Stunde saßt“ sagt, ob man es will.
+- **Die Jahresfarbe ist keine Handarbeit** (`Spread.backgroundAuto`). Bei eingeschalteten Jahresfarben schreibt der Generator eine Farbe an jede Doppelseite; ohne Marker zählte sie als verworfene Entscheidung, und die Vorschau meldete an jeder unveränderten Seite einen Verlust. Ein von Hand gewählter Ton kommt aus derselben Palette und wäre daran nicht zu erkennen — deshalb setzt der Generator den Marker, und wer die Farbe setzt, löscht ihn.
+
+**Die Entscheidung fällt seitenweise, nicht nur im Ganzen.** An jeder Zeile der Vorschau stehen zwei Griffe, und sie meinen Verschiedenes: **„ok"** ist eine Marke am Durchgang und ändert nichts — bei einunddreißig Änderungen der Unterschied zwischen Durchsehen und Suchen. **„So lassen"** ändert das Buch, das übernommen würde: Die Doppelseite geht als `kept` durch den Neuaufbau (`layout/keep.ts`), ihre Bilder gelten als vergeben, ihre zwei Seiten gehen vom Budget ab — und alles andere fällt drumherum neu. Deshalb wird nach jedem Klick **das ganze Buch neu gerechnet und gezeigt**; am echten Bestand kostet das 33 ms, und etwas anderes zu zeigen als das, was übernommen würde, wäre genau der Fehler, gegen den diese Ansicht gebaut ist.
+
+Zwei Festlegungen dazu:
+
+- **Behalten ist nicht Festhalten.** `locked` gilt dauerhaft und über jede künftige Anordnung hinweg; „so lassen" gilt für **diese** Probe. Wer beim Durchsehen an einer Seite hängenbleibt, will sie diesmal behalten und keine Entscheidung fürs ganze Buchleben. Festgehaltene Seiten bekommen den Griff deshalb gar nicht erst — sie bleiben ohnehin.
+- **Die behaltene Seite hängt an ihrer Nachbarschaft, nicht an ihrer Nummer.** `ankerNeben` (`layout/keep.ts`) setzt ihren Anker auf das erste Bild der folgenden Doppelseite; ohne das stünde sie auf ihrem alten Blatt, und wenn der Neuaufbau davor fünf Seiten einschiebt, mitten im falschen Monat. Andere behaltene Seiten kommen als Ankergeber nicht in Frage: Ihre Bilder laufen nicht im Fluss, dort fände der Anker sie nicht.
+
+Angesprochen wird eine Seite dabei über ihre **Stelle im bisherigen Buch** und nicht über `Spread.id`: Die Kennung ist nicht eindeutig — der Generator vergibt `spread-<n>` je Lauf neu, festgehaltene Seiten behalten ihre alte, und am echten Buch kommt `spread-38` deshalb zweimal vor. Der Index ist eindeutig, solange das bisherige Buch steht, und genau so lange gilt eine Probe.
+
+Die Einstellungen, die einen Neuaufbau auslösen — Seitenzahl, Jahresauftakte, Jahresfarben, Gruppenauftakte —, gehen seitdem **durch die Probe**: Sie werden gerechnet und erst mit dem Übernehmen gespeichert. „180 Seiten statt 160“ ist genau die Frage, deren Antwort man vorher sehen will; ein Zahlenfeld, das ungefragt achtzig Doppelseiten umwirft, war der unheimlichste Griff der Buchspalte. Rastet die Vorgabe auf das Druckprofil ein (180 gibt es bei einem Maximum von 160 nicht), sagt die Vorschau das, statt eine unerklärlich gleich lange Antwort zu zeigen.
+
+**Was die Vorschau zuerst zutage gefördert hat**, gehört zur Geschichte dieser Funktion: Am echten Buch (21 festgehaltene Auftakte) kam beim Neuanordnen die Jahresfolge 2008, 2012, 2009, 2014, 2015, 2010 heraus — das Buch war nicht mehr chronologisch. Zwei Ursachen, beide behoben:
+
+- **Anker zeigten aufeinander.** `ankerFuer` suchte das erste Bild der folgenden Doppelseite, ohne zu prüfen, ob die selbst festgehalten ist. Weil die eigenen Auftakte nebeneinanderstanden, zeigten 18 von 21 Ankern auf Bilder, die im Fluss gar nicht mitlaufen — `insertKept` fand sie nie. Beide Aufrufer nutzen jetzt `ankerNeben` (`layout/keep.ts`), das festgehaltene und in dieser Rechnung behaltene Seiten als Ankergeber auslässt.
+- **Der Notnagel las den Buchindex als Flussposition.** Ohne brauchbaren Anker fiel `insertKept` auf `spread.index` zurück — der zählt Blätter des ganzen Buches, `flow` enthält die festgehaltenen aber nicht. Jede festgehaltene Seite rutschte damit um die Zahl der festgehaltenen vor ihr nach vorn, und der Fluss schob sich dazwischen. Gerechnet wird jetzt `index − (festgehaltene davor)`.
+
+Das ist der Beleg für den Zweck der Ansicht: Der Fehler steckte seit jeher im Neuaufbau, war aber unsichtbar, weil niemand das Ergebnis vorher sah.
+
+Die Probe wird **nicht gespeichert** — sie ist eine Frage, keine Entscheidung, wie die Doppelvorschläge. Ein Übernehmen ist ein gewöhnlicher Undo-Schritt mit Notanker davor.
+
 ### Typografie
 
 Eine Familie, zwei Schnitte: **Franibook Sans**, abgeleitet von Source Sans 3 (Adobe, SIL Open Font License 1.1), Regular und SemiBold, je 37 KB. Die Dateien liegen in `packages/fonts/files/`; Herkunft, verworfene Alternativen und die Befehle zur Reproduktion stehen in `packages/fonts/HERKUNFT.md`. Umbenannt wurde sie, weil „Source“ ein Reserved Font Name der OFL ist und wir eine geänderte Fassung ausliefern.

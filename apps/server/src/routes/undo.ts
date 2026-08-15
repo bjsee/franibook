@@ -97,6 +97,12 @@ function amSlot(was: string): Ausleser<string> {
 export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // ------------------------------------------------------- Das ganze Buch
   'POST /api/generate': { label: 'Buch neu angeordnet', anker: true },
+  // Die Probe rechnet und zeigt, ändert am Projekt aber nichts – sie liegt
+  // flüchtig neben dem Zustand (`project/probe.ts`). Erst das Übernehmen ist
+  // der Griff, und es ist derselbe wie `POST /api/generate`.
+  'POST /api/anordnung/probe': null,
+  'DELETE /api/anordnung/probe': null,
+  'POST /api/anordnung/uebernehmen': { label: 'Buch neu angeordnet', anker: true },
   'POST /api/book/layout': { label: 'Layout eingespielt', anker: true },
   // Ein Schlüssel, weil die Neigung und der Rahmen an Reglern hängen: eine
   // Anfrage je Reglerstellung, und alle bedeuten eine Entscheidung.

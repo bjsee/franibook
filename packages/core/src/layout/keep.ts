@@ -14,7 +14,7 @@
  * baut die Automatik kein zweites Mal.
  */
 import type { PhotoId } from '../model/photo.js';
-import type { Spread } from '../model/spread.js';
+import type { Spread, SpreadAnchor } from '../model/spread.js';
 import { groupOpenerTemplates } from '../templates/index.js';
 
 /** Trennt die festgehaltenen Doppelseiten von denen, die neu gebaut werden. */
@@ -107,13 +107,26 @@ export function insertKept(flow: readonly Spread[], kept: readonly Spread[]): Sp
     }
   });
 
+  /**
+   * Wie viele festgehaltene Seiten im bisherigen Buch vor dieser Stelle lagen.
+   *
+   * Für den Notnagel: `spread.index` zählt Blätter des **ganzen** Buches,
+   * `flow` enthält die festgehaltenen aber gerade nicht. Beides gleichzusetzen
+   * war der Fehler, der ein Buch mit vielen eigenen Seiten beim Neuanordnen
+   * durcheinanderbrachte — am echten Bestand (21 festgehaltene Auftakte, davon
+   * 18 mit einem Anker ins Leere) kam die Jahresfolge als 2008, 2012, 2009,
+   * 2014, 2015, 2010 heraus: Jede festgehaltene Seite rutschte um die Zahl der
+   * festgehaltenen vor ihr nach vorn, und der Fluss schob sich dazwischen.
+   */
+  const keptDavor = (index: number): number => kept.filter((k) => k.index < index).length;
+
   const stelleVon = (spread: Spread): number => {
     const anchor = spread.anchor;
     const treffer = anchor ? spreadOfPhoto.get(anchor.photoId) : undefined;
     if (treffer !== undefined) {
       return anchor!.where === 'after' ? treffer + 1 : treffer;
     }
-    return Math.min(Math.max(0, spread.index), flow.length);
+    return Math.min(Math.max(0, spread.index - keptDavor(spread.index)), flow.length);
   };
 
   // Nach Stelle gruppieren, innerhalb der Stelle in bisheriger Reihenfolge.
@@ -135,4 +148,52 @@ export function insertKept(flow: readonly Spread[], kept: readonly Spread[]): Sp
   }
 
   return ergebnis.map((spread, i) => ({ ...spread, index: i }));
+}
+
+/**
+ * Ein Anker für eine Doppelseite, die an dieser Stelle im Buch stehen soll.
+ *
+ * Zwei Aufrufer, eine Frage: Eine **neu eingefügte** Seite soll dort auftauchen,
+ * wo man sie hingesetzt hat, und eine in der Vorschau **behaltene** dort
+ * bleiben, wo sie steht. Beide Male ist der gespeicherte Index die schlechte
+ * Antwort: Schiebt der Neuaufbau fünf Seiten davor ein, stünde die Seite fünf
+ * Blätter zu früh, mitten im falschen Monat.
+ *
+ * Der Anker zeigt deshalb auf ein Foto der **Nachbarschaft** — vor das erste
+ * Bild der Seite dahinter, am Buchende hinter das letzte Bild der Seite davor.
+ * Das ist die Sprache, in der die Absicht formuliert ist: „bleibt dort, wo sie
+ * im Buch steht", und nicht „bleibt auf Blatt 41".
+ *
+ * **Seiten, die selbst nicht im Fluss laufen, taugen nicht als Ankergeber**:
+ * Ihre Bilder sind vergeben, `insertKept` findet sie dort nie. Das sind die
+ * festgehaltenen — und über `ausgenommen` die in dieser Rechnung behaltenen,
+ * die eigene eingeschlossen. Am echten Buch zeigten ohne diese Prüfung 18 von
+ * 21 festgehaltenen Seiten aufeinander und damit ins Leere.
+ *
+ * `undefined`, wenn keine Nachbarseite ein Bild hat — dann bleibt es beim
+ * Index, wie bei einer festgehaltenen Seite ohne Anker.
+ */
+export function ankerNeben(
+  spreads: readonly Spread[],
+  /** Die Stelle im Buch, an der die Seite steht oder stehen soll. */
+  stelle: number,
+  /** Seiten, deren Bilder nicht im Fluss laufen – die eigene eingeschlossen. */
+  ausgenommen: ReadonlySet<number> = new Set(),
+): SpreadAnchor | undefined {
+  const bildAuf = (i: number, letztes: boolean): PhotoId | undefined => {
+    const spread = spreads[i];
+    if (!spread || ausgenommen.has(i) || spread.locked) return undefined;
+    const ids = spread.slots.map((s) => s.photoId).filter((id): id is PhotoId => id !== null);
+    return letztes ? ids[ids.length - 1] : ids[0];
+  };
+
+  for (let i = stelle; i < spreads.length; i++) {
+    const foto = bildAuf(i, false);
+    if (foto) return { photoId: foto, where: 'before' };
+  }
+  for (let i = stelle - 1; i >= 0; i--) {
+    const foto = bildAuf(i, true);
+    if (foto) return { photoId: foto, where: 'after' };
+  }
+  return undefined;
 }

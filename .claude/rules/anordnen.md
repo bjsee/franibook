@@ -206,6 +206,42 @@ Drei Festlegungen dazu, die man beim Erweitern beibehält:
 Gezählt wird das in `handwork().plaetze`: Der Neuaufbau holt die Plätze aus der
 Vorlage zurück.
 
+## Neu anordnen zeigt vorher, was dabei herauskommt
+
+**Der Weg zum Neuaufbau führt über die Probe** (`project/probe.ts`,
+`/api/anordnung/…`, Ansicht `apps/web/src/Neuanordnen.tsx`): Sie rechnet das
+Buch, setzt es aber nicht ein, und `POST /api/anordnung/uebernehmen` schiebt
+**genau die gezeigten** Doppelseiten in den Zustand — abgesichert über einen
+Abdruck der Eingaben, nicht über die Zusage des Determinismus. `POST
+/api/generate` bleibt daneben der direkte Weg.
+
+**In der Vorschau lässt sich jede Doppelseite einzeln behalten** („so lassen"):
+Sie geht dann als `kept` durch den Neuaufbau, und das ganze Buch wird
+drumherum **neu gerechnet** — eine behaltene Seite nimmt ihre Bilder aus dem
+Fluss und zwei Seiten aus dem Budget. Ihren Platz bekommt sie über
+`ankerNeben`, nicht über ihre alte Nummer. Das ist **nicht** `locked`: Behalten
+gilt für diese Probe, Festhalten dauerhaft.
+
+Zwei Dinge gehören dazu und sind leicht zu übersehen:
+
+- **Der Vergleich läuft über die Fotos** (`layout/vergleich.ts`), nicht über den
+  Index: Eine eingeschobene Doppelseite verschiebt alles dahinter, und nach
+  Nummer verglichen wäre das ganze Buch „geändert".
+- **Die Jahresfarbe ist keine Handarbeit** (`Spread.backgroundAuto`). Der
+  Generator setzt sie an jede Doppelseite und markiert sie dabei; ohne den
+  Marker zählte `handwork()` sie als verworfene Entscheidung. Wer eine neue
+  Eigenschaft einführt, die der Generator selbst setzt, entscheidet dieselbe
+  Frage: Steht sie am Spread, weil jemand sie wollte — oder weil die Rechnung
+  sie hingeschrieben hat?
+
+**Ein Anker darf nie auf eine Seite zeigen, die selbst nicht im Fluss läuft.**
+`ankerNeben` (`layout/keep.ts`) ist die eine Stelle, die das entscheidet — für
+eingefügte Seiten (`project/seiten.ts`) wie für behaltene. Zeigt er trotzdem
+ins Leere, rechnet `insertKept` den gespeicherten Buchindex in eine
+**Flussposition** um (`index − festgehaltene davor`); ihn roh zu nehmen war der
+Fehler, der ein Buch mit 21 eigenen Auftakten beim Neuanordnen
+entchronologisierte.
+
 ## Was die Automatik verwirft und was sie bewahrt
 
 `handwork()` sagt vor einem Neuaufbau, was er kostet: Positionen (frei gesetzte

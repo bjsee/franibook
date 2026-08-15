@@ -209,6 +209,20 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     payload: { targetPages: 20 },
   }),
 
+  // Die Probe gehört zur Ausgangslage: Sie ändert nichts, das Übernehmen tut
+  // es. Ein anderes Seitenziel, damit das gerechnete Buch überhaupt ein anderes
+  // ist – sonst vergliche der Rundlauf zwei gleiche Stände.
+  'POST /api/anordnung/uebernehmen': async ({ app }) => {
+    const antwort = await app.inject({
+      method: 'POST',
+      url: '/api/anordnung/probe',
+      payload: { targetPages: 20 },
+    });
+    expect(antwort.statusCode).toBe(200);
+    const { probe } = antwort.json() as { probe: { id: string } };
+    return { method: 'POST', url: '/api/anordnung/uebernehmen', payload: { id: probe.id } };
+  },
+
   'PATCH /api/settings': () => ({
     method: 'PATCH',
     url: '/api/settings',
