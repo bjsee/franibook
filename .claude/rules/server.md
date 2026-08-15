@@ -276,8 +276,10 @@ dafür `fileName` neben `outputPath` zurück: Der Pfad ist die Auskunft für den
 Menschen, der Name die Adresse.
 
 Der Vorschau-Cache trägt die Fassung eines Fotos im Namen (Drehung), und die
-Oberfläche hängt eine Bildversion als `?v=` an jede Adresse — ohne das bliebe ein
-gedrehtes Bild hinter `immutable` unsichtbar.
+Oberfläche hängt sie als `?q=` an jede Adresse — die Karte dafür kommt aus
+`GET /api/project` (`bildFassungen`). Ohne das bliebe ein gedrehtes Bild hinter
+`immutable` unsichtbar; `immutable` ist eine Zusage über die Pixel hinter einer
+Adresse, und die Fotokennung ist der Hash der _Datei_.
 
 **Bildmerkmale erkennt der Server, nicht der Kern** (`vision.ts`, Swift-Werkzeuge in
 `apps/server/vision/`, beim ersten Bedarf nach `<cache>/bin/` kompiliert). Der Lauf

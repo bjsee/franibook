@@ -22,6 +22,7 @@ import {
   hintergrundSetzen,
 } from './api.js';
 import { B, T } from './theme.js';
+import { useBildSrc } from './bildadresse.js';
 
 type Farbe = { id: string; name: string; hex: string };
 type Kandidat = { photoId: string; fileName: string; dpi: number; taugt: boolean };
@@ -42,6 +43,7 @@ export function BackgroundPicker({
   aktuell,
   onChanged,
 }: BackgroundPickerProps) {
+  const bildSrc = useBildSrc();
   const [farben, setFarben] = useState<Farbe[]>([]);
   const [kandidaten, setKandidaten] = useState<Kandidat[]>([]);
   const [minDpi, setMinDpi] = useState(150);
@@ -139,7 +141,7 @@ export function BackgroundPicker({
                   title={k.fileName}
                   style={S.kandidat}
                 >
-                  <img src={`/api/photos/${k.photoId}/preview?size=thumb`} alt="" style={S.thumb} />
+                  <img src={bildSrc(k.photoId, 'thumb')} alt="" style={S.thumb} />
                   <span style={{ fontSize: 10, color: k.taugt ? T.ok : T.warn }}>{k.dpi} dpi</span>
                 </button>
               ))}

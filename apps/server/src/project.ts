@@ -2437,6 +2437,30 @@ export class Project {
     return gruppen.groupMarks(this);
   }
 
+  /**
+   * Die Fassung jedes gedrehten Fotos — Kennung → Vierteldrehungen.
+   *
+   * Die Bild-Endpunkte liefern mit `Cache-Control: immutable` aus, und das ist
+   * eine Zusage über die *Pixel* hinter einer Adresse. Die Fotokennung deckt sie
+   * nur halb: Sie ist der Inhaltshash der Datei, und eine Ausrichtungskorrektur
+   * ändert die Pixel, ohne die Datei anzufassen. Der Vorschau-Cache trägt die
+   * Fassung deshalb längst im Dateinamen (`<hash>-q1.webp`) — die Adresse aber
+   * nicht, und damit hielt der Browser das gedrehte Bild ein Jahr lang für
+   * dasselbe. Mit dieser Karte hängt die Oberfläche sie an jede Bildadresse.
+   *
+   * Nur die gedrehten stehen darin: Der häufige Fall ist „nicht gedreht", und
+   * eine Karte über den ganzen Bestand wäre bei 830 Fotos eine Liste von Nullen
+   * in jeder Projektauskunft.
+   */
+  bildFassungen(): Record<PhotoId, 1 | 2 | 3> {
+    const fassungen: Record<PhotoId, 1 | 2 | 3> = {};
+    for (const [id, override] of Object.entries(this.overrides)) {
+      const turns = override.orientationTurns;
+      if (turns) fassungen[id] = turns;
+    }
+    return fassungen;
+  }
+
   /** Das Buch als Baum: je Doppelseite ihre Bilder und was an ihr auffällt. */
   baum(): BaumSeite[] {
     return baum(this);

@@ -28,19 +28,6 @@ import { doppelseiteLaden } from '../api.js';
  */
 const LADE_VERZOEGERUNG_MS = 250;
 
-/** Vorschau in Miniaturauflösung – siehe Modulkommentar. */
-/**
- * Adresse einer Miniatur.
- *
- * `bildVersion` ist derselbe Zähler wie in `App.tsx`: Er hängt an der Adresse,
- * damit eine Ausrichtungskorrektur sichtbar wird, obwohl Vorschauen `immutable`
- * ausgeliefert werden. Ohne Angabe bleibt die Adresse wie bisher — die Miniaturen
- * der Nachbarn und des Buchnavigators ändern sich beim Kippen ohnehin erst beim
- * nächsten Laden.
- */
-export const miniaturSrc = (photoId: string, bildVersion = 0) =>
-  `/api/photos/${photoId}/preview?size=thumb${bildVersion > 0 ? `&v=${bildVersion}` : ''}`;
-
 export function useNachbarn(
   index: number,
   spreadCount: number,
