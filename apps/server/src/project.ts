@@ -46,6 +46,7 @@ import {
   type TimelineFootVariant,
   type TimelineSideVariant,
   splitKept,
+  ankerNeben,
   aufsBlatt,
   bookStats,
   buildStructure,
@@ -69,7 +70,6 @@ import {
   generateBook,
   isBackgroundColor,
   isFrameId,
-  isJustified,
   moveSlotLayer,
   movePhoto,
   movePhotos,
@@ -96,6 +96,7 @@ import type { Aussortiert, DateienBericht, ImportDiff, QuellenBericht } from './
 import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
+import { type Handarbeitsbilanz, handarbeitsbilanz } from './project/handarbeit.js';
 import { type Bestandsfilter, filtereFotos, platzierteFotos } from './project/filter.js';
 import {
   type Unterschriftenbereich,
@@ -105,6 +106,7 @@ import {
   loescheUnterschriften,
   setzeUnterschriften,
 } from './project/unterschriften.js';
+import * as probe from './project/probe.js';
 import * as merkmale from './project/merkmale.js';
 import type { MerkmaleBericht } from './project/merkmale.js';
 import * as qualitaet from './project/qualitaet.js';
@@ -236,6 +238,20 @@ export interface ProjectSettings {
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
   subjectName?: string;
+}
+
+/**
+ * Ein Buch, wie es gezeichnet wird: Doppelseiten samt den Einstellungen, unter
+ * denen sie entstanden sind.
+ *
+ * Das Projekt selbst ist eine solche Sicht, die Anordnungsprobe die zweite.
+ * Beide gehen durch dieselbe `render()`-Funktion – eine zweite Rechnung für die
+ * Vorschau wäre genau die Art von Adapterfehler, die der Parity-Test zwischen
+ * Vorschau und PDF verhindert.
+ */
+export interface Buchsicht {
+  spreads: readonly Spread[];
+  settings: ProjectSettings;
 }
 
 interface PersistedProject {
@@ -785,117 +801,13 @@ export class Project {
   /**
    * Handarbeit an den Doppelseiten, die ein Neugenerieren verwerfen würde.
    *
-   * Gezählt, nicht geraten: Der Knopf „Neu anordnen" baut das Buch komplett neu,
-   * und was dabei verloren geht, soll vorher dranstehen.
-   *
-   * Festgehaltene Seiten sind ausgenommen – sie gehen unverändert durch den
-   * Generator (`layout/keep.ts`), und was an ihnen Arbeit war, überlebt. Wie
-   * viele es sind, steht als `festgehalten` daneben: Die Warnung soll nicht nur
-   * sagen, was verloren geht, sondern auch, was bleibt.
+   * Gezählt und nach Art getrennt in `project/handarbeit.ts`; hier steht nur,
+   * über welches Buch gezählt wird. Festgehaltene Seiten sind ausgenommen und
+   * stehen als `festgehalten` daneben: Die Warnung soll nicht nur sagen, was
+   * verloren geht, sondern auch, was bleibt.
    */
-  handwork(): {
-    crops: number;
-    neigungen: number;
-    /** Bilder mit einem eigenen Rahmen, abweichend von der Buchvorgabe. */
-    rahmen: number;
-    /** Bildunterschriften im Fuß eines Rahmens. */
-    unterschriften: number;
-    hintergruende: number;
-    zeitstrahl: number;
-    positionen: number;
-    /**
-     * Bilder mit einer von Hand gesetzten Ebene im Stapel.
-     *
-     * Gezählt wird der Slot mit einem `layer`, nicht der Stapel: Ein Zug
-     * nummeriert alle Plätze der Doppelseite neu, also trägt danach jeder eine
-     * Ebene. Die Zahl sagt damit „auf so vielen Bildern liegt eine Aussage über
-     * das Vorn und Hinten" – und die verwirft der Neuaufbau, weil die neuen
-     * Plätze aus der Vorlage kommen.
-     */
-    ebenen: number;
-    /** Von Hand gesetzte Textblöcke auf Seiten, die neu gebaut werden. */
-    texte: number;
-    /**
-     * Vorlagentexte, die von Hand verschoben, aufgezogen oder gedreht wurden –
-     * Jahreszahlen, Gruppentitel, Ereigniszeilen. Der Neuaufbau stellt sie an
-     * den Platz der Vorlage zurück.
-     *
-     * Gezählt wird die Geometrie, dazu der Wortlaut der Jahreszahl, wo er von
-     * `chapterYear` abweicht. Ein umbenannter Gruppentitel bleibt ungezählt:
-     * Was die Automatik hinschreiben würde, steht in der Gruppe und wäre hier
-     * ein zweiter Weg zur Wahrheit – die Zahl soll eine untere Schranke sein,
-     * keine geratene.
-     */
-    textplaetze: number;
-    /**
-     * Weggenommene Plätze (`Spread.hiddenSlots`).
-     *
-     * Der Neuaufbau holt sie zurück: Die Plätze kommen aus der Vorlage, und die
-     * wählt er neu. Gezählt wird der Platz und nicht die Doppelseite — wer drei
-     * Löcher auf einer Seite geschlossen hat, verliert drei Entscheidungen.
-     */
-    plaetze: number;
-    /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
-    festgehalten: number;
-  } {
-    let crops = 0;
-    let neigungen = 0;
-    let rahmen = 0;
-    let unterschriften = 0;
-    let hintergruende = 0;
-    let zeitstrahl = 0;
-    let positionen = 0;
-    let ebenen = 0;
-    let texte = 0;
-    let textplaetze = 0;
-    let plaetze = 0;
-    let festgehalten = 0;
-    for (const spread of this.spreads) {
-      if (spread.locked) {
-        festgehalten++;
-        continue;
-      }
-      texte += spread.blocks?.length ?? 0;
-      textplaetze += (spread.texts ?? []).filter(
-        (t) =>
-          t.rect !== undefined ||
-          t.rotateDeg !== undefined ||
-          (t.role === 'year' &&
-            spread.chapterYear !== undefined &&
-            t.content !== String(spread.chapterYear)),
-      ).length;
-      crops += spread.slots.filter((sl) => sl.crop.mode === 'manual').length;
-      // Zählt auch die ausdrücklich geradegestellten: Auch eine gesetzte 0 ist
-      // eine Entscheidung, die der Neuaufbau verwirft.
-      neigungen += spread.slots.filter((sl) => sl.rotateDeg !== undefined).length;
-      // Wie bei der Neigung zählt auch das ausdrückliche „keiner": Ein Bild aus
-      // dem Rahmen des Buches herauszunehmen ist eine Entscheidung.
-      rahmen += spread.slots.filter((sl) => sl.frame !== undefined).length;
-      unterschriften += spread.slots.filter((sl) => sl.caption !== undefined).length;
-      // Justierte Doppelseiten tragen in jedem Slot ein Rechteck, aber
-      // gerechnet und nicht gesetzt: Der Neuaufbau stellt es wieder her.
-      if (!isJustified(spread.templateId))
-        positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
-      ebenen += spread.slots.filter((sl) => sl.layer !== undefined).length;
-      plaetze += spread.hiddenSlots?.length ?? 0;
-      if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
-        hintergruende++;
-      if (spread.timeline !== undefined) zeitstrahl++;
-    }
-    return {
-      crops,
-      neigungen,
-      rahmen,
-      unterschriften,
-      hintergruende,
-      zeitstrahl,
-      positionen,
-      ebenen,
-      texte,
-      textplaetze,
-      plaetze,
-      festgehalten,
-    };
+  handwork(): Handarbeitsbilanz {
+    return handarbeitsbilanz(this.spreads);
   }
 
   // ------------------------------------------------------------- Struktur
@@ -965,6 +877,10 @@ export class Project {
       // freier Hexwert wäre auf Dauer ein kräftiges Blau hinter Fotos.
       else if (isBackgroundColor(patch.color)) spread.background = patch.color;
       else return { ok: false, error: 'Unbekannte Hintergrundfarbe' };
+      // Ab jetzt ist es eine Entscheidung und keine Jahresfarbe mehr – auch
+      // beim Zurücksetzen, denn die Automatik setzt sie erst wieder beim
+      // nächsten Erzeugen.
+      delete spread.backgroundAuto;
     }
 
     if (patch.photoId !== undefined) {
@@ -1069,34 +985,154 @@ export class Project {
    * besteht aus Handarbeit, und der Generator kennt nur Fotos und Vorlagen.
    */
   generate(): GenerateResult {
+    const result = this.baueBuch(this.settings);
+    this.uebernimmBuch(result, this.settings);
+    return result;
+  }
+
+  /**
+   * Rechnet ein Buch – ohne es einzusetzen.
+   *
+   * Getrennt vom Einsetzen, damit dieselbe Rechnung auch als **Probe** laufen
+   * kann (`project/probe.ts`): Die Vorschau zeigt dann genau das Buch, das ein
+   * Klick auf „Übernehmen" in Kraft setzt. Ohne diese Trennung wäre die
+   * Vorschau eine zweite Rechnung mit demselben Ergebnis nur unter der Zusage
+   * der Determinismusregel – und die gilt eben nur, solange sich zwischendurch
+   * nichts ändert.
+   *
+   * Die Einstellungen kommen als Argument und nicht aus `this`: Eine Probe
+   * rechnet regelmäßig mit einem anderen Seed als das Buch, das gerade steht.
+   *
+   * @param behalten Stellen zusätzlicher Doppelseiten, die unverändert
+   * durchgereicht werden — die Seiten, an denen jemand in der Vorschau „so
+   * lassen" gesagt hat. Sie gehen denselben Weg wie festgehaltene
+   * (`layout/keep.ts`) und bekommen einen Anker auf ihre Nachbarseite, damit
+   * sie im umgebauten Buch an ihrer Stelle bleiben und nicht auf ihrer alten
+   * Nummer. Angesprochen über die Stelle und nicht über `Spread.id`: Die ist
+   * nicht eindeutig (siehe `Seitenvergleich.altIndex`).
+   */
+  baueBuch(settings: ProjectSettings, behalten: ReadonlySet<number> = new Set()): GenerateResult {
     this.rebuildStructure();
     const { kept } = splitKept(this.spreads);
-    const result = generateBook({
+    const zusaetzlich = this.spreads
+      .map((spread, index) => ({ spread, index }))
+      .filter(({ spread, index }) => !spread.locked && behalten.has(index));
+    const ausgenommen = new Set(zusaetzlich.map(({ index }) => index));
+    const alleKept = [
+      ...kept,
+      ...zusaetzlich.map(({ spread, index }) => {
+        // Der Anker ersetzt einen etwaigen alten: Der zeigte auf die
+        // Nachbarschaft eines früheren Buches.
+        const { anchor: _alt, ...ohne } = spread;
+        const anker = ankerNeben(this.spreads, index, ausgenommen);
+        return anker ? { ...ohne, anchor: anker } : ohne;
+      }),
+    ];
+    return generateBook({
       structure: this.structure,
       photos: this.photos,
       overrides: this.overrides,
-      profile: this.profile,
-      ...(kept.length > 0 ? { kept } : {}),
-      targetPages: this.settings.targetPages,
-      chapterOpeners: this.settings.chapterOpeners,
-      chapterOpenersDense: this.settings.chapterOpenersDense,
-      seed: this.settings.seed,
+      profile: profileById(settings.printProfileId) ?? this.profile,
+      ...(alleKept.length > 0 ? { kept: alleKept } : {}),
+      targetPages: settings.targetPages,
+      chapterOpeners: settings.chapterOpeners,
+      chapterOpenersDense: settings.chapterOpenersDense,
+      seed: settings.seed,
       weightOf: (id) => this.overrides[id]?.weight ?? 'normal',
       groups: this.groups,
-      groupOpeners: this.settings.groupOpeners,
-      groupOpenerMinPhotos: this.settings.groupOpenerMinPhotos,
+      groupOpeners: settings.groupOpeners,
+      groupOpenerMinPhotos: settings.groupOpenerMinPhotos,
       // Löst `groupOpeners: 'auto'` auf.
-      timeline: this.settings.timeline,
-      chapterColors: this.settings.chapterColors,
+      timeline: settings.timeline,
+      chapterColors: settings.chapterColors,
       yearEvents: Object.fromEntries(
         Object.entries(this.yearEvents).map(([jahr, zeilen]) => [Number(jahr), zeilen]),
       ),
     });
+  }
+
+  /**
+   * Setzt ein gerechnetes Buch in Kraft – samt der Einstellungen, mit denen es
+   * gerechnet wurde.
+   *
+   * Beides gehört zusammen: Ein Buch mit dem neuen Seed und Einstellungen mit
+   * dem alten hieße, dass das nächste Rendern andere Neigungen zeichnet als die
+   * Anordnung vorsah.
+   */
+  uebernimmBuch(result: GenerateResult, settings: ProjectSettings): void {
+    this.settings = settings;
     this.spreads = result.spreads;
     this.lastReport = result.report;
     this.groupStamp = gruppen.groupFingerprint(this);
     this.structureStamp = structureFingerprint(this.structure);
-    return result;
+    // Eine Probe, die gegen den alten Stand gerechnet wurde, ist jetzt eine
+    // Vorschau auf ein Buch, das es nicht mehr gibt.
+    this.anordnungsprobe = null;
+  }
+
+  // ------------------------------------------------------ Anordnungsprobe
+
+  /**
+   * Die gerechnete, noch nicht eingesetzte Anordnung.
+   *
+   * Flüchtig: nicht im `Stand`, nicht in `project.json`. Sie ist eine Frage und
+   * keine Entscheidung – dieselbe Überlegung wie bei den Doppelvorschlägen. Ein
+   * Cmd+Z soll sie deshalb auch nicht zurückbringen; ob sie noch zum Stand
+   * passt, entscheidet ihr Abdruck (`project/probe.ts`).
+   */
+  private anordnungsprobe: probe.Anordnungsprobe | null = null;
+
+  /**
+   * Rechnet eine Probe und legt sie ab.
+   *
+   * @param behalten Doppelseiten, die bleiben sollen, wie sie sind — die, an
+   * denen in der Vorschau „so lassen" steht. Für diese Probe, nicht für immer:
+   * Dauerhaft ist `locked`, und das ist eine andere Entscheidung.
+   */
+  probeRechnen(
+    patch: Partial<ProjectSettings> = {},
+    behalten: readonly number[] = [],
+  ): probe.Probeauskunft {
+    this.anordnungsprobe = probe.probeRechnen(this, patch, behalten);
+    return this.anordnungsprobe.auskunft;
+  }
+
+  /**
+   * Die abgelegte Probe – oder `null`, wenn keine vorliegt.
+   *
+   * `veraltet` heißt: Sie ist gerechnet, aber am Projekt hat sich seither etwas
+   * geändert. Die Oberfläche zeigt dann einen Hinweis statt einer Vorschau, die
+   * ein anderes Buch verspricht, als das Übernehmen einsetzen würde.
+   */
+  probeAuskunft(): { auskunft: probe.Probeauskunft; veraltet: boolean } | null {
+    if (!this.anordnungsprobe) return null;
+    return {
+      auskunft: this.anordnungsprobe.auskunft,
+      veraltet: !probe.probeGilt(this, this.anordnungsprobe),
+    };
+  }
+
+  /** Das Buch der Probe, wie `render()` es zeichnen kann. */
+  probeSicht(): Buchsicht | null {
+    if (!this.anordnungsprobe) return null;
+    return {
+      spreads: this.anordnungsprobe.result.spreads,
+      settings: this.anordnungsprobe.settings,
+    };
+  }
+
+  /** Wirft die Probe weg. `false`, wenn gar keine dalag. */
+  probeVerwerfen(): boolean {
+    const dalag = this.anordnungsprobe !== null;
+    this.anordnungsprobe = null;
+    return dalag;
+  }
+
+  /** Setzt die Probe in Kraft – oder sagt in einem Satz, warum nicht. */
+  probeUebernehmen(
+    id?: string,
+  ): { ok: true; result: GenerateResult } | { ok: false; error: string } {
+    return probe.probeUebernehmen(this, this.anordnungsprobe, id);
   }
 
   // -------------------------------------------------------------- Gruppen
@@ -1964,27 +2000,32 @@ export class Project {
 
   // -------------------------------------------------------------- Rendern
 
-  render(index: number): RenderedSpread | undefined {
-    const spread = this.spreads[index];
+  /**
+   * @param sicht welches Buch gemeint ist. Ohne Angabe das, das gerade steht;
+   * die Anordnungsprobe reicht ihr gerechnetes herein und bekommt damit
+   * Miniaturen aus derselben Funktion wie die Übersicht — mit ihrem Seed, also
+   * auch mit den Neigungen, die das übernommene Buch später hätte.
+   */
+  render(index: number, sicht: Buchsicht = this): RenderedSpread | undefined {
+    const spread = sicht.spreads[index];
     if (!spread) return undefined;
+    const settings = sicht.settings;
     return renderSpread(spread, {
-      profile: this.profile,
+      profile: profileById(settings.printProfileId) ?? this.profile,
       template: requireTemplate(spread.templateId),
       photos: this.photos,
       overrides: this.overrides,
-      background: this.settings.background,
-      ...(this.settings.timeline ? { timeline: this.timelineContext(index) } : {}),
+      background: settings.background,
+      ...(settings.timeline ? { timeline: this.timelineContext(index, sicht) } : {}),
       // Ohne Angabe trägt das Buch keine Zahlen – der Schalter lebt hier und
       // nicht in der Engine, wie beim Zeitstrahl.
-      ...(this.settings.pageNumbers ? { pageNumbers: {} } : {}),
+      ...(settings.pageNumbers ? { pageNumbers: {} } : {}),
       // Derselbe Seed wie beim Generieren: Ein neu angeordnetes Buch bekommt
       // damit auch neue Winkel, ein unverändertes behält seine.
-      ...(this.settings.tilt > 0
-        ? { tilt: { maxDeg: this.settings.tilt, seed: this.settings.seed } }
-        : {}),
+      ...(settings.tilt > 0 ? { tilt: { maxDeg: settings.tilt, seed: settings.seed } } : {}),
       // Nur ein gewählter Rahmen wird durchgereicht: Ohne die Angabe steht
       // jedes Bild ohne, und das ist die Vorgabe.
-      ...(this.settings.frame !== 'keiner' ? { frame: this.settings.frame } : {}),
+      ...(settings.frame !== 'keiner' ? { frame: settings.frame } : {}),
     });
   }
 
@@ -2132,7 +2173,7 @@ export class Project {
    * Das Ersatzjahr entsteht hier und nicht in der Engine: Nur der Projektstand
    * kennt die Reihenfolge der Doppelseiten im Buch.
    */
-  private timelineContext(index: number) {
+  private timelineContext(index: number, sicht: Buchsicht = this) {
     const ctx = this.dateContext();
     const gruppeVon = new Map<PhotoId, PhotoGroup>();
     for (const group of this.groups) {
@@ -2140,17 +2181,17 @@ export class Project {
       for (const id of group.photoIds) if (!gruppeVon.has(id)) gruppeVon.set(id, group);
     }
 
-    const fallbackYear = this.nearestYear(index);
+    const fallbackYear = this.nearestYear(index, sicht);
     const spanne = this.bookYears();
     return {
-      style: this.settings.timelineStyle,
-      footVariant: this.settings.timelineFootVariant,
-      sideVariant: this.settings.timelineSideVariant,
+      style: sicht.settings.timelineStyle,
+      footVariant: sicht.settings.timelineFootVariant,
+      sideVariant: sicht.settings.timelineSideVariant,
       // Nur ein gewählter Ton wird durchgereicht: Ohne `accentColor` leitet die
       // Engine ihn aus dem Hintergrund der Doppelseite ab, und das ist die
       // Vorgabe – siehe `accentOn`.
-      ...(this.settings.timelineAccent !== 'auto'
-        ? { accentColor: this.settings.timelineAccent }
+      ...(sicht.settings.timelineAccent !== 'auto'
+        ? { accentColor: sicht.settings.timelineAccent }
         : {}),
       ...(spanne ? { bookYears: spanne } : {}),
       dateOf: (id: PhotoId) => {
@@ -2185,10 +2226,10 @@ export class Project {
    * damit an der richtigen Stelle stehen, statt zu verschwinden – nur der
    * Marker entfällt.
    */
-  private nearestYear(index: number): number | undefined {
+  private nearestYear(index: number, sicht: Buchsicht = this): number | undefined {
     const ctx = this.dateContext();
     const jahrVon = (i: number): number | undefined => {
-      const spread = this.spreads[i];
+      const spread = sicht.spreads[i];
       if (!spread) return undefined;
       const daten = spread.slots
         .map((s) => (s.photoId ? this.photos.get(s.photoId) : undefined))
@@ -2200,7 +2241,7 @@ export class Project {
       return daten[Math.floor(daten.length / 2)];
     };
 
-    for (let abstand = 0; abstand < this.spreads.length; abstand++) {
+    for (let abstand = 0; abstand < sicht.spreads.length; abstand++) {
       const jahr = jahrVon(index - abstand) ?? jahrVon(index + abstand);
       if (jahr !== undefined) return jahr;
     }

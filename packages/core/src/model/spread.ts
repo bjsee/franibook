@@ -248,6 +248,23 @@ export interface Spread {
    */
   background?: string;
   /**
+   * Ob die Farbe von der Automatik stammt – der Jahresfarbe aus
+   * `chapterColors`.
+   *
+   * Der Unterschied ist keine Feinheit: `background` steht bei eingeschalteten
+   * Jahresfarben auf **jeder** Doppelseite, ohne dass jemand sie gesetzt hätte.
+   * Ohne diesen Marker zählte „was verwirft ein Neuaufbau" jede einzelne davon
+   * als verlorene Handarbeit – am frisch erzeugten Buch also achtzig
+   * Entscheidungen, die niemand getroffen hat. Ein von Hand gewählter Ton
+   * kommt aus derselben Palette und wäre daran nicht zu erkennen.
+   *
+   * Wer die Farbe setzt, löscht den Marker; der Generator setzt beides
+   * zusammen. Ältere Projekte tragen ihn nicht – dort gilt der Hintergrund
+   * weiter als Handarbeit, bis einmal neu angeordnet wurde. Das ist die
+   * vorsichtige Richtung: lieber eine Warnung zu viel als eine verschwiegene.
+   */
+  backgroundAuto?: true;
+  /**
    * Foto als randabfallender Hintergrund. Schlägt die Farbe.
    *
    * Ob die Auflösung dafür reicht, prüft `backgroundFit`; sie tut es bei diesem

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Spread } from '../model/spread.js';
-import { insertKept, keptOpeners, keptPhotos, splitKept } from './keep.js';
+import { ankerNeben, insertKept, keptOpeners, keptPhotos, splitKept } from './keep.js';
 
 const AUTO = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
 
@@ -160,5 +160,67 @@ describe('insertKept', () => {
   it('nummeriert auch ohne festgehaltene Seiten durch', () => {
     const flow = [fluss('s0', 7, ['p1']), fluss('s1', 9, ['p2'])];
     expect(insertKept(flow, []).map((s) => s.index)).toEqual([0, 1]);
+  });
+});
+
+describe('insertKept ohne brauchbaren Anker', () => {
+  /**
+   * Der Fehler, der ein ganzes Buch verdrehte: Zeigt der Anker einer
+   * festgehaltenen Seite auf ein Foto, das selbst auf einer festgehaltenen
+   * Seite liegt, findet ihn der Fluss nie — dann zählt der gespeicherte Index.
+   * Der meint Blätter des ganzen Buches, `flow` enthält die festgehaltenen
+   * aber nicht.
+   */
+  it('rechnet den Buchindex in eine Stelle im Fluss um', () => {
+    // Altes Buch: eigen, fluss, eigen, fluss, eigen, fluss (Index 0..5).
+    const eigen0 = { ...eigen('e0', 0), anchor: { photoId: 'weg', where: 'before' as const } };
+    const eigen2 = { ...eigen('e2', 2), anchor: { photoId: 'weg', where: 'before' as const } };
+    const eigen4 = { ...eigen('e4', 4), anchor: { photoId: 'weg', where: 'before' as const } };
+    const flow = [fluss('f1', 0, ['p1']), fluss('f3', 1, ['p3']), fluss('f5', 2, ['p5'])];
+
+    const gebaut = insertKept(flow, [eigen0, eigen2, eigen4]);
+
+    // Jede eigene Seite steht wieder vor ihrer Flussseite – und nicht alle drei
+    // am Anfang, wie es der rohe Buchindex ergäbe.
+    expect(gebaut.map((s) => s.id)).toEqual(['e0', 'f1', 'e2', 'f3', 'e4', 'f5']);
+  });
+});
+
+describe('ankerNeben', () => {
+  const buch = [
+    fluss('s0', 0, ['p1', 'p2']),
+    fluss('s1', 1, ['p3', 'p4']),
+    fluss('s2', 2, ['p5', 'p6']),
+  ];
+
+  /**
+   * Der Fall, für den es die Funktion gibt: Eine behaltene Seite soll dort
+   * stehen bleiben, wo sie im Buch steht – und nicht auf ihrer alten Nummer,
+   * die nach einer eingeschobenen Seite auf ein anderes Kapitel zeigt.
+   */
+  it('zeigt vor das erste Bild der Seite an dieser Stelle', () => {
+    expect(ankerNeben(buch, 1)).toEqual({ photoId: 'p3', where: 'before' });
+  });
+
+  /**
+   * Für eine Seite, die selbst schon dort steht: Sie gehört in `ausgenommen`,
+   * dann zeigt der Anker auf ihre Nachbarin.
+   */
+  it('überspringt die eigene Seite', () => {
+    expect(ankerNeben(buch, 1, new Set([1]))).toEqual({ photoId: 'p5', where: 'before' });
+  });
+
+  it('hängt am Ende des Buches hinter das letzte Bild der vorigen Seite', () => {
+    expect(ankerNeben(buch, 3)).toEqual({ photoId: 'p6', where: 'after' });
+  });
+
+  it('überspringt Seiten, die selbst nicht im Fluss laufen', () => {
+    // Die folgende Seite wird ebenfalls behalten – ihre Bilder sind vergeben
+    // und taugen deshalb nicht als Anker im neuen Fluss.
+    expect(ankerNeben(buch, 1, new Set([1]))).toEqual({ photoId: 'p5', where: 'before' });
+  });
+
+  it('gibt nichts zurück, wenn keine Nachbarseite ein Bild hat', () => {
+    expect(ankerNeben([fluss('s0', 0, [null])], 0)).toBeUndefined();
   });
 });
