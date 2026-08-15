@@ -8,12 +8,14 @@
  * wiederherstellen könnte.
  *
  * Deshalb `locked`: Solche Doppelseiten werden nicht gebaut, sondern
- * durchgereicht. Was das für die Engine bedeutet, steckt in diesen drei
- * Funktionen – ihre Bilder sind vergeben, ihre Seiten kosten Budget, und ihr
- * Platz im Buch hängt an einem Foto, nicht an einer Zahl.
+ * durchgereicht. Was das für die Engine bedeutet, steckt in diesen vier
+ * Funktionen – ihre Bilder sind vergeben, ihre Seiten kosten Budget, ihr Platz
+ * im Buch hängt an einem Foto statt an einer Zahl, und was sie schon leisten,
+ * baut die Automatik kein zweites Mal.
  */
 import type { PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
+import { groupOpenerTemplates } from '../templates/index.js';
 
 /** Trennt die festgehaltenen Doppelseiten von denen, die neu gebaut werden. */
 export function splitKept(spreads: readonly Spread[]): { kept: Spread[]; flow: Spread[] } {
@@ -39,6 +41,44 @@ export function keptPhotos(kept: readonly Spread[]): Set<PhotoId> {
     if (spread.backgroundPhotoId) ids.add(spread.backgroundPhotoId);
   }
   return ids;
+}
+
+/**
+ * Auftakte, die unter den festgehaltenen Doppelseiten schon stehen.
+ *
+ * Ohne diese Auskunft baut `generateBook` sie ein zweites Mal: Die
+ * Kapitelschleife setzt für jedes Jahr einen Auftakt, und die Gruppen bekommen
+ * ihren aus der Reservierung – beide fragen nicht, ob der Fluss diese Seite
+ * überhaupt noch beisteuern muss. Wer einen Jahresauftakt festhält und neu
+ * anordnet, bekam so zwei Jahresseiten für dasselbe Jahr; beim Gruppenauftakt
+ * stand zusätzlich das Hauptbild zweimal im Buch, weil `keptPhotos` nur den
+ * Fluss ausnimmt und nicht die zweite Auftaktseite.
+ *
+ * Das Jahr steht am Spread (`chapterYear`) und ist damit eine Aussage. Die
+ * Gruppe steht nirgends – sie wird über die Bilder der Seite bestimmt und
+ * ausdrücklich nicht über den Titeltext: Der ist editierbar, und ein
+ * umbenannter Auftakt bliebe sonst unerkannt.
+ */
+export function keptOpeners(
+  kept: readonly Spread[],
+  groupOf: ReadonlyMap<PhotoId, string>,
+): { years: Set<number>; groups: Set<string> } {
+  const years = new Set<number>();
+  const groups = new Set<string>();
+  const gruppenAuftakte = new Set(groupOpenerTemplates().map((t) => t.id));
+
+  for (const spread of kept) {
+    if (spread.chapterYear !== undefined) years.add(spread.chapterYear);
+    if (!gruppenAuftakte.has(spread.templateId)) continue;
+    for (const slot of spread.slots) {
+      const gruppe = slot.photoId ? groupOf.get(slot.photoId) : undefined;
+      if (gruppe !== undefined) {
+        groups.add(gruppe);
+        break;
+      }
+    }
+  }
+  return { years, groups };
 }
 
 /**

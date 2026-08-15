@@ -18,7 +18,7 @@ import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Structure } from '../structure/segment.js';
 import { isJustified } from '../templates/justified.js';
-import { insertKept, keptPhotos } from './keep.js';
+import { insertKept, keptOpeners, keptPhotos } from './keep.js';
 import { justifySpread, layoutSpread } from './rebuild.js';
 import {
   chapterTemplates,
@@ -619,6 +619,9 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // selbst gebauten Seite und klein im Fluss.
   const kept = opts.kept ?? [];
   const keptFotos = keptPhotos(kept);
+  // Und was sie schon leisten, wird nicht doppelt gebaut: Ein festgehaltener
+  // Auftakt ist ein Auftakt und bleibt einer.
+  const { years: keptJahre, groups: keptGruppen } = keptOpeners(kept, groupOf);
   /**
    * Vorgabe für Gruppenauftakte, aufgelöst.
    *
@@ -647,6 +650,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     for (const g of opts.groups ?? []) {
       if (!g.active) continue;
       if (!auftaktGewuenscht(g)) continue;
+      // Ihr Auftakt steht schon und ist festgehalten. Ohne diese Zeile bekäme
+      // sie einen zweiten – mit demselben Hauptbild, denn ein gesetztes
+      // `coverPhotoId` geht an `schonVergeben` vorbei.
+      if (keptGruppen.has(g.id)) continue;
       const verdient = g.coverPhotoId !== undefined || g.photoIds.length >= openerMinPhotos;
       if (!verdient) continue;
 
@@ -680,6 +687,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const jahresBilder = new Map<number, Photo[]>();
   if (useOpeners) {
     for (const chapter of structure.chapters) {
+      // Für ein Jahr, dessen Auftakt festgehalten ist, wird keiner gebaut –
+      // also darf ihm auch niemand Bilder reservieren. Sie fielen sonst aus dem
+      // Fluss heraus, ohne je auf einer Seite zu landen.
+      if (keptJahre.has(chapter.year)) continue;
       const frei = chapter.segments
         .flatMap((s) => s.photoIds)
         .filter((id) => !schonVergeben.has(id))
@@ -725,8 +736,21 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // einzurechnen, plante das Budget 61 Doppelseiten und das Buch wurde 68 lang.
   // Festgehaltene Seiten sind schon gedruckt gedacht und kosten genauso.
   const auftaktSpreads = auftaktBild.size;
+
+  // Jahresauftakte, die als festgehaltene Seite schon bezahlt sind.
+  // `distributeBudget` zieht für *jedes* Kapitel einen Auftakt ab; für diese
+  // Jahre baut die Schleife aber keinen mehr, und ohne die Rückgabe wäre das
+  // Buch je festgehaltenem Auftakt zwei Seiten zu kurz.
+  const keptJahresAuftakte = useOpeners
+    ? structure.chapters.filter((c) => keptJahre.has(c.year)).length
+    : 0;
+  const budgetSeiten = Math.max(
+    2,
+    zielSeiten - (auftaktSpreads + kept.length - keptJahresAuftakte) * 2,
+  );
+
   const budgets = distributeBudget(budgetKapitel, {
-    targetPages: Math.max(2, zielSeiten - (auftaktSpreads + kept.length) * 2),
+    targetPages: budgetSeiten,
     chapterSpreads: useOpeners ? 1 : 0,
     maxPhotosPerSpread: Math.max(...slotCounts, 1),
   });
@@ -753,7 +777,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
     const farbe = jahresFarbe.get(chapter.year);
     const abHier = spreads.length;
 
-    if (useOpeners) {
+    // Steht der Auftakt dieses Jahres schon als festgehaltene Seite, kommt er
+    // über `insertKept` an seinen Platz zurück. Ihn hier trotzdem zu bauen, gab
+    // dem Jahrgang zwei Jahresseiten – der gemeldete Fehler.
+    if (useOpeners && !keptJahre.has(chapter.year)) {
       const { spread, usedPhotoIds } = buildChapterOpener(
         `spread-${spreads.length}`,
         spreads.length,
@@ -934,8 +961,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       pageCount: alle.length * 2,
       targetPages,
       effectiveTargetPages: zielSeiten,
-      chapterOpeners: chapterOpenerCount,
-      groupOpeners: groupOpenerCount,
+      // Festgehaltene Auftakte zählen mit: Gefragt ist, wie viele Auftakte das
+      // Buch hat, nicht wie viele die Engine gebaut hat. Neunzehn Jahrgänge mit
+      // achtzehn gemeldeten Auftakten läsen sich wie ein fehlender.
+      chapterOpeners: chapterOpenerCount + keptJahresAuftakte,
+      groupOpeners: groupOpenerCount + keptGruppen.size,
       keptSpreads: kept.length,
       unplaced,
       worstDpi: stats.worstDpi,
@@ -944,7 +974,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       photosPerSpread: stats.photosPerSpread,
       feasibility: checkFeasibility(
         platzierbar,
-        Math.max(2, zielSeiten - (auftaktSpreads + kept.length) * 2),
+        budgetSeiten,
         slotCounts,
         structure.chapters.length,
         useOpeners,

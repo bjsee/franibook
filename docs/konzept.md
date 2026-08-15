@@ -882,6 +882,30 @@ Inhalt: Kasten, Winkel und Schriftgröße jedes Textblocks dort zu spiegeln hie�
 sie an zwei Stellen zu pflegen. Umsortieren und Löschen bleiben möglich, denn dafür
 zählt allein, wo die Zeile steht.
 
+> **Korrektur (15. August 2026): ein festgehaltener Auftakt bleibt einer**
+>
+> Festgehalten wird nicht nur, was von Hand gebaut ist — jede Doppelseite lässt sich
+> festhalten, auch eine, die die Automatik erzeugt hat. Bei einem Auftakt reichten die
+> drei Auskünfte oben dann nicht: `generateBook` setzte für jedes Jahr einen
+> Jahresauftakt und für jede Gruppe ihren, ohne zu fragen, ob der Fluss diese Seite
+> überhaupt noch beisteuern muss. Wer einen Jahresauftakt festhielt und neu anordnete,
+> bekam sein Jahr zweimal; beim Gruppenauftakt stand zusätzlich das Hauptbild an zwei
+> Stellen im Buch, denn `keptPhotos` nimmt Bilder nur aus dem **Fluss** heraus und
+> nicht aus einer zweiten Auftaktseite.
+>
+> `keptOpeners` (`layout/keep.ts`) ist die vierte Auskunft: Welche Jahre und welche
+> Gruppen haben ihren Auftakt schon? Das Jahr steht als `chapterYear` am Spread — eine
+> Aussage der Engine, aus demselben Grund, aus dem die Kapitelnavigation nicht am
+> Wortlaut der Jahreszahl hängt. Die Gruppe steht nirgends und wird über die **Bilder**
+> der Seite bestimmt, ausdrücklich nicht über den Titeltext: Wer „Reise" in „Sylt 2019"
+> umbenennt, bekäme sonst einen zweiten Auftakt. Die eingesparten Auftakte gehen ins
+> Seitenbudget zurück, sonst wäre das Buch je festgehaltenem Auftakt zwei Seiten zu
+> kurz, und der Bericht zählt sie mit: Gefragt ist, wie viele Auftakte das Buch hat,
+> nicht wie viele die Engine gebaut hat.
+>
+> Was der Fehler über den Bericht verriet, steht im Abschnitt „Prüfbericht": Ein Bild
+> an zwei Stellen war in keiner Kennzahl und in keiner Befundart vorgesehen.
+
 ### Einzelne Buchseiten
 
 Manches braucht keine zwei Seiten. Eine Auftaktseite für ein Fest, ein Nachsatz –
@@ -2038,6 +2062,22 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > Liste trifft deshalb auch nicht mehr nur das Blatt, sondern das Bild
 > (`/doppelseite/18/platz/r2c`) — bei acht Bildern auf einer Doppelseite ist das der
 > Unterschied zwischen einer Auskunft und einem Suchbild.
+
+> **Ergänzung (15. August 2026): dasselbe Bild an zwei Stellen**
+>
+> Die einzige Befundart, die kein Renderer beisteuern kann und die deshalb erst in
+> `pruefeBuch` entsteht: Eine Doppelseite weiß nichts von den übrigen 79. `foto-doppelt`
+> meldet die **zweite** Stelle und nennt die erste — dorthin will man springen, die erste
+> ist die, die man behält. Der Schlüssel hängt am Foto wie jeder Bildfund; gezählt werden
+> nur Motive, denn ein Bild, das zusätzlich als Hintergrund einer Seite steht, ist eine
+> Gestaltung und kein Versehen.
+>
+> Der Anlass war ein festgehaltener Gruppenauftakt, dessen Hauptbild die Automatik ein
+> zweites Mal setzte (`keptOpeners` in `layout/keep.ts`). Aufgefallen ist das keiner
+> Zahl: `bookStats` zählt platzierte Bilder als **Menge**, und darin ist eine Dublette
+> unsichtbar. Die Kennzahl bleibt so — „wie viele Bilder liegen im Buch" ist eine Frage
+> nach Bildern und nicht nach Plätzen —, aber was sie nicht sehen kann, sagt jetzt der
+> Bericht.
 
 > **Ergänzung (8. August 2026): der Korrekturabzug**
 >

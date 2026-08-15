@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Spread } from '../model/spread.js';
-import { insertKept, keptPhotos, splitKept } from './keep.js';
+import { insertKept, keptOpeners, keptPhotos, splitKept } from './keep.js';
 
 const AUTO = { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' as const };
 
@@ -60,6 +60,39 @@ describe('keptPhotos', () => {
       backgroundPhotoId: 'p9',
     };
     expect([...keptPhotos([seite])].sort()).toEqual(['p1', 'p9']);
+  });
+});
+
+describe('keptOpeners', () => {
+  const gruppeVon = new Map([
+    ['p1', 'reise'],
+    ['p2', 'reise'],
+  ]);
+
+  it('nennt das Jahr einer festgehaltenen Jahresseite', () => {
+    const seite: Spread = { ...fluss('e1', 0, []), locked: true, chapterYear: 2019 };
+    const { years } = keptOpeners([seite], new Map());
+    expect([...years]).toEqual([2019]);
+  });
+
+  it('erkennt die Gruppe eines Auftakts an seinem Bild, nicht am Titel', () => {
+    // Der Titel ist editierbar: Wer „Reise" in „Sylt 2019" umbenennt, hätte bei
+    // einem Textvergleich einen zweiten Auftakt bekommen.
+    const seite: Spread = {
+      ...fluss('e1', 0, ['p1']),
+      templateId: 'spread.group.opener',
+      locked: true,
+      texts: [{ id: 't', role: 'eventTitle', content: 'Sylt 2019', slotId: 't-title' }],
+    };
+    const { groups } = keptOpeners([seite], gruppeVon);
+    expect([...groups]).toEqual(['reise']);
+  });
+
+  it('hält eine gewöhnliche Doppelseite nicht für einen Auftakt', () => {
+    const seite: Spread = { ...fluss('e1', 0, ['p1', 'p2']), locked: true };
+    const { years, groups } = keptOpeners([seite], gruppeVon);
+    expect(years.size).toBe(0);
+    expect(groups.size).toBe(0);
   });
 });
 

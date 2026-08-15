@@ -34,6 +34,13 @@ const PHOTOS = new Map<string, Photo>([
   // Der bekannte Fall aus dem echten Bestand: 348 px lange Kante, passt in
   // keinen Slot mit 240 dpi.
   ['klein', photo('klein', 348, 261)],
+  // Reserve für Bücher aus mehreren Doppelseiten: Seit der Bericht Dubletten
+  // meldet, ist dieselbe Kennung auf zwei Seiten selbst ein Fund.
+  ['p5', photo('p5', 2048, 1536)],
+  ['p6', photo('p6', 2048, 1536)],
+  ['p7', photo('p7', 2048, 1536)],
+  ['p8', photo('p8', 2048, 1536)],
+  ['p9', photo('p9', 2048, 1536)],
 ]);
 
 function spreadWith(photoIds: (string | null)[]): Spread {
@@ -409,12 +416,54 @@ describe('Abnahmebericht', () => {
     expect(seitenbefunde(spread, 0, profile)).toEqual(ausDemBuch);
   });
 
+  /**
+   * Der eine Fund, den keine Doppelseite allein sehen kann.
+   *
+   * Er fehlte, solange die Kennzahlen Bilder als Menge zählten: Ein doppelt
+   * gesetztes Bild war in `placedCount` unsichtbar und im Bericht gar nicht
+   * vorgesehen.
+   */
+  describe('Bild zweimal im Buch', () => {
+    it('meldet die zweite Stelle und nennt die erste', () => {
+      const bericht = pruefeBuch({
+        spreads: [gerendert(['p1', 'p2', 'p3', 'p4']), gerendert(['p5', 'p6', 'p7', 'p1'])],
+        profile,
+      });
+
+      const funde = bericht.befunde.filter((b) => b.art === 'foto-doppelt');
+      expect(funde).toHaveLength(1);
+      // Gemeldet wird die zweite Stelle: Die erste will man behalten.
+      expect(funde[0]!.ort).toEqual({ kind: 'spread', index: 1, slotId: 'd' });
+      expect(funde[0]!.text).toBe('steht schon auf Doppelseite 1');
+      // Der Fund hängt am Foto, nicht an der Seite – eine Neuanordnung trägt
+      // ihn mit.
+      expect(funde[0]!.schluessel).toBe('foto-doppelt#foto:p1');
+    });
+
+    it('erkennt auch dasselbe Bild zweimal auf einer Doppelseite', () => {
+      const bericht = pruefeBuch({ spreads: [gerendert(['p1', 'p2', 'p1', 'p4'])], profile });
+      const funde = bericht.befunde.filter((b) => b.art === 'foto-doppelt');
+      expect(funde).toHaveLength(1);
+      expect(funde[0]!.text).toBe('steht auf dieser Doppelseite noch ein zweites Mal');
+    });
+
+    it('schweigt über ein Buch ohne Dubletten', () => {
+      const bericht = pruefeBuch({
+        spreads: [gerendert(['p1', 'p2', 'p3', 'p4']), gerendert(['p5', 'p6', 'p7', 'p8'])],
+        profile,
+      });
+      expect(bericht.befunde.filter((b) => b.art === 'foto-doppelt')).toEqual([]);
+    });
+  });
+
   it('ordnet die Funde nach Gewicht und innerhalb einer Art nach Buchreihenfolge', () => {
+    // Jede Seite mit eigenen Bildern: Dieselbe Kennung zweimal wäre ein Fund
+    // für sich und stünde als schwerer vor dem, was hier geprüft wird.
     const bericht = pruefeBuch({
       spreads: [
         gerendert(['p1', null, 'p3', 'p4']),
-        gerendert(['klein', 'p2', 'p3', 'p4']),
-        gerendert(['p1', null, 'p3', 'p4']),
+        gerendert(['klein', 'p2', 'p5', 'p6']),
+        gerendert(['p7', null, 'p8', 'p9']),
       ],
       profile,
     });
