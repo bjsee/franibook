@@ -27,7 +27,7 @@ import { Unterschriften } from './Unterschriften.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
-import { miniaturSrc } from './useNachbarn.js';
+import { useMiniaturSrc } from '../bildadresse.js';
 import { useSpreadTiles } from './useSpreadTiles.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import { Vorlagentexte } from './Vorlagentexte.js';
@@ -207,6 +207,7 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
  */
 function Buchnavigator({ aussen, version }: { aussen: SpreadAussen; version: number }) {
   const { containerRef, geladen } = useSpreadTiles(aussen.spreadCount, version);
+  const miniaturSrc = useMiniaturSrc();
 
   /**
    * Zu welchem Jahrgang eine Doppelseite gehört.

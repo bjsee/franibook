@@ -8,7 +8,8 @@
 import { useState } from 'react';
 import { SpreadView } from '@franibook/render-dom';
 import { T } from '../theme.js';
-import { miniaturSrc, useNachbarn } from './useNachbarn.js';
+import { useNachbarn } from './useNachbarn.js';
+import { useMiniaturSrc } from '../bildadresse.js';
 
 /** Breite einer Kachel in Pixeln. */
 const KACHEL_PX = 132;
@@ -27,6 +28,7 @@ interface Props {
 export function Nachbarn({ index, spreadCount, zieht, version, onOpen, onDrop }: Props) {
   const { nachbarn, geladen } = useNachbarn(index, spreadCount, 2, version);
   const [ueber, setUeber] = useState<number | null>(null);
+  const miniaturSrc = useMiniaturSrc();
 
   if (spreadCount <= 1) return null;
 

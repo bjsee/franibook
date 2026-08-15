@@ -28,6 +28,7 @@ import {
 import { auswahlKlick } from './auswahl.js';
 import { B, T } from './theme.js';
 import { fotoLoeschen, loeschMeldung } from './deletePhoto.js';
+import { useBildSrc } from './bildadresse.js';
 
 type Filter = { kind: 'all' } | { kind: 'ungrouped' } | { kind: 'group'; id: string };
 
@@ -76,6 +77,7 @@ export function PhotoGroups({
   onOpenSpread,
   standVersion,
 }: Props) {
+  const bildSrc = useBildSrc();
   const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -558,7 +560,7 @@ export function PhotoGroups({
                 title="Doppelklick vergrößert"
                 style={{ ...S.zeile, ...(ausgewaehlt ? S.zeileAn : {}) }}
               >
-                <img src={`/api/photos/${p.id}/preview?size=thumb`} alt="" style={S.thumb} />
+                <img src={bildSrc(p.id, 'thumb')} alt="" style={S.thumb} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={S.datei}>
                     {p.fileName}
@@ -611,11 +613,7 @@ export function PhotoGroups({
       {grossesBild && (
         <div style={S.overlay} onClick={() => setLightbox(null)}>
           <figure style={S.figur} onClick={(e) => e.stopPropagation()}>
-            <img
-              src={`/api/photos/${grossesBild.id}/preview`}
-              alt={grossesBild.fileName}
-              style={S.grossesBild}
-            />
+            <img src={bildSrc(grossesBild.id)} alt={grossesBild.fileName} style={S.grossesBild} />
             <figcaption style={S.bildunterschrift}>
               <strong style={{ color: '#fff', fontFamily: T.mono, fontSize: 13 }}>
                 {grossesBild.fileName}

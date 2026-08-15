@@ -48,6 +48,10 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     report: project.lastReport,
     chapters: project.chapters(),
     groupMarks: project.groupMarks(),
+    // Womit die Oberfläche ihre Bildadressen stempelt: Ohne die Fassung in der
+    // Adresse zeigte der Browser hinter `immutable` ein Jahr lang die
+    // ungedrehten Pixel (`Project.bildFassungen`).
+    bildFassungen: project.bildFassungen(),
     // Was der Zeitstrahl beschriftet, folgt einer Gruppenänderung sofort;
     // Verteilung und Auftaktseiten erst beim Neuanordnen. Die Oberfläche sagt es,
     // statt das Buch ungefragt neu zu bauen.

@@ -27,17 +27,15 @@ import { Fragment, useEffect, useState } from 'react';
 import { type FotoInfo } from './api.js';
 import { type DoppelZeile, useDoppel } from './useDoppel.js';
 import { B, T } from './theme.js';
+import { useBildSrc } from './bildadresse.js';
 
 export function Doppel({
   onChanged,
   standVersion,
-  bildVersion,
   onOffen,
 }: {
   onChanged?: () => void;
   standVersion?: number;
-  /** Hängt an den Bildern, damit eine gekippte Ausrichtung sichtbar wird. */
-  bildVersion: number;
   /**
    * Meldet die offenen Doppel an den Reiter der Prüfung.
    *
@@ -186,7 +184,6 @@ export function Doppel({
               )}
               <Zeile
                 zeile={zeile}
-                bildVersion={bildVersion}
                 schwelle={m.bericht?.hoechstabstand}
                 laeuft={m.laeuft}
                 onBehalten={(id) => void m.behalten(i, id)}
@@ -203,7 +200,6 @@ export function Doppel({
 
 function Zeile({
   zeile,
-  bildVersion,
   schwelle,
   laeuft,
   onBehalten,
@@ -211,7 +207,6 @@ function Zeile({
   onWiederOeffnen,
 }: {
   zeile: DoppelZeile;
-  bildVersion: number;
   /** Bis wohin der Bildvergleich zwei Aufnahmen zusammenlässt. */
   schwelle: number | undefined;
   laeuft: string | null;
@@ -235,7 +230,6 @@ function Zeile({
           <Bild
             key={foto.id}
             foto={foto}
-            bildVersion={bildVersion}
             vorschlag={foto.id === zeile.behalten}
             entfernt={zeile.entfernt.includes(foto.id)}
             bester={istBester(foto, uebrig)}
@@ -308,7 +302,6 @@ function zahl(wert: number): string {
 
 function Bild({
   foto,
-  bildVersion,
   vorschlag,
   entfernt,
   bester,
@@ -317,7 +310,6 @@ function Bild({
   onBehalten,
 }: {
   foto: FotoInfo;
-  bildVersion: number;
   vorschlag: boolean;
   entfernt: boolean;
   bester: boolean;
@@ -325,6 +317,7 @@ function Bild({
   zeigeKnopf: boolean;
   onBehalten: () => void;
 }) {
+  const bildSrc = useBildSrc();
   const schaerfe = foto.quality?.sharpness;
 
   return (
@@ -339,7 +332,7 @@ function Bild({
         }}
       >
         <img
-          src={`/api/photos/${foto.id}/preview?size=preview${bildVersion > 0 ? `&v=${bildVersion}` : ''}`}
+          src={bildSrc(foto.id)}
           alt={foto.fileName}
           style={{ ...S.pixel, filter: entfernt ? 'grayscale(1)' : 'none' }}
         />

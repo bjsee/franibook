@@ -101,17 +101,9 @@ export interface FotodatenModell {
 export function useFotodaten(opts: {
   /** Nach jeder Korrektur: Projektinfo und Buchvorschau neu holen. */
   onChanged: () => void;
-  /**
-   * Nach einer Ausrichtungskorrektur: die Bildversion hochzählen.
-   *
-   * Ohne das zeigte der Browser die alte Ausrichtung weiter — Vorschauen gehen
-   * mit `Cache-Control: immutable` heraus, und die Fotokennung ändert sich beim
-   * Kippen nicht.
-   */
-  onBildGeaendert: () => void;
   standVersion?: number | undefined;
 }): FotodatenModell {
-  const { onChanged, onBildGeaendert, standVersion } = opts;
+  const { onChanged, standVersion } = opts;
 
   const [alle, setAlle] = useState<FotoInfo[] | null>(null);
   const [orte, setOrte] = useState<Ort[]>([]);
@@ -326,13 +318,12 @@ export function useFotodaten(opts: {
           setNote(meldung(e, nachher.verb));
           // Ein neuer Ortsname gehört ab jetzt in die Vervollständigung.
           if (nachher.ort) orteLaden();
-          if (nachher.pixel) onBildGeaendert();
           onChanged();
         })
         .catch((err: unknown) => setFehler(fehlertext(err)))
         .finally(() => setBusy(false));
     },
-    [auswahl, onChanged, onBildGeaendert, orteLaden, laden],
+    [auswahl, onChanged, orteLaden, laden],
   );
 
   const anwenden = useCallback(
