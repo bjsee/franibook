@@ -14,6 +14,8 @@ import {
   type Spread,
   allTemplates,
   chapterChoices,
+  chapterHalfOfTemplate,
+  chapterHalves,
   choosePairFor,
   effectivePhoto,
   halfPageById,
@@ -21,6 +23,7 @@ import {
   halvesOfTemplate,
   isBlank,
   isJustified,
+  isChapterHalf,
   isOwnHalf,
   JUSTIFIED_MAX_PHOTOS,
   JUSTIFIED_MIN_PHOTOS,
@@ -29,10 +32,10 @@ import {
   layoutSpread,
   pairId,
   rotateCrop,
+  setChapterHalf,
   setHalfPage,
   templateById,
   templateMeta,
-  wirksamePlaetze,
 } from '@franibook/core';
 
 /** Was diese Funktionen vom Projekt brauchen. */
@@ -198,24 +201,36 @@ export function setSpreadHalf(
 ): { ok: boolean; error?: string; leftover: PhotoId[] } {
   const spread = z.spreads[index];
   if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', leftover: [] };
-  if (!halfPageById(halfId) && !isOwnHalf(halfId)) {
+  // Die Jahresseiten-Fassungen stehen in einer eigenen Familie und werden erst
+  // im Kapitelzweig aufgelöst (`chapter-halves.ts`).
+  if (!halfPageById(halfId) && !isOwnHalf(halfId) && !isChapterHalf(halfId)) {
     return { ok: false, error: `Anordnung ${halfId} gibt es nicht`, leftover: [] };
   }
-  // Eine Jahresseite zerfällt nicht in zwei Buchseiten: Die Hälften des Flusses
-  // tragen keinen Textplatz, und aus zwei zusammengesetzt verlöre der Auftakt
-  // Jahreszahl und Ereigniszeilen. Er wählt als ganze Doppelseite unter seiner
-  // eigenen Familie (`templateChoices`).
+  const fotos = fotosVon(z, spread);
+
+  // Eine Jahresseite geht ihren eigenen Weg: Ihre Textseite wählt unter den
+  // Jahresseiten-Fassungen, die Bildseite unter den Halbseiten des Flusses, und
+  // die Textplätze kommen bei der Zusammensetzung mit (`setChapterHalf`).
+  // Vorher wurde der Griff hier abgelehnt — die Seite wäre sonst ihre Jahreszahl
+  // losgeworden.
   if (templateMeta(spread.templateId).chapterOnly) {
+    const kapitel = setChapterHalf(spread, {
+      side,
+      halfId,
+      photos: fotos,
+      profile: z.profile,
+      weightOf: gewicht(z),
+    });
+    if (kapitel.ok && kapitel.spread) {
+      z.spreads[index] = kapitel.spread;
+      return { ok: true, leftover: kapitel.leftover };
+    }
     return {
       ok: false,
-      error:
-        'Eine Jahresseite lässt sich nur als ganze Doppelseite anordnen – ' +
-        'seitenweise verlöre sie Jahreszahl und Ereigniszeilen',
+      ...(kapitel.error ? { error: kapitel.error } : {}),
       leftover: [],
     };
   }
-
-  const fotos = fotosVon(z, spread);
 
   // Der seitenweise Weg zuerst: Er lässt die Gegenseite unberührt und ist damit
   // der, den der Griff verspricht.
@@ -284,57 +299,109 @@ export function halfChoices(
   z: Bestand,
   index: number,
 ): {
-  halves: {
-    id: string;
-    /** Wie die Anordnung heißt – als Erklärung an der Skizze. */
-    name?: string;
-    slotCount: number;
-    slots: { x: number; y: number; w: number; h: number }[];
-  }[];
+  halves: Anordnungsskizze[];
+  /**
+   * Die Fassungen der Jahresseite – nur bei einem Auftakt und nur für die Seite,
+   * auf der die Textplätze stehen.
+   *
+   * Getrennte Listen, weil die beiden Seiten verschiedene Dinge sind: Auf der
+   * einen steht die Jahreszahl, auf der anderen liegen Bilder wie im Fluss. Eine
+   * Flusshälfte auf der Textseite nähme der Doppelseite ihre Jahreszahl —
+   * `setSpreadHalf` lehnt sie ab, die Oberfläche bietet sie erst gar nicht an.
+   */
+  jahresseiten?: Anordnungsskizze[];
+  /** Auf welcher Buchseite die Textplätze stehen. */
+  textseite?: 'left' | 'right';
   current: { left?: string; right?: string };
   /** Bilder auf der linken und rechten Seite dieser Doppelseite. */
   counts: { left: number; right: number };
   /**
-   * Ob dies eine Auftaktseite ist – dann gibt es keine seitenweise Wahl.
+   * Ob dies eine Jahresseite ist.
    *
-   * Die Oberfläche zeigt sonst als Vorgabe die einzelne Seite, und das ist bei
-   * einer Jahresseite der Griff, der ihr die Jahreszahl nimmt (siehe
-   * `setSpreadHalf`). Sie soll ihn deshalb gar nicht erst anbieten.
+   * Sie lässt sich seitenweise anordnen wie jede andere Doppelseite, wählt aber
+   * je Seite in einer eigenen Familie — die Oberfläche braucht den Unterschied
+   * für ihre Beschriftung.
    */
   auftakt: boolean;
 } {
   const spread = z.spreads[index];
   if (!spread) return { halves: [], current: {}, counts: { left: 0, right: 0 }, auftakt: false };
 
-  if (templateMeta(spread.templateId).chapterOnly) {
-    const belegt = spread.slots.filter((s) => s.photoId).length;
-    return { halves: [], current: {}, counts: { left: 0, right: belegt }, auftakt: true };
+  const template = templateById(spread.templateId);
+  // Gezählt wird über die **wirksame** Lage jedes Bildes: `rect` schlägt den
+  // Platz der Vorlage. Zwei Fälle laufen sonst auseinander, und beide kommen am
+  // echten Buch vor — ein eingeworfenes Bild hat einen freien Platz, den die
+  // Vorlage nicht kennt, und ein von Hand gezogener Kasten steht woanders als
+  // sein Vorlagenplatz. Die Oberfläche schrieb dann „0 Bilder" an eine Seite mit
+  // zweien, und die seitenweise Anordnung schickte sie unangekündigt in den Pool.
+  const geo = new Map((template?.slots ?? []).map((s) => [s.id, s]));
+  const belegt = (pruefe: (r: { x: number; w: number }) => boolean) =>
+    spread.slots.filter((s) => {
+      if (!s.photoId) return false;
+      const platz = s.rect ?? geo.get(s.slotId);
+      return platz ? pruefe(platz) : false;
+    }).length;
+
+  const halves = halfPages().map(skizze);
+  const counts = {
+    // Ein Kasten über dem Falz zählt zu der Seite, auf der seine Mitte liegt —
+    // dieselbe Rechnung wie beim Trennen (`setChapterHalf`).
+    left: belegt((r) => r.x + r.w / 2 < 0.5),
+    right: belegt((r) => r.x + r.w / 2 >= 0.5),
+  };
+
+  const jahresseite = template ? chapterHalfOfTemplate(template) : undefined;
+  if (jahresseite) {
+    // Was gerade steht: auf der Textseite die Fassung, gegenüber die Halbseite —
+    // und die kennt `halvesOfTemplate` nur, wenn sie auch im Fluss vorkommt.
+    const gegen = template ? halvesOfTemplate(template) : {};
+    const current =
+      jahresseite.seite === 'left'
+        ? { left: jahresseite.id, ...(gegen.right ? { right: gegen.right } : {}) }
+        : { right: jahresseite.id, ...(gegen.left ? { left: gegen.left } : {}) };
+    return {
+      halves,
+      jahresseiten: chapterHalves().map(skizze),
+      textseite: jahresseite.seite,
+      current,
+      counts,
+      auftakt: true,
+    };
   }
 
-  const template = templateById(spread.templateId);
-  // Über die wirksamen Plätze und ihre Geometrie, nicht über den Index in der
-  // Vorlage: Ein eingeworfenes Bild hat einen freien Platz, den die Vorlage nicht
-  // kennt (`wirksamePlaetze`). Gezählt wurde es damit auf keiner Seite – die
-  // Oberfläche schrieb „1 Bild" an eine Seite mit zwei, und die seitenweise
-  // Anordnung schickte das zweite unangekündigt in den Pool.
-  const plaetze = template ? wirksamePlaetze(template, spread) : [];
-  const belegtVon = new Set(spread.slots.filter((s) => s.photoId).map((s) => s.slotId));
-  const belegt = (pruefe: (x: number, w: number) => boolean) =>
-    plaetze.filter((s) => pruefe(s.x, s.w) && belegtVon.has(s.id)).length;
-
   return {
-    halves: halfPages().map((h) => ({
-      id: h.id,
-      ...(h.name ? { name: h.name } : {}),
-      slotCount: h.slots.length,
-      slots: h.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
-    })),
+    halves,
     current: template ? halvesOfTemplate(template) : {},
-    counts: {
-      left: belegt((x, w) => x + w <= 0.5001),
-      right: belegt((x) => x >= 0.4999),
-    },
+    counts,
     auftakt: false,
+  };
+}
+
+/** Eine Anordnung, so weit die Oberfläche sie zum Zeichnen braucht. */
+export interface Anordnungsskizze {
+  id: string;
+  /** Wie die Anordnung heißt – als Erklärung an der Skizze. */
+  name?: string;
+  slotCount: number;
+  slots: { x: number; y: number; w: number; h: number }[];
+  /** Textplätze der Jahresseite; ohne sie sähe „Jahreszahl allein" wie leer aus. */
+  textSlots?: { x: number; y: number; w: number; h: number }[];
+}
+
+function skizze(h: {
+  id: string;
+  name?: string;
+  slots: readonly { x: number; y: number; w: number; h: number }[];
+  textSlots?: readonly { x: number; y: number; w: number; h: number }[];
+}): Anordnungsskizze {
+  return {
+    id: h.id,
+    ...(h.name ? { name: h.name } : {}),
+    slotCount: h.slots.length,
+    slots: h.slots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
+    ...(h.textSlots
+      ? { textSlots: h.textSlots.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })) }
+      : {}),
   };
 }
 

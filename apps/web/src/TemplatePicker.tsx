@@ -131,37 +131,30 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
     return <span style={B.leiser}>lade …</span>;
   }
 
-  // Eine Auftaktseite kennt die seitenweise Wahl nicht: Aus zwei Hälften des
-  // Flusses zusammengesetzt verlöre sie Jahreszahl und Ereigniszeilen. Der
-  // Umschalter fehlt dort deshalb ganz, statt eine Wahl zu zeigen, die der
-  // Server ablehnt.
-  const gewaehlterModus = daten.auftakt ? 'doppelseite' : modus;
+  // Auch die Jahresseite wählt seitenweise — nur je Seite in einer eigenen
+  // Familie: auf der Textseite die Fassungen mit Jahreszahl, gegenüber die
+  // Halbseiten des Flusses. Eine Flusshälfte auf der Textseite nähme ihr die
+  // Jahreszahl und steht deshalb gar nicht erst in der Liste.
+  const gewaehlterModus = modus;
 
   return (
     <>
-      {daten.auftakt ? (
-        <span style={B.leiser}>
-          Eine Jahresseite wird als ganze Doppelseite angeordnet — seitenweise verlöre sie
-          Jahreszahl und Ereigniszeilen.
-        </span>
-      ) : (
-        <div style={B.segRahmen}>
-          {(
-            [
-              ['seiten', 'einzelne Seite'],
-              ['doppelseite', 'ganze Doppelseite'],
-            ] as const
-          ).map(([wert, text]) => (
-            <button
-              key={wert}
-              onClick={() => setModus(wert)}
-              style={{ ...(modus === wert ? B.segAn : B.segAus), flex: 1, fontSize: 12 }}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
-      )}
+      <div style={B.segRahmen}>
+        {(
+          [
+            ['seiten', 'einzelne Seite'],
+            ['doppelseite', 'ganze Doppelseite'],
+          ] as const
+        ).map(([wert, text]) => (
+          <button
+            key={wert}
+            onClick={() => setModus(wert)}
+            style={{ ...(modus === wert ? B.segAn : B.segAus), flex: 1, fontSize: 12 }}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
 
       {gewaehlterModus === 'doppelseite' ? (
         <Faecher
@@ -183,10 +176,15 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
       ) : (
         (['left', 'right'] as const).map((seite) => {
           const bisher = seite === 'left' ? daten.counts.left : daten.counts.right;
+          // Auf der Textseite einer Jahresseite steht die eigene Familie: Ihre
+          // Fassungen tragen Jahreszahl und Ereigniszeilen, die des Flusses nicht.
+          const istTextseite = daten.textseite === seite;
+          const eintraege = istTextseite ? (daten.jahresseiten ?? []) : daten.halves;
           return (
             <div key={seite}>
               <p style={S.seitenTitel}>
                 {seite === 'left' ? 'Linke Seite' : 'Rechte Seite'}
+                {istTextseite && <span style={S.seitenMarke}>Jahresseite</span>}
                 <span style={S.seitenZahl}>
                   {bisher} {bisher === 1 ? 'Bild' : 'Bilder'}
                 </span>
@@ -194,7 +192,7 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
               <Faecher
                 soll={bisher}
                 benannt={false}
-                eintraege={daten.halves}
+                eintraege={eintraege}
                 kachel={(h) => {
                   const aktiv =
                     (seite === 'left' ? daten.current.left : daten.current.right) === h.id;
@@ -209,7 +207,11 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
                       style={{ ...S.kachel, ...(aktiv ? S.kachelAn : {}) }}
                     >
                       {/* Für die rechte Seite gespiegelt – so wie die Engine sie einsetzt. */}
-                      <Skizze slots={h.slots} halb={seite} />
+                      <Skizze
+                        slots={h.slots}
+                        halb={seite}
+                        {...(h.textSlots ? { textSlots: h.textSlots } : {})}
+                      />
                       <Zahl hat={h.slotCount} soll={bisher} />
                     </button>
                   );
@@ -222,7 +224,7 @@ export function TemplatePicker({ index, photoCount, version, onApplied, onFehler
 
       <span style={B.leiser}>
         {daten.auftakt
-          ? 'Jede Fassung trägt Jahreszahl und Ereigniszeilen. Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.'
+          ? 'Die Seite mit der Jahreszahl wählt unter den Fassungen der Jahresseite, die andere wie jede Buchseite. Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.'
           : 'Erst die linke, dann die rechte Seite — oder die ganze Doppelseite. Die Bilder werden den neuen Plätzen nach Passung zugeordnet; Ausschnitte entstehen dabei neu.'}
       </span>
     </>
@@ -310,11 +312,23 @@ function Zahl({ hat, soll }: { hat: number; soll: number }) {
  * Randabfallende Slots ragen absichtlich über 0..1 hinaus; das Beschneiden
  * übernimmt das SVG, damit die Kachel nicht ausfranst.
  */
-function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'right' }) {
+function Skizze({
+  slots,
+  halb,
+  textSlots,
+}: {
+  slots: Vorlage['slots'];
+  halb?: 'left' | 'right';
+  /** Jahreszahl und Ereigniszeilen, als Linien angedeutet. */
+  textSlots?: { x: number; y: number; w: number; h: number }[];
+}) {
   // Eine Halbseite ist halb so breit; die rechte wird gespiegelt gezeichnet,
   // weil eine Seite außen mehr Rand hat als am Falz.
   const breite = halb ? SKIZZE_BREITE / 2 : SKIZZE_BREITE;
-  const gezeigt = halb === 'right' ? slots.map((s) => ({ ...s, x: 0.5 - s.x - s.w })) : slots;
+  const spiegele = <T extends { x: number; w: number }>(r: T): T =>
+    halb === 'right' ? { ...r, x: 0.5 - r.x - r.w } : r;
+  const gezeigt = slots.map(spiegele);
+  const texte = (textSlots ?? []).map(spiegele);
 
   return (
     <svg
@@ -334,6 +348,19 @@ function Skizze({ slots, halb }: { slots: Vorlage['slots']; halb?: 'left' | 'rig
           width={s.w * SKIZZE_BREITE}
           height={s.h * SKIZZE_HOEHE}
           fill={s.bleed ? 'var(--cyan-100)' : 'var(--warm-300)'}
+        />
+      ))}
+      {/* Die Textplätze als Balken: Eine Jahresseite ohne Bild ist keine leere
+          Seite, und die Skizze soll den Unterschied zeigen. */}
+      {texte.map((t, i) => (
+        <rect
+          key={`t${i}`}
+          x={t.x * SKIZZE_BREITE}
+          y={t.y * SKIZZE_HOEHE}
+          width={t.w * SKIZZE_BREITE}
+          height={Math.max(1.5, t.h * SKIZZE_HOEHE)}
+          fill="var(--warm-500)"
+          rx={0.5}
         />
       ))}
       {/* Die Falzachse: Sie entscheidet mit, ob eine Anordnung taugt. */}
@@ -417,4 +444,18 @@ const S = {
     color: T.fg2,
   },
   seitenZahl: { fontWeight: 400, color: T.fg4, fontSize: 11 },
+  /**
+   * „Jahresseite" an der Seite, die Jahreszahl und Ereigniszeilen trägt.
+   *
+   * Grau und nicht türkis: Es ist eine Aussage über die Seite, keine über die
+   * Bedienung — Türkis bleibt der Auswahl (`theme.ts`).
+   */
+  seitenMarke: {
+    fontWeight: 400,
+    fontSize: 10,
+    color: T.fg4,
+    border: `1px solid ${T.line}`,
+    borderRadius: 3,
+    padding: '0 4px',
+  },
 } satisfies Record<string, React.CSSProperties>;
