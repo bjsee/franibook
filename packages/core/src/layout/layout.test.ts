@@ -1241,3 +1241,115 @@ describe('Festgehaltene Doppelseiten beim Erzeugen', () => {
     expect(ergebnis.spreads.map((s) => s.index)).toEqual(ergebnis.spreads.map((_, i) => i));
   });
 });
+
+/**
+ * Ein festgehaltener Auftakt ist ein Auftakt.
+ *
+ * Er kommt über `insertKept` an seinen Platz zurück – wer ihn trotzdem baut,
+ * setzt einen zweiten daneben. Beim Jahresauftakt waren das zwei Jahresseiten
+ * für dasselbe Jahr, beim Gruppenauftakt zusätzlich dasselbe Hauptbild an zwei
+ * Stellen im Buch: Ein gesetztes `coverPhotoId` geht an `keptPhotos` vorbei,
+ * weil die Reservierung es unabhängig von `schonVergeben` wählt.
+ */
+describe('Festgehaltene Auftakte werden nicht doppelt gebaut', () => {
+  const BESTAND = { 2019: 40, 2020: 40 };
+
+  function buch(kept?: Spread[]) {
+    const { photos, dated } = buildBestand(BESTAND);
+    return generateBook({
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 40,
+      ...(kept ? { kept } : {}),
+    });
+  }
+
+  it('gibt einem Jahr mit festgehaltenem Auftakt keine zweite Jahresseite', () => {
+    const erst = buch();
+    const festgehalten = erst.spreads.map((s) =>
+      s.chapterYear === 2019 ? { ...s, locked: true } : s,
+    );
+
+    const zweit = buch(festgehalten.filter((s) => s.locked));
+    const jahre = zweit.spreads
+      .filter((s) => s.chapterYear !== undefined)
+      .map((s) => s.chapterYear);
+
+    expect(jahre).toEqual([2019, 2020]);
+    // Der Auftakt bleibt der festgehaltene, nicht ein neu gebauter daneben.
+    expect(zweit.spreads.filter((s) => s.locked)).toHaveLength(1);
+    expect(zweit.report.chapterOpeners).toBe(2);
+  });
+
+  it('hält dabei die Zielseitenzahl ein', () => {
+    const ohne = buch();
+    const festgehalten = ohne.spreads
+      .filter((s) => s.chapterYear === 2019)
+      .map((s) => ({
+        ...s,
+        locked: true,
+      }));
+    const mit = buch(festgehalten);
+
+    // Die festgehaltene Seite kostet zwei Seiten, der eingesparte Auftakt gibt
+    // zwei zurück. Ohne diese Rückgabe wäre das Buch je festgehaltenem Auftakt
+    // zwei Seiten zu kurz.
+    expect(mit.report.pageCount).toBe(ohne.report.pageCount);
+  });
+
+  it('lässt kein Bild aus dem Buch fallen', () => {
+    const erst = buch();
+    const mit = buch(
+      erst.spreads
+        .filter((s) => s.chapterYear === 2019)
+        .map((s) => ({
+          ...s,
+          locked: true,
+        })),
+    );
+
+    // Die Bilder des festgehaltenen Auftakts sind vergeben; für ihn dürfen
+    // keine weiteren reserviert werden, sonst stünden sie nirgends.
+    expect(mit.report.unplaced).toEqual([]);
+  });
+
+  it('gibt einer Gruppe mit festgehaltenem Auftakt keinen zweiten', () => {
+    const { photos, dated } = buildBestand({ 2020: 60 });
+    const ids = dated.map((d) => d.id);
+    const gruppe = {
+      id: 'reise',
+      title: 'Reise',
+      photoIds: ids.slice(10, 30),
+      active: true,
+      coverPhotoId: ids[12]!,
+    };
+    const opts = {
+      structure: buildStructure(dated),
+      photos,
+      profile,
+      targetPages: 40,
+      chapterOpeners: false,
+      groupOpeners: true as const,
+      groups: [gruppe],
+    };
+
+    const erst = generateBook(opts);
+    const auftakte = erst.spreads.filter((s) => s.templateId.startsWith('spread.group.opener'));
+    expect(auftakte).toHaveLength(1);
+
+    const zweit = generateBook({
+      ...opts,
+      kept: auftakte.map((s) => ({ ...s, locked: true })),
+    });
+
+    expect(
+      zweit.spreads.filter((s) => s.templateId.startsWith('spread.group.opener')),
+    ).toHaveLength(1);
+
+    const platziert = zweit.spreads.flatMap((s) =>
+      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
+    );
+    expect(platziert.filter((id) => id === gruppe.coverPhotoId)).toHaveLength(1);
+  });
+});
