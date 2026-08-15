@@ -68,6 +68,7 @@ import {
   fotosDerSeiteLaden,
   fotoVerschieben,
   gewichtSetzen as apiGewichtSetzen,
+  platzWegnehmen as apiPlatzWegnehmen,
   seiteNeuAnordnen,
   neigungSetzen,
   ortSetzen as apiOrtSetzen,
@@ -666,6 +667,28 @@ export function useSpreadEditor({
       setNote(`Ausschnitt nicht zurückgesetzt: ${fehlertext(e)}`);
     }
   }, [selectedSlotId, index, onSpread, onChanged]);
+
+  /**
+   * Nimmt einen leeren Platz von der Doppelseite.
+   *
+   * Die Auswahl fällt danach weg: Der Platz, auf den sie zeigte, ist nicht mehr
+   * da, und eine Auswahl auf nichts ließe die Griffe ins Leere greifen.
+   */
+  const platzWegnehmen = useCallback(
+    async (slotId: string) => {
+      try {
+        const data = await apiPlatzWegnehmen(index, slotId, true);
+        if (data.spread) {
+          onSpread(data.spread);
+          onChanged();
+          onSelect(null);
+        }
+      } catch (e) {
+        setNote(`Platz nicht weggenommen: ${fehlertext(e)}`);
+      }
+    },
+    [index, onSpread, onChanged, onSelect],
+  );
 
   /** Ausschnitt enger oder weiter fassen – Knopf und Taste teilen den Griff. */
   function zoomen(faktor: number) {
@@ -1957,6 +1980,9 @@ export function useSpreadEditor({
     // Ebene im Stapel
     ebene,
     ebeneZiehen,
+
+    // Der leere Platz selbst
+    platzWegnehmen,
 
     // Ausschnitt und Lage
     pendingCrop,

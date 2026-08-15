@@ -180,6 +180,25 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
           <span style={S.zuKlein}>zu klein · {Math.round(box.effectiveDpi)} dpi</span>
         )}
         {/*
+          Der Griff am leeren Platz steht auf der Bühne und nicht in einem
+          Panel: Sie ist allen drei Rahmen gemeinsam, und ein Knopf, den nur der
+          Inspektor hätte, wäre genau die Funktion, derentwegen man den Rahmen
+          wechselt statt aus Vorliebe. Der Ort sagt außerdem, was gemeint ist —
+          dieser Platz, nicht „ein Platz".
+        */}
+        {kind === 'empty' && slotId === selectedSlotId && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              void model.platzWegnehmen(slotId);
+            }}
+            style={S.platzWeg}
+            title="Nimmt diesen leeren Platz von der Doppelseite. Die übrigen Bilder rühren sich nicht; ein Cmd+Z holt ihn zurück."
+          >
+            Platz wegnehmen
+          </button>
+        )}
+        {/*
           Was die Abnahme über dieses Bild sagt — an ihm und nicht nur in der
           Liste: Wer einen Ausschnitt zieht, soll sofort sehen, was das für den
           Druck bedeutet. Nur die offenen Funde; abgenickte sind eine
@@ -484,6 +503,27 @@ const S = {
     color: '#fff',
     background: T.fehler,
     pointerEvents: 'none' as const,
+  },
+  /**
+   * Der Griff am gewählten leeren Platz, mittig in seiner Fläche.
+   *
+   * `pointerEvents: auto` gegen die Regel der Marken ringsum: Dies ist als
+   * einzige Einblendung ein Knopf und kein Hinweis.
+   */
+  platzWeg: {
+    position: 'absolute' as const,
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    padding: '5px 10px',
+    fontSize: 12,
+    color: T.fg2,
+    background: T.bg1,
+    border: `1px solid ${T.line}`,
+    borderRadius: T.rMd,
+    cursor: 'pointer',
+    pointerEvents: 'auto' as const,
+    whiteSpace: 'nowrap' as const,
   },
   /**
    * Das ganze Blatt als Abwurffläche.

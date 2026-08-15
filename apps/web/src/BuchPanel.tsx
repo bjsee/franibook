@@ -119,6 +119,8 @@ export interface Handarbeit {
   ebenen: number;
   texte: number;
   textplaetze: number;
+  /** Weggenommene leere Plätze — der Neuaufbau holt sie aus der Vorlage zurück. */
+  plaetze: number;
   festgehalten: number;
 }
 
@@ -214,6 +216,7 @@ export function BuchPanel({
     handwork.ebenen > 0 ? `${handwork.ebenen} gestapelte Bilder` : null,
     handwork.texte > 0 ? `${handwork.texte} Textblöcke` : null,
     handwork.textplaetze > 0 ? `${handwork.textplaetze} bewegte Vorlagentexte` : null,
+    handwork.plaetze > 0 ? `${handwork.plaetze} weggenommene Plätze` : null,
   ].filter((s): s is string => s !== null);
 
   // `auto` heißt „aus dem Hintergrund ableiten" – dann bekommt der Kern gar
