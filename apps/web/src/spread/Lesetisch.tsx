@@ -45,22 +45,43 @@ interface Props {
 }
 
 export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
-  const [blatt, setBlatt] = useState<'pool' | 'anordnung' | null>(null);
+  /**
+   * Nur die Anordnung ist ein Blatt dieses Rahmens.
+   *
+   * Ob der Fotopool offen steht, hält `App.tsx` (`aussen.poolOffen`): Er soll
+   * das Blättern überstehen, und dieser Rahmen hängt dabei aus. Was hier bleibt,
+   * ist die Regel, dass immer nur eines der beiden Blätter dasteht — sie gilt für
+   * die Anordnung, weil sie dem Rahmen gehört.
+   */
+  const [anordnungOffen, setAnordnungOffen] = useState(false);
+  const { poolOffen, setPoolOffen } = model;
 
   // `p` und `a` öffnen die beiden Blätter, `Esc` schließt sie. Dieselbe Prüfung
-  // auf Eingabefelder wie beim `i` im Editor: In einem Textfeld ist ein `p` ein
-  // Buchstabe.
+  // auf Eingabefelder wie beim `i` in `App.tsx`: In einem Textfeld ist ein `p`
+  // ein Buchstabe.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-      if (e.key === 'p') setBlatt((b) => (b === 'pool' ? null : 'pool'));
-      if (e.key === 'a') setBlatt((b) => (b === 'anordnung' ? null : 'anordnung'));
-      if (e.key === 'Escape') setBlatt(null);
+      if (e.key === 'p') setPoolOffen(!poolOffen);
+      if (e.key === 'a') {
+        setAnordnungOffen((o) => !o);
+        setPoolOffen(false);
+      }
+      if (e.key === 'Escape') {
+        setAnordnungOffen(false);
+        setPoolOffen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [poolOffen, setPoolOffen]);
+
+  // Immer nur ein Blatt. Hier und nicht an den beiden Tasten, weil der Pool auch
+  // von anderswo aufgeht – ein Bild, das in ihn eingeworfen wird, klappt ihn auf.
+  useEffect(() => {
+    if (poolOffen) setAnordnungOffen(false);
+  }, [poolOffen]);
 
   const zuKlein = spread.boxes.filter(
     (b) => b.kind === 'image' && b.warnings.some((w) => w.code === 'below-min-dpi'),
@@ -131,7 +152,7 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
 
       {model.gewaehlteBox && <BildLeiste model={model} />}
 
-      {blatt === 'pool' && (
+      {poolOffen && (
         <div
           style={S.blatt}
           onDragOver={model.poolAblage.onDragOver}
@@ -141,7 +162,7 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
             <span style={B.marke}>Fotopool</span>
             <span style={B.leiser}>{poolZahl(model.pool)}</span>
             <span style={B.dehner} />
-            <button onClick={() => setBlatt(null)} style={S.x}>
+            <button onClick={() => setPoolOffen(false)} style={S.x}>
               ×
             </button>
           </div>
@@ -149,12 +170,12 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
         </div>
       )}
 
-      {blatt === 'anordnung' && (
+      {anordnungOffen && (
         <div style={S.blatt}>
           <div style={S.blattKopf}>
             <span style={B.marke}>Anordnung</span>
             <span style={B.dehner} />
-            <button onClick={() => setBlatt(null)} style={S.x}>
+            <button onClick={() => setAnordnungOffen(false)} style={S.x}>
               ×
             </button>
           </div>
