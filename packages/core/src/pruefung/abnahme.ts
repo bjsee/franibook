@@ -57,6 +57,19 @@ import { imageBoxes, type RenderedSpread, type RenderWarning } from '../render/r
  */
 export const BEFUNDARTEN = [
   { art: 'foto-fehlt', titel: 'Bild nicht im Bestand', schwer: true },
+  /**
+   * Dasselbe Bild an zwei Stellen im Buch.
+   *
+   * Die einzige Art, die kein Renderer melden kann: Eine Doppelseite weiß
+   * nichts von den übrigen 79. Gezählt werden nur Motive — ein Bild, das
+   * zusätzlich als Hintergrund einer Seite steht, ist eine Gestaltung.
+   *
+   * Der Anlass war ein festgehaltener Gruppenauftakt, dessen Hauptbild die
+   * Automatik ein zweites Mal setzte. Aufgefallen ist das niemandem: Die
+   * Kennzahlen zählen platzierte Bilder als Menge (`bookStats`), und dort ist
+   * eine Dublette unsichtbar.
+   */
+  { art: 'foto-doppelt', titel: 'Bild zweimal im Buch', schwer: true },
   { art: 'unter-mindest-dpi', titel: 'Unter der Mindestauflösung', schwer: true },
   { art: 'im-rand', titel: 'Text im Sicherheitsabstand', schwer: true },
   { art: 'im-falz', titel: 'Text in der Falzzone', schwer: true },
@@ -270,10 +283,18 @@ export function pruefeBuch(e: AbnahmeEingabe): Abnahmebericht {
   const zielVerfehlt = { anzahl: 0, schwaechstes: Number.POSITIVE_INFINITY };
 
   const ausSeiten: Befund[] = [];
+  /** Wo jedes Motiv steht — für den einen Fund, den keine Seite allein sieht. */
+  const stellen = new Map<string, { index: number; slotId: string }[]>();
+
   e.spreads.forEach((spread, index) => {
     ausSeiten.push(...seitenbefunde(spread, index, profile));
     for (const box of imageBoxes(spread)) {
-      if (box.slotId !== BACKGROUND_SLOT_ID) bilder++;
+      if (box.slotId !== BACKGROUND_SLOT_ID) {
+        bilder++;
+        const bisher = stellen.get(box.photoId);
+        if (bisher) bisher.push({ index, slotId: box.slotId });
+        else stellen.set(box.photoId, [{ index, slotId: box.slotId }]);
+      }
       for (const warnung of box.warnings) {
         if (warnung.code === 'below-target-dpi') merkeZiel(zielVerfehlt, warnung.dpi);
       }
@@ -281,6 +302,28 @@ export function pruefeBuch(e: AbnahmeEingabe): Abnahmebericht {
   });
 
   const befunde = buendleTexte(ausSeiten);
+
+  // Ein Bild, das zweimal im Buch steht. Gemeldet wird die *zweite* Stelle: Die
+  // erste ist die, die man behalten will, und das Sprungziel soll dorthin
+  // führen, wo etwas zu tun ist.
+  for (const [photoId, orte] of stellen) {
+    if (orte.length < 2) continue;
+    const [erste, ...weitere] = orte as [
+      { index: number; slotId: string },
+      ...{ index: number; slotId: string }[],
+    ];
+    for (const ort of weitere) {
+      befunde.push({
+        art: 'foto-doppelt',
+        ort: { kind: 'spread', index: ort.index, slotId: ort.slotId },
+        text:
+          ort.index === erste.index
+            ? 'steht auf dieser Doppelseite noch ein zweites Mal'
+            : `steht schon auf Doppelseite ${erste.index + 1}`,
+        schluessel: `foto-doppelt#foto:${photoId}`,
+      });
+    }
+  }
 
   const seiten = e.spreads.length * 2;
   if (e.spreads.length > 0 && !isValidPageCount(profile, seiten)) {

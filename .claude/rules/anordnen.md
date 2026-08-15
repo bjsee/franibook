@@ -40,6 +40,17 @@ nicht einen Index, denn der stimmt nach einem Neuaufbau nicht mehr. Im
 Layout-Dokument steht sie als `keep: "<Kennung>"` ohne Inhalt. Begründung:
 `docs/konzept.md`, Abschnitt „Eigene Doppelseiten".
 
+**Was eine festgehaltene Seite schon leistet, baut die Automatik nicht noch
+einmal** (`keptOpeners` in `layout/keep.ts`): Ein festgehaltener Jahresauftakt
+nimmt seinem Jahrgang den zweiten, ein festgehaltener Gruppenauftakt seiner
+Gruppe. Ohne das bekam ein festgehaltener Jahresauftakt sein Jahr zweimal, und
+beim Gruppenauftakt stand zusätzlich das Hauptbild an zwei Stellen im Buch —
+`keptPhotos` nimmt nur den Fluss aus, nicht eine zweite Auftaktseite. Das Jahr
+steht als `chapterYear` am Spread, die Gruppe wird über die Bilder der Seite
+bestimmt und ausdrücklich nicht über den Titel: Der ist editierbar. Die
+eingesparten Auftakte gehen ins Seitenbudget zurück, sonst wäre das Buch je
+festgehaltenem Auftakt zwei Seiten zu kurz.
+
 ## Eine einzelne Buchseite einfügen
 
 `POST /api/spreads/page`, `layout/single-page.ts`. Das kippt die Parität: Was
