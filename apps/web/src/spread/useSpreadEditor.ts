@@ -134,8 +134,6 @@ export interface SpreadEditorArgs {
    * korrigiertes Aufnahmedatum steht im Zeitstrahl am Fuß der Seite.
    */
   onNeuRendern: () => void;
-  /** Die Pixel eines Bildes haben sich geändert – Bildversion hochzählen. */
-  onBildGeaendert: () => void;
 }
 
 export type SpreadEditorModel = ReturnType<typeof useSpreadEditor>;
@@ -150,7 +148,6 @@ export function useSpreadEditor({
   onSelect,
   onChanged,
   onNeuRendern,
-  onBildGeaendert,
 }: SpreadEditorArgs) {
   /**
    * Wie breit das Blatt gezeichnet wird — **eine** Zahl für alle drei Rahmen.
@@ -1719,8 +1716,9 @@ export function useSpreadEditor({
    * bis dahin steht das Bild in einem Platz, der jetzt schlechter passt.
    *
    * Die Doppelseite wird neu geholt, weil der Ausschnitt sich auf das gedrehte
-   * Bild bezieht, und die Bildversion hochgezählt, weil sonst der Browser das
-   * alte Bild weiter zeigt.
+   * Bild bezieht. Dass der Browser danach die neuen Pixel zeigt, besorgt die
+   * Fassung in der Bildadresse (`bildadresse.tsx`): `onChanged` lädt die
+   * Projektauskunft neu, und mit ihr die Karte, aus der die Adressen entstehen.
    */
   async function ausrichtungKippen(turns: 1 | 2 | 3 | null): Promise<void> {
     const photoId = gewaehlteBox?.photoId;
@@ -1732,7 +1730,6 @@ export function useSpreadEditor({
       if (neu) setInfos((bestand) => new Map(bestand).set(photoId, neu));
       if (e.uebersprungen[0]) setNote(e.uebersprungen[0].grund);
       else setNote('Gekippt. Die Vorlage folgt erst beim Neuanordnen.');
-      onBildGeaendert();
       onChanged();
       onNeuRendern();
     } catch (fehler) {

@@ -42,7 +42,6 @@ export interface PruefungProps {
   teil?: 'doppel';
   onNavigieren: (ziel: Route) => void;
   standVersion?: number;
-  bildVersion: number;
   onChanged?: () => void;
   /**
    * Meldet, wie viele Punkte in einem Bereich offen sind.
@@ -53,14 +52,7 @@ export interface PruefungProps {
   onOffen?: (bereich: 'buch' | 'bestand', offen: number) => void;
 }
 
-export function Pruefung({
-  teil,
-  onNavigieren,
-  standVersion,
-  bildVersion,
-  onChanged,
-  onOffen,
-}: PruefungProps) {
+export function Pruefung({ teil, onNavigieren, standVersion, onChanged, onOffen }: PruefungProps) {
   // Stabile Melder: Die Bereiche rufen sie aus einem Effekt heraus, und eine bei
   // jedem Rendern neue Funktion wäre eine Meldung bei jedem Rendern — dieselbe
   // Sorge wie bei `gruppeInAdresse` in `App.tsx`.
@@ -91,7 +83,6 @@ export function Pruefung({
 
       {teil === 'doppel' ? (
         <Doppel
-          bildVersion={bildVersion}
           onOffen={bestandOffen}
           {...(standVersion !== undefined ? { standVersion } : {})}
           {...(onChanged ? { onChanged } : {})}

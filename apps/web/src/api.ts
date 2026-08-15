@@ -199,6 +199,14 @@ export interface ProjectInfo {
   handwork: Handarbeit;
   chapters: Kapitel[];
   groupMarks: { spreadIndex: number; id: string; title: string }[];
+  /**
+   * Kennung → Vierteldrehungen, nur für die gedrehten Fotos.
+   *
+   * Gehört in jede Bildadresse (`bildadresse.tsx`): Die Bild-Endpunkte liefern
+   * `immutable` aus, und die Fotokennung ist der Hash der *Datei* — eine
+   * Ausrichtungskorrektur ändert die Pixel darunter.
+   */
+  bildFassungen: Record<string, 1 | 2 | 3>;
   /** Ob sich die Gruppen geändert haben, seit das Buch gebaut wurde. */
   groupsPending: boolean;
   /**

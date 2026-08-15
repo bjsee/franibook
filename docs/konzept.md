@@ -3420,18 +3420,33 @@ Vorschau, Export und Ausschnitt-Editor ihre Maße ziehen.
 
 Vorschauen gehen mit `Cache-Control: immutable` heraus, weil die Fotokennung der
 Inhaltshash ist — und der ändert sich beim Kippen gerade **nicht**. Zwei Griffe
-halten die Zusage trotzdem: Der Cache auf Platte trägt die Fassung im Namen
-(`<hash>-q1.webp`), und die Oberfläche führt eine **Bildversion**, die als `?v=`
-an jeder Vorschau-Adresse hängt und bei jeder Ausrichtungskorrektur hochzählt. Der
-Server ignoriert den Parameter; er ist allein dazu da, dass die Adresse eine andere
-ist. Der Preis ist ein einmaliges Nachladen der sichtbaren Kacheln.
+halten die Zusage: Der Cache auf Platte trägt die Fassung im Namen
+(`<hash>-q1.webp`), und **die Adresse trägt sie auch** (`?q=1`). Woher die
+Oberfläche sie kennt, sagt die Projektauskunft: `bildFassungen` nennt Kennung →
+Vierteldrehungen für die gedrehten Fotos und sonst keine. Gebaut werden die
+Adressen an einer Stelle (`apps/web/src/bildadresse.tsx`), die die Karte über
+einen Kontext bezieht — der eine Wert, den jede Ansicht braucht und keine ändert.
+Der Server liest den Parameter nicht; er ist allein der Schlüssel, unter dem der
+Browser die Pixel ablegt.
 
-Verworfen wurde, die Fassung je Foto in die Adresse zu ziehen: Die Stellen, die
-Bild-URLs bilden (`imageSrc`, `miniaturSrc`, vier Ansichten), kennen dort nur die
-Kennung, nicht die Korrektur. Eine offene Kante bleibt: `?original=1` — der
-Diagnosepfad des Parity-Tests — liefert die Datei ungedreht. Das ist für die
-Fixtures ohne Korrekturen bedeutungslos; soll der Parity-Test je gekippte Bilder
-prüfen, braucht er die Drehung im RSM.
+> **Nachtrag (15. August 2026): die Bildversion hielt nicht.**
+> Vorher stand hier eine **Bildversion** — ein Zähler in `App.tsx`, der bei jeder
+> Ausrichtungskorrektur hochlief und als `?v=` an den Adressen hing —, und die
+> Fassung je Foto in die Adresse zu ziehen galt als verworfen, weil die
+> URL-bildenden Stellen nur die Kennung kennen. Beides war falsch herum. Der
+> Zähler hielt genau eine Sitzung: Beim nächsten Laden stand er wieder auf 0, die
+> Adresse fiel auf ihre kanonische Form zurück, und die lag im Cache — mit den
+> alten Pixeln, ein Jahr lang. Am echten Bestand sah das so aus, dass ein Bild
+> beliebig oft gekippt werden konnte und immer gleich dastand. Dazu hing er nur
+> an vier der zehn Stellen, die Bildadressen bilden; Fotopool, Gruppenlisten,
+> Bildquellen und Hintergrundwahl zeigten das gedrehte Bild überhaupt nie. Dass
+> die Stellen die Korrektur nicht kennen, war kein Hindernis, sondern die
+> Aufgabe: Sie kennen sie jetzt.
+
+Eine offene Kante bleibt: `?original=1` — der Diagnosepfad des Parity-Tests —
+liefert die Datei ungedreht. Das ist für die Fixtures ohne Korrekturen
+bedeutungslos; soll der Parity-Test je gekippte Bilder prüfen, braucht er die
+Drehung im RSM.
 
 ### Fotogruppen
 

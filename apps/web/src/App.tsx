@@ -44,6 +44,7 @@ import {
   zurueckNehmen,
 } from './api.js';
 import { ausstehendSenden } from './ausstehend.js';
+import { BildfassungenProvider, bildSrcVon } from './bildadresse.js';
 import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
 import { BuchPanel } from './BuchPanel.js';
@@ -96,30 +97,6 @@ interface Notiz {
   datei?: string;
 }
 
-/**
- * Bildquelle. Der Parity-Test schaltet über `?original=1` auf die Originale
- * um – sonst würde er WebP-Kompression gegen JPEG-Kompression messen statt
- * Geometrie gegen Geometrie.
- */
-function useImageSrc(bildVersion: number) {
-  const useOriginal = new URLSearchParams(location.search).has('original');
-  return useCallback(
-    (photoId: string) => {
-      if (useOriginal) return `/api/photos/${photoId}/original`;
-      // Die Fassung hängt an *jeder* Vorschau-Adresse, nicht nur an der des
-      // gedrehten Bildes: Die Oberfläche weiß an dieser Stelle nur die Kennung,
-      // nicht die Korrektur — und eine Ausrichtungskorrektur muss sichtbar
-      // werden, obwohl Vorschauen `immutable` ausgeliefert werden. Der Server
-      // ignoriert den Parameter; er ist allein dazu da, dass die Adresse eine
-      // andere ist. Der Preis ist ein einmaliges Nachladen der sichtbaren
-      // Kacheln, und dafür bleibt die Zusage für alle übrigen Bilder in Kraft.
-      const fassung = bildVersion > 0 ? `?v=${bildVersion}` : '';
-      return `/api/photos/${photoId}/preview${fassung}`;
-    },
-    [useOriginal, bildVersion],
-  );
-}
-
 export function App() {
   const [info, setInfo] = useState<ProjectInfo | null>(null);
   const [spread, setSpread] = useState<SpreadResponse | null>(null);
@@ -139,16 +116,6 @@ export function App() {
    * weniger, aber jedes Cmd+Z würfe die Fotoliste an den Anfang zurück.
    */
   const [standVersion, setStandVersion] = useState(0);
-  /**
-   * Zählt hoch, wenn sich Bildpixel geändert haben — heute nur bei einer
-   * Ausrichtungskorrektur.
-   *
-   * Sie hängt als `?v=` an jeder Vorschau-Adresse. Ohne das bliebe das gedrehte
-   * Bild unsichtbar: Vorschauen gehen mit `Cache-Control: immutable` heraus, weil
-   * die Kennung eines Fotos sein Inhaltshash ist — und der ändert sich beim
-   * Kippen gerade nicht.
-   */
-  const [bildVersion, setBildVersion] = useState(0);
   const [route, navigieren] = useRoute();
   const view = route.view;
   /**
@@ -220,7 +187,14 @@ export function App() {
     bare ? {} : { trim: true, safety: true, gutter: true, diagnostics: true },
   );
 
-  const imageSrc = useImageSrc(bildVersion);
+  /**
+   * Bildadressen samt Fassung der gedrehten Fotos (`bildadresse.tsx`).
+   *
+   * Hier gebaut und nicht über den Haken geholt: Der Kontext, aus dem der Haken
+   * liest, wird eine Zeile weiter unten von genau dieser Karte gefüllt.
+   */
+  const fassungen = info?.bildFassungen ?? {};
+  const imageSrc = bildSrcVon(fassungen);
 
   const hatZeitstrahl = spread?.timelineOverride !== false;
 
@@ -828,34 +802,34 @@ export function App() {
             loadInfo();
             neuRendern();
           },
-          onBildGeaendert: () => setBildVersion((v) => v + 1),
         }
       : null;
 
   return (
-    <div style={S.app}>
-      <header style={S.kopf}>
-        <span style={S.marke}>
-          <strong style={S.name}>Franibook</strong>
-          {spanne && <span style={S.spanne}>{spanne}</span>}
-        </span>
+    <BildfassungenProvider fassungen={fassungen}>
+      <div style={S.app}>
+        <header style={S.kopf}>
+          <span style={S.marke}>
+            <strong style={S.name}>Franibook</strong>
+            {spanne && <span style={S.spanne}>{spanne}</span>}
+          </span>
 
-        {/*
+          {/*
           Echte Links und keine Knöpfe: Damit öffnet ⌘-Klick den Reiter in einem
           neuen Tab, und „Adresse kopieren" liefert die Stelle, die man jemandem
           schicken will. Der einfache Klick wird abgefangen, sonst lädt der
           Browser die Anwendung neu.
         */}
-        <nav style={B.segRahmen}>
-          {REITER.map((r) => (
-            <Link
-              key={r.id}
-              route={reiterRoute(r.id)}
-              onNavigieren={navigieren}
-              style={view === r.id ? B.segAn : B.segAus}
-            >
-              {r.label}
-              {/*
+          <nav style={B.segRahmen}>
+            {REITER.map((r) => (
+              <Link
+                key={r.id}
+                route={reiterRoute(r.id)}
+                onNavigieren={navigieren}
+                style={view === r.id ? B.segAn : B.segAus}
+              >
+                {r.label}
+                {/*
                 Die offenen Prüfpunkte in Rot — eine Aussage über das Buch und
                 nicht über die Bedienung, wie „3 zu klein" in den Kennzahlen.
                 Türkis bleibt der Auswahl vorbehalten (`.claude/rules/web.md`).
@@ -864,339 +838,338 @@ export function App() {
                 61 springt, weil der zweite Teil nachlädt, sieht aus wie ein
                 Fehler.
               */}
-              {r.id === 'pruefung' && pruefpunkte !== null && (
-                <span style={S.pruefzahl}> ({pruefpunkte})</span>
-              )}
-            </Link>
-          ))}
-        </nav>
+                {r.id === 'pruefung' && pruefpunkte !== null && (
+                  <span style={S.pruefzahl}> ({pruefpunkte})</span>
+                )}
+              </Link>
+            ))}
+          </nav>
 
-        <span style={B.dehner} />
+          <span style={B.dehner} />
 
-        {/*
+          {/*
           Zwei Knöpfe mit der Bezeichnung des Schritts im Hinweis: Ein Pfeil ohne
           Wortlaut sagt nicht, was er zurücknimmt, und bei achtzig Doppelseiten
           ist das der Unterschied zwischen Zutrauen und Ausprobieren.
         */}
-        <span style={B.segRahmen}>
-          <button
-            onClick={() => void zurueck()}
-            disabled={!info?.undo.zurueck}
-            style={{ ...S.verlaufKnopf, color: info?.undo.zurueck ? T.fg2 : T.fg4 }}
-            title={
-              info?.undo.zurueck
-                ? `Zurücknehmen: ${info.undo.zurueck} (⌘Z)`
-                : 'Nichts zurückzunehmen'
-            }
-            aria-label="Zurücknehmen"
-          >
-            ↶
-          </button>
-          <button
-            onClick={() => void vor()}
-            disabled={!info?.undo.vor}
-            style={{ ...S.verlaufKnopf, color: info?.undo.vor ? T.fg2 : T.fg4 }}
-            title={info?.undo.vor ? `Wiederholen: ${info.undo.vor} (⇧⌘Z)` : 'Nichts zu wiederholen'}
-            aria-label="Wiederholen"
-          >
-            ↷
-          </button>
-        </span>
+          <span style={B.segRahmen}>
+            <button
+              onClick={() => void zurueck()}
+              disabled={!info?.undo.zurueck}
+              style={{ ...S.verlaufKnopf, color: info?.undo.zurueck ? T.fg2 : T.fg4 }}
+              title={
+                info?.undo.zurueck
+                  ? `Zurücknehmen: ${info.undo.zurueck} (⌘Z)`
+                  : 'Nichts zurückzunehmen'
+              }
+              aria-label="Zurücknehmen"
+            >
+              ↶
+            </button>
+            <button
+              onClick={() => void vor()}
+              disabled={!info?.undo.vor}
+              style={{ ...S.verlaufKnopf, color: info?.undo.vor ? T.fg2 : T.fg4 }}
+              title={
+                info?.undo.vor ? `Wiederholen: ${info.undo.vor} (⇧⌘Z)` : 'Nichts zu wiederholen'
+              }
+              aria-label="Wiederholen"
+            >
+              ↷
+            </button>
+          </span>
 
-        {/*
+          {/*
           Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im PDF
           fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
         */}
-        {offline.length > 0 && (
-          <button onClick={() => navigieren({ view: 'sources' })} style={S.offline}>
-            <span style={S.punkt} />
-            {offline.length === 1
-              ? '1 Bildquelle offline'
-              : `${offline.length} Bildquellen offline`}
-          </button>
-        )}
+          {offline.length > 0 && (
+            <button onClick={() => navigieren({ view: 'sources' })} style={S.offline}>
+              <span style={S.punkt} />
+              {offline.length === 1
+                ? '1 Bildquelle offline'
+                : `${offline.length} Bildquellen offline`}
+            </button>
+          )}
 
-        {/*
+          {/*
           Der Variantenumschalter steht nur bei der Doppelseite, weil er nur dort
           etwas ändert. Er ist der eine Teil dieser Oberfläche, der wieder
           verschwindet, sobald eine der drei gewonnen hat.
         */}
-        {view === 'spread' && (
-          <span style={B.segRahmen} title="Rahmen um die Doppelseite (?ui=a|b|c)">
-            {VARIANTEN.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => waehleVariante(v.id)}
-                style={{
-                  ...(variante === v.id ? B.segAn : B.segAus),
-                  fontSize: 12,
-                  padding: '5px 10px',
-                }}
-                title={v.hinweis}
-              >
-                {v.name}
-              </button>
-            ))}
-          </span>
-        )}
+          {view === 'spread' && (
+            <span style={B.segRahmen} title="Rahmen um die Doppelseite (?ui=a|b|c)">
+              {VARIANTEN.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => waehleVariante(v.id)}
+                  style={{
+                    ...(variante === v.id ? B.segAn : B.segAus),
+                    fontSize: 12,
+                    padding: '5px 10px',
+                  }}
+                  title={v.hinweis}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </span>
+          )}
 
-        {view !== 'cover' && (
-          <>
-            {/*
+          {view !== 'cover' && (
+            <>
+              {/*
               Der Abzug steht neben dem Druck-PDF und nicht darin versteckt: Er
               ist der Griff, den man beim Arbeiten am häufigsten braucht — nur
               eben nicht der, mit dem das Buch bestellt wird. Deshalb daneben und
               schlicht statt in Cyan.
             */}
-            <button
-              onClick={() => void exportAbzug()}
-              disabled={!!busy}
-              style={B.knopf}
-              title="Das ganze Buch klein und blätterbar, mit Seitenzahlen zum Notieren — dahinter ein Kontaktbogen der Fotos, die nicht im Buch stehen."
-            >
-              Korrekturabzug
-            </button>
-            <button
-              onClick={() => void exportPdf(view !== 'spread')}
-              disabled={!!busy}
-              style={B.knopfPrimaer}
-            >
-              {view === 'spread' ? 'Diese Seite als PDF' : 'Buch als PDF'}
-            </button>
-          </>
+              <button
+                onClick={() => void exportAbzug()}
+                disabled={!!busy}
+                style={B.knopf}
+                title="Das ganze Buch klein und blätterbar, mit Seitenzahlen zum Notieren — dahinter ein Kontaktbogen der Fotos, die nicht im Buch stehen."
+              >
+                Korrekturabzug
+              </button>
+              <button
+                onClick={() => void exportPdf(view !== 'spread')}
+                disabled={!!busy}
+                style={B.knopfPrimaer}
+              >
+                {view === 'spread' ? 'Diese Seite als PDF' : 'Buch als PDF'}
+              </button>
+            </>
+          )}
+        </header>
+
+        {info && (
+          <Kennzahlen
+            report={report ?? null}
+            photoCount={info.photoCount}
+            spreadCount={info.spreadCount}
+            undated={info.undatedCount}
+            groupsPending={info.groupsPending}
+            structurePending={info.structurePending}
+            busy={!!busy}
+            onZeigeSpread={(i) => zeigeSpread(i)}
+            onNeuAnordnen={() => void regenerate({})}
+          />
         )}
-      </header>
 
-      {info && (
-        <Kennzahlen
-          report={report ?? null}
-          photoCount={info.photoCount}
-          spreadCount={info.spreadCount}
-          undated={info.undatedCount}
-          groupsPending={info.groupsPending}
-          structurePending={info.structurePending}
-          busy={!!busy}
-          onZeigeSpread={(i) => zeigeSpread(i)}
-          onNeuAnordnen={() => void regenerate({})}
-        />
-      )}
-
-      {view === 'overview' && info ? (
-        <div style={S.inhaltReihe}>
-          <div style={S.scrollFlaeche}>
-            <Overview
-              key={renderVersion}
-              spreadCount={info.spreadCount}
-              chapters={info.chapters}
-              groupMarks={info.groupMarks}
-              imageSrc={imageSrc}
-              onOpen={(i) => zeigeSpread(i)}
-              onInsert={setEinfuegenAn}
+        {view === 'overview' && info ? (
+          <div style={S.inhaltReihe}>
+            <div style={S.scrollFlaeche}>
+              <Overview
+                key={renderVersion}
+                spreadCount={info.spreadCount}
+                chapters={info.chapters}
+                groupMarks={info.groupMarks}
+                imageSrc={imageSrc}
+                onOpen={(i) => zeigeSpread(i)}
+                onInsert={setEinfuegenAn}
+              />
+            </div>
+            <BuchPanel
+              settings={info.settings}
+              profile={info.profile}
+              formate={info.profiles}
+              handwork={info.handwork}
+              busy={!!busy}
+              onNeuAnordnen={(patch) => void regenerate(patch)}
+              onFormat={(id) => void setFormat(id)}
+              onDarstellung={(patch) => void setSetting(patch)}
+              onNeuEinlesen={() => void reimport()}
+              onNotankerZurueck={(satz) => {
+                // Wie nach einem Zurücknehmen: Der Stand ist ein anderer, und
+                // welche Ansicht davon betroffen ist, weiß niemand.
+                loadInfo();
+                neuRendern();
+                setStandVersion((v) => v + 1);
+                // Nur die gemerkte Stelle, nicht die Ansicht: Der Notanker wird
+                // aus der Übersicht geworfen, und dort soll man auch bleiben. Die
+                // Seitenzahl von vorher gilt danach aber für ein anderes Buch.
+                setLetzterSpread(0);
+                setNote(satz);
+              }}
             />
           </div>
-          <BuchPanel
-            settings={info.settings}
-            profile={info.profile}
-            formate={info.profiles}
-            handwork={info.handwork}
-            busy={!!busy}
-            onNeuAnordnen={(patch) => void regenerate(patch)}
-            onFormat={(id) => void setFormat(id)}
-            onDarstellung={(patch) => void setSetting(patch)}
-            onNeuEinlesen={() => void reimport()}
-            onNotankerZurueck={(satz) => {
-              // Wie nach einem Zurücknehmen: Der Stand ist ein anderer, und
-              // welche Ansicht davon betroffen ist, weiß niemand.
-              loadInfo();
-              neuRendern();
-              setStandVersion((v) => v + 1);
-              // Nur die gemerkte Stelle, nicht die Ansicht: Der Notanker wird
-              // aus der Übersicht geworfen, und dort soll man auch bleiben. Die
-              // Seitenzahl von vorher gilt danach aber für ein anderes Buch.
-              setLetzterSpread(0);
-              setNote(satz);
-            }}
-          />
-        </div>
-      ) : view === 'spread' ? (
-        spread && aussen ? (
-          <SpreadEditor
-            spread={spread}
-            onSpread={setSpread}
-            imageSrc={imageSrc}
-            selectedSlotId={selectedSlotId}
-            onSelect={waehlePlatz}
-            variante={variante}
-            aussen={aussen}
-          />
-        ) : (
-          <div style={S.laedt}>
-            <span style={B.leise}>Lade Doppelseite …</span>
-          </div>
-        )
-      ) : view === 'groups' ? (
-        <PhotoGroups
-          focusGroupId={route.view === 'groups' ? (route.groupId ?? null) : null}
-          // Die gewählte Gruppe steht in der Adresse, also muss ein Wechsel des
-          // Filters dort ankommen – sonst zeigt sie eine Gruppe, die längst nicht
-          // mehr gefiltert ist. Ersetzend, denn ein Filterklick ist eine
-          // Verfeinerung derselben Ansicht und keine neue Station.
-          onGruppeGewaehlt={gruppeInAdresse}
-          standVersion={standVersion}
-          onOpenSpread={(i) => zeigeSpread(i)}
-          onChanged={() => {
-            loadInfo();
-            // Der Zeitstrahl holt seine Beschriftung bei jedem Rendern aus den
-            // Gruppen. Eine aufgelöste oder umbenannte Gruppe wirkt damit
-            // sofort – aber nur, wenn die gerenderte Doppelseite im Speicher
-            // nicht weitergilt.
-            neuRendern();
-          }}
-        />
-      ) : view === 'years' && info ? (
-        <YearEvents
-          chapters={info.chapters}
-          standVersion={standVersion}
-          onOpen={(i) => {
-            zeigeSpread(i);
-            // Die Auftaktseite hat sich geändert, also neu holen.
-            neuRendern();
-          }}
-        />
-      ) : view === 'fotodaten' ? (
-        <Fotodaten
-          standVersion={standVersion}
-          bildVersion={bildVersion}
-          onBildGeaendert={() => setBildVersion((v) => v + 1)}
-          onChanged={() => {
-            loadInfo();
-            // Ein korrigiertes Datum ändert das Buch nicht von selbst – aber die
-            // Zeitleiste am Fuß der Doppelseite liest die Daten beim Rendern,
-            // also gilt das gerenderte Blatt im Speicher nicht weiter.
-            neuRendern();
-          }}
-        />
-      ) : view === 'sources' ? (
-        <PhotoSources
-          standVersion={standVersion}
-          onChanged={() => {
-            loadInfo();
-            // Fotos können hinzugekommen oder weggefallen sein – die gerenderte
-            // Doppelseite im Speicher gilt nicht weiter.
-            neuRendern();
-          }}
-        />
-      ) : view === 'edit' ? (
-        // Derselbe Gegenstand in zwei Fassungen: der Baum zum Ziehen, das JSON
-        // für den großen Umbau. Welche gilt, steht im Pfad (`/aufteilung/json`).
-        route.view === 'edit' && route.json ? (
-          <LayoutEditor
-            imageSrc={imageSrc}
-            onNavigieren={navigieren}
-            onApplied={() => {
-              loadInfo();
-              neuRendern();
-            }}
-          />
-        ) : (
-          <Baum
-            bildVersion={bildVersion}
+        ) : view === 'spread' ? (
+          spread && aussen ? (
+            <SpreadEditor
+              spread={spread}
+              onSpread={setSpread}
+              imageSrc={imageSrc}
+              selectedSlotId={selectedSlotId}
+              onSelect={waehlePlatz}
+              variante={variante}
+              aussen={aussen}
+            />
+          ) : (
+            <div style={S.laedt}>
+              <span style={B.leise}>Lade Doppelseite …</span>
+            </div>
+          )
+        ) : view === 'groups' ? (
+          <PhotoGroups
+            focusGroupId={route.view === 'groups' ? (route.groupId ?? null) : null}
+            // Die gewählte Gruppe steht in der Adresse, also muss ein Wechsel des
+            // Filters dort ankommen – sonst zeigt sie eine Gruppe, die längst nicht
+            // mehr gefiltert ist. Ersetzend, denn ein Filterklick ist eine
+            // Verfeinerung derselben Ansicht und keine neue Station.
+            onGruppeGewaehlt={gruppeInAdresse}
             standVersion={standVersion}
+            onOpenSpread={(i) => zeigeSpread(i)}
+            onChanged={() => {
+              loadInfo();
+              // Der Zeitstrahl holt seine Beschriftung bei jedem Rendern aus den
+              // Gruppen. Eine aufgelöste oder umbenannte Gruppe wirkt damit
+              // sofort – aber nur, wenn die gerenderte Doppelseite im Speicher
+              // nicht weitergilt.
+              neuRendern();
+            }}
+          />
+        ) : view === 'years' && info ? (
+          <YearEvents
+            chapters={info.chapters}
+            standVersion={standVersion}
+            onOpen={(i) => {
+              zeigeSpread(i);
+              // Die Auftaktseite hat sich geändert, also neu holen.
+              neuRendern();
+            }}
+          />
+        ) : view === 'fotodaten' ? (
+          <Fotodaten
+            standVersion={standVersion}
+            onChanged={() => {
+              loadInfo();
+              // Ein korrigiertes Datum ändert das Buch nicht von selbst – aber die
+              // Zeitleiste am Fuß der Doppelseite liest die Daten beim Rendern,
+              // also gilt das gerenderte Blatt im Speicher nicht weiter.
+              neuRendern();
+            }}
+          />
+        ) : view === 'sources' ? (
+          <PhotoSources
+            standVersion={standVersion}
+            onChanged={() => {
+              loadInfo();
+              // Fotos können hinzugekommen oder weggefallen sein – die gerenderte
+              // Doppelseite im Speicher gilt nicht weiter.
+              neuRendern();
+            }}
+          />
+        ) : view === 'edit' ? (
+          // Derselbe Gegenstand in zwei Fassungen: der Baum zum Ziehen, das JSON
+          // für den großen Umbau. Welche gilt, steht im Pfad (`/aufteilung/json`).
+          route.view === 'edit' && route.json ? (
+            <LayoutEditor
+              imageSrc={imageSrc}
+              onNavigieren={navigieren}
+              onApplied={() => {
+                loadInfo();
+                neuRendern();
+              }}
+            />
+          ) : (
+            <Baum
+              standVersion={standVersion}
+              onNavigieren={navigieren}
+              onChanged={() => {
+                loadInfo();
+                neuRendern();
+              }}
+            />
+          )
+        ) : view === 'cover' ? (
+          <Cover imageSrc={imageSrc} standVersion={standVersion} />
+        ) : route.view === 'pruefung' ? (
+          <Pruefung
+            {...(route.teil ? { teil: route.teil } : {})}
             onNavigieren={navigieren}
+            standVersion={standVersion}
+            onOffen={merkeOffen}
+            // Beide Bereiche ändern den Projektzustand — eine Abnahme wie ein
+            // Aussortieren. Der Rückgängig-Knopf muss wissen, was er zurücknähme,
+            // und die Doppelseiten dahinter können ein Bild verloren haben.
             onChanged={() => {
               loadInfo();
               neuRendern();
             }}
           />
-        )
-      ) : view === 'cover' ? (
-        <Cover imageSrc={imageSrc} standVersion={standVersion} />
-      ) : route.view === 'pruefung' ? (
-        <Pruefung
-          {...(route.teil ? { teil: route.teil } : {})}
-          onNavigieren={navigieren}
-          standVersion={standVersion}
-          bildVersion={bildVersion}
-          onOffen={merkeOffen}
-          // Beide Bereiche ändern den Projektzustand — eine Abnahme wie ein
-          // Aussortieren. Der Rückgängig-Knopf muss wissen, was er zurücknähme,
-          // und die Doppelseiten dahinter können ein Bild verloren haben.
-          onChanged={() => {
-            loadInfo();
-            neuRendern();
-          }}
-        />
-      ) : (
-        <div style={S.laedt}>
-          <span style={B.leise}>Lade Projekt …</span>
-        </div>
-      )}
+        ) : (
+          <div style={S.laedt}>
+            <span style={B.leise}>Lade Projekt …</span>
+          </div>
+        )}
 
-      {/*
+        {/*
         Nach dem Einfügen gleich zur neuen Seite: Sie ist leer, und alles
         weitere – Textblock setzen, Bild hineinziehen – passiert dort.
       */}
-      {einfuegenAn !== null && info && (
-        <InsertSpread
-          at={einfuegenAn}
-          spreadCount={info.spreadCount}
-          onAbbrechen={() => setEinfuegenAn(null)}
-          onFehler={(text) => {
-            setEinfuegenAn(null);
-            setNote(text);
-          }}
-          onEingefuegt={(neu, bericht) => {
-            setEinfuegenAn(null);
-            loadInfo();
-            neuRendern();
-            zeigeSpread(neu);
-            // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als die
-            // eine Stelle. Das gehört gesagt, sonst wundert man sich über die
-            // veränderten Nachbarseiten.
-            if (bericht && bericht.neuGepaart > 0) {
-              setNote(
-                `${bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt` +
-                  (bericht.leerseiten > 0
-                    ? `, ${bericht.leerseiten} leere Seite(n) für die Parität`
-                    : '') +
-                  (bericht.leereBlaetter > 0
-                    ? `, ${bericht.leereBlaetter} Doppelseite(n) ganz ohne Bild`
-                    : '') +
-                  ' — die Fotoverteilung ist unverändert.',
-              );
-            }
-          }}
-        />
-      )}
+        {einfuegenAn !== null && info && (
+          <InsertSpread
+            at={einfuegenAn}
+            spreadCount={info.spreadCount}
+            onAbbrechen={() => setEinfuegenAn(null)}
+            onFehler={(text) => {
+              setEinfuegenAn(null);
+              setNote(text);
+            }}
+            onEingefuegt={(neu, bericht) => {
+              setEinfuegenAn(null);
+              loadInfo();
+              neuRendern();
+              zeigeSpread(neu);
+              // Bei einer einzelnen Seite hat die Umpaarung mehr angefasst als die
+              // eine Stelle. Das gehört gesagt, sonst wundert man sich über die
+              // veränderten Nachbarseiten.
+              if (bericht && bericht.neuGepaart > 0) {
+                setNote(
+                  `${bericht.neuGepaart} Doppelseite(n) neu zusammengesetzt` +
+                    (bericht.leerseiten > 0
+                      ? `, ${bericht.leerseiten} leere Seite(n) für die Parität`
+                      : '') +
+                    (bericht.leereBlaetter > 0
+                      ? `, ${bericht.leereBlaetter} Doppelseite(n) ganz ohne Bild`
+                      : '') +
+                    ' — die Fotoverteilung ist unverändert.',
+                );
+              }
+            }}
+          />
+        )}
 
-      {(busy || note) && (
-        <div style={S.toast} role="status">
-          {busy ?? note}
-          {/*
+        {(busy || note) && (
+          <div style={S.toast} role="status">
+            {busy ?? note}
+            {/*
             Der Weg vom Pfad zum Blättern. Ohne ihn endete jeder Export mit einer
             Zeile, die man von Hand in den Finder tippt — und gerade der Abzug
             lebt davon, sofort durchgesehen zu werden. Ein neuer Tab und nicht
             dieser: Wer den Abzug ansieht, will danach in der Oberfläche
             weitermachen, wo er war.
           */}
-          {!busy && notiz?.datei && (
-            <a
-              href={`/api/export/${notiz.datei}`}
-              target="_blank"
-              rel="noreferrer"
-              style={S.toastLink}
-            >
-              Öffnen
-            </a>
-          )}
-          {!busy && (
-            <button onClick={() => setNote(null)} style={S.toastZu} title="Ausblenden">
-              ×
-            </button>
-          )}
-        </div>
-      )}
-    </div>
+            {!busy && notiz?.datei && (
+              <a
+                href={`/api/export/${notiz.datei}`}
+                target="_blank"
+                rel="noreferrer"
+                style={S.toastLink}
+              >
+                Öffnen
+              </a>
+            )}
+            {!busy && (
+              <button onClick={() => setNote(null)} style={S.toastZu} title="Ausblenden">
+                ×
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </BildfassungenProvider>
   );
 }
 
