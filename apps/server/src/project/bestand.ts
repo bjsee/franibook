@@ -20,6 +20,7 @@ import {
   effectivePhoto,
   ungroupPhotos,
 } from '@franibook/core';
+import { stat } from 'node:fs/promises';
 import type { DecodeCache } from '../decode.js';
 import { importSource } from '../import.js';
 import type { PreviewCache } from '../previews.js';
@@ -373,6 +374,80 @@ export async function reimport(
     offline,
     aussortiert,
   };
+}
+
+/** Was die Dateiprüfung über den Bestand herausfindet. */
+export interface DateienBericht {
+  /** Fotos, deren Datei nicht mehr da ist, in der Reihenfolge des Bestands. */
+  fehlend: PhotoId[];
+  /** Wie viele Dateien geprüft wurden — ohne die aus abgehängten Quellen. */
+  geprueft: number;
+  /**
+   * Quellen, die gerade nicht erreichbar sind, samt ihrer Bilderzahl.
+   *
+   * Ihre Fotos werden **nicht** geprüft und nicht gemeldet: Ein nicht
+   * eingehängtes Netzlaufwerk ist kein Datenverlust, und achthundert Zeilen
+   * „Datei fehlt" wären die falsche Auskunft für „das NAS ist aus".
+   */
+  offline: { id: string; label: string; photoCount: number }[];
+}
+
+/** Wie viele `stat`-Anfragen gleichzeitig laufen. */
+const STAT_GLEICHZEITIG = 32;
+
+/**
+ * Sieht nach, welche Bilddateien noch da sind.
+ *
+ * Der billige Bruder des Reimports: Der liest Hashes, EXIF und Pixelmaße und
+ * braucht dafür Minuten; hier steht nur die eine Frage, ob die Datei noch an
+ * ihrem Platz liegt. Beantworten muss sie jemand, denn am Bildschirm sieht man
+ * es nicht — die Vorschau liegt im Cache und zeigt weiter ein Bild, das es
+ * nicht mehr gibt. Bemerkt würde es beim Export, und dort ist es zu spät.
+ *
+ * Auf Anfrage gerechnet und nirgends gespeichert, aus demselben Grund wie bei
+ * den Doppeln: Ein gemerktes Ergebnis wäre nach dem nächsten Griff ins
+ * Dateisystem falsch, und niemand hätte es gemerkt.
+ */
+export async function fehlendeDateien(z: Bestandstand): Promise<DateienBericht> {
+  const status = await z.sources.status();
+  const abgehaengt = new Set(status.filter((q) => !q.erreichbar).map((q) => q.id));
+
+  const offline = status
+    .filter((q) => abgehaengt.has(q.id))
+    .map((q) => ({
+      id: q.id,
+      label: q.label,
+      photoCount: [...z.photos.values()].filter((p) => p.sourceId === q.id).length,
+    }));
+
+  const zuPruefen = [...z.photos.values()].filter(
+    (p) => !(p.sourceId !== undefined && abgehaengt.has(p.sourceId)),
+  );
+
+  const fehlend: PhotoId[] = [];
+  for (let i = 0; i < zuPruefen.length; i += STAT_GLEICHZEITIG) {
+    const block = zuPruefen.slice(i, i + STAT_GLEICHZEITIG);
+    const ergebnisse = await Promise.all(
+      block.map(async (photo) => {
+        try {
+          // Über denselben Resolver wie jeder andere Zugriff: `Sources.pfad`
+          // ist die einzige Stelle, an der aus einem Foto ein Pfad wird, und
+          // eine zweite Rechnung daneben suchte an einer anderen Stelle als
+          // Vorschau und Export.
+          const st = await stat(z.sources.pfad(photo));
+          return st.isFile() ? null : photo.id;
+        } catch {
+          // Auch ein Rechtefehler heißt hier „nicht auffindbar": Für das Buch
+          // macht es keinen Unterschied, ob die Datei weg ist oder
+          // unerreichbar.
+          return photo.id;
+        }
+      }),
+    );
+    for (const id of ergebnisse) if (id !== null) fehlend.push(id);
+  }
+
+  return { fehlend, geprueft: zuPruefen.length, offline };
 }
 
 /**

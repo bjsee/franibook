@@ -6,7 +6,7 @@
  * Ausnahme ist `einwerfen`, das eine **neue** Datei in der ersten Bildquelle
  * anlegt (`project/einwurf.ts`).
  */
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import {
   type Chapter,
@@ -92,7 +92,7 @@ import type { PreviewCache } from './previews.js';
 import * as anordnung from './project/anordnung.js';
 import { type BaumSeite, baum } from './project/baum.js';
 import * as bestand from './project/bestand.js';
-import type { Aussortiert, ImportDiff, QuellenBericht } from './project/bestand.js';
+import type { Aussortiert, DateienBericht, ImportDiff, QuellenBericht } from './project/bestand.js';
 import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
 import * as gruppen from './project/gruppen.js';
@@ -121,6 +121,7 @@ import {
   ankerListe,
 } from './project/notanker.js';
 import * as seiten from './project/seiten.js';
+import { schreibeAtomar } from './project/speichern.js';
 import * as umschlag from './project/umschlag.js';
 import { type Schritt, Verlauf } from './project/verlauf.js';
 import { type PhotoSource, quellenId, Sources } from './sources.js';
@@ -774,6 +775,11 @@ export class Project {
 
   warmPreviews(ids: readonly PhotoId[]): void {
     bestand.warmPreviews(this, ids);
+  }
+
+  /** Welche Bilddateien nicht mehr an ihrem Platz liegen. */
+  fehlendeDateien(): Promise<DateienBericht> {
+    return bestand.fehlendeDateien(this);
   }
 
   /**
@@ -1976,7 +1982,14 @@ export class Project {
    * eigener Zustandsschnittstelle wäre für diese fünf Zeilen mehr Zeremonie als
    * Auskunft.
    */
-  abnahme(): Abnahmebericht {
+  /**
+   * @param fehlendeDateien Fotos ohne Datei, sofern jemand nachgesehen hat.
+   * Der Bericht ist synchron und soll es bleiben — er hängt an
+   * `spreadAntwort` und am Korrekturabzug —, ein `stat` je Bild ist es nicht.
+   * Wer die Auskunft haben will, holt sie sich vorher (`fehlendeDateien()`)
+   * und reicht sie herein; wer sie weglässt, bekommt den Bericht wie bisher.
+   */
+  abnahme(fehlendeDateien?: ReadonlySet<PhotoId>): Abnahmebericht {
     return pruefeBuch({
       spreads: this.renderAll(),
       cover: this.renderCover(),
@@ -1984,6 +1997,7 @@ export class Project {
       groupsPending: this.groupsPending(),
       structurePending: this.structurePending(),
       abgenommen: new Set(Object.keys(this.abnahmen)),
+      ...(fehlendeDateien ? { fehlendeDateien } : {}),
     });
   }
 
@@ -2482,6 +2496,41 @@ export class Project {
    * trotzdem – aber mit einer lauten Meldung, denn dann liegt die einzige
    * Fassung noch unter dem alten Namen und der nächste `save()` trifft sie.
    */
+  /**
+   * Sichert die Projektdatei, bevor eine Migration sie anfasst.
+   *
+   * Eine Migration ist der eine Schreibvorgang, den niemand ausgelöst hat: Sie
+   * läuft beim Start, ungefragt, und ihr Ergebnis ersetzt beim nächsten
+   * `save()` den einzigen Stand, den es gibt. Ist sie fehlerhaft — und das
+   * merkt man an einem Projekt aus 830 Fotos nicht sofort —, gibt es nichts,
+   * woraus sich der alte Stand herleiten ließe. Die Kopie kostet 680 KB und
+   * einmal je Schemasprung: Danach trägt die Datei die neue Version, und der
+   * nächste Start kommt hier nicht mehr vorbei.
+   *
+   * `copyFile` und nicht `rename`: Das Original soll unter seinem Namen liegen
+   * bleiben, auch wenn die Sicherung scheitert. Gelöscht wird keine Sicherung —
+   * Schemasprünge sind selten, und die Aufräumregel wäre das Werkzeug, das
+   * genau die Datei wegräumt, die man sucht.
+   */
+  private async sichereVorMigration(pfad: string, von: number): Promise<void> {
+    const stempel = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ziel = `${pfad}.schema${von}-${stempel}`;
+    try {
+      await copyFile(pfad, ziel);
+      console.warn(
+        `Projekt wird von Schema ${von} auf ${SCHEMA_VERSION} gehoben — Sicherung: ${ziel}`,
+      );
+    } catch (fehler) {
+      // Nicht abbrechen: Ohne Migration liefe der Server auf einen Neuimport
+      // hinaus, und der verwirft genau das, was hier zu schützen wäre. Die
+      // Originaldatei liegt bis zum ersten Speichern noch unter ihrem Namen.
+      console.error(
+        `Sicherung vor der Migration misslungen (${ziel}): ${String(fehler)}. ` +
+          `Vor dem nächsten Speichern von Hand kopieren: ${pfad}`,
+      );
+    }
+  }
+
   private async legeBeiseite(pfad: string): Promise<void> {
     const stempel = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const ziel = `${pfad}.unlesbar-${stempel}`;
@@ -2612,12 +2661,13 @@ export class Project {
 
     try {
       await mkdir(this.projectPath, { recursive: true });
-      await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-      await rename(tmp, target);
+      await schreibeAtomar(target, JSON.stringify(data, null, 2), tmp);
     } catch (fehler) {
+      // Die Nebendatei räumt `schreibeAtomar` selbst weg, soweit das die
+      // richtige Antwort ist. Hier bleibt die Meldung: Ein fehlgeschlagener
+      // Schreibvorgang ist ärgerlich, ein Serverabsturz mit dem ganzen
+      // Projektzustand im Speicher wäre schlimmer.
       console.error(`Projekt nicht gespeichert (${target}): ${String(fehler)}`);
-      // Die Nebendatei aufräumen, damit kein halber Stand liegen bleibt.
-      await rm(tmp, { force: true }).catch(() => undefined);
     }
   }
 
@@ -2694,9 +2744,42 @@ export class Project {
   /** @returns ob ein gespeichertes Projekt gefunden wurde. */
   async load(): Promise<boolean> {
     const pfad = join(this.projectPath, 'project.json');
+
+    let raw: string;
     try {
-      const raw = await readFile(pfad, 'utf8');
-      const parsed: unknown = JSON.parse(raw);
+      raw = await readFile(pfad, 'utf8');
+    } catch (fehler) {
+      // Keine Datei ist der erste Start und keine Meldung wert. Jeder andere
+      // Fehler dagegen ist einer: Ein nicht lesbares Projekt („false") sieht von
+      // hier aus genauso aus wie gar keines, der Server importiert neu, und der
+      // nächste `save()` schreibt über eine Datei, die er nie gelesen hat.
+      if ((fehler as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(
+          `Projektdatei nicht lesbar (${pfad}): ${String(fehler)}. ` +
+            'Der Server startet mit einem Neuimport — vor dem nächsten Speichern von Hand sichern.',
+        );
+      }
+      return false;
+    }
+
+    try {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (fehler) {
+        // Beschädigtes JSON — ein abgebrochener Schreibvorgang auf einem
+        // Dateisystem ohne atomares `rename`, ein Sync-Konflikt, ein Griff von
+        // Hand. Bis hierher fiel das in dasselbe stille `return false` wie eine
+        // fehlende Datei und die Reste wurden beim nächsten Speichern
+        // überschrieben.
+        console.error(`Projektdatei nicht deutbar (${pfad}): ${String(fehler)}`);
+        await this.legeBeiseite(pfad);
+        return false;
+      }
+
+      if (istBrauchbareStruktur(parsed) && parsed.schemaVersion !== SCHEMA_VERSION) {
+        await this.sichereVorMigration(pfad, parsed.schemaVersion);
+      }
       const data = istBrauchbareStruktur(parsed) ? migriere(parsed) : null;
 
       if (data === null) {
