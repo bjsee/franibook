@@ -126,6 +126,66 @@ describe('Sources', () => {
     // Der Fall, der zählt: ein nicht eingehängtes Netzlaufwerk.
     expect(await quellen.erreichbar(source.id)).toBe(false);
   });
+
+  describe('reroot — der Ordner ist umgezogen', () => {
+    it('zeigt woanders hin und behält dabei seine Kennung', async () => {
+      const woanders = await mkdtemp(join(tmpdir(), 'franibook-umzug-'));
+      try {
+        const quellen = new Sources();
+        const { source } = await quellen.add(dir, 'Bestand');
+        const vorher = source.id;
+
+        const umgezogen = await quellen.reroot(vorher, woanders);
+
+        expect(umgezogen?.root).toBe(woanders);
+        // Der Punkt der ganzen Übung: Jedes Foto zeigt über `sourceId` auf
+        // diese Quelle. Eine neue Kennung ließe den ganzen Bestand ins Leere
+        // laufen — bei 830 Bildern die teuerste Art, einen Ordner umzubenennen.
+        expect(umgezogen?.id).toBe(vorher);
+        expect(quellen.pfad({ id: '1', relPath: 'a.jpg', sourceId: vorher })).toBe(
+          join(woanders, 'a.jpg'),
+        );
+        expect(umgezogen?.label).toBe('Bestand');
+      } finally {
+        await rm(woanders, { recursive: true, force: true });
+      }
+    });
+
+    it('weist einen Ordner ab, den es nicht gibt', async () => {
+      const quellen = new Sources();
+      const { source } = await quellen.add(dir);
+
+      await expect(quellen.reroot(source.id, join(dir, 'weg'))).rejects.toThrow('nicht gefunden');
+      // Und die Quelle steht unverändert – ein misslungener Umzug darf nicht
+      // auch noch den alten Pfad kosten.
+      expect(quellen.get(source.id)?.root).toBe(dir);
+    });
+
+    it('weist einen Ordner ab, der sich mit einer anderen Quelle überschneidet', async () => {
+      const zweite = await mkdtemp(join(tmpdir(), 'franibook-quellen2-'));
+      try {
+        const quellen = new Sources();
+        const { source } = await quellen.add(dir, 'Bestand');
+        await quellen.add(zweite, 'Nachzügler');
+
+        await expect(quellen.reroot(source.id, zweite)).rejects.toThrow('Überschneidet sich');
+      } finally {
+        await rm(zweite, { recursive: true, force: true });
+      }
+    });
+
+    it('lässt den Umzug auf denselben Ordner durchgehen', async () => {
+      const quellen = new Sources();
+      const { source } = await quellen.add(dir);
+      // Sonst stolperte die eigene Überschneidungsprüfung über die Quelle selbst.
+      expect((await quellen.reroot(source.id, dir))?.root).toBe(dir);
+    });
+
+    it('kennt keine unbekannte Quelle', async () => {
+      const quellen = new Sources();
+      expect(await quellen.reroot('gibtsnicht', dir)).toBeUndefined();
+    });
+  });
 });
 
 describe('sammleDateien', () => {

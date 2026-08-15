@@ -70,6 +70,21 @@ export const BEFUNDARTEN = [
    * eine Dublette unsichtbar.
    */
   { art: 'foto-doppelt', titel: 'Bild zweimal im Buch', schwer: true },
+  /**
+   * Das Bild steht im Bestand, seine Datei aber nicht mehr auf der Platte.
+   *
+   * Der Unterschied zu `foto-fehlt` ist die Richtung: Dort kennt das Buch eine
+   * Kennung, die der Bestand nicht führt; hier führt der Bestand ein Foto,
+   * dessen Datei verschwunden ist — umbenannt, verschoben, ein Ordner
+   * abgehängt. Am Bildschirm sieht man es nicht unbedingt: Die Vorschau liegt
+   * im Cache und zeigt weiter, was längst nicht mehr da ist. Auffallen würde es
+   * beim Export, und dort ist es zu spät.
+   *
+   * Wie `unter-ziel-dpi` eine Art, die nur der Buchbericht kennt: Ob eine Datei
+   * existiert, weiß der Kern nicht — er bekommt die Auskunft von außen, so wie
+   * er die abgenickten Funde von außen bekommt.
+   */
+  { art: 'datei-fehlt', titel: 'Bilddatei nicht auffindbar', schwer: true },
   { art: 'unter-mindest-dpi', titel: 'Unter der Mindestauflösung', schwer: true },
   { art: 'im-rand', titel: 'Text im Sicherheitsabstand', schwer: true },
   { art: 'im-falz', titel: 'Text in der Falzzone', schwer: true },
@@ -161,6 +176,15 @@ export interface AbnahmeEingabe {
    * wird nichts, denn wer „auch abgenommene zeigen" wählt, will sie sehen.
    */
   abgenommen?: ReadonlySet<string> | undefined;
+  /**
+   * Fotos, deren Datei nicht mehr auffindbar ist.
+   *
+   * Von außen und aus demselben Grund wie `abgenommen`: Der Kern kennt kein
+   * Dateisystem. Wer die Menge nicht mitgibt, bekommt die Prüfung nicht — das
+   * ist die richtige Vorgabe, denn ein `stat` je Bild ist eine Frage an die
+   * Platte und keine, die man beiläufig stellt.
+   */
+  fehlendeDateien?: ReadonlySet<string> | undefined;
 }
 
 export interface Abnahmebericht {
@@ -302,6 +326,23 @@ export function pruefeBuch(e: AbnahmeEingabe): Abnahmebericht {
   });
 
   const befunde = buendleTexte(ausSeiten);
+
+  // Fehlende Dateien: je Bild ein Fund an seiner ersten Stelle. Nicht je
+  // Vorkommen — man ersetzt das Foto, nicht den Platz; und der Bericht bündelt
+  // die Arten ohnehin, sodass eine abgehängte Quelle als eine Zeile mit Zahl
+  // erscheint statt als achthundert.
+  if (e.fehlendeDateien?.size) {
+    for (const [photoId, orte] of stellen) {
+      if (!e.fehlendeDateien.has(photoId)) continue;
+      const erste = orte[0]!;
+      befunde.push({
+        art: 'datei-fehlt',
+        ort: { kind: 'spread', index: erste.index, slotId: erste.slotId },
+        text: 'die Bilddatei ist nicht mehr auffindbar',
+        schluessel: `datei-fehlt#foto:${photoId}`,
+      });
+    }
+  }
 
   // Ein Bild, das zweimal im Buch steht. Gemeldet wird die *zweite* Stelle: Die
   // erste ist die, die man behalten will, und das Sprungziel soll dorthin

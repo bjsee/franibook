@@ -389,9 +389,56 @@ Vor jedem Schreiben von `book.json` wandert die vorherige Fassung nach `history/
 
 `project.json` trägt eine `schemaVersion`. Beim Öffnen läuft eine Kette von Migrationsfunktionen (`migrations/001-to-002.ts` …), jede mit eigenem Test gegen eine eingefrorene Beispieldatei. Vor der ersten Migration wird das komplette Projektverzeichnis nach `Projekt.franibook.bak-v<n>` kopiert. Bei nur einem Nutzer und einem Projekt ist das billig und erspart jede Diskussion über Rückwärtskompatibilität.
 
+> **Umgesetzt (15. August 2026), mit drei Abweichungen**
+>
+> Die Kette steht als `migriere()` in `project.ts` und nicht als ein Modul je
+> Sprung: Zwei Sprünge sind zwei Funktionen von zwanzig Zeilen, und ein Ordner
+> mit Nummernpaaren wäre Ordnung für eine Menge, die es noch nicht gibt.
+>
+> **Gesichert wird die Datei, nicht das Verzeichnis** —
+> `project.json.schema<n>-<zeit>`, per `copyFile`, damit das Original unter
+> seinem Namen liegen bleibt, auch wenn die Sicherung scheitert. Das Verzeichnis
+> daneben enthält nur noch `history/` mit den Notankern, und die sind selbst
+> Sicherungen.
+>
+> **Die eingefrorenen Beispieldateien stehen neben den Objektliteralen, nicht an
+> ihrer Stelle** (`apps/server/src/fixtures/projekt-schema*.json`). Sie prüfen
+> Verschiedenes: Ein Literal ist an den heutigen Typ gebunden und wandert mit
+> ihm mit — `as never` wischt weg, was nicht mehr passt —, eine Datei ist die
+> Form von damals, mit allen Feldern, die ein echtes Projekt trug. Gefahren wird
+> der ganze Ladeweg bis in die Felder der Klasse: `JSON.parse`, Formprüfung,
+> Migration, Einstellungen auffüllen. Wer eine Fixture anpasst, damit ein Test
+> wieder grün wird, hat den Test abgeschafft.
+>
+> Der teuerste Fund dabei hatte mit Migration nichts zu tun: `load()`
+> beantwortete **jeden** Lesefehler wie „es gibt noch kein Projekt". Ein
+> abgeschnittenes JSON führte damit zum stillen Neuimport, und der nächste
+> `save()` schrieb über die Reste. Jetzt schweigt nur `ENOENT`.
+
 ### Referenzen auf Originalbilder
 
 `Photo.relPath` ist relativ zu einem Eintrag in `project.sources`. Verschiebt der Benutzer den Bilderordner, muss nur die Quelle neu gesetzt werden, nicht 900 Pfade. Beim Öffnen prüft das Backend stichprobenartig die Existenz und meldet fehlende Dateien als eigene Problemliste; die Buchstruktur bleibt intakt, betroffene Slots werden in der Vorschau markiert.
+
+> **Umgesetzt (15. August 2026): auf Anfrage statt beim Öffnen, und ganz statt stichprobenartig**
+>
+> `GET /api/photos/fehlend` fragt per `stat` nach jeder Datei — am echten
+> Bestand 983 in 18 ms, also ist eine Stichprobe die umständlichere Antwort. Beim
+> Öffnen läuft sie trotzdem nicht: Der Start wartet schon auf Import und
+> Vorschauen, und eine Prüfung, deren Ergebnis niemand liest, ist Wartezeit ohne
+> Auskunft. Gestellt wird die Frage dort, wo sie jemanden interessiert — im
+> Reiter **Bildquellen** über einen Knopf, und im **Abnahmebericht**, der sie vor
+> jeder Bestellung mitstellt und als `datei-fehlt` meldet (`?dateien=0` lässt es
+> weg).
+>
+> **Fotos einer nicht erreichbaren Quelle werden übergangen.** Ein abgehängtes
+> Netzlaufwerk ist kein Datenverlust, und achthundert Zeilen „Datei fehlt" wären
+> die falsche Auskunft für „das NAS ist aus" — die richtige steht in
+> `GET /api/sources`.
+>
+> **Die Quelle neu zu setzen, heißt `PATCH /api/sources/:id` mit `root`**
+> (`Sources.reroot`), nicht Entfernen und Neuanlegen: Die Kennung leitet sich
+> beim Anlegen aus dem Pfad ab, ist aber eine Identität. Eine neue ließe jedes
+> Foto ins Leere zeigen — die teuerste Art, einen Ordner umzubenennen.
 
 ## Metadaten-Strategie
 

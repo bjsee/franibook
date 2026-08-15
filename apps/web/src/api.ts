@@ -1130,6 +1130,25 @@ export const quelleEntfernen = (id: string) =>
 export const quelleUmbenennen = (id: string, label: string) =>
   sende<{ source: Bildquelle }>('PATCH', `/api/sources/${id}`, { label });
 
+/**
+ * Zeigt eine Quelle auf einen anderen Ordner — der Weg zurück, wenn er umgezogen
+ * ist und mit ihm jede Bilddatei.
+ *
+ * Nicht dasselbe wie Entfernen und Neuanlegen: Die Quelle behält ihre Kennung,
+ * und damit bleibt jedes Foto bei ihr, samt Korrekturen und Platz im Buch.
+ */
+export const quelleUmziehen = (id: string, root: string) =>
+  sende<{ source: Bildquelle }>('PATCH', `/api/sources/${id}`, { root });
+
+/** Fotos, deren Bilddatei nicht mehr auffindbar ist. */
+export const fehlendeDateienLaden = () =>
+  hole<{
+    count: number;
+    geprueft: number;
+    offline: { id: string; label: string; photoCount: number }[];
+    photos: FotoInfo[];
+  }>('/api/photos/fehlend');
+
 // ─── Jahresereignisse ───────────────────────────────────────────────────────
 
 export const jahresereignisseLaden = () =>

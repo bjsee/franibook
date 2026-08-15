@@ -456,6 +456,55 @@ describe('Abnahmebericht', () => {
     });
   });
 
+  /**
+   * Die Datei ist weg, das Foto steht noch im Bestand.
+   *
+   * Der Kern kann das nicht selbst herausfinden und soll es auch nicht — er
+   * kennt kein Dateisystem. Die Auskunft kommt von außen, wie die abgenickten
+   * Funde.
+   */
+  describe('Bilddatei nicht auffindbar', () => {
+    it('meldet je Bild einen Fund an seiner ersten Stelle', () => {
+      const bericht = pruefeBuch({
+        spreads: [gerendert(['p1', 'p2', 'p3', 'p4']), gerendert(['p5', 'p6', 'p7', 'p8'])],
+        profile,
+        fehlendeDateien: new Set(['p2', 'p7']),
+      });
+
+      const funde = bericht.befunde.filter((b) => b.art === 'datei-fehlt');
+      expect(funde).toHaveLength(2);
+      expect(funde.map((b) => (b.ort.kind === 'spread' ? b.ort.index : -1))).toEqual([0, 1]);
+      expect(funde[0]!.schluessel).toBe('datei-fehlt#foto:p2');
+    });
+
+    it('meldet ein zweimal gesetztes Bild trotzdem nur einmal', () => {
+      // Man ersetzt das Foto, nicht den Platz.
+      const bericht = pruefeBuch({
+        spreads: [gerendert(['p1', 'p2', 'p3', 'p4']), gerendert(['p2', 'p6', 'p7', 'p8'])],
+        profile,
+        fehlendeDateien: new Set(['p2']),
+      });
+
+      expect(bericht.befunde.filter((b) => b.art === 'datei-fehlt')).toHaveLength(1);
+    });
+
+    it('schweigt ohne die Auskunft von außen', () => {
+      // Ohne `fehlendeDateien` bleibt der Bericht, was er war: eine Sammlung
+      // dessen, was beim Rendern ohnehin auffällt.
+      const bericht = pruefeBuch({ spreads: [gerendert(['p1', 'p2', 'p3', 'p4'])], profile });
+      expect(bericht.befunde.filter((b) => b.art === 'datei-fehlt')).toEqual([]);
+    });
+
+    it('meldet nichts über ein Bild, das gar nicht im Buch steht', () => {
+      const bericht = pruefeBuch({
+        spreads: [gerendert(['p1', 'p2', 'p3', 'p4'])],
+        profile,
+        fehlendeDateien: new Set(['p9']),
+      });
+      expect(bericht.befunde.filter((b) => b.art === 'datei-fehlt')).toEqual([]);
+    });
+  });
+
   it('ordnet die Funde nach Gewicht und innerhalb einer Art nach Buchreihenfolge', () => {
     // Jede Seite mit eigenen Bildern: Dieselbe Kennung zweimal wäre ein Fund
     // für sich und stünde als schwerer vor dem, was hier geprüft wird.
