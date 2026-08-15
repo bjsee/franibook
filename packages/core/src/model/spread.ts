@@ -263,6 +263,23 @@ export interface Spread {
    * Doppelseite, die die Engine neu erzeugt.
    */
   timeline?: boolean;
+  /**
+   * Plätze der Vorlage, die diese Doppelseite nicht zeigt.
+   *
+   * Ein Platz ohne Bild zeichnet sonst einen leeren Kasten, und der ist in der
+   * Oberfläche eine Fläche wie jede andere — man kann etwas hineinziehen. Wer
+   * ihn aber gar nicht füllen will, hatte bisher keine Wahl: Der Kasten blieb
+   * stehen, und die Abnahme meldete ihn als `platz-leer`, Seite für Seite.
+   *
+   * **Ein Bild schlägt den Eintrag.** Bekommt der Platz doch eine Zuordnung —
+   * über den Fotopool, ein eingespieltes Layout-Dokument, ein Zurücknehmen —,
+   * wird er wieder gezeichnet, statt das Bild zu verschlucken. Der Eintrag ist
+   * eine Aussage über *diesen* leeren Platz, keine über die Vorlage.
+   *
+   * Der Neuaufbau verwirft ihn wie jede andere Handarbeit an der Anordnung;
+   * `handwork().plaetze` sagt vorher, wie viele es sind.
+   */
+  hiddenSlots?: string[];
 }
 
 /**
@@ -288,16 +305,27 @@ export interface Spread {
  * `layer` schlägt das ohnehin (`slotReihenfolge`), aber ohne Angabe liegt ein
  * eingeworfenes Bild damit obenauf – und das ist die richtige Vorgabe: Man hat
  * es gerade hingelegt.
+ *
+ * **Weggenommene Plätze fallen hier heraus** (`Spread.hiddenSlots`), und zwar
+ * nur, solange sie leer sind: Ein Bild schlägt den Eintrag, sonst verschluckte
+ * ein alter Vermerk ein neu eingesetztes Foto. Weil die Plätze hier
+ * verschwinden, entfällt alles Weitere von selbst – kein leerer Kasten im RSM,
+ * kein Ziel für einen Zug, kein `platz-leer` im Abnahmebericht.
  */
 export function wirksamePlaetze(
   template: { slots: readonly TemplateSlot[] },
-  spread: Pick<Spread, 'slots'>,
+  spread: Pick<Spread, 'slots' | 'hiddenSlots'>,
 ): readonly TemplateSlot[] {
   const bekannt = new Set(template.slots.map((s) => s.id));
   const frei = spread.slots.flatMap((s): TemplateSlot[] =>
     s.rect && !bekannt.has(s.slotId) ? [{ id: s.slotId, ...s.rect, prominence: 2 }] : [],
   );
-  return frei.length === 0 ? template.slots : [...template.slots, ...frei];
+  const alle = frei.length === 0 ? template.slots : [...template.slots, ...frei];
+
+  if (!spread.hiddenSlots?.length) return alle;
+  const belegt = new Set(spread.slots.filter((s) => s.photoId !== null).map((s) => s.slotId));
+  const weg = new Set(spread.hiddenSlots.filter((id) => !belegt.has(id)));
+  return weg.size === 0 ? alle : alle.filter((s) => !weg.has(s.id));
 }
 
 /**

@@ -418,6 +418,20 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
     };
   },
 
+  'PATCH /api/spreads/:index/slots/:slotId/hidden': ({ project }) => {
+    // Ein leerer Platz, denn nur die lassen sich wegnehmen. Findet sich keiner,
+    // wird einer gemacht: Das Bild aus dem ersten Slot herauszunehmen ist hier
+    // Vorbereitung und nicht der geprüfte Zug.
+    const { index, slotId } = ersterSlot(project);
+    const spread = project.spreads[index]!;
+    spread.slots = spread.slots.filter((s) => s.slotId !== slotId);
+    return {
+      method: 'PATCH',
+      url: `/api/spreads/${index}/slots/${slotId}/hidden`,
+      payload: { hidden: true },
+    };
+  },
+
   'PATCH /api/spreads/:index/slots/:slotId/layer': ({ project }) => {
     const { index, slotId } = ersterSlot(project);
     return {

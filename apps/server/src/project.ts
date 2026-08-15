@@ -827,6 +827,14 @@ export class Project {
      * keine geratene.
      */
     textplaetze: number;
+    /**
+     * Weggenommene Plätze (`Spread.hiddenSlots`).
+     *
+     * Der Neuaufbau holt sie zurück: Die Plätze kommen aus der Vorlage, und die
+     * wählt er neu. Gezählt wird der Platz und nicht die Doppelseite — wer drei
+     * Löcher auf einer Seite geschlossen hat, verliert drei Entscheidungen.
+     */
+    plaetze: number;
     /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
     festgehalten: number;
   } {
@@ -840,6 +848,7 @@ export class Project {
     let ebenen = 0;
     let texte = 0;
     let textplaetze = 0;
+    let plaetze = 0;
     let festgehalten = 0;
     for (const spread of this.spreads) {
       if (spread.locked) {
@@ -868,6 +877,7 @@ export class Project {
       if (!isJustified(spread.templateId))
         positionen += spread.slots.filter((sl) => sl.rect !== undefined).length;
       ebenen += spread.slots.filter((sl) => sl.layer !== undefined).length;
+      plaetze += spread.hiddenSlots?.length ?? 0;
       if (spread.background !== undefined || spread.backgroundPhotoId !== undefined)
         hintergruende++;
       if (spread.timeline !== undefined) zeitstrahl++;
@@ -883,6 +893,7 @@ export class Project {
       ebenen,
       texte,
       textplaetze,
+      plaetze,
       festgehalten,
     };
   }
@@ -1420,6 +1431,15 @@ export class Project {
 
   setSpreadLocked(index: number, locked: boolean): { ok: boolean; error?: string } {
     return seiten.setSpreadLocked(this, index, locked);
+  }
+
+  /** Nimmt einen leeren Platz von der Doppelseite oder holt ihn zurück. */
+  setSlotHidden(index: number, slotId: string, hidden: boolean): { ok: boolean; error?: string } {
+    const ergebnis = seiten.setSlotHidden(this, index, slotId, hidden);
+    // Ein Platz weniger ist ein Platz weniger: Die Kennzahlen zählen freie
+    // Plätze mit.
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
   insertChoices() {
