@@ -43,6 +43,29 @@ export interface SpreadAussen {
   guides: GuideVisibility;
   onGuides: (g: GuideVisibility) => void;
 
+  /**
+   * Ob Aufnahmezeit und Ort über den Bildern stehen (`i`).
+   *
+   * Steht hier und nicht im Editor, obwohl nur die Bühne ihn zeichnet: Beim
+   * Blättern setzt `App.tsx` die Doppelseite kurz auf `null`, der Editor hängt
+   * dabei aus, und ein Schalter in seinem Zustand fiele mit ihm weg. Wer achtzig
+   * Seiten mit eingeblendeten Daten durchsieht, hätte ihn achtzigmal neu
+   * eingeschaltet — dieselbe Überlegung wie bei den Hilfslinien darüber.
+   */
+  infosSichtbar: boolean;
+  onInfosSichtbar: (sichtbar: boolean) => void;
+
+  /**
+   * Ob der Fotopool aufgeklappt ist — aus demselben Grund von außen.
+   *
+   * Der Pool gehört dem Bestand und nicht dieser Doppelseite: Wer Bilder
+   * verteilt, blättert mit offenem Pool. Der Rahmen entscheidet weiter, *wie* er
+   * dasteht (Spalte im Fuß, Blatt über der Seite) — die Werkbank zeigt ihn ohne
+   * Schalter und lässt ihn deshalb unbeachtet.
+   */
+  poolOffen: boolean;
+  onPoolOffen: (offen: boolean) => void;
+
   onIndex: (index: number) => void;
   onLocked: (locked: boolean) => void;
   onZeitstrahl: (wert: boolean | null) => void;
