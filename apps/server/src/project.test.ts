@@ -417,6 +417,18 @@ describe('setSpreadTemplate', () => {
     expect(platz.w / platz.h).toBeLessThan(1);
   });
 
+  it('nennt die Fassung der gedrehten Fotos und sonst keine', () => {
+    // Woraus die Oberfläche ihre Bildadressen stempelt: Ohne die Fassung darin
+    // zeigte der Browser hinter `Cache-Control: immutable` ein Jahr lang die
+    // ungedrehten Pixel. Nur die gedrehten stehen darin — eine Karte über den
+    // ganzen Bestand wäre eine Liste von Nullen in jeder Projektauskunft.
+    const p = projektMitDrei();
+    p.overrides['p1'] = { orientationTurns: 3 };
+    p.overrides['p2'] = { dateOverride: '2015-06-12T14:12:33' };
+
+    expect(p.bildFassungen()).toEqual({ p1: 3 });
+  });
+
   it('lehnt „auto" an einer festgehaltenen Doppelseite ab', () => {
     // `locked` heißt: Die Automatik lässt die Finger davon. `generateBook`
     // übernimmt die Seite unverändert und `movePhotos` rührt sie nicht an — ein

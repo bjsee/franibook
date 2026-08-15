@@ -13,6 +13,7 @@
 import { dragBild } from '@franibook/render-dom';
 import { B, T } from '../theme.js';
 import { POOL_SICHTBAR, type SpreadEditorModel } from './useSpreadEditor.js';
+import { useBildSrc } from '../bildadresse.js';
 
 export function Fotopool({
   model,
@@ -22,6 +23,7 @@ export function Fotopool({
   /** Höhe des Gitters; darüber hinaus wird gescrollt. */
   hoehe?: number;
 }) {
+  const bildSrc = useBildSrc();
   const { pool, selectedSlotId } = model;
 
   if (pool === null) return <span style={B.leiser}>lade …</span>;
@@ -57,7 +59,7 @@ export function Fotopool({
             style={S.bild}
           >
             <img
-              src={`/api/photos/${p.id}/preview?size=thumb`}
+              src={bildSrc(p.id, 'thumb')}
               alt=""
               loading="lazy"
               draggable={false}

@@ -30,6 +30,7 @@ import { DATUMSQUELLE } from './spread/SpreadStage.js';
 import { B, T } from './theme.js';
 import type { Bestandsfilter } from './api.js';
 import { type Filter, useFotodaten } from './useFotodaten.js';
+import { useBildSrc } from './bildadresse.js';
 
 /** Eine Bedingung setzen – oder sie fallen lassen, wenn das Feld leer ist. */
 function ohneLeere<K extends 'von' | 'bis' | 'ort' | 'quelle'>(
@@ -60,17 +61,13 @@ const FILTER: { id: Filter; label: string; titel: string }[] = [
 
 export function Fotodaten({
   onChanged,
-  onBildGeaendert,
-  bildVersion,
   standVersion,
 }: {
   onChanged: () => void;
-  onBildGeaendert: () => void;
-  /** Hängt an den Miniaturen, damit eine gekippte Ausrichtung sichtbar wird. */
-  bildVersion: number;
   standVersion?: number;
 }) {
-  const m = useFotodaten({ onChanged, onBildGeaendert, standVersion });
+  const m = useFotodaten({ onChanged, standVersion });
+  const bildSrc = useBildSrc();
 
   // Die Eingaben der drei Werkzeuge. Lokal und nicht im Haken: Sie sind
   // Formularzustand dieser Ansicht und bedeuten nichts, bis man anwendet.
@@ -271,11 +268,7 @@ export function Fotodaten({
                 title="Umschalt-Klick wählt bis hierher"
                 style={{ ...S.zeile, ...(platz >= 0 ? S.zeileAn : {}) }}
               >
-                <img
-                  src={`/api/photos/${f.id}/preview?size=thumb${bildVersion > 0 ? `&v=${bildVersion}` : ''}`}
-                  alt=""
-                  style={S.thumb}
-                />
+                <img src={bildSrc(f.id, 'thumb')} alt="" style={S.thumb} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={B.dateiname}>{f.fileName}</div>
                   <div style={S.meta}>

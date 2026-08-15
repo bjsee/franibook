@@ -30,7 +30,8 @@ import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
 import { SpreadStage, zeitpunkt } from './SpreadStage.js';
-import { miniaturSrc, useNachbarn } from './useNachbarn.js';
+import { useNachbarn } from './useNachbarn.js';
+import { useMiniaturSrc } from '../bildadresse.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import type { SpreadAussen } from './types.js';
 
@@ -180,6 +181,7 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
  */
 function Filmstreifen({ model, aussen }: { model: SpreadEditorModel; aussen: SpreadAussen }) {
   const { nachbarn, geladen } = useNachbarn(aussen.index, aussen.spreadCount, 3, model.buchVersion);
+  const miniaturSrc = useMiniaturSrc();
 
   return (
     <div style={S.film}>

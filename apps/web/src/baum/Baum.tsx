@@ -38,17 +38,16 @@ import {
   zugeklappteMerken,
 } from './merken.js';
 import { type Herkunft, useBaum } from './useBaum.js';
+import { useBildSrc } from '../bildadresse.js';
 
 interface Props {
-  /** Fassung der Vorschauen, damit eine gedrehte Datei sichtbar wird. */
-  bildVersion: number;
   standVersion: number;
   /** Das Buch hat sich geändert – Kennzahlen und gerenderte Seiten gelten nicht weiter. */
   onChanged: () => void;
   onNavigieren: (ziel: Route) => void;
 }
 
-export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Props) {
+export function Baum({ standVersion, onChanged, onNavigieren }: Props) {
   const model = useBaum(standVersion, onChanged);
   const [px, setPx] = useState(bildgroesseLesen);
   const [zu, setZu] = useState<Set<number>>(zugeklappteLesen);
@@ -214,7 +213,6 @@ export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Pro
                       model={model}
                       px={px}
                       bilderAn={bilderAn}
-                      bildVersion={bildVersion}
                       onNavigieren={onNavigieren}
                     />
                   ))}
@@ -224,13 +222,7 @@ export function Baum({ bildVersion, standVersion, onChanged, onNavigieren }: Pro
         )}
       </div>
 
-      <Poolspalte
-        pool={model.pool}
-        model={model}
-        px={px}
-        bilderAn={bilderAn}
-        bildVersion={bildVersion}
-      />
+      <Poolspalte pool={model.pool} model={model} px={px} bilderAn={bilderAn} />
     </div>
   );
 }
@@ -254,14 +246,12 @@ function Seitenzeile({
   model,
   px,
   bilderAn,
-  bildVersion,
   onNavigieren,
 }: {
   seite: BaumSeite;
   model: ReturnType<typeof useBaum>;
   px: number;
   bilderAn: boolean;
-  bildVersion: number;
   onNavigieren: (ziel: Route) => void;
 }) {
   const [ueber, setUeber] = useState(false);
@@ -362,14 +352,7 @@ function Seitenzeile({
       {bilderAn && (
         <div style={S.band}>
           {seite.bilder.map((b) => (
-            <Bildchen
-              key={b.photoId}
-              photoId={b.photoId}
-              von={ziel}
-              model={model}
-              px={px}
-              bildVersion={bildVersion}
-            />
+            <Bildchen key={b.photoId} photoId={b.photoId} von={ziel} model={model} px={px} />
           ))}
           {seite.leer && <span style={B.leiser}>keine Bilder</span>}
         </div>
@@ -384,13 +367,11 @@ function Poolspalte({
   model,
   px,
   bilderAn,
-  bildVersion,
 }: {
   pool: PoolFoto[];
   model: ReturnType<typeof useBaum>;
   px: number;
   bilderAn: boolean;
-  bildVersion: number;
 }) {
   const [ueber, setUeber] = useState(false);
   // Dieselbe Sperre wie bei den Seiten: kein zweites Fallenlassen, solange das
@@ -439,7 +420,6 @@ function Poolspalte({
               von={{ kind: 'pool' }}
               model={model}
               px={Math.min(px, 96)}
-              bildVersion={bildVersion}
             />
           ))}
         </div>
@@ -464,17 +444,15 @@ function Bildchen({
   von,
   model,
   px,
-  bildVersion,
 }: {
   photoId: string;
   von: Herkunft;
   model: ReturnType<typeof useBaum>;
   px: number;
-  bildVersion: number;
 }) {
   const gewaehlt = model.selected.has(photoId);
   const info = model.infos.get(photoId);
-  const fassung = bildVersion > 0 ? `&v=${bildVersion}` : '';
+  const bildSrc = useBildSrc();
 
   return (
     <button
@@ -498,7 +476,7 @@ function Bildchen({
       style={{ ...S.bild, width: px, height: px, ...(gewaehlt ? S.bildGewaehlt : {}) }}
     >
       <img
-        src={`/api/photos/${photoId}/preview?size=thumb${fassung}`}
+        src={bildSrc(photoId, 'thumb')}
         alt=""
         loading="lazy"
         // Ohne das zieht Chrome das Bild selbst – als Datei, an der Anwendung

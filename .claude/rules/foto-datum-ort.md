@@ -61,9 +61,10 @@ Scan die falsche Vorlage. **Nicht** als geänderte `orientation`: Die
 Bildaufbereitung liest daraus nur _ob_, und `.rotate()` nimmt die Orientierung aus
 der Datei. Sie steht deshalb als `Photo.quarterTurns`, das nur `effectivePhoto`
 setzt; Vorschau und PDF drehen zusätzlich (eine sharp-Kette genügt, gemessen). Der
-Vorschau-Cache trägt die Fassung im Namen, und die Oberfläche hängt eine
-**Bildversion** als `?v=` an jede Vorschau-Adresse — ohne das bliebe das gedrehte
-Bild hinter `immutable` unsichtbar.
+Vorschau-Cache trägt die Fassung im Namen, und **die Adresse trägt sie ebenfalls**
+(`?q=1`, aus `ProjectInfo.bildFassungen` über `apps/web/src/bildadresse.tsx`) —
+ohne das bliebe das gedrehte Bild hinter `immutable` unsichtbar, und zwar dauerhaft:
+Ein Sitzungszähler an derselben Stelle war beim nächsten Laden wieder 0.
 
 **Der Ausschnitt dreht mit** (`rotateCrop`, angewandt in `dreheAusschnitte`) – er
 steht in Bildkoordinaten und zeigte sonst nach der Drehung auf eine andere Stelle,

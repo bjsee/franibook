@@ -34,6 +34,7 @@ import {
   quelleUmbenennen,
 } from './api.js';
 import { B, T } from './theme.js';
+import { useBildSrc } from './bildadresse.js';
 
 interface PhotoSourcesProps {
   /** Nach jeder Änderung am Bestand: Projektinfo und Vorschau neu laden. */
@@ -43,6 +44,7 @@ interface PhotoSourcesProps {
 }
 
 export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
+  const bildSrc = useBildSrc();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [aussortiert, setAussortiert] = useState<AussortiertesFoto[]>([]);
   const [pfad, setPfad] = useState('');
@@ -267,12 +269,7 @@ export function PhotoSources({ onChanged, standVersion }: PhotoSourcesProps) {
             <div style={S.gitter}>
               {aussortiert.map((a) => (
                 <div key={a.photo.id} style={S.kachel}>
-                  <img
-                    src={`/api/photos/${a.photo.id}/preview?size=thumb`}
-                    alt=""
-                    style={S.bild}
-                    loading="lazy"
-                  />
+                  <img src={bildSrc(a.photo.id, 'thumb')} alt="" style={S.bild} loading="lazy" />
                   <div style={{ minWidth: 0 }}>
                     <p style={S.dateiname} title={a.photo.relPath}>
                       {a.photo.fileName}
