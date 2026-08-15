@@ -65,10 +65,36 @@ export function quellenRouten(app: FastifyInstance, { project, sources }: Kontex
     return { ...ergebnis, photoCount: project.photos.size };
   });
 
-  /** Anzeigename einer Quelle. */
-  app.patch<{ Params: { id: string }; Body?: { label?: string } }>(
+  /**
+   * Anzeigename oder Ordner einer Quelle.
+   *
+   * `root` ist der Weg zurück, wenn ein Ordner umgezogen oder umbenannt wurde
+   * und mit ihm jede Bilddatei verschwunden ist: Die Quelle zeigt danach
+   * woanders hin, behält aber ihre Kennung — und damit bleibt jedes Foto bei
+   * seiner Quelle, samt Korrekturen, Gruppen und Platz im Buch. Über Entfernen
+   * und Neuanlegen ginge genau das verloren.
+   *
+   * Eingelesen wird dabei nicht. Ob die Dateien nun wieder da sind, beantwortet
+   * `GET /api/photos/fehlend` in einem Bruchteil der Zeit; ein Reimport ist die
+   * Antwort auf „es sind welche dazugekommen", nicht auf „der Ordner heißt
+   * jetzt anders".
+   */
+  app.patch<{ Params: { id: string }; Body?: { label?: string; root?: string } }>(
     '/api/sources/:id',
     async (req, reply) => {
+      const root = req.body?.root?.trim();
+      if (root) {
+        try {
+          const umgezogen = await sources.reroot(req.params.id, root);
+          if (!umgezogen) return reply.code(404).send({ error: 'Quelle nicht gefunden' });
+          if (req.body?.label !== undefined) sources.rename(req.params.id, req.body.label);
+          await project.save();
+          return { source: umgezogen };
+        } catch (err) {
+          return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+
       const quelle = sources.rename(req.params.id, req.body?.label ?? '');
       if (!quelle) return reply.code(404).send({ error: 'Quelle nicht gefunden' });
       await project.save();

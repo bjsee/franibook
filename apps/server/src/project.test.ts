@@ -22,6 +22,13 @@ import { quellenId, Sources } from './sources.js';
  *
  * Als Literal statt aus einer Fixture: Der Punkt der Migration ist, dass genau
  * diese Felder überleben – Korrekturen, Gruppen und das nachgearbeitete Buch.
+ *
+ * Die eingefrorenen Dateien in `fixtures/` prüfen die andere Hälfte und sind
+ * deshalb kein Ersatz, sondern die Ergänzung: Dieses Literal ist an den
+ * *heutigen* Typ gebunden und wandert mit ihm mit (`as never` wischt weg, was
+ * nicht mehr passt). Eine Datei tut das nicht — sie ist die Form von damals,
+ * mit allen Feldern, die ein echtes Projekt trug, und genau daran muss eine
+ * Migration sich bewähren.
  */
 function altesProjekt(): Parameters<typeof migriere>[0] {
   return {
@@ -125,6 +132,122 @@ describe('migriere', () => {
   });
 });
 
+/**
+ * Die Migration gegen eingefrorene Projektdateien.
+ *
+ * Geprüft wird hier der ganze Ladeweg und nicht `migriere` allein: Ein
+ * gespeichertes Projekt kommt über `readFile`, `JSON.parse`,
+ * `istBrauchbareStruktur` und die Migrationskette bis in die Felder der Klasse,
+ * und jede dieser Stufen kann ein altes Format ablehnen. Die Dateien liegen
+ * unverändert unter `fixtures/` — wer sie anpasst, damit ein Test wieder grün
+ * wird, hat den Test abgeschafft: Ein Projekt von 2026 ändert sich nicht mehr.
+ */
+describe('Migration eingefrorener Projektdateien', () => {
+  async function geladen(fixture: string): Promise<{ project: Project; dir: string }> {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-migration-'));
+    const inhalt = await readFile(join(import.meta.dirname, 'fixtures', fixture), 'utf8');
+    await writeFile(join(dir, 'project.json'), inhalt);
+
+    const project = new Project(new Sources(), null as never, null as never, dir);
+    expect(await project.load()).toBe(true);
+    return { project, dir };
+  }
+
+  it('hebt ein Projekt aus Schema 1 auf den heutigen Stand', async () => {
+    const { project } = await geladen('projekt-schema1.json');
+
+    expect(project.photos.size).toBe(3);
+    // 1 → 2: aus dem einen Ordner wird eine Liste, jedes Foto bekommt sie.
+    expect(project.sources.list()).toHaveLength(1);
+    const quelle = project.sources.list()[0]!.id;
+    expect([...project.photos.values()].every((p) => p.sourceId === quelle)).toBe(true);
+  });
+
+  it('rettet dabei Korrekturen, Gruppen und die Handarbeit am Buch', async () => {
+    const { project } = await geladen('projekt-schema1.json');
+
+    // Der Grund, aus dem migriert und nicht neu importiert wird: Ein Neuimport
+    // stellt nichts davon wieder her.
+    expect(project.overrides['b204ff31']?.dateOverride).toBe('2019-12-24T18:30:00');
+    expect(project.overrides['b204ff31']?.placeOverride?.label).toBe('Bei Oma');
+    expect(project.groups.map((g) => g.title)).toEqual(['Ostern 2019']);
+    expect(project.spreads).toHaveLength(2);
+    expect(project.spreads[1]?.slots[0]?.crop).toEqual({
+      x: 0.1,
+      y: 0,
+      w: 0.8,
+      h: 1,
+      mode: 'manual',
+    });
+  });
+
+  it('nimmt die Überschrift aus dem Fluss und lässt sie dem Auftakt', async () => {
+    const { project } = await geladen('projekt-schema1.json');
+
+    // 2 → 3. Am Literal oben steht dieselbe Prüfung; hier steht sie gegen ein
+    // Buch, das nie jemand für einen Test zurechtgelegt hat.
+    expect(project.spreads[0]?.texts).toHaveLength(1);
+    expect(project.spreads[1]?.texts).toBeUndefined();
+  });
+
+  it('füllt Einstellungen auf, die es damals noch nicht gab', async () => {
+    const { project } = await geladen('projekt-schema1.json');
+
+    // Gespeichert war `targetPages` und `seed`, nicht aber Seitenzahlen,
+    // Zeitstrahlfassung oder Buchformat. Ein fehlendes Feld darf kein
+    // `undefined` in den Einstellungen werden — daran stirbt der Renderer.
+    expect(project.settings.targetPages).toBe(160);
+    expect(project.settings.seed).toBe(1);
+    expect(project.settings.birthDate).toBe('2008-03-14');
+    expect(project.settings.printProfileId).toBeTruthy();
+    expect(project.settings.timelineStyle).toBeTruthy();
+    expect(typeof project.settings.pageNumbers).toBe('boolean');
+  });
+
+  it('hebt ein Projekt aus Schema 2 und behält seine zweite Quelle', async () => {
+    const { project } = await geladen('projekt-schema2.json');
+
+    expect(project.sources.list().map((q) => q.label)).toEqual(['buch', 'nachzuegler']);
+    expect(project.yearEvents['2019']).toEqual(['Einschulung', 'Erstes Fahrrad']);
+    expect(project.cover.title).toBe('Franziska');
+    // Eine festgehaltene Seite bleibt festgehalten — sonst überschriebe der
+    // nächste Neuaufbau, was jemand von Hand gebaut hat.
+    expect(project.spreads[0]?.locked).toBe(true);
+    expect(project.spreads[0]?.background).toBe('#e8f0f4');
+  });
+
+  it('legt vor der Migration eine Sicherung an', async () => {
+    const { dir } = await geladen('projekt-schema1.json');
+
+    // Eine Migration ist der eine Schreibvorgang, den niemand ausgelöst hat.
+    // Ist sie fehlerhaft, gibt es ohne diese Kopie nichts mehr, woraus sich der
+    // alte Stand herleiten ließe.
+    const dateien = await readdir(dir);
+    const sicherung = dateien.find((n) => n.startsWith('project.json.schema1-'));
+    expect(sicherung).toBeDefined();
+
+    // Und sie ist die Datei von vorher, nicht das Ergebnis.
+    const kopie: unknown = JSON.parse(await readFile(join(dir, sicherung!), 'utf8'));
+    expect((kopie as { schemaVersion: number }).schemaVersion).toBe(1);
+  });
+
+  it('sichert nicht, wenn nichts zu migrieren ist', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-migration-'));
+    const roh = await readFile(
+      join(import.meta.dirname, 'fixtures', 'projekt-schema2.json'),
+      'utf8',
+    );
+    const daten = JSON.parse(roh) as { schemaVersion: number };
+    await writeFile(join(dir, 'project.json'), JSON.stringify({ ...daten, schemaVersion: 3 }));
+
+    const project = new Project(new Sources(), null as never, null as never, dir);
+    expect(await project.load()).toBe(true);
+
+    // Sonst legte jeder Serverstart eine weitere Kopie ab.
+    expect((await readdir(dir)).filter((n) => n !== 'project.json')).toEqual([]);
+  });
+});
+
 describe('load() mit einer beschädigten project.json', () => {
   /**
    * `JSON.parse` liefert `unknown`, keine geprüfte Struktur — eine von Hand
@@ -141,6 +264,45 @@ describe('load() mit einer beschädigten project.json', () => {
 
     const dateien = await readdir(dir);
     expect(dateien.some((n) => n.startsWith('project.json.unlesbar-'))).toBe(true);
+  });
+
+  /**
+   * Die abgeschnittene Datei — das Ergebnis eines Absturzes auf einem
+   * Dateisystem ohne atomares `rename`, eines Sync-Konflikts oder eines Griffs
+   * von Hand.
+   *
+   * Sie fiel bis hierher in dasselbe stille `return false` wie eine fehlende
+   * Datei: Der Server importierte neu, und der nächste `save()` schrieb über
+   * die Reste. Wer den Rest von Hand hätte retten können, erfuhr nie, dass es
+   * einen gab.
+   */
+  it('legt auch eine abgeschnittene Datei beiseite, statt sie zu überschreiben', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-project-'));
+    const ganz = await readFile(
+      join(import.meta.dirname, 'fixtures', 'projekt-schema2.json'),
+      'utf8',
+    );
+    await writeFile(join(dir, 'project.json'), ganz.slice(0, Math.floor(ganz.length / 2)));
+
+    const project = new Project(new Sources(), null as never, null as never, dir);
+    expect(await project.load()).toBe(false);
+
+    const dateien = await readdir(dir);
+    expect(dateien.some((n) => n.startsWith('project.json.unlesbar-'))).toBe(true);
+    // Und die Reste sind noch vollständig da, nicht gekürzt oder überschrieben.
+    const beiseite = dateien.find((n) => n.startsWith('project.json.unlesbar-'))!;
+    expect(await readFile(join(dir, beiseite), 'utf8')).toBe(
+      ganz.slice(0, Math.floor(ganz.length / 2)),
+    );
+  });
+
+  it('schweigt, wenn es schlicht noch kein Projekt gibt', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'franibook-project-'));
+    const project = new Project(new Sources(), null as never, null as never, dir);
+
+    expect(await project.load()).toBe(false);
+    // Der erste Start ist kein Schadensfall: nichts gemeldet, nichts angelegt.
+    expect(await readdir(dir)).toEqual([]);
   });
 });
 

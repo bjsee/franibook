@@ -201,6 +201,30 @@ export function fotoRouten(
   app.get('/api/photos/places', async () => ({ places: project.orte() }));
 
   /**
+   * Fotos, deren Bilddatei nicht mehr auffindbar ist.
+   *
+   * Am Bildschirm fällt das nicht auf — die Vorschau liegt im Cache und zeigt
+   * weiter, was längst nicht mehr da ist. Deshalb gibt es diese Frage
+   * ausdrücklich, und sie ist billiger als ihre Alternative: Ein Reimport
+   * beantwortet sie nebenbei, liest dafür aber Hashes, EXIF und Pixelmaße.
+   *
+   * Die Fotos kommen als volle Ansichten wie in `/api/photos` — dieselbe Liste,
+   * dieselbe Darstellung, nur eine andere Bedingung. `offline` steht daneben:
+   * Ein abgehängtes Netzlaufwerk ist kein Datenverlust und wird deshalb weder
+   * geprüft noch als Fund gemeldet.
+   */
+  app.get('/api/photos/fehlend', async () => {
+    const bericht = await project.fehlendeDateien();
+    const fehlend = new Set(bericht.fehlend);
+    return {
+      count: bericht.fehlend.length,
+      geprueft: bericht.geprueft,
+      offline: bericht.offline,
+      photos: project.fotosFiltern({}).filter((p) => fehlend.has(p.id)),
+    };
+  });
+
+  /**
    * Doppel: mehrere Aufnahmen desselben Augenblicks, mit einem Vorschlag,
    * welche davon zu behalten wäre.
    *

@@ -147,6 +147,44 @@ export class Sources implements PathResolver {
     return this.quellen.splice(i, 1)[0];
   }
 
+  /**
+   * Zeigt eine Quelle auf einen anderen Ordner.
+   *
+   * Der Fall dahinter ist der teuerste, den dieses Projekt kennt: Ein Ordner
+   * wird umbenannt oder umgezogen, und mit einem Schlag ist keine einzige
+   * Bilddatei mehr auffindbar. Über `remove` und `add` ginge das nicht — die
+   * neue Quelle bekäme eine neue Kennung, und jedes Foto zeigte weiter auf eine
+   * Quelle, die es nicht mehr gibt. Erst ein voller Reimport fände sie wieder,
+   * und der ist kein Weg für „der Ordner heißt jetzt anders".
+   *
+   * **Die Kennung bleibt deshalb, was sie ist.** Sie leitet sich beim Anlegen
+   * aus dem Pfad ab, aber sie ist eine Identität und kein abgeleiteter Wert:
+   * `photo.sourceId` zeigt darauf, und diese Zuordnung soll ein Umzug nicht
+   * antasten.
+   *
+   * @throws wenn der neue Pfad kein lesbares Verzeichnis ist oder sich mit
+   * einer anderen Quelle überschneidet.
+   */
+  async reroot(id: string, root: string): Promise<PhotoSource | undefined> {
+    const quelle = this.get(id);
+    if (!quelle) return undefined;
+
+    const abs = resolve(root);
+    if (abs === quelle.root) return quelle;
+
+    const st = await stat(abs).catch(() => undefined);
+    if (!st) throw new Error(`Ordner nicht gefunden: ${abs}`);
+    if (!st.isDirectory()) throw new Error(`Kein Ordner: ${abs}`);
+
+    const kollision = this.quellen.find((q) => q.id !== id && verschachtelt(q.root, abs));
+    if (kollision) {
+      throw new Error(`Überschneidet sich mit der Quelle „${kollision.label}" (${kollision.root})`);
+    }
+
+    quelle.root = abs;
+    return quelle;
+  }
+
   rename(id: string, label: string): PhotoSource | undefined {
     const quelle = this.get(id);
     if (!quelle) return undefined;

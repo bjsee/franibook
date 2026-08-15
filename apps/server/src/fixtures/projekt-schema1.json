@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "sourceRoot": "/Users/see/nas/dokumente/Franziska/buch",
+  "settings": {
+    "targetPages": 160,
+    "chapterOpeners": true,
+    "groupOpeners": "auto",
+    "groupOpenerMinPhotos": 6,
+    "timeline": true,
+    "background": "#faf7f2",
+    "chapterColors": true,
+    "tilt": 1.2,
+    "seed": 1,
+    "birthDate": "2008-03-14"
+  },
+  "photos": [
+    {
+      "id": "3f9a1c2b",
+      "relPath": "2019/IMG_0421.jpeg",
+      "fileName": "IMG_0421.jpeg",
+      "bytes": 2841233,
+      "width": 2048,
+      "height": 1536,
+      "orientation": 1,
+      "takenAt": "2019-04-21T11:04:12",
+      "takenAtSource": "exif"
+    },
+    {
+      "id": "7d1e5a08",
+      "relPath": "2019/IMG_0422.jpeg",
+      "fileName": "IMG_0422.jpeg",
+      "bytes": 3120044,
+      "width": 1536,
+      "height": 2048,
+      "orientation": 6,
+      "takenAt": "2019-04-21T11:06:38",
+      "takenAtSource": "exif"
+    },
+    {
+      "id": "b204ff31",
+      "relPath": "2019/scan-oma.jpeg",
+      "fileName": "scan-oma.jpeg",
+      "bytes": 812004,
+      "width": 1200,
+      "height": 1600,
+      "orientation": 1
+    }
+  ],
+  "overrides": {
+    "b204ff31": {
+      "dateOverride": "2019-12-24T18:30:00",
+      "placeOverride": { "key": "bei-oma", "label": "Bei Oma" }
+    }
+  },
+  "groups": [
+    {
+      "id": "g-ostern-2019",
+      "title": "Ostern 2019",
+      "photoIds": ["3f9a1c2b", "7d1e5a08"],
+      "active": true,
+      "coverPhotoId": "3f9a1c2b"
+    }
+  ],
+  "book": {
+    "spreads": [
+      {
+        "id": "spread-0",
+        "index": 0,
+        "templateId": "spread.group.opener",
+        "slots": [
+          {
+            "slotId": "a",
+            "photoId": "3f9a1c2b",
+            "crop": { "x": 0, "y": 0, "w": 1, "h": 1, "mode": "auto-cover" }
+          }
+        ],
+        "texts": [
+          {
+            "id": "spread-0-title",
+            "role": "eventTitle",
+            "content": "Ostern 2019",
+            "slotId": "t-title"
+          }
+        ]
+      },
+      {
+        "id": "spread-1",
+        "index": 1,
+        "templateId": "spread.4up.grid",
+        "slots": [
+          {
+            "slotId": "a",
+            "photoId": "7d1e5a08",
+            "crop": { "x": 0.1, "y": 0, "w": 0.8, "h": 1, "mode": "manual" }
+          },
+          {
+            "slotId": "b",
+            "photoId": "b204ff31",
+            "crop": { "x": 0, "y": 0, "w": 1, "h": 1, "mode": "auto-cover" }
+          }
+        ],
+        "texts": [
+          {
+            "id": "spread-1-title",
+            "role": "eventTitle",
+            "content": "April",
+            "slotId": "t-title"
+          }
+        ]
+      }
+    ]
+  },
+  "importedAt": "2026-08-02T09:14:55.412Z"
+}
