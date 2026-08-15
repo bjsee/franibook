@@ -219,6 +219,12 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     // vor" ist ein Griff und soll ein Cmd+Z sein.
     schluessel: amSlot('ebene'),
   },
+  // Ohne Schlüssel: Einen Platz wegzunehmen ist eine Entscheidung je Platz, und
+  // zwei davon sollen zwei Cmd+Z sein.
+  'PATCH /api/spreads/:index/slots/:slotId/hidden': {
+    label: 'Platz weggenommen',
+    spreadIndex: ausIndex,
+  },
   'PATCH /api/spreads/:index/textslots/:slotId': {
     label: 'Vorlagentext geändert',
     spreadIndex: ausIndex,

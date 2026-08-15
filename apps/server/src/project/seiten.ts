@@ -246,6 +246,69 @@ export function removeSpread(
 }
 
 /**
+ * Nimmt einen leeren Platz von der Doppelseite — oder holt ihn zurück.
+ *
+ * Ein Platz ohne Bild zeichnet einen leeren Kasten. Auf einer Seite, die man so
+ * haben will, ist das zweimal störend: Der Kasten steht im Buch, und die Abnahme
+ * meldet ihn als `platz-leer`, bei jedem Aufruf wieder. Ein „weiß ich, ist ok"
+ * wäre die falsche Antwort — der Fund stimmt ja, man will den Platz nicht.
+ *
+ * **Ein belegter Platz wird nicht weggenommen.** Er trägt ein Bild; wer das
+ * loswerden will, nimmt erst das Bild heraus. Wortlaut statt stillem
+ * Misserfolg, wie überall hier.
+ *
+ * Ein **freier** Platz (eingeworfenes Bild, `SlotAssignment` mit `rect`) wird
+ * dagegen ganz aus der Liste genommen statt vermerkt: Er steht in keiner
+ * Vorlage, also gäbe es nach dem Vermerk niemanden mehr, der ihn zurückholen
+ * könnte — der Eintrag zeigte auf einen Platz, den nichts mehr beschreibt.
+ */
+export function setSlotHidden(
+  buch: Buch,
+  index: number,
+  slotId: string,
+  hidden: boolean,
+): { ok: boolean; error?: string } {
+  const spread = buch.spreads[index];
+  if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+  const template = templateById(spread.templateId);
+  const inVorlage = template?.slots.some((s) => s.id === slotId) ?? false;
+  const zuordnung = spread.slots.find((s) => s.slotId === slotId);
+  if (!inVorlage && !zuordnung) return { ok: false, error: 'Platz nicht gefunden' };
+
+  if (!hidden) {
+    const bisher = spread.hiddenSlots ?? [];
+    if (!bisher.includes(slotId)) {
+      return { ok: false, error: 'Dieser Platz ist nicht weggenommen' };
+    }
+    const uebrig = bisher.filter((id) => id !== slotId);
+    if (uebrig.length > 0) spread.hiddenSlots = uebrig;
+    else delete spread.hiddenSlots;
+    return { ok: true };
+  }
+
+  if (zuordnung?.photoId) {
+    return { ok: false, error: 'Der Platz trägt ein Bild — erst das Bild herausnehmen' };
+  }
+
+  if (!inVorlage) {
+    // Ein freier Platz ohne Bild: Er existiert nur als Eintrag, also fällt er
+    // mit ihm weg.
+    spread.slots = spread.slots.filter((s) => s.slotId !== slotId);
+    return { ok: true };
+  }
+
+  if (spread.hiddenSlots?.includes(slotId)) {
+    return { ok: false, error: 'Dieser Platz ist schon weggenommen' };
+  }
+  spread.hiddenSlots = [...(spread.hiddenSlots ?? []), slotId];
+  // Die leere Zuordnung mitnehmen: Sie beschreibt einen Platz, den es nicht
+  // mehr gibt, und stünde beim Zurückholen mit altem Ausschnitt wieder da.
+  spread.slots = spread.slots.filter((s) => s.slotId !== slotId);
+  return { ok: true };
+}
+
+/**
  * Hält eine Doppelseite fest oder gibt sie wieder frei.
  *
  * Beim Festhalten wird der Anker nachgezogen: Er soll auf den Nachbarn zeigen,
