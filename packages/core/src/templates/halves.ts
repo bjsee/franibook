@@ -50,7 +50,7 @@ function signature(slots: readonly TemplateSlot[]): string {
 }
 
 /** Spiegelt Slots an der Falzachse – aus einer linken Hälfte wird eine rechte. */
-function mirror(slots: readonly TemplateSlot[]): TemplateSlot[] {
+export function mirror(slots: readonly TemplateSlot[]): TemplateSlot[] {
   return slots.map((s) => ({ ...s, x: 1 - s.x - s.w }));
 }
 

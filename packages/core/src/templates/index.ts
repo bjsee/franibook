@@ -11,6 +11,7 @@ import type { Template, TemplateId, TemplateSlot } from '../model/template.js';
 import { mirrorTemplate } from '../model/template.js';
 import library from './library.json' with { type: 'json' };
 import { PAIR_PREFIX, pairTemplate } from './halves.js';
+import { CHAPTER_PAIR_PREFIX, chapterPairTemplate } from './chapter-halves.js';
 import { JUSTIFIED_PREFIX, justifiedTemplate } from './justified.js';
 
 interface RawSlot {
@@ -206,9 +207,20 @@ export function templateById(id: TemplateId): Template | undefined {
   const bekannt = BY_ID.get(id);
   if (bekannt) return bekannt;
 
-  if (!id.startsWith(PAIR_PREFIX) && !id.startsWith(JUSTIFIED_PREFIX)) return undefined;
+  if (
+    !id.startsWith(PAIR_PREFIX) &&
+    !id.startsWith(JUSTIFIED_PREFIX) &&
+    !id.startsWith(CHAPTER_PAIR_PREFIX)
+  ) {
+    return undefined;
+  }
   const zusammengesetzt =
-    PAIRS.get(id) ?? (id.startsWith(PAIR_PREFIX) ? pairTemplate(id) : justifiedTemplate(id));
+    PAIRS.get(id) ??
+    (id.startsWith(PAIR_PREFIX)
+      ? pairTemplate(id)
+      : id.startsWith(CHAPTER_PAIR_PREFIX)
+        ? chapterPairTemplate(id)
+        : justifiedTemplate(id));
   if (zusammengesetzt) PAIRS.set(id, zusammengesetzt);
   return zusammengesetzt;
 }
@@ -223,7 +235,14 @@ export function requireTemplate(id: TemplateId): Template {
 }
 
 export function templateMeta(id: TemplateId): TemplateMeta {
-  return META.get(id) ?? { chapterOnly: false, highResOnly: false };
+  const bekannt = META.get(id);
+  if (bekannt) return bekannt;
+  // Eine seitenweise angeordnete Jahresseite bleibt eine Jahresseite: Sonst
+  // bekäme sie nach dem ersten Griff Seitenzahlen (Auftakte bleiben ausgespart),
+  // stünde in der Vorlagenwahl des Flusses und nähme beim Verschieben Bilder an
+  // wie eine gewöhnliche Doppelseite (`chapter-halves.ts`).
+  if (id.startsWith(CHAPTER_PAIR_PREFIX)) return { chapterOnly: true, highResOnly: false };
+  return { chapterOnly: false, highResOnly: false };
 }
 
 /**
