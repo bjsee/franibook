@@ -35,7 +35,8 @@ export type View =
   | 'sources'
   | 'edit'
   | 'cover'
-  | 'pruefung';
+  | 'pruefung'
+  | 'neuanordnen';
 
 export type Route =
   | { view: 'overview' }
@@ -69,7 +70,16 @@ export type Route =
    * Unterpfad wie `/aufteilung/json`, damit ⌘-Klick den Bereich in einen zweiten
    * Tab mitnimmt.
    */
-  | { view: 'pruefung'; teil?: 'doppel' };
+  | { view: 'pruefung'; teil?: 'doppel' }
+  /**
+   * Die Vorschau auf ein neu angeordnetes Buch.
+   *
+   * Eine eigene Station und kein Dialog über der Übersicht: Man liest sie
+   * durch – achtzig Doppelseiten im Vorher/Nachher –, und was man dabei
+   * ansieht, gehört in die Adresse wie jede andere Ansicht. Ein Dialog wäre
+   * außerdem nach dem ersten Browser-Zurück weg, mitsamt der gerechneten Probe.
+   */
+  | { view: 'neuanordnen' };
 
 /** Zeitfenster, in dem zwei Navigationen mit gleichem Schlüssel zu einer Station verschmelzen. */
 const VERSCHMELZ_MS = 1500;
@@ -85,6 +95,7 @@ const PFADE: Record<View, string> = {
   edit: '/aufteilung',
   cover: '/umschlag',
   pruefung: '/pruefung',
+  neuanordnen: '/neuanordnen',
 };
 
 /** Die Adresse zu einer Route — ohne Query, die hängt der Aufrufer daran. */
@@ -151,7 +162,7 @@ export function routeVon(pfad: string, suche = ''): Route {
   }
 
   // Die übrigen Ansichten tragen keine Kennung im Pfad.
-  for (const view of ['years', 'fotodaten', 'sources', 'cover'] as const) {
+  for (const view of ['years', 'fotodaten', 'sources', 'cover', 'neuanordnen'] as const) {
     if (PFADE[view] === `/${erstes}`) return { view };
   }
   return { view: 'overview' };
@@ -168,6 +179,7 @@ const WORTE: Record<View, string> = {
   edit: 'Aufteilung',
   cover: 'Umschlag',
   pruefung: 'Prüfung',
+  neuanordnen: 'Neu anordnen',
 };
 
 /**

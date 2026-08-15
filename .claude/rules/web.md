@@ -137,6 +137,30 @@ die Jahreszahl damit umbenennbar ist, steht das Jahr einer Seite in
 `Spread.chapterYear` und nicht mehr in ihrem Anzeigetext. Begründung und verworfene
 Fassungen: `docs/konzept.md`, Abschnitt „Vorlagentexte von Hand setzen".
 
+## Was das Buch neu baut, wird vorher gezeigt
+
+`Neuanordnen.tsx` (Route `/neuanordnen`) ist die Vorschau auf ein neu
+angeordnetes Buch: je Doppelseite die alte und die neue Miniatur, dazu der Satz,
+was sich ändert, und was die Seite an Handarbeit kostet. **Jeder Griff, der das
+Buch neu baut, führt dorthin** — der Knopf der Buchspalte ebenso wie das
+Zahlenfeld für die Seitenzahl und die Kästchen für Auftakte und Jahresfarben.
+Diese Einstellungen werden in der Probe gerechnet und erst mit dem Übernehmen
+gespeichert.
+
+An jeder Zeile stehen zwei Griffe, und der Unterschied ist die Regel dahinter:
+**„ok" markiert den Durchgang und ändert nichts**, **„so lassen" ändert das
+Buch, das übernommen würde** — deshalb rechnet der Server danach neu, und die
+Ansicht zeigt das Ergebnis. Was gezeigt wird, kommt in beiden Fällen aus der
+Probe (`Probeseite.behalten`) und nie aus einem zweiten Zustand in der
+Oberfläche: Zwei Wahrheiten darüber, welche Seiten bleiben, bemerkt man erst,
+wenn das Übernehmen etwas anderes einsetzt als die Liste zeigte.
+
+Daraus folgt die Regel für neue Einstellungen in `BuchPanel.tsx`: **Was eine
+Neuanordnung auslöst, gehört über `onNeuAnordnen` in die Probe**, nicht über
+`onDarstellung` in ein sofortiges `PATCH`. Und es steht dort keine zweite Zahl
+über verlorene Handarbeit mehr: Was ein Neuaufbau kostet, hängt daran, welches
+Buch dabei herauskommt, und das weiß erst die Probe.
+
 ## Navigation: die Adresse ist der Zustand
 
 Welche Ansicht offen ist und welche Doppelseite gezeigt wird, steht im Pfad und

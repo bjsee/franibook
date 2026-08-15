@@ -108,22 +108,6 @@ const FASSUNGEN: {
   ],
 };
 
-export interface Handarbeit {
-  crops: number;
-  neigungen: number;
-  rahmen: number;
-  unterschriften: number;
-  hintergruende: number;
-  zeitstrahl: number;
-  positionen: number;
-  ebenen: number;
-  texte: number;
-  textplaetze: number;
-  /** Weggenommene leere Plätze — der Neuaufbau holt sie aus der Vorlage zurück. */
-  plaetze: number;
-  festgehalten: number;
-}
-
 /**
  * Das aktive Druckprofil, soweit dieses Panel es braucht.
  *
@@ -139,9 +123,26 @@ interface Props {
   profile: Druckprofil;
   /** Die wählbaren Buchformate; das gewählte steht in `settings.printProfileId`. */
   formate: Buchformat[];
-  handwork: Handarbeit;
+  /**
+   * Doppelseiten, die ein Neuanordnen unverändert übersteht.
+   *
+   * Die einzige Zahl zur Handarbeit, die hier noch steht — und die einzige, die
+   * sich ohne Rechnung sagen lässt. Was ein Neuaufbau *kostet*, hängt daran,
+   * welches Buch dabei herauskommt, und das weiß erst die Probe
+   * (`Neuanordnen.tsx`). Zwei Zahlen für dieselbe Frage standen hier vorher
+   * nebeneinander und widersprachen sich.
+   */
+  festgehalten: number;
   busy: boolean;
-  /** Baut das Buch neu – verwirft Handarbeit. */
+  /**
+   * Führt zur Vorschau auf das neu angeordnete Buch.
+   *
+   * Mit den Einstellungen, die den Neuaufbau auslösen — Seitenzahl, Auftakte,
+   * Jahresfarben. Sie werden **in der Probe** gerechnet und nicht gespeichert:
+   * „180 Seiten statt 160" ist genau die Frage, deren Antwort man vorher sehen
+   * will, und ein Zahlenfeld, das ungefragt achtzig Doppelseiten umwirft, war
+   * der unheimlichste Griff dieser Spalte.
+   */
   onNeuAnordnen: (patch: Record<string, unknown>) => void;
   /** Wechselt das Format. Ordnet nichts neu, klemmt aber die Seitenzahl. */
   onFormat: (printProfileId: string) => void;
@@ -192,7 +193,7 @@ export function BuchPanel({
   settings,
   profile,
   formate,
-  handwork,
+  festgehalten,
   busy,
   onNeuAnordnen,
   onFormat,
@@ -204,44 +205,9 @@ export function BuchPanel({
   /** Ob die Randachse in diesem Format hinter die Sicherheitslinie passt. */
   const randachseGeht = sideAxisPasst(profile);
   const gruppen = nachAnbieter(formate);
-  /** Was ein Neuaufbau kosten würde, in Stücken. */
-  const verlust = [
-    handwork.crops > 0 ? `${handwork.crops} Ausschnitte` : null,
-    handwork.neigungen > 0 ? `${handwork.neigungen} von Hand gesetzte Neigungen` : null,
-    handwork.rahmen > 0 ? `${handwork.rahmen} eigene Rahmen` : null,
-    handwork.unterschriften > 0 ? `${handwork.unterschriften} Bildunterschriften` : null,
-    handwork.hintergruende > 0 ? `${handwork.hintergruende} Hintergründe` : null,
-    handwork.zeitstrahl > 0 ? `${handwork.zeitstrahl} Zeitstrahl-Ausnahmen` : null,
-    handwork.positionen > 0 ? `${handwork.positionen} frei gesetzte Bilder` : null,
-    handwork.ebenen > 0 ? `${handwork.ebenen} gestapelte Bilder` : null,
-    handwork.texte > 0 ? `${handwork.texte} Textblöcke` : null,
-    handwork.textplaetze > 0 ? `${handwork.textplaetze} bewegte Vorlagentexte` : null,
-    handwork.plaetze > 0 ? `${handwork.plaetze} weggenommene Plätze` : null,
-  ].filter((s): s is string => s !== null);
-
   // `auto` heißt „aus dem Hintergrund ableiten" – dann bekommt der Kern gar
   // keine Farbe, statt einer geratenen.
   const akzent = settings.timelineAccent === 'auto' ? undefined : settings.timelineAccent;
-
-  function neuAnordnen() {
-    // Was bleibt, gehört genauso in die Warnung wie was geht: Sonst klingt sie,
-    // als würde auch die selbst gebaute Seite verworfen.
-    const bleibt =
-      handwork.festgehalten > 0
-        ? `\n\n${handwork.festgehalten} festgehaltene Doppelseite(n) bleiben unangetastet.`
-        : '';
-    if (
-      verlust.length > 0 &&
-      !window.confirm(
-        `Das Buch wird komplett neu gebaut. Verworfen werden: ${verlust.join(', ')}.\n\n` +
-          'Fotos, Datumskorrekturen, Gruppen und Jahresereignisse bleiben erhalten.' +
-          bleibt,
-      )
-    ) {
-      return;
-    }
-    onNeuAnordnen({ seed: settings.seed + 1 });
-  }
 
   return (
     <aside style={S.spalte}>
@@ -573,20 +539,25 @@ export function BuchPanel({
         >
           Bilder neu einlesen
         </button>
+        {/*
+          Kein `window.confirm` mehr davor: Eine Warnung, die nur zählt, was
+          verloren geht, hält vom Klicken ab, ohne zu sagen, wofür. Der Knopf
+          führt jetzt in die Probe — dort steht beides, und sie ändert nichts,
+          bis jemand übernimmt.
+        */}
         <button
-          onClick={neuAnordnen}
+          onClick={() => onNeuAnordnen({ seed: settings.seed + 1 })}
           disabled={busy}
           style={{ ...S.breit, borderColor: T.fehlerRand, color: T.fehler }}
-          title="Baut das Buch neu und wählt andere Vorlagen. Bilder werden nicht neu eingelesen."
+          title="Würfelt eine andere Anordnung und zeigt vorher, was sich ändert. Bilder werden nicht neu eingelesen."
         >
           Buch neu anordnen …
         </button>
         <p style={B.leiser}>
-          {verlust.length > 0
-            ? `Verworfen würden ${verlust.join(', ')}.`
-            : 'Derzeit gibt es keine Handarbeit, die dabei verloren gehen könnte.'}
-          {handwork.festgehalten > 0 &&
-            ` ${handwork.festgehalten} festgehaltene Doppelseite(n) bleiben unangetastet.`}
+          Zeigt erst die Vorschau: was sich an jeder Doppelseite ändert und was an Handarbeit
+          verloren ginge. Übernommen wird nichts, bis du es sagst.
+          {festgehalten > 0 &&
+            ` ${festgehalten} festgehaltene Doppelseite(n) bleiben ohnehin unangetastet.`}
         </p>
 
         {/*

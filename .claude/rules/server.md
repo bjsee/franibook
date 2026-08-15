@@ -150,6 +150,24 @@ hin und **behält ihre Kennung**. Über Entfernen und Neuanlegen ginge jedes Fot
 seiner `sourceId` verlustig; die Kennung leitet sich beim Anlegen aus dem Pfad
 ab, ist aber eine Identität und kein abgeleiteter Wert.
 
+## Die Anordnungsprobe
+
+**Was das Buch neu anordnet, wird erst gerechnet und gezeigt, dann eingesetzt**
+(`project/probe.ts`, `routes/anordnung.ts`). Drei Eigenschaften, die man beim
+Erweitern beibehält:
+
+- **Sie ändert nichts.** `Project.baueBuch()` rechnet, `uebernimmBuch()` setzt
+  ein — die Trennung ist der ganze Trick. Wer eine zweite Stelle baut, die ein
+  Buch erzeugt, hält sie auseinander.
+- **Sie liegt neben dem Zustand, nicht darin.** Nicht in `stand()`, nicht in
+  `project.json`, kein Undo-Schritt: eine Frage, keine Entscheidung — wie die
+  Doppelvorschläge. Ob sie noch gilt, sagt ihr Abdruck (`eingabenAbdruck`), und
+  ein Übernehmen gegen einen geänderten Stand ist ein `409` mit Satz.
+- **Gerendert wird sie durch dieselbe Funktion wie das Buch.** `render()` nimmt
+  dafür eine `Buchsicht` — Doppelseiten samt ihren Einstellungen. Eine zweite
+  Renderstrecke für die Vorschau wäre genau der Adapterfehler, den der
+  Parity-Test zwischen Vorschau und PDF verhindert.
+
 ## Zurücknehmen
 
 **Ein Undo-Schritt hält den ganzen Stand von vorher**, nicht die Umkehrung einer
