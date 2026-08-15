@@ -162,6 +162,8 @@ export interface Handarbeit {
   texte: number;
   /** Vorlagentexte, die von Hand verschoben, aufgezogen oder gedreht wurden. */
   textplaetze: number;
+  /** Weggenommene leere Plätze — der Neuaufbau holt sie aus der Vorlage zurück. */
+  plaetze: number;
   festgehalten: number;
 }
 
@@ -523,6 +525,15 @@ export const rahmenSetzen = (index: number, slotId: string, frame: FrameId | nul
 /** Bildunterschrift im Fuß des Rahmens. Ein leerer Text löscht sie. */
 export const unterschriftSetzen = (index: number, slotId: string, caption: string) =>
   sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/caption`, { caption });
+
+/**
+ * Nimmt einen leeren Platz von der Doppelseite oder holt ihn zurück.
+ *
+ * Nur für Plätze ohne Bild: Der Server antwortet mit `409` und einem Satz,
+ * wenn dort noch eines liegt.
+ */
+export const platzWegnehmen = (index: number, slotId: string, hidden: boolean) =>
+  sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/hidden`, { hidden });
 
 /** Ein Bild im Stapel der Doppelseite bewegen – vier Züge, keine Ebenennummer. */
 export const ebeneSetzen = (index: number, slotId: string, zug: Ebenenzug) =>

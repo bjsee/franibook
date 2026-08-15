@@ -829,6 +829,123 @@ describe('Bildzahl je Buchseite', () => {
   });
 });
 
+/**
+ * Einen leeren Platz wegnehmen.
+ *
+ * Ein Platz ohne Bild zeichnet einen leeren Kasten und wird in der Abnahme als
+ * `platz-leer` gemeldet — auf einer Seite, die man so haben will, zweimal
+ * störend. Ein „weiß ich, ist ok" wäre die falsche Antwort: Der Fund stimmt ja,
+ * man will den Platz nicht.
+ */
+describe('Leere Plätze wegnehmen', () => {
+  function projektMitLeerem(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    p.photos.set('p1', {
+      id: 'p1',
+      sourceId: 'q',
+      relPath: 'p1.jpg',
+      fileName: 'p1.jpg',
+      bytes: 1_000_000,
+      width: 4000,
+      height: 3000,
+      takenAt: '2020-01-01T12:00:00',
+    } as never);
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.2up.pair',
+        slots: [
+          { slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } },
+          { slotId: 'b', photoId: null, crop: { ...FULL_CROP } },
+        ],
+      },
+    ];
+    return p;
+  }
+
+  /** Die Bildplätze im gerenderten Blatt, belegte wie leere. */
+  function plaetzeIm(p: Project): { belegt: string[]; leer: string[] } {
+    const rsm = p.render(0)!;
+    return {
+      belegt: rsm.boxes.filter((b) => b.kind === 'image').map((b) => b.slotId),
+      leer: rsm.boxes.filter((b) => b.kind === 'empty').map((b) => b.slotId),
+    };
+  }
+
+  it('zeichnet den leeren Platz danach nicht mehr', () => {
+    const p = projektMitLeerem();
+    expect(plaetzeIm(p)).toEqual({ belegt: ['a'], leer: ['b'] });
+
+    expect(p.setSlotHidden(0, 'b', true).ok).toBe(true);
+    expect(plaetzeIm(p)).toEqual({ belegt: ['a'], leer: [] });
+  });
+
+  it('lässt das übrige Bild an seinem Platz', () => {
+    // Der Punkt der Entscheidung: Das Loch bleibt, die Seite ordnet sich nicht
+    // neu. Wer den Platz schließt, will nicht die Ausschnitte der ganzen Seite
+    // verlieren.
+    const p = projektMitLeerem();
+    const vorher = p.render(0)!.boxes.find((b) => b.kind === 'image');
+    p.setSlotHidden(0, 'b', true);
+    const nachher = p.render(0)!.boxes.find((b) => b.kind === 'image');
+
+    expect(nachher).toEqual(vorher);
+  });
+
+  it('meldet den Platz danach nicht mehr in der Abnahme', () => {
+    const p = projektMitLeerem();
+    expect(p.abnahme().befunde.filter((b) => b.art === 'platz-leer')).toHaveLength(1);
+
+    p.setSlotHidden(0, 'b', true);
+    expect(p.abnahme().befunde.filter((b) => b.art === 'platz-leer')).toEqual([]);
+  });
+
+  it('holt ihn auf Verlangen zurück', () => {
+    const p = projektMitLeerem();
+    p.setSlotHidden(0, 'b', true);
+
+    expect(p.setSlotHidden(0, 'b', false).ok).toBe(true);
+    expect(plaetzeIm(p)).toEqual({ belegt: ['a'], leer: ['b'] });
+    // Und die Liste verschwindet, statt leer stehen zu bleiben.
+    expect(p.spreads[0]).not.toHaveProperty('hiddenSlots');
+  });
+
+  it('nimmt einen Platz mit Bild nicht weg und sagt warum', () => {
+    const p = projektMitLeerem();
+    const ergebnis = p.setSlotHidden(0, 'a', true);
+
+    expect(ergebnis.ok).toBe(false);
+    expect(ergebnis.error).toContain('trägt ein Bild');
+  });
+
+  it('kennt keinen Platz, den die Vorlage nicht hat', () => {
+    expect(projektMitLeerem().setSlotHidden(0, 'gibtsnicht', true).error).toContain(
+      'nicht gefunden',
+    );
+  });
+
+  it('zählt weggenommene Plätze als Handarbeit', () => {
+    // Der Neuaufbau holt sie zurück, denn die Plätze kommen aus der Vorlage.
+    const p = projektMitLeerem();
+    expect(p.handwork().plaetze).toBe(0);
+
+    p.setSlotHidden(0, 'b', true);
+    expect(p.handwork().plaetze).toBe(1);
+  });
+
+  it('lässt ein neu eingesetztes Bild den Eintrag schlagen', () => {
+    const p = projektMitLeerem();
+    p.setSlotHidden(0, 'b', true);
+
+    // Über den Fotopool, ein Layout-Dokument oder ein Zurücknehmen kann der
+    // Platz wieder ein Bild bekommen — dann wird er gezeichnet, statt es zu
+    // verschlucken.
+    p.spreads[0]!.slots.push({ slotId: 'b', photoId: 'p1', crop: { ...FULL_CROP } });
+    expect(plaetzeIm(p).belegt).toEqual(['a', 'b']);
+  });
+});
+
 describe('Eine Buchseite anordnen', () => {
   /** Vier Bilder im Raster – zwei links, zwei rechts –, links mit Handarbeit. */
   function projektMitVier(): Project {

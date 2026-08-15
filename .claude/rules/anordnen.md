@@ -181,12 +181,37 @@ nicht, denn das verwürfe die Ausschnitte der ganzen Seite. Im Baum wird dagegen
 neu angeordnet — eine Zeile hat keine Stelle im Millimeterraster. Begründung:
 `docs/konzept.md`, Abschnitt „Bilder einwerfen".
 
+## Einen leeren Platz wegnehmen
+
+**Ein Platz ohne Bild muss nicht stehen bleiben.** `PATCH
+/api/spreads/:index/slots/:slotId/hidden` trägt ihn in `Spread.hiddenSlots` ein,
+`wirksamePlaetze` lässt ihn heraus — und damit entfällt alles Weitere von
+selbst: kein leerer Kasten im RSM, kein Ziel für einen Zug, kein `platz-leer`
+im Abnahmebericht. Die übrigen Bilder rühren sich nicht; die Seite wird
+ausdrücklich **nicht** neu angeordnet, denn das kostete die Ausschnitte aller
+anderen. Ein Abnicken wäre die falsche Antwort gewesen: Der Fund stimmt ja, man
+will den Platz nicht.
+
+Drei Festlegungen dazu, die man beim Erweitern beibehält:
+
+- **Ein Bild schlägt den Eintrag.** Bekommt der Platz doch eine Zuordnung, wird
+  er wieder gezeichnet — sonst verschluckte ein alter Vermerk ein neu
+  eingesetztes Foto.
+- **Ein belegter Platz wird nicht weggenommen** (`409` mit Satz): Erst das Bild
+  heraus, dann der Platz.
+- **Ein freier Platz** (eingeworfenes Bild, `SlotAssignment` mit `rect`) fällt
+  ganz aus der Liste statt vermerkt zu werden. Er steht in keiner Vorlage, also
+  zeigte der Vermerk auf etwas, das nichts mehr beschreibt.
+
+Gezählt wird das in `handwork().plaetze`: Der Neuaufbau holt die Plätze aus der
+Vorlage zurück.
+
 ## Was die Automatik verwirft und was sie bewahrt
 
 `handwork()` sagt vor einem Neuaufbau, was er kostet: Positionen (frei gesetzte
-Kästen), Ebenen und Textplätze überlebt er **nicht**, justierte Zeilen und
-gerechnete Ausschnitte stellt er wieder her, `locked` bewahrt eine ganze
-Doppelseite. Wer eine neue Handarbeit einführt, entscheidet zuerst diese Frage und
+Kästen), Ebenen, Textplätze und weggenommene Plätze überlebt er **nicht**,
+justierte Zeilen und gerechnete Ausschnitte stellt er wieder her, `locked`
+bewahrt eine ganze Doppelseite. Wer eine neue Handarbeit einführt, entscheidet zuerst diese Frage und
 trägt sie dort ein.
 
 **Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** `renderSpread`

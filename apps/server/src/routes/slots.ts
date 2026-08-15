@@ -190,6 +190,32 @@ export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
     return { ok: true, spread: spreadAntwort(project, index) };
   });
 
+  /**
+   * Nimmt einen leeren Platz von der Doppelseite — oder holt ihn zurück.
+   *
+   * `409` und nicht `404`, wenn der Platz ein Bild trägt: Es gibt ihn, er lässt
+   * sich nur so nicht wegnehmen. Der Satz sagt, was zuerst zu tun wäre.
+   */
+  app.patch<{
+    Params: { index: string; slotId: string };
+    Body?: { hidden?: boolean };
+  }>('/api/spreads/:index/slots/:slotId/hidden', async (req, reply) => {
+    const hidden = req.body?.hidden;
+    if (typeof hidden !== 'boolean') {
+      return reply.code(400).send({ error: 'hidden fehlt oder ist kein Wahrheitswert' });
+    }
+
+    const index = Number(req.params.index);
+    const result = project.setSlotHidden(index, req.params.slotId, hidden);
+    if (!result.ok) {
+      const code = result.error?.includes('nicht gefunden') ? 404 : 409;
+      return reply.code(code).send({ ok: false, error: result.error });
+    }
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
   // ------------------------------------------------------------ Textblöcke
 
   /**

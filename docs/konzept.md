@@ -2110,6 +2110,21 @@ Vor dem Schreiben läuft ein Preflight, dessen Ergebnis als Liste in der Oberfl�
 > (`/doppelseite/18/platz/r2c`) — bei acht Bildern auf einer Doppelseite ist das der
 > Unterschied zwischen einer Auskunft und einem Suchbild.
 
+> **Ergänzung (15. August 2026): einen leeren Platz kann man auch wegnehmen**
+>
+> `platz-leer` war der eine Fund, auf den es keine Antwort gab. Füllen wollte man
+> den Platz nicht — sonst hätte man es getan —, und Abnicken passte nicht: Der
+> Fund stimmt, nur ist er kein Mangel, sondern eine offene Entscheidung. Ein
+> abgenickter leerer Platz stünde außerdem weiter im Buch, mit Kasten und allem.
+>
+> Jetzt nimmt man ihn weg (`Spread.hiddenSlots`, `PATCH …/slots/:slotId/hidden`),
+> und der Fund verschwindet als Folge und nicht als Ausnahme: `wirksamePlaetze`
+> gibt den Platz nicht mehr aus, also gibt es keine leere Box im RSM, über die
+> der Bericht stolpern könnte. **Die Seite ordnet sich dabei nicht neu** — das
+> Loch bleibt, jedes andere Bild behält Ausschnitt und Lage. Wer stattdessen
+> eine dichtere Anordnung will, ordnet die Doppelseite neu an; das ist ein
+> anderer Wunsch und kostet die Ausschnitte der ganzen Seite.
+
 > **Ergänzung (15. August 2026): dasselbe Bild an zwei Stellen**
 >
 > Die einzige Befundart, die kein Renderer beisteuern kann und die deshalb erst in
