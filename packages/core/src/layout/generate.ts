@@ -902,9 +902,14 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       if (recentTemplates.length > 4) recentTemplates.shift();
     }
 
-    // Alle Doppelseiten dieses Jahrgangs tragen dessen Farbe.
+    // Alle Doppelseiten dieses Jahrgangs tragen dessen Farbe. `backgroundAuto`
+    // dazu: Sonst gilt die Jahresfarbe später als von Hand gesetzt, und ein
+    // Neuaufbau meldete an jeder Seite eine verworfene Entscheidung.
     if (farbe !== undefined) {
-      for (let i = abHier; i < spreads.length; i++) spreads[i]!.background = farbe;
+      for (let i = abHier; i < spreads.length; i++) {
+        spreads[i]!.background = farbe;
+        spreads[i]!.backgroundAuto = true;
+      }
     }
 
     // Nachlese: Auftakte, die in der Schleife nicht zum Zuge kamen, weil die
@@ -924,7 +929,10 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         profile,
       );
       if (!opener) continue;
-      if (farbe !== undefined) opener.background = farbe;
+      if (farbe !== undefined) {
+        opener.background = farbe;
+        opener.backgroundAuto = true;
+      }
       spreads.push(opener);
       groupOpenerCount++;
       placed.add(coverId);

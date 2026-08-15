@@ -286,6 +286,104 @@ export const neuEinlesen = (body?: { limit?: number; sourceId?: string }) =>
 export const buchErzeugen = (patch: Record<string, unknown>) =>
   sende<{ report: Report }>('POST', '/api/generate', patch);
 
+// ─── Neu anordnen: erst ansehen ─────────────────────────────────────────────
+
+/** Was aus einer Doppelseite wird, wenn das Buch neu angeordnet wird. */
+export interface Probeseite {
+  /**
+   * Stelle im bisherigen Buch; `null` bei einer neu hinzukommenden Seite.
+   *
+   * Zugleich die Kennung, unter der eine Seite ansprechbar ist — `Spread.id`
+   * taugt dafür nicht, sie ist nicht eindeutig (Begründung im Kern, bei
+   * `Seitenvergleich.altIndex`).
+   */
+  altIndex: number | null;
+  /** Stelle im neuen Buch; `null`, wenn die Seite wegfällt. */
+  neuIndex: number | null;
+  art: 'gleich' | 'vorlage' | 'fotos' | 'neu' | 'entfaellt';
+  /** Gleicher Inhalt, andere Stelle im Buch. */
+  verschoben: boolean;
+  locked: boolean;
+  templateVorher: string | null;
+  templateNachher: string | null;
+  fotosVorher: number;
+  fotosNachher: number;
+  zugegangen: string[];
+  abgegangen: string[];
+  /** Wie viele von Hand getroffene Entscheidungen diese eine Seite kostet. */
+  handarbeit: number;
+  /** Ob diese Doppelseite auf Verlangen bleibt, wie sie ist. */
+  behalten: boolean;
+}
+
+/** Die gerechnete, noch nicht eingesetzte Anordnung. */
+export interface Probe {
+  id: string;
+  /** Die Einstellungen, mit denen gerechnet wurde. */
+  settings: Einstellungen;
+  /** Wenn die gewünschte Seitenzahl in diesem Format nicht geht. */
+  geklemmt?: { gewuenscht: number; wirksam: number };
+  bilanz: {
+    doppelVorher: number;
+    doppelNachher: number;
+    seitenVorher: number;
+    seitenNachher: number;
+    gleich: number;
+    verschoben: number;
+    geaendert: number;
+    neu: number;
+    entfallen: number;
+    festgehalten: number;
+    /** Bilder, die neu ins Buch kommen. */
+    insBuch: number;
+    /** Bilder, die herausfallen – sie liegen danach im Fotopool. */
+    ausDemBuch: number;
+    fotosVorher: number;
+    fotosNachher: number;
+  };
+  /** Was diese Anordnung an Handarbeit kostet – auf sie gerechnet, nicht geschätzt. */
+  handwork: Handarbeit;
+  report: Report;
+  /** Die Doppelseiten, die bleiben sollen, wie sie sind – als Stellen im bisherigen Buch. */
+  behalten: number[];
+  seiten: Probeseite[];
+}
+
+/**
+ * Rechnet eine Probe: das neue Buch, ohne es einzusetzen.
+ *
+ * Nimmt denselben Rumpf wie `buchErzeugen` – regelmäßig ein neuer Seed –, dazu
+ * die Doppelseiten, die bleiben sollen, wie sie sind. Beides in einem Aufruf,
+ * weil das Buch um jede behaltene Seite herum anders fällt: Es gibt keine
+ * Rechnung, die man nachträglich anpasst.
+ */
+export const probeRechnen = (patch: Record<string, unknown>, behalten: readonly number[] = []) =>
+  sende<{ probe: Probe }>('POST', '/api/anordnung/probe', { ...patch, behalten });
+
+/**
+ * Die liegende Probe.
+ *
+ * `auskunft: null` heißt „keine da", `veraltet` heißt „eine da, aber der Stand
+ * hat sich geändert" – dann rechnet die Ansicht neu, statt eine Vorschau zu
+ * zeigen, die etwas anderes verspricht als das Übernehmen einsetzt.
+ */
+export const probeLaden = () =>
+  hole<{ auskunft: Probe | null; veraltet?: boolean }>('/api/anordnung/probe');
+
+/** Eine Doppelseite der Probe, gerendert – für die Miniaturen der Vorschau. */
+export const probeDoppelseiteLaden = (index: number) =>
+  hole<SpreadResponse>(`/api/anordnung/probe/spreads/${index}`);
+
+/** Setzt die Probe in Kraft. Die Kennung ist die Zusage auf das Gezeigte. */
+export const probeUebernehmen = (id: string) =>
+  sende<{ ok: true; settings: Einstellungen; report: Report; handwork: Handarbeit }>(
+    'POST',
+    '/api/anordnung/uebernehmen',
+    { id },
+  );
+
+export const probeVerwerfen = () => sende<{ ok: boolean }>('DELETE', '/api/anordnung/probe');
+
 // ─── Zurücknehmen ───────────────────────────────────────────────────────────
 
 /**

@@ -22,7 +22,6 @@ import type { TimelineFootVariant, TimelineSideVariant } from '@franibook/core';
 import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
   abnahmeLaden,
-  buchErzeugen,
   buchseiteLoeschen,
   ApiFehler,
   doppelLaden,
@@ -51,6 +50,7 @@ import { BuchPanel } from './BuchPanel.js';
 import { Cover } from './Cover.js';
 import { Pruefung } from './Pruefung.js';
 import { Fotodaten } from './Fotodaten.js';
+import { Neuanordnen } from './Neuanordnen.js';
 import { Overview } from './Overview.js';
 import { Baum } from './baum/Baum.js';
 import { LayoutEditor } from './LayoutEditor.js';
@@ -130,6 +130,16 @@ export function App() {
     route.view === 'spread' ? route.index : 0,
   );
   const index = route.view === 'spread' ? route.index : letzterSpread;
+
+  /**
+   * Mit welcher Frage die Vorschau geöffnet wurde – „180 Seiten statt 160",
+   * „Jahresauftakte aus".
+   *
+   * Im Zustand und nicht in der Adresse: Es ist keine Station, sondern der
+   * Anlass für eine Rechnung, die der Server ohnehin festhält. Wer die Ansicht
+   * neu lädt, bekommt die liegende Probe – dieselbe, nur ohne den Satz darüber.
+   */
+  const [probePatch, setProbePatch] = useState<Record<string, unknown>>({});
   const [variante, setVariante] = useState<Variante>(varianteLesen);
   const [error, setError] = useState<string | null>(null);
   /** Was der Server gerade tut, solange er noch nicht antwortet. `null` = läuft. */
@@ -526,7 +536,7 @@ export function App() {
   /**
    * Ändert eine Darstellungseinstellung.
    *
-   * Anders als `regenerate` bleibt die Fotoverteilung unangetastet – es wird
+   * Anders als beim Neuanordnen bleibt die Fotoverteilung unangetastet – es wird
    * nur neu gezeichnet. Für den Zeitstrahl ist das der Unterschied zwischen
    * einer Linie ein- und ausblenden und dem Verwerfen aller Korrekturen.
    */
@@ -693,23 +703,31 @@ export function App() {
     neuRendern();
   }
 
-  async function regenerate(patch: Record<string, unknown>) {
-    setBusy('Erzeuge Buch neu …');
+  /**
+   * Zur Vorschau auf das neu angeordnete Buch.
+   *
+   * Der Weg zum Neuanordnen führt seit der Probe immer hierüber: Es ist der
+   * teuerste Griff am Buch, und blind ausgelöst hat ihn niemand gern. Die
+   * Ansicht rechnet, zeigt und setzt auf Verlangen ein.
+   */
+  function zeigeNeuanordnen(patch: Record<string, unknown> = {}) {
     setNote(null);
-    try {
-      const data = await buchErzeugen(patch);
-      loadInfo();
-      neuRendern();
-      const r = data.report;
-      setNote(
-        `${r.spreadCount} Doppelseiten, ${r.pageCount} Seiten, ` +
-          `${r.photosPerSpread.toFixed(1)} Fotos je Doppelseite`,
-      );
-    } catch (e) {
-      setNote(`Fehler: ${fehlertext(e)}`);
-    } finally {
-      setBusy(null);
-    }
+    setProbePatch(patch);
+    navigieren({ view: 'neuanordnen' });
+  }
+
+  /** Nach dem Übernehmen: Das Buch ist ein anderes, also gilt nichts Geladenes weiter. */
+  function nachNeuanordnen(satz: string) {
+    // Die Frage ist beantwortet: Ein nächster Aufruf soll nicht wieder mit
+    // „180 statt 160" rechnen, was inzwischen das Buch ist.
+    setProbePatch({});
+    loadInfo();
+    neuRendern();
+    setStandVersion((v) => v + 1);
+    // Die gemerkte Stelle gilt für ein anderes Buch – wie nach einem Notanker.
+    setLetzterSpread(0);
+    navigieren({ view: 'overview' }, { ersetzen: true });
+    setNote(satz);
   }
 
   async function exportAbzug() {
@@ -980,7 +998,7 @@ export function App() {
             structurePending={info.structurePending}
             busy={!!busy}
             onZeigeSpread={(i) => zeigeSpread(i)}
-            onNeuAnordnen={() => void regenerate({})}
+            onNeuAnordnen={() => zeigeNeuanordnen()}
           />
         )}
 
@@ -1001,9 +1019,9 @@ export function App() {
               settings={info.settings}
               profile={info.profile}
               formate={info.profiles}
-              handwork={info.handwork}
+              festgehalten={info.handwork.festgehalten}
               busy={!!busy}
-              onNeuAnordnen={(patch) => void regenerate(patch)}
+              onNeuAnordnen={zeigeNeuanordnen}
               onFormat={(id) => void setFormat(id)}
               onDarstellung={(patch) => void setSetting(patch)}
               onNeuEinlesen={() => void reimport()}
@@ -1109,6 +1127,16 @@ export function App() {
               }}
             />
           )
+        ) : view === 'neuanordnen' && info ? (
+          <Neuanordnen
+            settings={info.settings}
+            patch={probePatch}
+            imageSrc={imageSrc}
+            onUebernommen={nachNeuanordnen}
+            // Zurück in die Übersicht: Von dort kommt der Knopf, und dort sieht
+            // man am Rhythmus des ganzen Buches, ob es beim Alten bleiben soll.
+            onVerworfen={() => navigieren({ view: 'overview' }, { ersetzen: true })}
+          />
         ) : view === 'cover' ? (
           <Cover imageSrc={imageSrc} standVersion={standVersion} />
         ) : route.view === 'pruefung' ? (

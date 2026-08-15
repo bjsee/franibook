@@ -8,10 +8,10 @@
  * an einer Stelle steht.
  */
 import {
-  type PhotoId,
   type SinglePageResult,
   type Spread,
   type SpreadAnchor,
+  ankerNeben,
   BLANK_TEMPLATE_ID,
   FULL_CROP,
   HALF_BLANK_ID,
@@ -35,20 +35,16 @@ export interface Buch {
  * woanders landet. Erst wenn dahinter kein Bild mehr kommt (das Buchende),
  * hängt sie sich hinter das letzte davor. Findet sich gar nichts, bleibt es
  * beim Index – siehe `insertKept`.
+ *
+ * **Festgehaltene Nachbarn taugen dafür nicht** (`ankerNeben` im Kern lässt sie
+ * aus): Ihre Bilder laufen beim Erzeugen nicht im Fluss mit, also findet der
+ * Anker sie dort nie. Am echten Buch zeigten so 18 von 21 festgehaltenen Seiten
+ * ins Leere — sie standen alle nebeneinander und ankerten aufeinander —, und
+ * das Neuanordnen warf die Jahresfolge durcheinander.
  */
 export function ankerFuer(buch: Buch, stelle: number): { anchor: SpreadAnchor } | undefined {
-  const erstesFoto = (spread: Spread | undefined): PhotoId | undefined =>
-    spread?.slots.find((s) => s.photoId)?.photoId ?? undefined;
-
-  for (let i = stelle; i < buch.spreads.length; i++) {
-    const photoId = erstesFoto(buch.spreads[i]);
-    if (photoId) return { anchor: { photoId, where: 'before' } };
-  }
-  for (let i = stelle - 1; i >= 0; i--) {
-    const photoId = erstesFoto(buch.spreads[i]);
-    if (photoId) return { anchor: { photoId, where: 'after' } };
-  }
-  return undefined;
+  const anchor = ankerNeben(buch.spreads, stelle);
+  return anchor ? { anchor } : undefined;
 }
 
 /**
