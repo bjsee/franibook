@@ -400,14 +400,28 @@ export interface Halbseite {
   name?: string;
   slotCount: number;
   slots: { x: number; y: number; w: number; h: number }[];
+  /**
+   * Textplätze — nur die Fassungen der Jahresseite haben welche.
+   *
+   * Sie gehören in die Skizze: Eine Textseite ohne Bild sähe sonst aus wie eine
+   * leere Seite, und genau die ist eine ganz andere Wahl.
+   */
+  textSlots?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface Anordnungen {
   templates: Vorlage[];
   halves: Halbseite[];
+  /**
+   * Die Fassungen der Jahresseite – nur bei einem Auftakt, und nur für die Seite,
+   * auf der Jahreszahl und Ereigniszeilen stehen (`textseite`).
+   */
+  jahresseiten?: Halbseite[];
+  /** Auf welcher Buchseite die Textplätze einer Jahresseite stehen. */
+  textseite?: 'left' | 'right';
   current: { left?: string; right?: string };
   counts: { left: number; right: number };
-  /** Auftaktseite: nur als ganze Doppelseite anzuordnen, `halves` ist dann leer. */
+  /** Jahresseite: Sie wählt je Buchseite in einer eigenen Familie. */
   auftakt: boolean;
 }
 

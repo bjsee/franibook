@@ -1449,6 +1449,23 @@ Zwei Arten, unterschiedlich geregelt:
   > `halfChoices` meldet `auftakt: true` — die Oberfläche zeigt den Umschalter dort
   > gar nicht erst, statt eine Wahl anzubieten, die der Server ablehnt.
 
+  > **Nachtrag (15. August 2026): jetzt geht sie doch — je Seite in ihrer eigenen
+  > Familie.** Die Sperre war richtig begründet und zu weit gefasst: Nicht die
+  > Doppelseite ist unteilbar, sondern der Text hängt an _einer_ ihrer beiden
+  > Buchseiten. In jeder Auftaktvorlage stehen alle Textplätze auf derselben
+  > Seite; damit ist die eine die Textseite und die andere eine gewöhnliche
+  > Bildseite. `templates/chapter-halves.ts` führt die **Texthälften** als eigene
+  > Familie (`jahrseite:…`, in Linksform wie jede Halbseite — die Bibliothek
+  > spiegelt schließlich auch Auftakte) und setzt sie mit einer beliebigen
+  > Halbseite zu `kapitel:<links>+<rechts>` zusammen. Die Textplätze behalten
+  > dabei ihre Kennung, denn `TextElement.slotId` zeigt auf sie; sie umzubenennen
+  > nähme der Seite die Jahreszahl, ohne dass etwas meldet. `templateMeta` gibt
+  > für `kapitel:` weiter `chapterOnly` zurück — sonst bekäme die Seite nach dem
+  > ersten Griff Seitenzahlen und fiele in die Vorlagenwahl des Flusses. Die Wahl
+  > je Seite ist getrennt: Auf der Textseite stehen die Jahresseiten-Fassungen,
+  > gegenüber die Halbseiten. Eine Flusshälfte auf der Textseite wird abgelehnt
+  > und gar nicht erst angeboten.
+
 - **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
 ### Seitenhintergrund

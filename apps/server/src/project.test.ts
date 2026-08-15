@@ -576,21 +576,43 @@ describe('Anordnungen einer Jahresseite', () => {
     expect(wahl[0]!.slotCount).toBe(3);
   });
 
-  it('bietet für eine Jahresseite keine seitenweise Anordnung an', () => {
+  it('stellt für eine Jahresseite je Buchseite eine eigene Familie zur Wahl', () => {
+    // Vorher gab es hier gar keine seitenweise Wahl: Aus zwei Hälften des
+    // Flusses zusammengesetzt verlöre die Seite Jahreszahl und Ereigniszeilen.
+    // Jetzt wählt die Textseite unter den Jahresseiten-Fassungen und die
+    // Bildseite unter den Halbseiten des Flusses.
     const auskunft = projektMitAuftakt().halfChoices(0);
 
     expect(auskunft.auftakt).toBe(true);
-    expect(auskunft.halves).toEqual([]);
+    expect(auskunft.textseite).toBe('left');
+    expect(auskunft.jahresseiten?.length).toBeGreaterThan(0);
+    expect(auskunft.halves.length).toBeGreaterThan(0);
+    // Was links gerade steht, ist eine Fassung der Jahresseite – auch bevor
+    // jemals von Hand gewählt wurde.
+    expect(auskunft.current.left).toMatch(/^jahrseite:/);
   });
 
-  it('lehnt die seitenweise Anordnung einer Jahresseite ab, statt sie zu zerlegen', () => {
-    // Aus zwei Hälften des Flusses zusammengesetzt hätte die Seite keinen
-    // Textplatz mehr – Jahreszahl und Ereigniszeilen wären weg.
+  it('ordnet die Bildseite einer Jahresseite neu an und behält ihre Textplätze', () => {
+    const p = projektMitAuftakt();
+    const r = p.setSpreadHalf(0, 'right', 'halb:eins');
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.templateId).toMatch(/^kapitel:/);
+    // Der Grund für die ganze Übung: Die Jahreszahl hängt an einem Textplatz
+    // der Vorlage, und ein Text ohne Platz wird stillschweigend nicht gezeichnet.
+    const texte = (requireTemplate(p.spreads[0]!.templateId).textSlots ?? []).map((t) => t.id);
+    expect(texte).toContain('t-year');
+    expect(p.spreads[0]!.texts?.[0]?.slotId).toBe('t-year');
+  });
+
+  it('lehnt eine Flusshälfte auf der Textseite ab', () => {
+    // Genau der Griff, der die Jahreszahl nähme. Die Oberfläche bietet ihn nicht
+    // an; abgelehnt wird er trotzdem.
     const p = projektMitAuftakt();
     const r = p.setSpreadHalf(0, 'left', 'halb:spread.4up.grid:L');
 
     expect(r.ok).toBe(false);
-    expect(r.error).toContain('Jahresseite');
+    expect(r.error).toContain('Jahreszahl');
     expect(p.spreads[0]!.templateId).toBe('spread.chapter.3up');
   });
 });

@@ -113,9 +113,18 @@ nimmt die größte Fassung, für die ein Jahrgang genug Bilder hat, und füllte 
 allen zusammen jeden Auftakt mit acht statt sechs Bildern — Seitenzahl und
 Bildverteilung des Buchs wären andere, ungefragt. Wer die Wahl von Hand erweitert,
 schreibt `nur-wahl` dazu; wer die Automatik ändern will, ändert den Test in
-`library.test.ts` mit. **Seitenweise geht eine Jahresseite nicht** (`halfChoices`
-meldet `auftakt`, `setSpreadHalf` lehnt ab): Die Hälften des Flusses tragen keinen
-Textplatz, die Seite verlöre Jahreszahl und Ereigniszeilen.
+`library.test.ts` mit.
+
+**Seitenweise geht eine Jahresseite auch** — je Buchseite in ihrer eigenen
+Familie (`templates/chapter-halves.ts`). In jeder Auftaktvorlage stehen alle
+Textplätze auf _einer_ Seite: Sie ist die Textseite und wählt unter den
+Jahresseiten-Fassungen (`jahrseite:…`, Jahreszahl plus 0 bis n Bilder), die
+andere unter den Halbseiten des Flusses. Zusammengesetzt heißt das Blatt
+`kapitel:<links>+<rechts>`, die Textplätze behalten ihre Kennung (`TextElement`
+zeigt darauf), und `templateMeta` gibt weiter `chapterOnly` zurück — sonst
+bekäme die Seite Seitenzahlen und fiele in die Vorlagenwahl des Flusses. Eine
+Flusshälfte auf der Textseite nähme ihr die Jahreszahl: `setSpreadHalf` lehnt
+sie ab, `halfChoices` bietet sie nicht an (`jahresseiten`, `textseite`).
 
 ## Die Bibliothek der Halbseiten
 
