@@ -157,9 +157,10 @@ Entscheidung sucht, ohne die passende Datei offen zu haben, liest sie direkt:
 | `.claude/rules/foto-datum-ort.md` | `core/src/model/**`                          | Datumskaskade und -korrektur, Ort, Ausrichtung, Bildfokus, `effectivePhoto` |
 | `.claude/rules/rendern.md`        | `core/src/render/**`                         | RSM, Schrift, Neigung, Rahmen, Ebenen, Warnungen                            |
 | `.claude/rules/format-druck.md`   | `core/src/print/**`                          | Druckprofile, Formatwechsel, Umschlagmaße                                   |
-| `.claude/rules/mosaik.md`         | `core/src/mosaic/**`, `server/src/mosaik/**` | Titelmosaik: Zielraster, Kachelwahl, Backen, Farbwerte am Foto              |
+| `.claude/rules/mosaik.md`         | `core/src/mosaic/**`, `server/src/mosaik/**` | Umschlagmosaik: Zielraster, Kachelwahl, Backen, Farbwerte am Foto           |
+| `.claude/rules/umschlag.md`       | `core/src/cover/**`, `web/src/Cover*.tsx`    | Vorgabe und Gestaltung: Texte, Schriftgrößen, Balken, Deckelfarben          |
 
-Die vier Zeilen mit `core/…` meinen `packages/core/…`; die genauen Muster stehen im
+Die Zeilen mit `core/…` meinen `packages/core/…`; die genauen Muster stehen im
 Frontmatter jeder Regeldatei.
 | `.claude/rules/adapter-parity.md` | `packages/render-{dom,pdf}/**` | was ein Renderer aus dem Kern beziehen darf, Schrift, Parity-Pflicht |
 | `.claude/rules/parity.md` | `tests/parity/**` | wie der Parity-Test rechnet: Schwellen, Vergleichsbreite, Ausgangslage |
