@@ -4,3 +4,4 @@
 - [Query type confusion](query_type_confusion.md) — repeated query keys become arrays (no Fastify schema validation); confirmed 500 in GET /api/photos?ort=a&ort=b, silent empty-result for quelle/gruppe
 - [PDF renderer streaming](render_pdf_streaming.md) — renderPdf streams images one at a time (4.9GB→495MB spike finding); more spreads/images isn't a memory-DoS on its own
 - [Kontaktbogen feature review](kontaktbogen_review.md) — no findings on POST /api/export/abzug contact-sheet addition; why each candidate concern was ruled out
+- [Mosaik feature review](mosaik_feature_review.md) — frontMosaic font/SVG/path handling ruled safe; one istDateiFehler gap in titelmosaik.ts error path (low severity)

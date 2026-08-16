@@ -12,6 +12,7 @@ export * from './print/profiles/index.js';
 
 export * from './model/photo.js';
 export * from './model/adjust.js';
+export * from './model/farbe.js';
 export * from './model/crop.js';
 export * from './model/caption.js';
 export * from './model/date.js';
@@ -52,6 +53,9 @@ export * from './render/frame.js';
 export * from './render/typography.js';
 export * from './render/inspect.js';
 export * from './render/page-number.js';
+
+export * from './mosaic/mosaic.js';
+export * from './mosaic/plan.js';
 
 export * from './cover/cover.js';
 export * from './cover/geometry.js';

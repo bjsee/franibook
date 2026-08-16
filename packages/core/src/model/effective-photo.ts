@@ -16,7 +16,7 @@
  * wohnt und `date.ts` seinerseits `photo.ts` importiert.
  */
 import type { PhotoOverride } from './date.js';
-import { type Photo, type PhotoId, rotateFocusRect } from './photo.js';
+import { type Photo, type PhotoId, rotateFocusRect, rotatePhotoTone } from './photo.js';
 
 /**
  * Kennung eines von Hand gesetzten Ortes.
@@ -60,6 +60,9 @@ export function effectivePhoto(photo: Photo, override?: PhotoOverride): Photo {
     // falsch.
     ...(turns && photo.faces ? { faces: photo.faces.map((f) => rotateFocusRect(f, turns)) } : {}),
     ...(turns && photo.salience ? { salience: rotateFocusRect(photo.salience, turns) } : {}),
+    // Aus demselben Grund das Farbraster: Es steht feldweise in Bildkoordinaten,
+    // und das Mosaik wählt daraus die Stelle im Bild.
+    ...(turns && photo.tone ? { tone: rotatePhotoTone(photo.tone, turns) } : {}),
   };
 }
 
