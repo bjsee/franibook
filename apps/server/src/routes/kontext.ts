@@ -12,7 +12,7 @@
  * Steht in einer Route eine Rechnung mit Millimetern oder eine Schleife über
  * Doppelseiten, gehört sie nach `project.ts` oder in den Kern.
  */
-import { coverWarningText, teilbar } from '@franibook/core';
+import { coverWarningText, mosaicWarningText, teilbar } from '@franibook/core';
 import type { DecodeCache } from '../decode.js';
 import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
@@ -95,6 +95,15 @@ export interface Kontext {
   abstaende: AbstandsErkennung;
   /** Wohin die PDF-Ausgabe geht. */
   outDir: string;
+  /**
+   * Wo die abgeleiteten Bilder liegen — Vorschauen und gebackene Mosaike.
+   *
+   * Der `PreviewCache` kennt den Ordner, behält ihn aber für sich. Das
+   * Titelmosaik legt daneben seinen eigenen ab und braucht ihn deshalb; ihn aus
+   * dem Cache herauszureichen hieße, dessen Kapselung für einen Nachbarn zu
+   * öffnen.
+   */
+  cacheDir: string;
   /** Vorgabe für `FRANIBOOK_LIMIT`, wenn eine Anfrage keine eigene mitbringt. */
   importLimit?: number | undefined;
 }
@@ -173,15 +182,38 @@ export function gruppenAntwort(project: Project) {
  * Rückenbreite hängt an der Seitenzahl, und die ändert sich mit jedem
  * Neuaufbau des Buchs.
  */
-export function coverAntwort(project: Project) {
+export function coverAntwort(project: Project, mosaikFehler?: string) {
   const cover = project.renderCover();
+  const m = project.titelmosaik;
   return {
     design: project.coverDesign(),
     cover,
     candidates: project.coverCandidates(),
     // Derselbe Wortlaut wie im Exportbericht, damit nicht zwei Texte dieselbe
     // Ursache verschieden beschreiben.
-    hints: cover.warnings.map(coverWarningText),
+    hints: [
+      ...cover.warnings.map(coverWarningText),
+      ...(m ? m.plan.warnings.map(mosaicWarningText) : []),
+      ...(mosaikFehler ? [`Das Titelmosaik ließ sich nicht bauen: ${mosaikFehler}`] : []),
+    ],
     profileVerified: project.profile.provenance.verifiedAt !== null,
+    // Was aus der Anweisung geworden ist. Die Oberfläche zeigt daran, wie viele
+    // Bilder das Mosaik trägt — die Zahl ist der eigentliche Reiz der Sache und
+    // steht in keiner anderen Antwort.
+    ...(m
+      ? {
+          mosaik: {
+            photoId: m.photoId,
+            datei: m.vorschauDatei,
+            kacheln: m.kacheln,
+            fotos: m.fotos,
+            // Erst im Verhältnis dazu bedeutet `fotos` etwas: Die Oberfläche
+            // beschriftet damit den Vielfaltsregler.
+            verfuegbar: m.plan.candidates,
+            druckBreitePx: m.druckBreitePx,
+            druckHoehePx: m.druckHoehePx,
+          },
+        }
+      : {}),
   };
 }

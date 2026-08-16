@@ -12,15 +12,19 @@
  * Kopfzeile weggefallen.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CoverDesign } from '@franibook/core';
+import type { CoverDesign, CoverMosaic } from '@franibook/core';
 import { CoverView, type CoverGuideVisibility } from '@franibook/render-dom';
 import {
   fehlertext,
   type Umschlag as CoverAntwort,
   umschlagAendern,
+  type Mosaikfortschritt,
+  mosaikFortschrittLaden,
   umschlagExportieren,
   umschlagLaden,
 } from './api.js';
+import { Bildwahl } from './Bildwahl.js';
+import { CoverMosaik } from './CoverMosaik.js';
 import { B, T } from './theme.js';
 
 const FELDER = [
@@ -29,6 +33,9 @@ const FELDER = [
   { key: 'spineText', label: 'Buchrücken' },
   { key: 'backText', label: 'Rückseite' },
 ] as const;
+
+/** Wie oft nachgefragt wird, während ein Mosaik entsteht. */
+const MOSAIK_TAKT_MS = 700;
 
 const SCHALTER = [
   { key: 'hinge', label: 'Gelenk & Rücken' },
@@ -59,6 +66,17 @@ export function Cover({
   const note = notiz?.text ?? null;
   const setNote = (text: string | null) => setNotiz(text === null ? null : { text });
   const [guides, setGuides] = useState<CoverGuideVisibility>({ hinge: true, diagnostics: true });
+  /**
+   * Woran der Server gerade backt.
+   *
+   * Die Antwort auf das `PATCH` kommt erst, wenn alles fertig ist — für eine
+   * Anzeige *während* der Arbeit taugt sie also nicht. Deshalb fragt die
+   * Ansicht, solange sie wartet.
+   */
+  const [arbeit, setArbeit] = useState<Mosaikfortschritt | null>(null);
+
+  /** Laufende Nummer der jüngsten Mosaikänderung — siehe `mosaikAendern`. */
+  const mosaikLauf = useRef(0);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(1000);
@@ -86,6 +104,54 @@ export function Cover({
       setData(await umschlagAendern({ [feld]: wert }));
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
+    }
+  }
+
+  /**
+   * Das Mosaik ändern — ein leeres Patch entfernt es.
+   *
+   * Eigener Weg neben `patch`, weil der Server hier tatsächlich arbeitet: Er
+   * backt das Bild neu, und das dauert Sekunden. Deshalb die Anzeige „baue das
+   * Mosaik" statt eines stummen Wartens; ohne sie sähe ein Regler, der eine
+   * Sekunde später nachzieht, nach einem Aussetzer aus.
+   */
+  async function mosaikAendern(patch: { frontMosaic?: CoverMosaic }) {
+    // **Nur die jüngste Änderung gilt.** Zwei können sich überlappen: Der
+    // Cursor steht im Feld „Form", die Hand greift zum Regler — `onBlur`
+    // schickt das eine, `onPointerUp` das andere. Käme das ältere zuletzt
+    // zurück, überschriebe sein `setData` den neueren Stand, und die Ansicht
+    // zeigte ein Mosaik, das nicht mehr gespeichert ist. Aus demselben Grund
+    // räumt nur der jüngste Lauf die Anzeige auf — sonst verschwände der
+    // Balken, während noch gebacken wird.
+    const lauf = ++mosaikLauf.current;
+    setBusy('Baue das Titelmosaik …');
+    setNote(null);
+    // Solange gewartet wird, im Sekundentakt nachfragen, woran gearbeitet wird.
+    // Der Takt ist grob genug, um nicht ins Gewicht zu fallen, und fein genug,
+    // dass sich der Balken sichtbar bewegt.
+    const takt = window.setInterval(() => {
+      mosaikFortschrittLaden()
+        .then((f) => {
+          if (lauf === mosaikLauf.current) setArbeit(f.fortschritt);
+        })
+        // Ein verlorener Takt ist kein Fehler, den jemand sehen müsste — er
+        // fehlt einfach, und der nächste kommt.
+        .catch(() => undefined);
+    }, MOSAIK_TAKT_MS);
+    try {
+      // `null` und nicht `undefined`: Über JSON käme das weggelassene Feld als
+      // „nicht angefasst" an, und das Mosaik ließe sich nie entfernen.
+      const naechste: CoverMosaic | null = patch.frontMosaic ?? null;
+      const antwort = await umschlagAendern({ frontMosaic: naechste });
+      if (lauf === mosaikLauf.current) setData(antwort);
+    } catch (e) {
+      if (lauf === mosaikLauf.current) setNote(`Fehler: ${fehlertext(e)}`);
+    } finally {
+      window.clearInterval(takt);
+      if (lauf === mosaikLauf.current) {
+        setArbeit(null);
+        setBusy(null);
+      }
     }
   }
 
@@ -215,7 +281,20 @@ export function Cover({
       <strong style={{ ...B.titel, display: 'block', fontSize: 15, margin: '26px 0 10px' }}>
         Titelbild
       </strong>
-      <div style={S.kandidaten}>
+      {/*
+        Ein gesetztes Mosaik **ist** das Titelbild und schlägt jede Wahl hier.
+        Ohne diesen Satz klickt man ein Bild an und es geschieht sichtbar
+        nichts — gespeichert wird es sehr wohl, es liegt nur unter dem Mosaik.
+        Ein wirkungsloser Griff sagt, warum er wirkungslos ist; die Wahl bleibt
+        möglich, denn sie gilt in dem Augenblick, in dem das Mosaik weggeht.
+      */}
+      {data.design.frontMosaic && (
+        <p style={{ ...B.leiser, margin: '0 0 10px' }}>
+          Der Umschlag trägt gerade ein Mosaik — eine Wahl hier wird gemerkt und gilt, sobald du es
+          weiter unten entfernst.
+        </p>
+      )}
+      <div style={{ ...S.kandidaten, opacity: data.design.frontMosaic ? 0.5 : 1 }}>
         {data.candidates.map((c) => (
           <button
             key={c.photoId}
@@ -223,7 +302,14 @@ export function Cover({
             title={c.label}
             style={{
               ...S.kandidat,
-              borderColor: c.photoId === data.design.frontPhotoId ? T.cyan : T.line,
+              // Ein gesetztes Mosaik **ist** das Titelbild; dann ist keiner
+              // dieser Kandidaten der gewählte, auch wenn `frontPhotoId` noch
+              // auf einen zeigt. Ihn trotzdem türkis zu rahmen behauptete eine
+              // Auswahl, die nicht gedruckt wird.
+              borderColor:
+                !data.design.frontMosaic && c.photoId === data.design.frontPhotoId
+                  ? T.cyan
+                  : T.line,
             }}
           >
             <img src={imageSrc(c.photoId)} alt={c.label} style={S.thumb} />
@@ -231,6 +317,25 @@ export function Cover({
           </button>
         ))}
       </div>
+      <p style={{ ...B.leiser, margin: '8px 0 10px' }}>
+        Die Reihe zeigt je ein Bild der Fotogruppen — {data.candidates.length} Stück. Jedes andere
+        Foto des Bestands geht auch:
+      </p>
+      <div style={{ opacity: data.design.frontMosaic ? 0.5 : 1 }}>
+        <Bildwahl
+          gewaehlt={data.design.frontMosaic ? undefined : data.design.frontPhotoId}
+          onWaehlen={(photoId) => void patch('frontPhotoId', photoId)}
+          knopf="Titelbild aus dem ganzen Bestand wählen"
+        />
+      </div>
+
+      <CoverMosaik
+        data={data}
+        onAendern={mosaikAendern}
+        imageSrc={imageSrc}
+        arbeit={arbeit}
+        laeuft={busy !== null}
+      />
     </div>
   );
 }

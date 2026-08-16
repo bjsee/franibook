@@ -122,6 +122,7 @@ async function probe(): Promise<Probe> {
     previews: null as never,
     decodes,
     abstaende: null as never,
+    cacheDir: '.franibook-cache',
     outDir: dir,
   } as Kontext;
 

@@ -71,6 +71,7 @@ const kontext: Kontext = {
   decodes,
   abstaende,
   outDir: OUT_DIR,
+  cacheDir: CACHE_DIR,
   importLimit: IMPORT_LIMIT,
 };
 
@@ -189,7 +190,8 @@ async function start(): Promise<void> {
     .warm(project.effectivePhotoList(), 'preview', 6)
     .then(() => process.stdout.write('Vorschaubilder vollständig\n'))
     .then(() => merkmaleNachziehen())
-    .then(() => qualitaetNachziehen());
+    .then(() => qualitaetNachziehen())
+    .then(() => farbenNachziehen());
 }
 
 /**
@@ -252,6 +254,30 @@ async function qualitaetNachziehen(): Promise<void> {
     // Wie bei den Merkmalen: Ohne die Zahlen bleibt die Gewichtung, wie sie
     // war, und beim nächsten Start wird es erneut versucht.
     process.stdout.write(`Bildqualität übersprungen: ${String(err)}\n`);
+  }
+}
+
+/**
+ * Farbwerte für die Fotos, denen sie fehlen.
+ *
+ * Der letzte Schritt der Kette und der am wenigsten dringende: Gebraucht werden
+ * die Werte allein vom Titelmosaik (`core/mosaic/`). Ein Bestand, der sie noch
+ * nicht hat, ergibt dort kein falsches Bild, sondern ein leeres mit einem
+ * Hinweis — nach diesem Durchlauf ist es vollständig, ohne dass am Buch etwas
+ * umgestellt wurde.
+ */
+async function farbenNachziehen(): Promise<void> {
+  try {
+    const bericht = await project.farbenNachziehen(previews);
+    if (bericht.gemessen === 0 && bericht.gescheitert === 0) return;
+    await project.save();
+    process.stdout.write(
+      `Bildfarben: ${bericht.gemessen} Fotos gemessen` +
+        (bericht.gescheitert > 0 ? `, ${bericht.gescheitert} gescheitert` : '') +
+        ` (${bericht.millisekunden} ms)\n`,
+    );
+  } catch (err) {
+    process.stdout.write(`Bildfarben übersprungen: ${String(err)}\n`);
   }
 }
 

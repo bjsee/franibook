@@ -150,13 +150,14 @@ Die ausführlichen Konventionen und Entwurfsentscheidungen stehen in `.claude/ru
 und werden beim Arbeiten an den jeweiligen Dateien automatisch geladen. Wer eine
 Entscheidung sucht, ohne die passende Datei offen zu haben, liest sie direkt:
 
-| Datei                             | gilt für                                   | Inhalt                                                                      |
-| --------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
-| `.claude/rules/kern-rein.md`      | `packages/core/**`                         | I/O-Freiheit, Determinismus, Druckprofil, Modellgrenzen                     |
-| `.claude/rules/anordnen.md`       | `core/src/{layout,structure,templates}/**` | Gliederung, Seitenbudget, Vorlagenwahl, eigene Seiten, Einwurf, Auftakte    |
-| `.claude/rules/foto-datum-ort.md` | `core/src/model/**`                        | Datumskaskade und -korrektur, Ort, Ausrichtung, Bildfokus, `effectivePhoto` |
-| `.claude/rules/rendern.md`        | `core/src/render/**`                       | RSM, Schrift, Neigung, Rahmen, Ebenen, Warnungen                            |
-| `.claude/rules/format-druck.md`   | `core/src/print/**`                        | Druckprofile, Formatwechsel, Umschlagmaße                                   |
+| Datei                             | gilt für                                     | Inhalt                                                                      |
+| --------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------- |
+| `.claude/rules/kern-rein.md`      | `packages/core/**`                           | I/O-Freiheit, Determinismus, Druckprofil, Modellgrenzen                     |
+| `.claude/rules/anordnen.md`       | `core/src/{layout,structure,templates}/**`   | Gliederung, Seitenbudget, Vorlagenwahl, eigene Seiten, Einwurf, Auftakte    |
+| `.claude/rules/foto-datum-ort.md` | `core/src/model/**`                          | Datumskaskade und -korrektur, Ort, Ausrichtung, Bildfokus, `effectivePhoto` |
+| `.claude/rules/rendern.md`        | `core/src/render/**`                         | RSM, Schrift, Neigung, Rahmen, Ebenen, Warnungen                            |
+| `.claude/rules/format-druck.md`   | `core/src/print/**`                          | Druckprofile, Formatwechsel, Umschlagmaße                                   |
+| `.claude/rules/mosaik.md`         | `core/src/mosaic/**`, `server/src/mosaik/**` | Titelmosaik: Zielraster, Kachelwahl, Backen, Farbwerte am Foto              |
 
 Die vier Zeilen mit `core/…` meinen `packages/core/…`; die genauen Muster stehen im
 Frontmatter jeder Regeldatei.

@@ -5,6 +5,7 @@
  * Import unveränderlich. Alle Benutzerkorrekturen leben getrennt davon, damit
  * ein erneuter Import sie nicht überschreibt.
  */
+import type { Rgb } from './farbe.js';
 
 export type PhotoId = string;
 
@@ -112,6 +113,81 @@ export interface Photo {
    * innerhalb eines Doppels (`structure/doppel.ts`).
    */
   quality?: PhotoQuality;
+
+  /**
+   * Welche Farben das Bild hat, sehr grob gerastert.
+   *
+   * Wie `faces` und `quality` beim Import gemessen und gespeichert, nicht bei
+   * Bedarf gerechnet: Der Kern hat keine Pixel (`.claude/rules/kern-rein.md`).
+   * Verwendet wird es allein vom Mosaik (`mosaic/`), das zu einer Wunschfarbe
+   * das passende Foto sucht — 1600 Kacheln gegen 830 Fotos sind über eine
+   * Million Vergleiche, und die will niemand auf Bilddateien rechnen.
+   *
+   * Fehlt bei Fotos, die vor der Messung eingelesen wurden. Ein Foto ohne
+   * `tone` kommt im Mosaik nicht vor; das ist kein Fehler, sondern ein noch
+   * nicht nachgezogener Bestand.
+   */
+  tone?: PhotoTone;
+}
+
+/**
+ * Die Farben eines Fotos, auf neun Felder eingedampft.
+ *
+ * **Warum nicht nur ein Mittelwert:** Eine Mosaikkachel zeigt selten das ganze
+ * Bild, sondern einen quadratischen Ausschnitt daraus. Mit neun Feldern kann
+ * die Zuordnung nicht nur das Foto wählen, sondern auch die Stelle darin —
+ * ein Bild mit hellem Himmel oben und dunklem Wald unten taugt damit für zwei
+ * ganz verschiedene Wunschfarben. Mit einem einzigen Mittelwert wäre es ein
+ * mittleres Graugrün und für beide gleich mittelmäßig.
+ *
+ * **Warum nicht feiner:** 3×3 sind 27 Zahlen je Foto, über den Bestand rund
+ * 100 KB im Projekt-JSON. Ein 5×5-Raster wäre das Dreifache, und die Kachel
+ * ist im Druck ohnehin nur wenige Millimeter groß — ihr Feinbau ist beim
+ * Betrachten nicht die Frage, ihr Farbeindruck schon.
+ *
+ * Beide Angaben stehen **relativ zur angezeigten Bildkante** und drehen
+ * deshalb mit einer Ausrichtungskorrektur mit (`rotatePhotoTone`) — dieselbe
+ * Sorge wie bei `faces` und beim Ausschnitt.
+ */
+export interface PhotoTone {
+  /** Mittlere Farbe des ganzen Bildes. */
+  mean: Rgb;
+  /** Neun Felder, zeilenweise von oben links nach unten rechts. */
+  grid: readonly Rgb[];
+}
+
+/** Kantenlänge des Farbrasters. Teil der Definition von `PhotoTone`. */
+export const TONE_GRID = 3;
+
+/**
+ * Dreht ein Farbraster um Vierteldrehungen im Uhrzeigersinn.
+ *
+ * Gegenstück zu `rotateFocusRect`: Das Raster steht in Bildkoordinaten, und
+ * ein gekipptes Scan-Bild hätte sonst seinen Himmel im Mosaik weiterhin oben,
+ * obwohl er im angezeigten Bild links liegt. Das Raster ist quadratisch, die
+ * Felderzahl ändert sich also nicht — nur ihre Lage.
+ */
+export function rotatePhotoTone(tone: PhotoTone, turns: 0 | 1 | 2 | 3): PhotoTone {
+  if (turns === 0) return tone;
+  const n = TONE_GRID;
+  if (tone.grid.length !== n * n) return tone;
+
+  const gedreht: Rgb[] = new Array<Rgb>(n * n);
+  for (let row = 0; row < n; row++) {
+    for (let col = 0; col < n; col++) {
+      const feld = tone.grid[row * n + col]!;
+      // Eine Vierteldrehung im Uhrzeigersinn schiebt die obere linke Ecke nach
+      // oben rechts; zwei- und dreimal angewandt ergibt das die anderen Fälle.
+      const [zielCol, zielRow] =
+        turns === 1
+          ? [n - 1 - row, col]
+          : turns === 2
+            ? [n - 1 - col, n - 1 - row]
+            : [row, n - 1 - col];
+      gedreht[zielRow * n + zielCol] = feld;
+    }
+  }
+  return { mean: tone.mean, grid: gedreht };
 }
 
 /**
