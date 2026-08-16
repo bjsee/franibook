@@ -78,6 +78,22 @@ describe('Undo-Tabelle', () => {
       }
     }
   });
+
+  it('nennt beim Quellenwechsel den Griff, der stattfand', () => {
+    // Dieselbe Route benennt eine Quelle um und zieht sie um (`Sources.reroot`).
+    // „Quelle umbenannt" über einem zurückgenommenen Umzug kündigte als
+    // Kleinigkeit an, was den Weg zum ganzen Bestand zurückstellt.
+    const eintrag = UNDO_ROUTEN['PATCH /api/sources/:id'];
+    const satz = (body: unknown) =>
+      eintrag !== null && typeof eintrag?.label === 'function'
+        ? eintrag.label({}, body)
+        : undefined;
+
+    expect(satz({ label: 'NAS' })).toBe('Quelle umbenannt');
+    expect(satz({ root: '/Volumes/neu/buch' })).toBe('Quelle umgezogen');
+    // Dieselbe Bedingung wie im Handler: ein Pfad, der nach dem Trimmen steht.
+    expect(satz({ root: '   ' })).toBe('Quelle umbenannt');
+  });
 });
 
 describe('Verlauf am Server', () => {

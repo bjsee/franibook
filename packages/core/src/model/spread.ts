@@ -345,6 +345,52 @@ export function wirksamePlaetze(
   return weg.size === 0 ? alle : alle.filter((s) => !weg.has(s.id));
 }
 
+/** Zwei Plätze sind derselbe, wenn ihre Rechtecke bis hierhin übereinstimmen. */
+const PLATZ_TOLERANZ = 1e-6;
+
+/**
+ * Die weggenommenen Plätze, die eine neue Anordnung überleben.
+ *
+ * **Ein Vermerk gilt einem Platz und nicht einer Kennung.** Die Kennungen sind
+ * je Vorlage vergeben und kräftig wiederverwendet: `a` steht in 65 der 117
+ * Vorlagen, `b` in 53. Ungeprüft weitergetragen versteckt ein Vermerk nach dem
+ * Vorlagenwechsel irgendeinen anderen Platz – und zwar unbemerkt. Er ist leer,
+ * also fällt er auch der Abnahme nicht auf (`platz-leer` ist dort bewusst
+ * unterdrückt), er nimmt kein Bild an, und die Oberfläche kennt keinen Weg, ihn
+ * zurückzuholen: Sie schickt nur `hidden: true`.
+ *
+ * Bleiben darf deshalb nur, was sich als *derselbe* Platz ausweist, und das
+ * entscheidet die Stelle auf dem Blatt und nicht die Kennung: Beim Umstellen
+ * einer einzelnen Buchseite heißt der Platz `a` der Gegenseite danach `r-a`
+ * (`layout/single-page.ts` hängt die Bilder über dieselbe Gleichheit um) – er ist
+ * trotzdem derselbe Kasten. Zurückgegeben wird deshalb die *neue* Kennung.
+ *
+ * Beim Neuanordnen der ganzen Doppelseite überlebt in aller Regel nichts, und
+ * das ist richtig so: Dort ist die Aussage „diesen leeren Kasten will ich nicht"
+ * mit der Anordnung gegenstandslos geworden.
+ */
+export function hiddenSlotsNachWechsel(
+  hiddenSlots: readonly string[] | undefined,
+  alt: { slots: readonly TemplateSlot[] } | undefined,
+  neu: { slots: readonly TemplateSlot[] } | undefined,
+): string[] {
+  if (!hiddenSlots?.length || !alt || !neu) return [];
+  const gleicherPlatz = (a: TemplateSlot, b: TemplateSlot) =>
+    Math.abs(a.x - b.x) < PLATZ_TOLERANZ &&
+    Math.abs(a.y - b.y) < PLATZ_TOLERANZ &&
+    Math.abs(a.w - b.w) < PLATZ_TOLERANZ &&
+    Math.abs(a.h - b.h) < PLATZ_TOLERANZ;
+
+  const uebrig = new Set<string>();
+  for (const id of hiddenSlots) {
+    const vorher = alt.slots.find((s) => s.id === id);
+    if (!vorher) continue;
+    const nachher = neu.slots.find((s) => gleicherPlatz(vorher, s));
+    if (nachher) uebrig.add(nachher.id);
+  }
+  return [...uebrig];
+}
+
 /**
  * Die Bildplätze einer Doppelseite in Zeichenreihenfolge – hinten zuerst.
  *

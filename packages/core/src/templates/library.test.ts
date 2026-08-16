@@ -275,6 +275,50 @@ describe('Geometrie', () => {
     }
   });
 
+  it('stellt einen frei stehenden Bilderblock mittig auf seine Buchseite', () => {
+    // Freiraum ist kein Mangel — eine Seite mit drei Bildern soll nicht bis an
+    // die Kanten reichen. Sichtbar wird erst die Unwucht: `spread.9up.portraits`
+    // ließ rechts 40 mm oben und 106 mm unten frei, der Block klebte oben und
+    // das untere Drittel der Seite stand leer. Dasselbe bei drei, fünf, sechs
+    // und sieben Bildern, bis zu 66 mm Unterschied.
+    //
+    // Gemessen wird je **Buchseite**: Bei `9up.portraits` steht die Restfläche
+    // nur rechts, und über die Doppelseite gemittelt verschwände sie.
+    //
+    // Zwei Bauweisen sind ausdrücklich in Ordnung und darum ausgenommen:
+    // Der Bandsatz führt seinen Block bis an den Fußraum und lässt oben die
+    // 16 mm des Kopfes stehen (`reicht mit dem Bilderblock genau bis an den
+    // Fußraum`), und wo ein Titelband über den Bildern steht, gehört der Block
+    // ans Band statt in die Mitte — sonst risse der Titel von seinen Bildern ab.
+    //
+    // Die Toleranz von 15 mm ist gemessen, nicht gegriffen: Sie liegt zwischen
+    // der bewussten Staffelung von `spread.8up.staggered` (12 mm, die beiden
+    // Seiten sollen dort gegeneinander versetzt stehen) und der kleinsten
+    // Unwucht, die am Buch auffiel (20 mm bei `spread.3up.portraits`).
+    for (const n of supportedSlotCounts()) {
+      for (const t of templatesWithoutTitle(n)) {
+        if (t.textSlots && t.textSlots.length > 0) continue;
+        for (const seite of ['links', 'rechts'] as const) {
+          const drauf = t.slots.filter((s) => {
+            const mitte = (s.x + s.w / 2) * SPREAD_W;
+            return seite === 'links' ? mitte < SPREAD_W / 2 : mitte >= SPREAD_W / 2;
+          });
+          if (drauf.length === 0) continue;
+          if (drauf.some((s) => s.y < 0 || s.y + s.h > 1)) continue; // randabfallend
+
+          const oben = Math.min(...drauf.map((s) => s.y * PAGE_H)) - 22;
+          const unten = 278 - Math.max(...drauf.map((s) => (s.y + s.h) * PAGE_H));
+          if (unten <= 8) continue; // reicht an den Fußraum, siehe oben
+
+          expect(
+            Math.abs(unten - oben),
+            `${t.id} (${seite}) steht unwuchtig: ${oben.toFixed(0)} mm oben, ${unten.toFixed(0)} mm unten`,
+          ).toBeLessThanOrEqual(15);
+        }
+      }
+    }
+  });
+
   it('überlappt innerhalb eines Templates keine Slots', () => {
     for (const t of allTemplates()) {
       for (let i = 0; i < t.slots.length; i++) {
@@ -501,6 +545,42 @@ describe('Ausrichtung', () => {
         } else {
           expect(ar, `${t.id}/${s.id} soll hoch sein`).toBeLessThan(1);
         }
+      }
+    }
+  });
+
+  it('erlaubt „egal" nur an Plätzen, die wirklich keine Form haben', () => {
+    // Die andere Hälfte des Tests darüber: `slotCost` bestraft den
+    // Orientierungsbruch über `prefers`, nicht über die gerechnete Slotform.
+    // Ein klar quer gebauter Platz mit `any` kostet ein Hochformat darin also
+    // nur seinen Beschnitt – die 0,6 des Bruchs entfallen. Genau das stand an
+    // 32 Plätzen von `four-and-five` und `five-and-six` (120 × 74, also 1,62):
+    // den beiden Familien, die der Bandsatz nicht ersetzt hat.
+    //
+    // Am echten Bestand blieb die Korrektur **wirkungslos** – nachgemessen
+    // über alle 24 Mischungen bei neun und elf Bildern, sowohl in der
+    // Vorlagenwahl als auch in der Zuordnung bei fest gewählter Vorlage:
+    // Der Beschnittterm sortiert von allein richtig, und eine Strafe, die
+    // jede falsche Paarung gleich teuer macht, verschiebt das Optimum der
+    // Ungarischen Methode nicht. Sie steht hier trotzdem, weil eine Vorlage
+    // sagen muss, wie sie gebaut ist: Was `slotCost` morgen daraus macht,
+    // entscheidet `slotCost` – nicht eine vergessene Angabe.
+    //
+    // Die Grenze liegt zwischen dem quadratischsten Platz der Bibliothek
+    // (`staggered.titled`, 1,17) und der flachsten gebauten Zelle des
+    // Bandsatzes (4:3, also 1,33). Darunter ist `any` eine Aussage über die
+    // Form; darüber ist es eine fehlende Angabe.
+    const QUADRATISCH_BIS = 1.25;
+    for (const t of allTemplates()) {
+      for (const s of t.slots) {
+        if (s.prefers !== 'any') continue;
+        // Ein randabfallender Platz nimmt jedes Bild: Er füllt die Fläche,
+        // gleich welche Form das Foto hat.
+        if (s.x < 0 || s.y < 0 || s.x + s.w > 1 || s.y + s.h > 1) continue;
+        const ar = slotAspect(s, SPREAD_W, PAGE_H);
+        expect(Math.max(ar, 1 / ar), `${t.id}/${s.id} ist nicht quadratisch`).toBeLessThan(
+          QUADRATISCH_BIS,
+        );
       }
     }
   });
