@@ -925,6 +925,21 @@ describe('Leere Plätze wegnehmen', () => {
     );
   });
 
+  it('trägt den Vermerk nicht in eine andere Vorlage mit', () => {
+    // Die Kennungen sind je Vorlage vergeben und kräftig wiederverwendet: `b`
+    // liegt in `spread.2up.pair` rechts über die halbe Seite, in
+    // `spread.3up.hero-plus-two` oben rechts als kleiner Platz. Bliebe der
+    // Vermerk an der Kennung hängen, wäre nach dem Wechsel ein Platz
+    // verschwunden, den niemand weggenommen hat — leer, also der Abnahme kein
+    // `platz-leer` wert, und aus der Oberfläche nicht zurückzuholen.
+    const p = projektMitLeerem();
+    p.setSlotHidden(0, 'b', true);
+
+    expect(p.setSpreadTemplate(0, 'spread.3up.hero-plus-two').ok).toBe(true);
+    expect(p.spreads[0]).not.toHaveProperty('hiddenSlots');
+    expect(plaetzeIm(p).leer).toContain('b');
+  });
+
   it('zählt weggenommene Plätze als Handarbeit', () => {
     // Der Neuaufbau holt sie zurück, denn die Plätze kommen aus der Vorlage.
     const p = projektMitLeerem();
