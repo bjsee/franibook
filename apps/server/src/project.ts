@@ -111,6 +111,9 @@ import * as merkmale from './project/merkmale.js';
 import type { MerkmaleBericht } from './project/merkmale.js';
 import * as qualitaet from './project/qualitaet.js';
 import type { QualitaetBericht } from './project/qualitaet.js';
+import * as farben from './project/farben.js';
+import type { FarbBericht } from './project/farben.js';
+import * as titelmosaik from './project/titelmosaik.js';
 import * as doppel from './project/doppel.js';
 import type { DoppelBericht } from './project/doppel.js';
 import type { AbstandsErkennung, VisionErkennung } from './vision.js';
@@ -2262,12 +2265,104 @@ export class Project {
     return umschlag.renderCover(this);
   }
 
-  updateCover(patch: Partial<CoverDesign>): CoverDesign {
+  updateCover(patch: umschlag.CoverPatch): CoverDesign {
     return umschlag.updateCover(this, patch);
   }
 
   coverCandidates(limit = 24): { photoId: PhotoId; label: string }[] {
     return umschlag.coverCandidates(this, limit);
+  }
+
+  /**
+   * Das gebackene Titelmosaik — liegt neben dem Zustand, nicht darin.
+   *
+   * Wie die Anordnungsprobe und die Doppelvorschläge: eine Auskunft, keine
+   * Entscheidung. Sie steht nicht in `project.json`, denn sie hängt am Bestand
+   * und an der Seitenzahl; die Anweisung dazu (`cover.frontMosaic`) wird sehr
+   * wohl gespeichert.
+   */
+  titelmosaik: titelmosaik.Titelmosaik | undefined = undefined;
+
+  /**
+   * Woran gerade gebacken wird, oder `null`.
+   *
+   * Wird abgefragt (`GET /api/cover/mosaik-fortschritt`) und nicht geschoben:
+   * Ein Mosaik zu bauen dauert Sekunden bis Minuten, und ohne diese Auskunft
+   * unterscheidet die Oberfläche nicht zwischen „rechnet noch" und „hängt".
+   */
+  mosaikFortschritt: titelmosaik.Mosaikfortschritt | null = null;
+
+  /**
+   * Laufende Nummer des jüngsten Backvorgangs.
+   *
+   * Zwei Aufrufe können sich überlappen, und beide schreiben auf `titelmosaik`
+   * und `mosaikFortschritt`. Die Nummer entscheidet, wer davon noch etwas zu
+   * sagen hat — dieselbe Sorge wie die `laufend`-Karte des Vorschau-Caches, nur
+   * ist hier nicht die doppelte Arbeit das Problem, sondern das Ergebnis eines
+   * überholten Laufs.
+   */
+  private mosaikLauf = 0;
+
+  /**
+   * Sorgt dafür, dass das Bild zum gesetzten Mosaik im Cache liegt.
+   *
+   * Muss vor jeder Antwort laufen, die den Umschlag zeigt oder exportiert.
+   * Beim zweiten Aufruf mit unveränderter Anweisung ist nichts zu tun: Der
+   * Abdruck des Plans steht im Dateinamen, und `backeMosaik` findet die Datei.
+   *
+   * **Fehler bleiben hier stecken.** Ein Mosaik, das sich nicht backen lässt —
+   * ein Zielbild ist weg, eine Vorschau fehlt —, darf die Coveransicht nicht
+   * verhindern; dann zeigt der Umschlag das gewöhnliche Titelbild, und der
+   * Grund steht im Rückgabewert.
+   */
+  async titelmosaikSicherstellen(
+    previews: PreviewCache,
+    cacheDir: string,
+    fuerDruck = false,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // **Es zählt der jüngste Aufruf, nicht der zuletzt fertige.** Zwei können
+    // sich überlappen — ein `GET /api/cover` aus einem zweiten Tab während eines
+    // langen `PATCH` —, und dann schrieben beide auf dieselben zwei Felder. Ein
+    // langsamerer *älterer* Lauf setzte zuletzt sein Ergebnis ein, und die
+    // Antwort meldete ein Mosaik, das nicht zur gespeicherten Anweisung gehört.
+    const lauf = ++this.mosaikLauf;
+
+    const anweisung = this.cover.frontMosaic;
+    if (!anweisung) {
+      this.titelmosaik = undefined;
+      return { ok: true };
+    }
+    try {
+      const gebacken = await titelmosaik.backeTitelmosaik(
+        this,
+        anweisung,
+        this.pageCount(),
+        previews,
+        cacheDir,
+        fuerDruck,
+        (f) => {
+          // Ein überholter Lauf meldet nichts mehr — sein Fortschritt gehört zu
+          // einem Bild, das niemand mehr sehen wird.
+          if (lauf === this.mosaikLauf) this.mosaikFortschritt = f;
+        },
+      );
+      if (lauf === this.mosaikLauf) this.titelmosaik = gebacken;
+      return { ok: true };
+    } catch (err) {
+      if (lauf === this.mosaikLauf) this.titelmosaik = undefined;
+      // **Nur selbst formulierte Sätze gehen nach außen.** Der Text einer rohen
+      // Exception trägt den vollen Dateipfad — bei einem ausgehängten
+      // Netzlaufwerk stünde er in den Hinweisen der Coveransicht. Dieselbe
+      // Zusage, die `istDateiFehler` an den Export-Endpunkten gibt.
+      if (err instanceof titelmosaik.MosaikFehler) return { ok: false, error: err.message };
+      process.stdout.write(`Titelmosaik gescheitert: ${String(err)}\n`);
+      return { ok: false, error: 'Beim Bauen ist etwas schiefgegangen (Näheres im Serverlog)' };
+    } finally {
+      // Nur der jüngste Lauf räumt auf: Ein schneller `GET` mitten in einem
+      // langen `PATCH` löschte sonst dessen Fortschritt, und der Balken bliebe
+      // bis zum Ende ohne Zahlen stehen.
+      if (lauf === this.mosaikLauf) this.mosaikFortschritt = null;
+    }
   }
 
   /**
@@ -2331,6 +2426,21 @@ export class Project {
     onProgress?: (fertig: number, gesamt: number) => void,
   ): Promise<QualitaetBericht> {
     return qualitaet.qualitaetNachziehen(this, previews, onProgress);
+  }
+
+  /**
+   * Zieht die fehlenden Farbwerte nach — das 3×3-Raster je Foto.
+   *
+   * Der dritte Nachzügler nach Merkmalen und Qualität, auf denselben
+   * 320-px-Vorschauen. Gebraucht wird er allein vom Titelmosaik
+   * (`core/mosaic/`); ein Bestand ohne die Werte ergibt kein falsches Mosaik,
+   * sondern ein leeres mit einem Hinweis.
+   */
+  async farbenNachziehen(
+    previews: PreviewCache,
+    onProgress?: (fertig: number, gesamt: number) => void,
+  ): Promise<FarbBericht> {
+    return farben.farbenNachziehen(this, previews, onProgress);
   }
 
   /**

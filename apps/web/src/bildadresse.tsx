@@ -30,6 +30,7 @@
  * Kontext gibt.
  */
 import { createContext, useContext, type ReactNode } from 'react';
+import { MOSAIC_ID_PREFIX, istMosaikId } from '@franibook/core';
 
 /** Kennung → Vierteldrehungen. Nur gedrehte Fotos stehen darin. */
 export type Bildfassungen = Record<string, 1 | 2 | 3>;
@@ -65,6 +66,14 @@ export function bildSrcVon(
   const original = new URLSearchParams(location.search).has('original');
 
   return (photoId: string, groesse: Bildgroesse = 'preview') => {
+    // Das Titelmosaik ist kein Foto des Bestands: Es hat keine Quelle, keine
+    // Fassung und keine zwei Größen, sondern liegt fertig gebacken im Cache
+    // (`core/cover/cover.ts`, `MOSAIC_ID_PREFIX`). Der Abdruck in seiner
+    // Kennung ist die Adresse — andere Anweisung, anderes Bild, andere URL,
+    // also gilt `immutable` auch hier.
+    if (istMosaikId(photoId)) {
+      return `/api/cover/mosaik/${photoId.slice(MOSAIC_ID_PREFIX.length)}`;
+    }
     const q = fassungen[photoId];
     const stempel = q ? `q=${q}` : '';
     if (original) {

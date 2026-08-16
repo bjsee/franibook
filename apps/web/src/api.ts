@@ -20,6 +20,7 @@ import type {
   Abnahmebericht,
   Befund,
   CoverDesign,
+  CoverMosaic,
   Crop,
   Ebenenzug,
   FrameId,
@@ -1278,12 +1279,49 @@ export interface Umschlag {
   candidates: { photoId: string; label: string }[];
   hints: string[];
   profileVerified: boolean;
+  /**
+   * Was aus einer Mosaikanweisung geworden ist. Fehlt, solange keine gesetzt
+   * ist — oder wenn das Backen scheiterte; dann steht der Grund in `hints`.
+   */
+  mosaik?: {
+    photoId: string;
+    datei: string;
+    kacheln: number;
+    /** Wie viele verschiedene Fotos vorkommen. */
+    fotos: number;
+    /** Wie viele überhaupt zur Wahl standen — `fotos` ist nur davor eine Aussage. */
+    verfuegbar: number;
+    druckBreitePx: number;
+    druckHoehePx: number;
+  };
 }
 
 export const umschlagLaden = () => hole<Umschlag>('/api/cover');
 
-export const umschlagAendern = (patch: Partial<CoverDesign>) =>
-  sende<Umschlag>('PATCH', '/api/cover', patch);
+/**
+ * `frontMosaic: null` entfernt das Mosaik — ein weggelassenes Feld hieße
+ * „nicht angefasst", und über JSON kommt kein `undefined` an.
+ */
+export const umschlagAendern = (
+  patch: Omit<Partial<CoverDesign>, 'frontMosaic'> & { frontMosaic?: CoverMosaic | null },
+) => sende<Umschlag>('PATCH', '/api/cover', patch);
+
+/**
+ * Woran der Server gerade backt, oder `null`.
+ *
+ * Wird im Sekundentakt gefragt, solange ein Mosaik entsteht — die Antwort auf
+ * das `PATCH` kommt erst, wenn alles fertig ist, und nützt für eine Anzeige
+ * während der Arbeit deshalb nichts.
+ */
+export interface Mosaikfortschritt {
+  phase: string;
+  fertig: number;
+  /** 0 heißt „keine zählbaren Schritte" — dann steht der Satz ohne Balken. */
+  gesamt: number;
+}
+
+export const mosaikFortschrittLaden = () =>
+  hole<{ fortschritt: Mosaikfortschritt | null }>('/api/cover/mosaik-fortschritt');
 
 export const umschlagExportieren = () =>
   sende<{

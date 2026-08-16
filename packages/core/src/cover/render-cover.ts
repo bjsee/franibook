@@ -22,7 +22,13 @@ import { type TextStyleName, textFontSizePt, textStyle } from '../render/typogra
 import type { CoverDesign } from './cover.js';
 import { withCoverDefaults } from './cover.js';
 import type { CoverGeometry, CoverPanelKind } from './geometry.js';
-import { containsRect, coverGeometry, overlapsHinge, safeArea } from './geometry.js';
+import {
+  containsRect,
+  coverGeometry,
+  coverImageArea,
+  overlapsHinge,
+  safeArea,
+} from './geometry.js';
 import type {
   CoverBox,
   CoverGuide,
@@ -228,20 +234,15 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
   // Bilder laufen bewusst über die Gelenkzone bis zur Blattkante. Endeten sie
   // an der sichtbaren Kante, zeigte jede Falztoleranz einen weißen Streifen.
   if (d.frontPhotoId) {
-    const rect: Rect = {
-      xMm: geo.panels['hinge-front'].xMm,
-      yMm: 0,
-      wMm: geo.widthMm - geo.panels['hinge-front'].xMm,
-      hMm: geo.heightMm,
-    };
-    boxes.push(imageBox('front-photo', rect, d.frontPhotoId, d.frontCrop, ctx));
+    boxes.push(
+      imageBox('front-photo', coverImageArea(geo, 'front'), d.frontPhotoId, d.frontCrop, ctx),
+    );
   } else {
     boxes.push({ kind: 'empty', ...front, slotId: 'front-photo' });
   }
 
   if (d.backPhotoId) {
-    const rect: Rect = { xMm: 0, yMm: 0, wMm: spine.xMm, hMm: geo.heightMm };
-    boxes.push(imageBox('back-photo', rect, d.backPhotoId, d.backCrop, ctx));
+    boxes.push(imageBox('back-photo', coverImageArea(geo, 'back'), d.backPhotoId, d.backCrop, ctx));
   }
 
   // Der Rücken ist immer einfarbig. Ein über den Rücken laufendes Foto wirkt

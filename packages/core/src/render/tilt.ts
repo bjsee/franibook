@@ -14,6 +14,7 @@
  * Platz liegt.
  */
 
+import { fnv1aZahl } from '../model/fingerprint.js';
 import type { Rect } from './rendered-spread.js';
 
 /**
@@ -103,23 +104,6 @@ export function randabfallend(rect: Rect, flaeche: { widthMm: number; heightMm: 
 }
 
 /**
- * FNV-1a über die Kennung, mit dem Seed als Startwert.
- *
- * Ein eigener Hash statt des `mulberry32` aus `layout/generate.ts`: Der
- * Generator liefert eine *Folge*, hier wird aber zu einem gegebenen Slot der
- * eine zugehörige Wert gebraucht, unabhängig davon, in welcher Reihenfolge
- * gerendert wird.
- */
-function hash32(text: string, seed: number): number {
-  let h = (0x811c9dc5 ^ seed) >>> 0;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/**
  * Neigung eines Bildes in Grad im Uhrzeigersinn.
  *
  * Auf ein Zehntelgrad gerundet, damit die Oberfläche eine lesbare Zahl
@@ -129,7 +113,10 @@ function hash32(text: string, seed: number): number {
 export function tiltDeg(key: string, seed: number, maxDeg: number): number {
   if (!(maxDeg > 0)) return 0;
 
-  const h = hash32(key, seed);
+  // Ein Hash und kein `mulberry32` wie in `layout/generate.ts`: Der Generator
+  // liefert eine *Folge*, hier wird zu einem gegebenen Slot der eine zugehörige
+  // Wert gebraucht — unabhängig davon, in welcher Reihenfolge gerendert wird.
+  const h = fnv1aZahl(key, seed);
   // Zwei unabhängige Entscheidungen aus einem Hash: Richtung aus dem
   // untersten Bit, Betrag aus dem Rest. Getrennte Hashes wären eine zweite
   // Stelle, an der sich ein Off-by-one einnisten kann.

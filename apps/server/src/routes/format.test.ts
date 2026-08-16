@@ -43,6 +43,7 @@ async function probe(): Promise<{ app: FastifyInstance; project: Project }> {
     previews: null as never,
     decodes: null as never,
     abstaende: null as never,
+    cacheDir: '.franibook-cache',
     outDir: dir,
   } as Kontext;
 
