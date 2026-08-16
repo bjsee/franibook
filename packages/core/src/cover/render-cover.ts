@@ -18,8 +18,14 @@ import type { Photo, PhotoId } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
 import type { PrintProfile } from '../print/profile.js';
 import type { ImageBox, Rect, RenderWarning } from '../render/rendered-spread.js';
-import { type TextStyleName, textFontSizePt, textStyle } from '../render/typography.js';
-import type { CoverDesign } from './cover.js';
+import type { FontFamilyId } from '../render/typography.js';
+import {
+  type TextStyleName,
+  textBoxHeightMm,
+  textFontSizePt,
+  textStyle,
+} from '../render/typography.js';
+import type { CoverDesign, CoverTextName, CoverTextStyle } from './cover.js';
 import { withCoverDefaults } from './cover.js';
 import type { CoverGeometry, CoverPanelKind } from './geometry.js';
 import {
@@ -170,25 +176,45 @@ function textBox(
   rect: Rect,
   content: string,
   color: string,
-  rotateDeg?: number,
-  /** Textstil aus `render/typography.ts`. */
-  styleName: TextStyleName = 'body',
+  opt: {
+    rotateDeg?: number;
+    /** Textstil aus `render/typography.ts`. */
+    styleName?: TextStyleName;
+    family?: FontFamilyId;
+  } = {},
 ): CoverTextBox {
   // Größe und Schnitt kommen aus demselben Stilsatz wie im Innenteil – zwei
   // eigene Regeln für dieselbe Frage laufen auseinander. Die Farbe bleibt ein
   // Argument: Auf dem Titelbalken steht der Text hell, nicht in Stilfarbe.
-  const style = textStyle(styleName);
+  const style = textStyle(opt.styleName ?? 'body');
   return {
     kind: 'text',
     ...rect,
     slotId,
     content,
+    // Aus der Kastenhöhe und nicht aus `CoverTextStyle.sizePt`: Eine gesetzte
+    // Punktgröße ist oben in die Kastenhöhe geflossen (`hoeheVon`), und die
+    // Grundlinie hängt in beiden Adaptern am Kasten. Zwei Wege zur Schriftgröße
+    // wären zwei Gelegenheiten, dass Zeile und Kasten auseinanderstehen.
     fontSizePt: textFontSizePt(rect.hMm, style),
     weight: style.weight,
     align: 'left',
     color,
-    ...(rotateDeg !== undefined ? { rotateDeg } : {}),
+    ...(opt.family ? { family: opt.family } : {}),
+    ...(opt.rotateDeg !== undefined ? { rotateDeg: opt.rotateDeg } : {}),
   };
+}
+
+/**
+ * Die Kastenhöhe eines Umschlagtexts.
+ *
+ * Ohne gesetzte Punktgröße die Vorgabe, die am Anteil der Seitenhöhe hängt und
+ * damit jedes Format mitnimmt. Mit gesetzter Größe deren Kasten — der Kasten ist
+ * der Träger der Grundlinie, also folgt er der Schrift und nicht umgekehrt.
+ */
+function hoeheVon(stil: CoverTextStyle, vorgabeMm: number, styleName: TextStyleName): number {
+  if (stil.sizePt === undefined) return vorgabeMm;
+  return textBoxHeightMm(stil.sizePt, textStyle(styleName));
 }
 
 function buildGuides(geo: CoverGeometry): CoverGuide[] {
@@ -231,6 +257,24 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
   const back = geo.panels.back;
   const spine = geo.panels.spine;
 
+  /** Der Stil eines der vier Texte — leer heißt „wie das Buch es vorgibt". */
+  const stil = (name: CoverTextName): CoverTextStyle => d.texts?.[name] ?? {};
+
+  // Die beiden Deckelfarben liegen als Fläche über dem Bogengrund und nicht
+  // neben ihm: Dazwischen stehen Rücken, Gelenke und die Umschlagkanten, die
+  // keinem der beiden Deckel gehören. Als drittes und viertes Feld in
+  // `RenderedCover` hätte jeder Adapter drei Grundfarben zu zeichnen gehabt —
+  // so sind es zwei gewöhnliche Rechtecke, für die die Parity längst gilt.
+  //
+  // Vor den Bildern, denn ein randabfallendes Titelbild deckt sie ohnehin zu;
+  // sichtbar sind sie genau dort, wo keines liegt.
+  for (const [farbe, panel] of [
+    [d.backBackground, 'back'],
+    [d.frontBackground, 'front'],
+  ] as const) {
+    if (farbe) boxes.push({ kind: 'rect', ...coverImageArea(geo, panel), fill: farbe });
+  }
+
   // Bilder laufen bewusst über die Gelenkzone bis zur Blattkante. Endeten sie
   // an der sichtbaren Kante, zeigte jede Falztoleranz einen weißen Streifen.
   if (d.frontPhotoId) {
@@ -255,33 +299,66 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
     yMm: 0,
     wMm: spine.wMm + 2 * geo.spineToleranceMm,
     hMm: geo.heightMm,
-    fill: d.accent ?? '#1a1a1a',
+    // Der Grund des Rückentextes ist der Rücken selbst — eine eigene Balkenfarbe
+    // gäbe es hier nichts zu unterlegen.
+    fill: stil('spine').band ?? d.accent ?? '#1a1a1a',
   });
 
   const titleH = profile.page.trimHeightMm * TITLE_HEIGHT_FRACTION;
-  const gap = titleH * GAP_FRACTION;
 
   // ------------------------------------------------------------- Vorderseite
 
   if (d.title || d.subtitle) {
-    const subH = d.subtitle ? titleH * SUBTITLE_FRACTION : 0;
+    const titelStil = stil('title');
+    const subStil = stil('subtitle');
+    const titelH = d.title ? hoeheVon(titelStil, titleH, 'groupTitle') : 0;
+    const subH = d.subtitle ? hoeheVon(subStil, titleH * SUBTITLE_FRACTION, 'body') : 0;
+    // Der Zwischenraum wächst mit dem Titel und nicht mit der Vorgabe: Ein von
+    // Hand auf 60 pt gesetzter Titel hätte sonst denselben knappen Abstand zum
+    // Untertitel wie ein 30-pt-Titel, und das liest sich als Klumpen.
+    const gap = d.title && d.subtitle ? titelH * GAP_FRACTION : 0;
     const unten = front.yMm + front.hMm - geo.safetyMm;
-    const titelY = unten - (d.title ? titleH : 0) - (d.subtitle ? subH + (d.title ? gap : 0) : 0);
+    const titelY = unten - titelH - subH - gap;
     const balkenY = titelY - geo.safetyMm;
     const aufBild = d.frontPhotoId !== undefined;
 
-    if (aufBild) {
+    /**
+     * Die beiden Balken stoßen in der Mitte des Zwischenraums aneinander.
+     *
+     * Ein Balken für beide Texte ginge nicht mehr, seit Titel und Untertitel je
+     * eine eigene Grundfarbe haben dürfen. Zwei Balken **mit Fuge** dazwischen
+     * sähen bei gleicher Farbe aus wie ein Fehler — so ergeben zwei gleiche
+     * Farben wieder genau die durchgehende Fläche von vorher.
+     */
+    const trennY = titelY + titelH + gap / 2;
+    const balken = (von: number, bis: number, fill: string) => {
       boxes.push({
         kind: 'rect',
         xMm: front.xMm,
-        yMm: balkenY,
+        yMm: von,
         wMm: geo.widthMm - front.xMm,
-        hMm: geo.heightMm - balkenY,
-        fill: d.accent ?? '#1a1a1a',
+        hMm: bis - von,
+        fill,
       });
+    };
+
+    // Ohne Bild darunter braucht der Text keinen deckenden Grund — es sei denn,
+    // jemand hat ausdrücklich eine Farbe gewählt. Wer eine Farbe wählt, will sie
+    // sehen; das ist derselbe Unterschied wie zwischen „automatisch" und „0" bei
+    // der Bildneigung.
+    const titelBalken = d.title && (aufBild || titelStil.band !== undefined);
+    const subBalken = d.subtitle && (aufBild || subStil.band !== undefined);
+
+    if (titelBalken) {
+      balken(balkenY, subBalken ? trennY : geo.heightMm, titelStil.band ?? d.accent ?? '#1a1a1a');
+    }
+    if (subBalken) {
+      balken(titelBalken ? trennY : balkenY, geo.heightMm, subStil.band ?? d.accent ?? '#1a1a1a');
     }
 
-    const farbe = (aufBild ? d.accentText : d.accent) ?? '#1a1a1a';
+    const farbeVon = (s: CoverTextStyle, mitBalken: boolean): string =>
+      s.color ?? (mitBalken ? d.accentText : d.accent) ?? '#1a1a1a';
+
     // Nicht `front.xMm + safetyMm`: Zur Rückenseite hin ist der Falzbereich
     // breiter als der Sicherheitsabstand, und die Prüfung weiter unten misst
     // gegen genau diese Fläche. Zwei Rechnungen für dieselbe Kante wären eine
@@ -292,28 +369,37 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
       boxes.push(
         textBox(
           'front-title',
-          { xMm, yMm: titelY, wMm, hMm: titleH },
+          { xMm, yMm: titelY, wMm, hMm: titelH },
           d.title,
-          farbe,
-          undefined,
-          'groupTitle',
+          farbeVon(titelStil, !!titelBalken),
+          { styleName: 'groupTitle', ...(titelStil.family ? { family: titelStil.family } : {}) },
         ),
       );
     }
     if (d.subtitle) {
       const yMm = unten - subH;
-      boxes.push(textBox('front-subtitle', { xMm, yMm, wMm, hMm: subH }, d.subtitle, farbe));
+      boxes.push(
+        textBox(
+          'front-subtitle',
+          { xMm, yMm, wMm, hMm: subH },
+          d.subtitle,
+          farbeVon(subStil, !!subBalken),
+          subStil.family ? { family: subStil.family } : {},
+        ),
+      );
     }
   }
 
   // --------------------------------------------------------------- Rückseite
 
   if (d.backText) {
-    const hMm = titleH * BACK_TEXT_FRACTION;
+    const backStil = stil('backText');
+    const hMm = hoeheVon(backStil, titleH * BACK_TEXT_FRACTION, 'body');
     const yMm = back.yMm + back.hMm - geo.safetyMm - hMm;
     const aufBild = d.backPhotoId !== undefined;
+    const mitBalken = aufBild || backStil.band !== undefined;
 
-    if (aufBild) {
+    if (mitBalken) {
       const balkenY = yMm - geo.safetyMm;
       boxes.push({
         kind: 'rect',
@@ -321,7 +407,7 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
         yMm: balkenY,
         wMm: spine.xMm,
         hMm: geo.heightMm - balkenY,
-        fill: d.accent ?? '#1a1a1a',
+        fill: backStil.band ?? d.accent ?? '#1a1a1a',
       });
     }
 
@@ -331,7 +417,8 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
         'back-text',
         { xMm: sicher.xMm, yMm, wMm: sicher.wMm, hMm },
         d.backText,
-        (aufBild ? d.accentText : d.accent) ?? '#1a1a1a',
+        backStil.color ?? (mitBalken ? d.accentText : d.accent) ?? '#1a1a1a',
+        backStil.family ? { family: backStil.family } : {},
       ),
     );
   }
@@ -339,6 +426,7 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
   // ------------------------------------------------------------------ Rücken
 
   if (d.spineText) {
+    const spineStil = stil('spine');
     const verfuegbar = spine.wMm - 2 * geo.spineToleranceMm;
     if (verfuegbar < MIN_SPINE_TEXT_HEIGHT_MM) {
       warnings.push({
@@ -347,7 +435,18 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
         requiredMm: MIN_SPINE_TEXT_HEIGHT_MM + 2 * geo.spineToleranceMm,
       });
     } else {
-      const hMm = Math.min(verfuegbar, MAX_SPINE_TEXT_HEIGHT_MM);
+      // Der Rücken ist die eine Stelle, an der die Breite eine harte Schranke
+      // ist: Was breiter gesetzt wird als der Rücken, läuft auf die Deckel. Eine
+      // gesetzte Größe wird deshalb geklemmt — aber gemeldet, denn ein still auf
+      // 12 mm zurückgestellter 40-pt-Wunsch sähe aus wie ein Fehler im Regler.
+      const gewuenscht = hoeheVon(spineStil, MAX_SPINE_TEXT_HEIGHT_MM, 'body');
+      const hMm = Math.min(verfuegbar, gewuenscht);
+      // Nur ein **ausdrücklicher** Wunsch wird gemeldet: `MAX_SPINE_TEXT_HEIGHT_MM`
+      // ist ein Deckel und keine Anforderung — dass ein schmaler Rücken ihn nicht
+      // ausschöpft, ist der Normalfall und kein Befund.
+      if (spineStil.sizePt !== undefined && gewuenscht > verfuegbar) {
+        warnings.push({ code: 'spine-text-clipped', requestedMm: gewuenscht, availableMm: hMm });
+      }
       const wMm = spine.hMm - 2 * geo.safetyMm;
       // Ungedrehte Lage: waagerecht, mittig auf dem Rücken. Die Drehung um den
       // Mittelpunkt macht daraus die senkrechte Zeile.
@@ -364,8 +463,8 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
             hMm,
           },
           d.spineText,
-          d.accentText ?? '#ffffff',
-          90,
+          spineStil.color ?? d.accentText ?? '#ffffff',
+          { rotateDeg: 90, ...(spineStil.family ? { family: spineStil.family } : {}) },
         ),
       );
     }

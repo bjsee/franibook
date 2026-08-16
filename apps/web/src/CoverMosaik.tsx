@@ -1,10 +1,15 @@
 /**
- * Das Titelbild aus vielen kleinen Fotos.
+ * Ein Deckelbild aus vielen kleinen Fotos.
  *
- * Ein eigenes Panel neben der Titelbildauswahl, weil es eine andere Frage
+ * Ein eigenes Panel neben der Bildauswahl, weil es eine andere Frage
  * beantwortet: Dort wählt man **ein** Bild, hier beschreibt man, wie aus dem
  * ganzen Bestand eines gebaut wird. Beides nebeneinander in derselben Reihe
  * hätte ausgesehen, als wäre das Mosaik einer der Kandidaten.
+ *
+ * **Eine Komponente für beide Deckel**, gewählt über `panel`. Vorder- und
+ * Rückseite tragen je eine eigene Anweisung, aber dieselben sechs Regler — eine
+ * zweite Fassung für die Rückseite wäre die Stelle gewesen, an der ein neuer
+ * Regler nur vorn ankommt.
  *
  * **Jeder Regler sendet erst beim Loslassen.** Ein Zug am Rasterregler löst
  * serverseitig einen Backvorgang aus — je nach Feinheit ein bis zehn Sekunden.
@@ -98,22 +103,41 @@ const REGLER: {
   },
 ];
 
+/** Welcher Deckel — mit allem, was daran verschieden ist. */
+const DECKEL = {
+  front: { feld: 'frontMosaic', stand: 'mosaik', titel: 'Titelbild aus vielen Fotos' },
+  back: { feld: 'backMosaic', stand: 'rueckmosaik', titel: 'Rückseite aus vielen Fotos' },
+} as const;
+
 export function CoverMosaik({
   data,
+  panel,
   onAendern,
   imageSrc,
   arbeit,
   laeuft = false,
 }: {
   data: Umschlag;
-  onAendern: (patch: { frontMosaic?: CoverMosaic }) => Promise<void>;
+  /** Vorder- oder Rückseite. Beide tragen je eine eigene Anweisung. */
+  panel: 'front' | 'back';
+  /**
+   * Das Patch geht unverändert an den Server. `null` entfernt das Mosaik —
+   * über JSON käme ein weggelassenes Feld als „nicht angefasst" an, und bei zwei
+   * Deckeln muss ohnehin dabeistehen, welcher gemeint ist.
+   */
+  onAendern: (patch: {
+    frontMosaic?: CoverMosaic | null;
+    backMosaic?: CoverMosaic | null;
+  }) => Promise<void>;
   imageSrc: (photoId: string) => string;
   /** Woran der Server gerade backt, sofern er schon geantwortet hat. */
   arbeit?: Mosaikfortschritt | null;
   /** Ob überhaupt gewartet wird — die erste Auskunft kommt einen Takt später. */
   laeuft?: boolean;
 }) {
-  const gesetzt = data.design.frontMosaic;
+  const deckel = DECKEL[panel];
+  const gesetzt = data.design[deckel.feld];
+  const stand = data[deckel.stand];
   /** Der Stand am Regler, während gezogen wird. Danach gilt wieder der Server. */
   const [entwurf, setEntwurf] = useState<CoverMosaic | null>(null);
   const wert = entwurf ?? gesetzt ?? DEFAULT_COVER_MOSAIC;
@@ -125,7 +149,7 @@ export function CoverMosaik({
   const senden = (patch: Partial<CoverMosaic>) => {
     const naechste = { ...wert, ...patch };
     setEntwurf(naechste);
-    void onAendern({ frontMosaic: naechste });
+    void onAendern({ [deckel.feld]: naechste });
   };
 
   /**
@@ -154,21 +178,28 @@ export function CoverMosaik({
   const ohneZielbild = () => {
     const { photoId: _weg, ...rest } = wert;
     setEntwurf(rest);
-    void onAendern({ frontMosaic: rest });
+    void onAendern({ [deckel.feld]: rest });
   };
 
   if (!gesetzt) {
     return (
       <div style={S.aus}>
         <div>
-          <strong style={B.titel}>Titelbild aus vielen Fotos</strong>
+          <strong style={B.titel}>{deckel.titel}</strong>
           <p style={{ ...B.leiser, margin: '4px 0 0' }}>
             Eine Zahl oder ein Wort aus den Bildern des Bestands formen — oder ein Foto als Mosaik
             nachbauen lassen.
           </p>
         </div>
         <button
-          onClick={() => void onAendern({ frontMosaic: { ...DEFAULT_COVER_MOSAIC, text: '18' } })}
+          onClick={() =>
+            void onAendern({
+              // Auf der Rückseite ohne Form: Dort trägt das Mosaik in aller
+              // Regel ein Feld aus Bildern, während vorn die Zahl steht.
+              [deckel.feld]:
+                panel === 'front' ? { ...DEFAULT_COVER_MOSAIC, text: '18' } : DEFAULT_COVER_MOSAIC,
+            })
+          }
           style={B.knopf}
         >
           Mosaik anlegen
@@ -180,15 +211,19 @@ export function CoverMosaik({
   return (
     <div style={S.panel}>
       <div style={S.zeile}>
-        <strong style={B.titel}>Titelbild aus vielen Fotos</strong>
+        <strong style={B.titel}>{deckel.titel}</strong>
         <span style={B.dehner} />
-        {data.mosaik && (
+        {stand && (
           <span style={B.leiser}>
-            {data.mosaik.kacheln} Kacheln aus {data.mosaik.fotos} Fotos ·{' '}
-            {data.mosaik.druckBreitePx} × {data.mosaik.druckHoehePx} px im Druck
+            {stand.kacheln} Kacheln aus {stand.fotos} Fotos · {stand.druckBreitePx} ×{' '}
+            {stand.druckHoehePx} px im Druck
           </span>
         )}
-        <button onClick={() => void onAendern({})} style={B.knopf} title="Zurück zum Einzelbild">
+        <button
+          onClick={() => void onAendern({ [deckel.feld]: null })}
+          style={B.knopf}
+          title="Zurück zum Einzelbild"
+        >
           Mosaik entfernen
         </button>
       </div>
@@ -253,9 +288,9 @@ export function CoverMosaik({
                 Die Zahl stammt aus dem zuletzt gebauten Mosaik und zieht darum
                 erst nach — das ist richtig so, sie beschreibt ein Ergebnis.
               */}
-              {r.key === 'reuseCost' && data.mosaik && (
+              {r.key === 'reuseCost' && stand && (
                 <span style={{ color: T.cyan }}>
-                  {data.mosaik.fotos} von {data.mosaik.verfuegbar} Fotos
+                  {stand.fotos} von {stand.verfuegbar} Fotos
                 </span>
               )}
             </span>

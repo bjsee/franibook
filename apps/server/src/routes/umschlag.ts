@@ -7,10 +7,15 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { istMosaikId, pruefeCoverMosaic } from '@franibook/core';
+import {
+  istMosaikId,
+  pruefeCoverGestaltung,
+  pruefeCoverMosaic,
+  type CoverDesign,
+} from '@franibook/core';
 import { renderCoverPdf } from '@franibook/render-pdf';
 import type { CoverPatch } from '../project/umschlag.js';
-import { MOSAIK_VORSCHAU_PX } from '../project/titelmosaik.js';
+import { MOSAIK_VORSCHAU_PX } from '../project/umschlagmosaik.js';
 import { coverAntwort, EXPORT_DATEINAME, istDateiFehler, type Kontext } from './kontext.js';
 
 /** Ein Abdruck ist eine Base-36-Zahl — nichts, was in einem Pfad etwas bedeutet. */
@@ -21,28 +26,34 @@ export function umschlagRouten(
   { project, sources, previews, outDir, cacheDir }: Kontext,
 ): void {
   app.get('/api/cover', async () => {
-    const mosaik = await project.titelmosaikSicherstellen(previews, cacheDir);
+    const mosaik = await project.umschlagmosaikeSicherstellen(previews, cacheDir);
     return coverAntwort(project, mosaik.ok ? undefined : mosaik.error);
   });
 
-  /** Nimmt Titel, Untertitel, Rückentext, ein anderes Titelbild oder ein Mosaik. */
+  /**
+   * Nimmt Titel, Untertitel, Rückentext, die Deckelbilder, die Mosaike und
+   * alles, was die vier Texte gestaltet.
+   */
   app.patch<{ Body?: CoverPatch }>('/api/cover', async (req, reply) => {
     // Der Rumpf kommt ungeprüft aus dem Netz und wird in den Projektzustand
     // gespreizt. Die Mosaikwerte steuern Rasterweiten und Bildmaße — ein
-    // vertipptes `cols: 20000` wären 400 Millionen Zellen. Ein unbrauchbarer
+    // vertipptes `cols: 20000` wären 400 Millionen Zellen —, und die Farben
+    // gehen unverändert in ein SVG-Attribut und ins PDF. Ein unbrauchbarer
     // Parameter ist ein `400` mit Satz (`.claude/rules/server.md`).
-    const anweisung = req.body?.frontMosaic;
-    if (anweisung) {
+    for (const anweisung of [req.body?.frontMosaic, req.body?.backMosaic]) {
+      if (!anweisung) continue;
       const fehler = pruefeCoverMosaic(anweisung);
       if (fehler) return reply.code(400).send({ error: fehler });
     }
+    const fehler = pruefeCoverGestaltung((req.body ?? {}) as Partial<CoverDesign>);
+    if (fehler) return reply.code(400).send({ error: fehler });
 
     project.updateCover(req.body ?? {});
     void project.save();
     // Nach dem Setzen und nicht erst beim nächsten `GET`: Wer die Rasterweite
     // verstellt, will das Ergebnis sehen — und die Antwort dieser Route ist der
     // Stand, den die Oberfläche übernimmt.
-    const mosaik = await project.titelmosaikSicherstellen(previews, cacheDir);
+    const mosaik = await project.umschlagmosaikeSicherstellen(previews, cacheDir);
     return coverAntwort(project, mosaik.ok ? undefined : mosaik.error);
   });
 
@@ -106,13 +117,20 @@ export function umschlagRouten(
 
     // Jetzt in Zielauflösung, nicht in Vorschaugröße: Der Export ist die eine
     // Gelegenheit, bei der die Wartezeit gerechtfertigt ist.
-    const mosaik = await project.titelmosaikSicherstellen(previews, cacheDir, true);
+    const mosaik = await project.umschlagmosaikeSicherstellen(previews, cacheDir, true);
     if (!mosaik.ok) {
       return reply
         .code(409)
-        .send({ ok: false, error: `Das Titelmosaik ließ sich nicht bauen: ${mosaik.error}` });
+        .send({ ok: false, error: `Ein Umschlagmosaik ließ sich nicht bauen: ${mosaik.error}` });
     }
-    const gebacken = project.titelmosaik;
+    // Nach Kennung und nicht nach Deckel nachgeschlagen: Der Auflöser bekommt
+    // eine `photoId` und weiß nicht, auf welcher Seite sie liegt — und beide
+    // Mosaike können dieselbe sein, wenn zufällig derselbe Plan herauskam.
+    const gebacken = new Map(
+      [project.titelmosaik, project.rueckmosaik]
+        .filter((m) => m !== undefined)
+        .map((m) => [m.photoId, m] as const),
+    );
 
     try {
       const result = await renderCoverPdf({
@@ -125,8 +143,8 @@ export function umschlagRouten(
           // Dort geht es um Bildquellen auf der Platte, und ein abgeleitetes
           // Bild ist keine.
           if (istMosaikId(photoId)) {
-            const datei = gebacken?.druckDatei;
-            if (!datei || gebacken.photoId !== photoId) return undefined;
+            const datei = gebacken.get(photoId)?.druckDatei;
+            if (!datei) return undefined;
             return { path: join(cacheDir, 'mosaik', datei), orientation: 1 };
           }
           const photo = project.photo(photoId);

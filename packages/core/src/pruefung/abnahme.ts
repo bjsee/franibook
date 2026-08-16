@@ -541,7 +541,11 @@ function ausCoverwarnung(w: CoverWarning): Befundart {
       return 'im-falz';
     case 'outside-safety':
       return 'im-rand';
+    // Beide Fälle sind derselbe Mangel: Der Rücken trägt den Text nicht so, wie
+    // er gesetzt ist. Eine zweite Art hätte im Bericht eine zweite Überschrift
+    // mit derselben Aussage bekommen; den Unterschied nennt der Wortlaut.
     case 'spine-too-narrow-for-text':
+    case 'spine-text-clipped':
       return 'ruecken-zu-schmal';
     case 'profile-unverified':
       return 'profil-ungeprueft';

@@ -21,6 +21,8 @@ import type {
   Befund,
   CoverDesign,
   CoverMosaic,
+  CoverTextName,
+  CoverTextStyle,
   Crop,
   Ebenenzug,
   FrameId,
@@ -1280,31 +1282,46 @@ export interface Umschlag {
   hints: string[];
   profileVerified: boolean;
   /**
-   * Was aus einer Mosaikanweisung geworden ist. Fehlt, solange keine gesetzt
-   * ist — oder wenn das Backen scheiterte; dann steht der Grund in `hints`.
+   * Was aus der Anweisung für die Vorderseite geworden ist. Fehlt, solange
+   * keine gesetzt ist — oder wenn das Backen scheiterte; dann steht der Grund
+   * in `hints`.
    */
-  mosaik?: {
-    photoId: string;
-    datei: string;
-    kacheln: number;
-    /** Wie viele verschiedene Fotos vorkommen. */
-    fotos: number;
-    /** Wie viele überhaupt zur Wahl standen — `fotos` ist nur davor eine Aussage. */
-    verfuegbar: number;
-    druckBreitePx: number;
-    druckHoehePx: number;
-  };
+  mosaik?: Mosaikstand;
+  /** Dasselbe für die Rückseite. */
+  rueckmosaik?: Mosaikstand;
+}
+
+export interface Mosaikstand {
+  photoId: string;
+  datei: string;
+  kacheln: number;
+  /** Wie viele verschiedene Fotos vorkommen. */
+  fotos: number;
+  /** Wie viele überhaupt zur Wahl standen — `fotos` ist nur davor eine Aussage. */
+  verfuegbar: number;
+  druckBreitePx: number;
+  druckHoehePx: number;
 }
 
 export const umschlagLaden = () => hole<Umschlag>('/api/cover');
 
 /**
- * `frontMosaic: null` entfernt das Mosaik — ein weggelassenes Feld hieße
- * „nicht angefasst", und über JSON kommt kein `undefined` an.
+ * Was `PATCH /api/cover` annimmt.
+ *
+ * `frontMosaic`/`backMosaic` auf `null` entfernen das Mosaik — ein weggelassenes
+ * Feld hieße „nicht angefasst", und über JSON kommt kein `undefined` an.
+ * Dieselbe Regel gilt in `texts` je Feld: `null` nimmt eine Gestaltung zurück,
+ * statt sie auf einen leeren Wert zu setzen. Und `texts` wird serverseitig **je
+ * Text verschmolzen**, die Oberfläche schickt also nur, was sie angefasst hat.
  */
-export const umschlagAendern = (
-  patch: Omit<Partial<CoverDesign>, 'frontMosaic'> & { frontMosaic?: CoverMosaic | null },
-) => sende<Umschlag>('PATCH', '/api/cover', patch);
+export type UmschlagPatch = Omit<Partial<CoverDesign>, 'frontMosaic' | 'backMosaic' | 'texts'> & {
+  frontMosaic?: CoverMosaic | null;
+  backMosaic?: CoverMosaic | null;
+  texts?: Partial<Record<CoverTextName, Partial<Record<keyof CoverTextStyle, unknown>>>>;
+};
+
+export const umschlagAendern = (patch: UmschlagPatch) =>
+  sende<Umschlag>('PATCH', '/api/cover', patch);
 
 /**
  * Woran der Server gerade backt, oder `null`.

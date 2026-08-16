@@ -16,6 +16,7 @@ import { coverWarningText, mosaicWarningText, teilbar } from '@franibook/core';
 import type { DecodeCache } from '../decode.js';
 import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
+import type { Umschlagmosaik } from '../project/umschlagmosaik.js';
 import type { Sources } from '../sources.js';
 import type { AbstandsErkennung } from '../vision.js';
 
@@ -184,36 +185,41 @@ export function gruppenAntwort(project: Project) {
  */
 export function coverAntwort(project: Project, mosaikFehler?: string) {
   const cover = project.renderCover();
-  const m = project.titelmosaik;
+  const vorn = project.titelmosaik;
+  const hinten = project.rueckmosaik;
   return {
     design: project.coverDesign(),
     cover,
     candidates: project.coverCandidates(),
     // Derselbe Wortlaut wie im Exportbericht, damit nicht zwei Texte dieselbe
-    // Ursache verschieden beschreiben.
+    // Ursache verschieden beschreiben. Die Befunde eines Mosaiks tragen ihren
+    // Deckel im Satz — „ohne Farbwerte" zweimal untereinander wäre sonst keine
+    // Auskunft, sondern ein Rätsel.
     hints: [
       ...cover.warnings.map(coverWarningText),
-      ...(m ? m.plan.warnings.map(mosaicWarningText) : []),
-      ...(mosaikFehler ? [`Das Titelmosaik ließ sich nicht bauen: ${mosaikFehler}`] : []),
+      ...(vorn ? vorn.plan.warnings.map((w) => `Titelmosaik: ${mosaicWarningText(w)}`) : []),
+      ...(hinten ? hinten.plan.warnings.map((w) => `Rückseite: ${mosaicWarningText(w)}`) : []),
+      ...(mosaikFehler ? [`Ein Umschlagmosaik ließ sich nicht bauen: ${mosaikFehler}`] : []),
     ],
     profileVerified: project.profile.provenance.verifiedAt !== null,
-    // Was aus der Anweisung geworden ist. Die Oberfläche zeigt daran, wie viele
-    // Bilder das Mosaik trägt — die Zahl ist der eigentliche Reiz der Sache und
-    // steht in keiner anderen Antwort.
-    ...(m
-      ? {
-          mosaik: {
-            photoId: m.photoId,
-            datei: m.vorschauDatei,
-            kacheln: m.kacheln,
-            fotos: m.fotos,
-            // Erst im Verhältnis dazu bedeutet `fotos` etwas: Die Oberfläche
-            // beschriftet damit den Vielfaltsregler.
-            verfuegbar: m.plan.candidates,
-            druckBreitePx: m.druckBreitePx,
-            druckHoehePx: m.druckHoehePx,
-          },
-        }
-      : {}),
+    // Was aus den Anweisungen geworden ist. Die Oberfläche zeigt daran, wie
+    // viele Bilder ein Mosaik trägt — die Zahl ist der eigentliche Reiz der
+    // Sache und steht in keiner anderen Antwort.
+    ...(vorn ? { mosaik: mosaikAntwort(vorn) } : {}),
+    ...(hinten ? { rueckmosaik: mosaikAntwort(hinten) } : {}),
+  };
+}
+
+function mosaikAntwort(m: Umschlagmosaik) {
+  return {
+    photoId: m.photoId,
+    datei: m.vorschauDatei,
+    kacheln: m.kacheln,
+    fotos: m.fotos,
+    // Erst im Verhältnis dazu bedeutet `fotos` etwas: Die Oberfläche
+    // beschriftet damit den Vielfaltsregler.
+    verfuegbar: m.plan.candidates,
+    druckBreitePx: m.druckBreitePx,
+    druckHoehePx: m.druckHoehePx,
   };
 }

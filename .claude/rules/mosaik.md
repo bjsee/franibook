@@ -4,15 +4,21 @@ paths:
   - 'packages/core/src/model/farbe.ts'
   - 'apps/server/src/mosaik/**/*'
   - 'apps/server/src/bildfarben.ts'
-  - 'apps/server/src/project/titelmosaik.ts'
+  - 'apps/server/src/project/umschlagmosaik.ts'
   - 'apps/server/src/project/farben.ts'
 ---
 
-# Das Titelmosaik: viele kleine Fotos ergeben ein Bild
+# Das Umschlagmosaik: viele kleine Fotos ergeben ein Bild
 
 Zwei Wünsche, ein Mechanismus: eine aus Bildern geformte „18", und ein
 vorgegebenes Foto, das aus Miniaturen nachgebaut wird. Wer hier etwas ergänzt,
 ergänzt es für beide — oder begründet, warum nicht.
+
+**Und zwei Deckel, dieselbe Rechnung.** Vorder- und Rückseite tragen je eine
+eigene Anweisung (`CoverDesign.frontMosaic`, `.backMosaic`); der einzige
+Unterschied ist die Fläche, für die geplant wird (`coverImageArea(geo, panel)`).
+Wer die Rückseite anders rechnen lässt als die Vorderseite, hat die zweite Stelle
+gebaut, an der Vielfalt und Einfärbung auseinanderlaufen können.
 
 ## Der gemeinsame Nenner ist das Zielraster
 
@@ -30,12 +36,12 @@ liest das Auge als Verlauf.
 
 ## Wer was rechnet
 
-| Ort                             | Aufgabe                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------- |
-| `core/mosaic/plan.ts`           | Welches Foto in welche Kachel, mit welchem Ausschnitt. I/O-frei, deterministisch. |
-| `server/mosaik/ziel.ts`         | Das Zielraster aus Text oder Foto — braucht Pixel und Schrift.                    |
-| `server/mosaik/backen.ts`       | Der Plan wird ein Bild. Der dritte Adapter neben Vorschau und PDF.                |
-| `server/project/titelmosaik.ts` | Vorschau- und Druckfassung aus **einem** Plan.                                    |
+| Ort                                | Aufgabe                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `core/mosaic/plan.ts`              | Welches Foto in welche Kachel, mit welchem Ausschnitt. I/O-frei, deterministisch. |
+| `server/mosaik/ziel.ts`            | Das Zielraster aus Text oder Foto — braucht Pixel und Schrift.                    |
+| `server/mosaik/backen.ts`          | Der Plan wird ein Bild. Der dritte Adapter neben Vorschau und PDF.                |
+| `server/project/umschlagmosaik.ts` | Vorschau- und Druckfassung aus **einem** Plan, je Deckel.                         |
 
 Die Trennung ist dieselbe wie zwischen RSM und Renderern: **Der Kern entscheidet,
 der Adapter zeichnet.** Wer den Backvorgang eine Layoutfrage beantworten lässt —
