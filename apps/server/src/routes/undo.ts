@@ -327,7 +327,18 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   'POST /api/import': { label: 'Bildquellen neu eingelesen', anker: true, barriere: true },
   'POST /api/sources': { label: 'Bildquelle aufgenommen', anker: true, barriere: true },
   'DELETE /api/sources/:id': { label: 'Bildquelle entfernt', anker: true, barriere: true },
-  'PATCH /api/sources/:id': { label: 'Quelle umbenannt' },
+  'PATCH /api/sources/:id': {
+    // Dieselbe Route trägt zwei Griffe: umbenennen und umziehen (`reroot`). Der
+    // Wortlaut nennt den, der stattfand — wer einen Ordner zurückgeholt hat und
+    // Cmd+Z drückt, bekäme unter „Quelle umbenannt" sonst den Weg zum ganzen
+    // Bestand zurückgenommen, angekündigt als Kleinigkeit. Die Bedingung ist die
+    // des Handlers (`routes/quellen.ts`): ein `root`, der nach dem Trimmen steht.
+    label: (_p, body) => {
+      const b = (body ?? {}) as { root?: unknown };
+      const umzug = typeof b.root === 'string' && b.root.trim() !== '';
+      return umzug ? 'Quelle umgezogen' : 'Quelle umbenannt';
+    },
+  },
 
   // -------------------------------------------------------------- Umschlag
   'PATCH /api/cover': { label: 'Umschlag geändert', schluessel: () => 'umschlag' },
