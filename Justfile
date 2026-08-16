@@ -22,6 +22,14 @@ probe := "apps/server/.franibook-project-probe"
 _default:
     @just --list --unsorted
 
+# Der erste Handgriff nach dem Klonen — und der nach jedem Merge, der eine
+# Abhängigkeit mitbringt: pnpm verlinkt sie je Paket, und ohne den Lauf
+# scheitert der Server am Import eines Moduls, das in `package.json` längst
+# steht. Richtet nebenbei den Pre-commit-Hook ein (`core.hooksPath`).
+[doc("Abhängigkeiten einrichten")]
+install:
+    pnpm install
+
 # Server und Vorschau zusammen starten (5174 und 5173).
 start:
     pnpm dev
