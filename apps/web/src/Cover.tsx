@@ -20,19 +20,60 @@ import {
   umschlagAendern,
   type Mosaikfortschritt,
   mosaikFortschrittLaden,
+  type UmschlagPatch,
   umschlagExportieren,
   umschlagLaden,
 } from './api.js';
 import { Bildwahl } from './Bildwahl.js';
 import { CoverMosaik } from './CoverMosaik.js';
+import { CoverTexte } from './CoverTexte.js';
+import { Farbwahl } from './Farbwahl.js';
 import { B, T } from './theme.js';
 
-const FELDER = [
-  { key: 'title', label: 'Titel (Vorderseite)' },
-  { key: 'subtitle', label: 'Untertitel' },
-  { key: 'spineText', label: 'Buchrücken' },
-  { key: 'backText', label: 'Rückseite' },
-] as const;
+/**
+ * Die Farben ganzer Flächen — im Unterschied zu denen einzelner Texte.
+ *
+ * `frontBackground` und `backBackground` liegen als Fläche über dem Bogengrund
+ * und heißen weggelassen „wie der Bogen". Deshalb steht in ihrem Wähler die
+ * geltende Vorgabe und nicht eine Farbe, die niemand gewählt hat.
+ */
+const GRUNDFARBEN: {
+  key: 'background' | 'frontBackground' | 'backBackground' | 'accent' | 'accentText';
+  label: string;
+  hinweis: string;
+  vorgabe: (d: CoverDesign) => string;
+}[] = [
+  {
+    key: 'background',
+    label: 'Bogen',
+    hinweis: 'Der ganze Umschlagbogen, sichtbar überall dort, wo nichts darüber liegt.',
+    vorgabe: () => '#ffffff',
+  },
+  {
+    key: 'frontBackground',
+    label: 'Vorderseite',
+    hinweis: 'Nur der vordere Deckel samt Gelenk und Beschnitt. Ein Titelbild deckt sie zu.',
+    vorgabe: (d) => d.background ?? '#ffffff',
+  },
+  {
+    key: 'backBackground',
+    label: 'Rückseite',
+    hinweis: 'Nur der hintere Deckel — ausdrücklich getrennt von der Vorderseite.',
+    vorgabe: (d) => d.background ?? '#ffffff',
+  },
+  {
+    key: 'accent',
+    label: 'Akzent',
+    hinweis: 'Vorgabe für Buchrücken und Textbalken, solange ein Text keine eigene Farbe hat.',
+    vorgabe: () => '#1a1a1a',
+  },
+  {
+    key: 'accentText',
+    label: 'Akzentschrift',
+    hinweis: 'Vorgabe für die Schrift auf Rücken und Balken.',
+    vorgabe: () => '#ffffff',
+  },
+];
 
 /** Wie oft nachgefragt wird, während ein Mosaik entsteht. */
 const MOSAIK_TAKT_MS = 700;
@@ -99,23 +140,26 @@ export function Cover({
     return () => ro.disconnect();
   }, [data]);
 
-  async function patch(feld: keyof CoverDesign, wert: string) {
+  async function patch(patch: UmschlagPatch) {
     try {
-      setData(await umschlagAendern({ [feld]: wert }));
+      setData(await umschlagAendern(patch));
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     }
   }
 
   /**
-   * Das Mosaik ändern — ein leeres Patch entfernt es.
+   * Das Mosaik ändern — `null` im Patch entfernt es.
    *
    * Eigener Weg neben `patch`, weil der Server hier tatsächlich arbeitet: Er
    * backt das Bild neu, und das dauert Sekunden. Deshalb die Anzeige „baue das
    * Mosaik" statt eines stummen Wartens; ohne sie sähe ein Regler, der eine
    * Sekunde später nachzieht, nach einem Aussetzer aus.
    */
-  async function mosaikAendern(patch: { frontMosaic?: CoverMosaic }) {
+  async function mosaikAendern(patch: {
+    frontMosaic?: CoverMosaic | null;
+    backMosaic?: CoverMosaic | null;
+  }) {
     // **Nur die jüngste Änderung gilt.** Zwei können sich überlappen: Der
     // Cursor steht im Feld „Form", die Hand greift zum Regler — `onBlur`
     // schickt das eine, `onPointerUp` das andere. Käme das ältere zuletzt
@@ -124,7 +168,7 @@ export function Cover({
     // räumt nur der jüngste Lauf die Anzeige auf — sonst verschwände der
     // Balken, während noch gebacken wird.
     const lauf = ++mosaikLauf.current;
-    setBusy('Baue das Titelmosaik …');
+    setBusy('Baue das Mosaik …');
     setNote(null);
     // Solange gewartet wird, im Sekundentakt nachfragen, woran gearbeitet wird.
     // Der Takt ist grob genug, um nicht ins Gewicht zu fallen, und fein genug,
@@ -139,10 +183,9 @@ export function Cover({
         .catch(() => undefined);
     }, MOSAIK_TAKT_MS);
     try {
-      // `null` und nicht `undefined`: Über JSON käme das weggelassene Feld als
-      // „nicht angefasst" an, und das Mosaik ließe sich nie entfernen.
-      const naechste: CoverMosaic | null = patch.frontMosaic ?? null;
-      const antwort = await umschlagAendern({ frontMosaic: naechste });
+      // Das Patch geht unverändert weiter: Welcher Deckel gemeint ist und ob er
+      // ein Mosaik bekommt oder verliert (`null`), hat das Panel schon gesagt.
+      const antwort = await umschlagAendern(patch);
       if (lauf === mosaikLauf.current) setData(antwort);
     } catch (e) {
       if (lauf === mosaikLauf.current) setNote(`Fehler: ${fehlertext(e)}`);
@@ -257,25 +300,28 @@ export function Cover({
         sind die Gelenkzonen — dort verschwindet beim Binden Fläche.
       </p>
 
-      <div style={S.felder}>
-        {FELDER.map((f) => (
-          <label key={f.key} style={S.feldWrap}>
-            <span style={B.marke}>{f.label}</span>
-            <input
-              // Ein Schlüssel mit dem geladenen Wert, sonst überlebt ein
-              // Server-seitiges Zurücknehmen nicht: `defaultValue` setzt React
-              // nur beim ersten Mount, und das nächste Verlassen des Feldes
-              // schriebe den alten DOM-Wert erneut zurück.
-              key={`${f.key}-${data.design[f.key] ?? ''}`}
-              defaultValue={data.design[f.key] ?? ''}
-              onBlur={(e) => {
-                if (e.target.value !== (data.design[f.key] ?? ''))
-                  void patch(f.key, e.target.value);
-              }}
-              style={{ ...B.feld, fontSize: 14 }}
+      <CoverTexte data={data} onAendern={patch} laeuft={busy !== null} />
+
+      {/*
+        Die Grundfarben stehen unter den Texten und nicht bei ihnen: Sie gelten
+        für eine ganze Fläche, nicht für eine Zeile — und die Vorderseite trägt
+        ihre nur dort, wo kein Bild liegt.
+      */}
+      <div style={S.farbpanel}>
+        <strong style={B.titel}>Grundfarben</strong>
+        <div style={S.farbreihe}>
+          {GRUNDFARBEN.map((f) => (
+            <Grundfarbe
+              key={f.key}
+              label={f.label}
+              hinweis={f.hinweis}
+              wert={data.design[f.key]}
+              vorgabe={f.vorgabe(data.design)}
+              gesperrt={busy !== null}
+              onSetzen={(farbe) => void patch({ [f.key]: farbe })}
             />
-          </label>
-        ))}
+          ))}
+        </div>
       </div>
 
       <strong style={{ ...B.titel, display: 'block', fontSize: 15, margin: '26px 0 10px' }}>
@@ -298,7 +344,7 @@ export function Cover({
         {data.candidates.map((c) => (
           <button
             key={c.photoId}
-            onClick={() => void patch('frontPhotoId', c.photoId)}
+            onClick={() => void patch({ frontPhotoId: c.photoId })}
             title={c.label}
             style={{
               ...S.kandidat,
@@ -324,19 +370,75 @@ export function Cover({
       <div style={{ opacity: data.design.frontMosaic ? 0.5 : 1 }}>
         <Bildwahl
           gewaehlt={data.design.frontMosaic ? undefined : data.design.frontPhotoId}
-          onWaehlen={(photoId) => void patch('frontPhotoId', photoId)}
+          onWaehlen={(photoId) => void patch({ frontPhotoId: photoId })}
           knopf="Titelbild aus dem ganzen Bestand wählen"
         />
       </div>
 
       <CoverMosaik
         data={data}
+        panel="front"
+        onAendern={mosaikAendern}
+        imageSrc={imageSrc}
+        arbeit={arbeit}
+        laeuft={busy !== null}
+      />
+
+      <strong style={{ ...B.titel, display: 'block', fontSize: 15, margin: '26px 0 10px' }}>
+        Rückseite
+      </strong>
+      {/*
+        Dieselbe Reihenfolge wie vorn — erst das einzelne Bild, dann das Mosaik,
+        das es schlägt. Die Rückseite darf leer bleiben: Ohne Bild trägt sie ihre
+        Grundfarbe, und das ist für ein Fotobuch eine ordentliche Rückseite.
+      */}
+      {data.design.backMosaic && (
+        <p style={{ ...B.leiser, margin: '0 0 10px' }}>
+          Die Rückseite trägt gerade ein Mosaik — eine Wahl hier wird gemerkt und gilt, sobald du es
+          weiter unten entfernst.
+        </p>
+      )}
+      <div style={{ opacity: data.design.backMosaic ? 0.5 : 1 }}>
+        <Bildwahl
+          gewaehlt={data.design.backMosaic ? undefined : data.design.backPhotoId}
+          onWaehlen={(photoId) => void patch({ backPhotoId: photoId })}
+          knopf="Bild der Rückseite aus dem ganzen Bestand wählen"
+        />
+      </div>
+
+      <CoverMosaik
+        data={data}
+        panel="back"
         onAendern={mosaikAendern}
         imageSrc={imageSrc}
         arbeit={arbeit}
         laeuft={busy !== null}
       />
     </div>
+  );
+}
+
+/** Eine Flächenfarbe mit ihrer Beschriftung. */
+function Grundfarbe({
+  label,
+  hinweis,
+  wert,
+  vorgabe,
+  gesperrt,
+  onSetzen,
+}: {
+  label: string;
+  hinweis: string;
+  wert: string | undefined;
+  vorgabe: string;
+  gesperrt: boolean;
+  onSetzen: (farbe: string | '') => void;
+}) {
+  return (
+    <label style={S.farbfeld} title={hinweis}>
+      <span style={B.marke}>{label}</span>
+      <Farbwahl wert={wert} vorgabe={vorgabe} gesperrt={gesperrt} onSetzen={onSetzen} />
+    </label>
   );
 }
 
@@ -391,6 +493,17 @@ const S = {
     margin: '18px 0',
   },
   buehne: { border: `1px solid ${T.line}`, lineHeight: 0, background: T.bg1 },
+  farbpanel: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 12,
+    padding: '14px 16px',
+    border: `1px solid ${T.line}`,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  farbreihe: { display: 'flex', gap: 22, flexWrap: 'wrap' as const },
+  farbfeld: { display: 'flex', flexDirection: 'column' as const, gap: 5 },
   felder: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))',

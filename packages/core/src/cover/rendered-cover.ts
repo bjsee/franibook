@@ -49,6 +49,7 @@ export type CoverWarning =
   | { code: 'in-hinge'; slotId: string }
   | { code: 'outside-safety'; slotId: string; panel: CoverPanelKind }
   | { code: 'spine-too-narrow-for-text'; spineMm: number; requiredMm: number }
+  | { code: 'spine-text-clipped'; requestedMm: number; availableMm: number }
   | { code: 'profile-unverified'; source: string };
 
 export interface RenderedCover {
@@ -98,6 +99,11 @@ export function coverWarningText(w: CoverWarning): string {
       return (
         `Der Rücken ist mit ${w.spineMm.toFixed(1)} mm zu schmal für Text ` +
         `(nötig wären ${w.requiredMm.toFixed(1)} mm) – der Rückentext bleibt weg`
+      );
+    case 'spine-text-clipped':
+      return (
+        `Die gesetzte Schriftgröße des Rückentitels bräuchte ${w.requestedMm.toFixed(1)} mm ` +
+        `Rückenbreite – gesetzt wird auf ${w.availableMm.toFixed(1)} mm`
       );
     case 'profile-unverified':
       return (

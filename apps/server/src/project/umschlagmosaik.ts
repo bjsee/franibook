@@ -1,10 +1,18 @@
 /**
- * Das Titelmosaik: von der Anweisung zum Bild.
+ * Das Umschlagmosaik: von der Anweisung zum Bild.
  *
  * Gespeichert ist im Projekt nur `CoverMosaic` — welcher Text, welches
  * Zielbild, wie fein das Raster. Hier wird daraus ein Bild: Zielraster
  * (`mosaik/ziel.ts`), Plan (`core/mosaic/`), gebackene Datei
  * (`mosaik/backen.ts`).
+ *
+ * **Beide Deckel, dieselbe Rechnung.** Vorder- und Rückseite tragen je eine
+ * eigene Anweisung (`frontMosaic`, `backMosaic`), und der einzige Unterschied
+ * zwischen ihnen ist die Fläche, für die geplant wird — sie kommt aus
+ * `coverImageArea(geo, panel)`. Deshalb steht hier `panel` als Argument und
+ * nicht ein zweites Modul daneben: Ein Rückseitenmosaik, das seine Kachelwahl
+ * aus einer eigenen Kopie dieser Funktionen bezöge, wäre die zweite Stelle, an
+ * der Vielfalt und Einfärbung auseinanderlaufen können.
  *
  * **Es gibt zwei Fassungen, und das ist der Grund für dieses Modul.** Die
  * Vorschau braucht ein Bild, das über die Leitung geht; der Druck braucht die
@@ -41,7 +49,7 @@ import { backeMosaik, type Bildquelle } from '../mosaik/backen.js';
 import { verbinde, zielAusFoto, zielAusText } from '../mosaik/ziel.js';
 
 /** Was dieses Modul vom Projekt anfasst. */
-export interface Titelmosaikstand {
+export interface Umschlagmosaikstand {
   photos: ReadonlyMap<PhotoId, Photo>;
   overrides: Record<PhotoId, PhotoOverride>;
   profile: PrintProfile;
@@ -95,8 +103,8 @@ export class MosaikFehler extends Error {
   }
 }
 
-export interface Titelmosaik {
-  /** Kennung, unter der das Bild als Titelbild läuft. */
+export interface Umschlagmosaik {
+  /** Kennung, unter der das Bild als Deckelbild läuft. */
   photoId: PhotoId;
   /** Synthetisches Foto — nur damit `renderCover` Ausschnitt und dpi rechnen kann. */
   photo: Photo;
@@ -115,22 +123,29 @@ export interface Titelmosaik {
   druckHoehePx: number;
 }
 
+/** Welcher Deckel gemeint ist. Derselbe Begriff wie in `coverImageArea`. */
+export type Deckel = 'front' | 'back';
+
 /**
- * Rechnet den Plan für ein Titelmosaik.
+ * Rechnet den Plan für ein Umschlagmosaik.
  *
  * Getrennt vom Backen, weil der Plan billig ist (Millisekunden) und das Backen
  * nicht: Über den Abdruck des Plans lässt sich entscheiden, ob überhaupt neu
  * gebacken werden muss.
  */
-export async function planeTitelmosaik(
-  stand: Titelmosaikstand,
+export async function planeUmschlagmosaik(
+  stand: Umschlagmosaikstand,
   mosaik: CoverMosaic,
+  panel: Deckel,
   pageCount: number,
   bilder: Bildquelle,
   melde?: (f: Mosaikfortschritt) => void,
 ): Promise<{ plan: MosaicPlan; areaAspect: number; druckBreitePx: number }> {
   const geo = coverGeometry(stand.profile, pageCount);
-  const flaeche = coverImageArea(geo, 'front');
+  // Beide Deckel sind gleich groß, aber die Fläche wird trotzdem erfragt und
+  // nicht angenommen: Ein Profil mit ungleichen Beschnittzugaben links und
+  // rechts machte aus der Annahme eine gestauchte Ziffer, und zwar lautlos.
+  const flaeche = coverImageArea(geo, panel);
   const areaAspect = flaeche.wMm / flaeche.hMm;
 
   const cols = Math.max(4, Math.round(mosaik.cols));
@@ -196,16 +211,24 @@ export async function planeTitelmosaik(
  * Sekunden bis Minuten und wird deshalb nur beim Export verlangt — beim
  * Blättern in der Coveransicht genügt die Vorschaufassung.
  */
-export async function backeTitelmosaik(
-  stand: Titelmosaikstand,
+export async function backeUmschlagmosaik(
+  stand: Umschlagmosaikstand,
   mosaik: CoverMosaic,
+  panel: Deckel,
   pageCount: number,
   bilder: Bildquelle,
   cacheDir: string,
   fuerDruck = false,
   melde?: (f: Mosaikfortschritt) => void,
-): Promise<Titelmosaik> {
-  const { plan, druckBreitePx } = await planeTitelmosaik(stand, mosaik, pageCount, bilder, melde);
+): Promise<Umschlagmosaik> {
+  const { plan, druckBreitePx } = await planeUmschlagmosaik(
+    stand,
+    mosaik,
+    panel,
+    pageCount,
+    bilder,
+    melde,
+  );
   const abdruck = mosaicFingerprint(plan);
 
   // **Die aufgelösten Fotos, nicht die rohen.** Der Vorschau-Cache wählt seine
@@ -294,7 +317,7 @@ function mosaikFoto(abdruck: string, width: number, height: number): Photo {
  * eine gedrehte Aufnahme steht also richtig herum in der Vorlage.
  */
 async function zielAusFotoKennung(
-  stand: Titelmosaikstand,
+  stand: Umschlagmosaikstand,
   photoId: PhotoId,
   raster: { cols: number; rows: number; areaAspect: number },
   bilder: Bildquelle,

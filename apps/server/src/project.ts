@@ -113,7 +113,7 @@ import * as qualitaet from './project/qualitaet.js';
 import type { QualitaetBericht } from './project/qualitaet.js';
 import * as farben from './project/farben.js';
 import type { FarbBericht } from './project/farben.js';
-import * as titelmosaik from './project/titelmosaik.js';
+import * as umschlagmosaik from './project/umschlagmosaik.js';
 import * as doppel from './project/doppel.js';
 import type { DoppelBericht } from './project/doppel.js';
 import type { AbstandsErkennung, VisionErkennung } from './vision.js';
@@ -2281,7 +2281,10 @@ export class Project {
    * und an der Seitenzahl; die Anweisung dazu (`cover.frontMosaic`) wird sehr
    * wohl gespeichert.
    */
-  titelmosaik: titelmosaik.Titelmosaik | undefined = undefined;
+  titelmosaik: umschlagmosaik.Umschlagmosaik | undefined = undefined;
+
+  /** Dasselbe für die Rückseite (`cover.backMosaic`). */
+  rueckmosaik: umschlagmosaik.Umschlagmosaik | undefined = undefined;
 
   /**
    * Woran gerade gebacken wird, oder `null`.
@@ -2290,7 +2293,7 @@ export class Project {
    * Ein Mosaik zu bauen dauert Sekunden bis Minuten, und ohne diese Auskunft
    * unterscheidet die Oberfläche nicht zwischen „rechnet noch" und „hängt".
    */
-  mosaikFortschritt: titelmosaik.Mosaikfortschritt | null = null;
+  mosaikFortschritt: umschlagmosaik.Mosaikfortschritt | null = null;
 
   /**
    * Laufende Nummer des jüngsten Backvorgangs.
@@ -2304,59 +2307,83 @@ export class Project {
   private mosaikLauf = 0;
 
   /**
-   * Sorgt dafür, dass das Bild zum gesetzten Mosaik im Cache liegt.
+   * Sorgt dafür, dass die Bilder zu den gesetzten Mosaiken im Cache liegen.
    *
    * Muss vor jeder Antwort laufen, die den Umschlag zeigt oder exportiert.
    * Beim zweiten Aufruf mit unveränderter Anweisung ist nichts zu tun: Der
    * Abdruck des Plans steht im Dateinamen, und `backeMosaik` findet die Datei.
    *
+   * **Beide Deckel nacheinander und nicht nebenläufig.** Ein Mosaik lastet die
+   * Maschine ohnehin aus (sharp arbeitet mit allen Kernen); zwei gleichzeitig
+   * wären nicht schneller, aber der Fortschrittsbalken zeigte abwechselnd zwei
+   * Zählungen und damit gar keine.
+   *
    * **Fehler bleiben hier stecken.** Ein Mosaik, das sich nicht backen lässt —
    * ein Zielbild ist weg, eine Vorschau fehlt —, darf die Coveransicht nicht
-   * verhindern; dann zeigt der Umschlag das gewöhnliche Titelbild, und der
+   * verhindern; dann zeigt der Umschlag das gewöhnliche Deckelbild, und der
    * Grund steht im Rückgabewert.
    */
-  async titelmosaikSicherstellen(
+  async umschlagmosaikeSicherstellen(
     previews: PreviewCache,
     cacheDir: string,
     fuerDruck = false,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     // **Es zählt der jüngste Aufruf, nicht der zuletzt fertige.** Zwei können
     // sich überlappen — ein `GET /api/cover` aus einem zweiten Tab während eines
-    // langen `PATCH` —, und dann schrieben beide auf dieselben zwei Felder. Ein
+    // langen `PATCH` —, und dann schrieben beide auf dieselben Felder. Ein
     // langsamerer *älterer* Lauf setzte zuletzt sein Ergebnis ein, und die
     // Antwort meldete ein Mosaik, das nicht zur gespeicherten Anweisung gehört.
     const lauf = ++this.mosaikLauf;
 
-    const anweisung = this.cover.frontMosaic;
-    if (!anweisung) {
-      this.titelmosaik = undefined;
-      return { ok: true };
-    }
     try {
-      const gebacken = await titelmosaik.backeTitelmosaik(
-        this,
-        anweisung,
-        this.pageCount(),
-        previews,
-        cacheDir,
-        fuerDruck,
-        (f) => {
-          // Ein überholter Lauf meldet nichts mehr — sein Fortschritt gehört zu
-          // einem Bild, das niemand mehr sehen wird.
-          if (lauf === this.mosaikLauf) this.mosaikFortschritt = f;
-        },
-      );
-      if (lauf === this.mosaikLauf) this.titelmosaik = gebacken;
-      return { ok: true };
-    } catch (err) {
-      if (lauf === this.mosaikLauf) this.titelmosaik = undefined;
-      // **Nur selbst formulierte Sätze gehen nach außen.** Der Text einer rohen
-      // Exception trägt den vollen Dateipfad — bei einem ausgehängten
-      // Netzlaufwerk stünde er in den Hinweisen der Coveransicht. Dieselbe
-      // Zusage, die `istDateiFehler` an den Export-Endpunkten gibt.
-      if (err instanceof titelmosaik.MosaikFehler) return { ok: false, error: err.message };
-      process.stdout.write(`Titelmosaik gescheitert: ${String(err)}\n`);
-      return { ok: false, error: 'Beim Bauen ist etwas schiefgegangen (Näheres im Serverlog)' };
+      // Der erste Fehler gewinnt, gebacken wird trotzdem weiter: Ein kaputtes
+      // Zielbild auf der Rückseite darf das fertige Titelmosaik nicht kosten.
+      let fehler: string | undefined;
+      for (const [feld, anweisung, panel, wo] of [
+        ['titelmosaik', this.cover.frontMosaic, 'front', 'Vorderseite'],
+        ['rueckmosaik', this.cover.backMosaic, 'back', 'Rückseite'],
+      ] as const) {
+        if (!anweisung) {
+          this[feld] = undefined;
+          continue;
+        }
+        try {
+          const gebacken = await umschlagmosaik.backeUmschlagmosaik(
+            this,
+            anweisung,
+            panel,
+            this.pageCount(),
+            previews,
+            cacheDir,
+            fuerDruck,
+            (f) => {
+              // Ein überholter Lauf meldet nichts mehr — sein Fortschritt gehört
+              // zu einem Bild, das niemand mehr sehen wird. Der Deckel steht im
+              // Satz, sonst zählt der Balken zweimal von vorn ohne zu sagen,
+              // woran das liegt.
+              if (lauf === this.mosaikLauf) {
+                this.mosaikFortschritt = { ...f, phase: `${wo}: ${f.phase}` };
+              }
+            },
+          );
+          if (lauf === this.mosaikLauf) this[feld] = gebacken;
+        } catch (err) {
+          if (lauf === this.mosaikLauf) this[feld] = undefined;
+          // **Nur selbst formulierte Sätze gehen nach außen.** Der Text einer
+          // rohen Exception trägt den vollen Dateipfad — bei einem ausgehängten
+          // Netzlaufwerk stünde er in den Hinweisen der Coveransicht. Dieselbe
+          // Zusage, die `istDateiFehler` an den Export-Endpunkten gibt.
+          const satz =
+            err instanceof umschlagmosaik.MosaikFehler
+              ? err.message
+              : 'Beim Bauen ist etwas schiefgegangen (Näheres im Serverlog)';
+          if (!(err instanceof umschlagmosaik.MosaikFehler)) {
+            process.stdout.write(`Umschlagmosaik (${wo}) gescheitert: ${String(err)}\n`);
+          }
+          fehler ??= `${wo}: ${satz}`;
+        }
+      }
+      return fehler === undefined ? { ok: true } : { ok: false, error: fehler };
     } finally {
       // Nur der jüngste Lauf räumt auf: Ein schneller `GET` mitten in einem
       // langen `PATCH` löschte sonst dessen Fortschritt, und der Balken bliebe
