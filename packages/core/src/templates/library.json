@@ -1419,7 +1419,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "e"
         },
         {
@@ -1428,7 +1428,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "f"
         },
         {
@@ -1437,7 +1437,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "g"
         },
         {
@@ -1446,7 +1446,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "h"
         },
         {
@@ -1455,7 +1455,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "i"
         }
       ]
@@ -1471,7 +1471,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "a"
         },
         {
@@ -1480,7 +1480,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "b"
         },
         {
@@ -1489,7 +1489,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "c"
         },
         {
@@ -1498,7 +1498,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "d"
         },
         {
@@ -1507,7 +1507,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "e"
         },
         {
@@ -1516,7 +1516,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "f"
         },
         {
@@ -1525,7 +1525,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "g"
         },
         {
@@ -1534,7 +1534,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "h"
         },
         {
@@ -1543,7 +1543,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "i"
         },
         {
@@ -1552,7 +1552,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "j"
         },
         {
@@ -1561,7 +1561,7 @@
           "w": 120,
           "h": 74,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "k"
         }
       ]
@@ -2032,7 +2032,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "e"
         },
         {
@@ -2041,7 +2041,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "f"
         },
         {
@@ -2050,7 +2050,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "g"
         },
         {
@@ -2059,7 +2059,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "h"
         },
         {
@@ -2068,7 +2068,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "i"
         }
       ],
@@ -2096,7 +2096,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "a"
         },
         {
@@ -2105,7 +2105,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "b"
         },
         {
@@ -2114,7 +2114,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "c"
         },
         {
@@ -2123,7 +2123,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "d"
         },
         {
@@ -2132,7 +2132,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "e"
         },
         {
@@ -2141,7 +2141,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "f"
         },
         {
@@ -2150,7 +2150,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "g"
         },
         {
@@ -2159,7 +2159,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "h"
         },
         {
@@ -2168,7 +2168,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "i"
         },
         {
@@ -2177,7 +2177,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "j"
         },
         {
@@ -2186,7 +2186,7 @@
           "w": 120,
           "h": 69,
           "prominence": 1,
-          "prefers": "any",
+          "prefers": "landscape",
           "id": "k"
         }
       ],

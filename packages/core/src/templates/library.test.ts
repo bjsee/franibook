@@ -504,6 +504,42 @@ describe('Ausrichtung', () => {
       }
     }
   });
+
+  it('erlaubt „egal" nur an Plätzen, die wirklich keine Form haben', () => {
+    // Die andere Hälfte des Tests darüber: `slotCost` bestraft den
+    // Orientierungsbruch über `prefers`, nicht über die gerechnete Slotform.
+    // Ein klar quer gebauter Platz mit `any` kostet ein Hochformat darin also
+    // nur seinen Beschnitt – die 0,6 des Bruchs entfallen. Genau das stand an
+    // 32 Plätzen von `four-and-five` und `five-and-six` (120 × 74, also 1,62):
+    // den beiden Familien, die der Bandsatz nicht ersetzt hat.
+    //
+    // Am echten Bestand blieb die Korrektur **wirkungslos** – nachgemessen
+    // über alle 24 Mischungen bei neun und elf Bildern, sowohl in der
+    // Vorlagenwahl als auch in der Zuordnung bei fest gewählter Vorlage:
+    // Der Beschnittterm sortiert von allein richtig, und eine Strafe, die
+    // jede falsche Paarung gleich teuer macht, verschiebt das Optimum der
+    // Ungarischen Methode nicht. Sie steht hier trotzdem, weil eine Vorlage
+    // sagen muss, wie sie gebaut ist: Was `slotCost` morgen daraus macht,
+    // entscheidet `slotCost` – nicht eine vergessene Angabe.
+    //
+    // Die Grenze liegt zwischen dem quadratischsten Platz der Bibliothek
+    // (`staggered.titled`, 1,17) und der flachsten gebauten Zelle des
+    // Bandsatzes (4:3, also 1,33). Darunter ist `any` eine Aussage über die
+    // Form; darüber ist es eine fehlende Angabe.
+    const QUADRATISCH_BIS = 1.25;
+    for (const t of allTemplates()) {
+      for (const s of t.slots) {
+        if (s.prefers !== 'any') continue;
+        // Ein randabfallender Platz nimmt jedes Bild: Er füllt die Fläche,
+        // gleich welche Form das Foto hat.
+        if (s.x < 0 || s.y < 0 || s.x + s.w > 1 || s.y + s.h > 1) continue;
+        const ar = slotAspect(s, SPREAD_W, PAGE_H);
+        expect(Math.max(ar, 1 / ar), `${t.id}/${s.id} ist nicht quadratisch`).toBeLessThan(
+          QUADRATISCH_BIS,
+        );
+      }
+    }
+  });
 });
 
 describe('Spiegelung', () => {
