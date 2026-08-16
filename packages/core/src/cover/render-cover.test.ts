@@ -183,11 +183,163 @@ describe('Cover rendern', () => {
     expect(renderCover(VOLL, ctx)).toEqual(renderCover(VOLL, ctx));
   });
 
+  it('rendert ohne eine einzige Gestaltungsangabe genau wie vorher', () => {
+    // Die Zusage hinter `CoverTextStyle`: Jedes Feld ist optional, und ein
+    // leeres `texts` darf am Ergebnis nichts ändern. Sonst verschöbe die
+    // Gestaltbarkeit jedes bestehende Buch um ein paar Zehntelmillimeter.
+    expect(renderCover({ ...VOLL, texts: {} }, ctx)).toEqual(renderCover(VOLL, ctx));
+  });
+
   it('liefert Hilfslinien für Beschnitt, Umschlag, Gelenk, Rücken und Falz', () => {
     const cover = renderCover(VOLL, ctx);
     const arten = new Set(cover.guides.map((g) => g.kind));
     expect([...arten].sort()).toEqual(['bleed', 'fold', 'hinge', 'safety', 'spine', 'wrap']);
     expect(cover.guides.filter((g) => g.kind === 'fold')).toHaveLength(4);
     expect(cover.guides.filter((g) => g.kind === 'hinge')).toHaveLength(2);
+  });
+});
+
+describe('Umschlag gestalten', () => {
+  it('setzt Schrift und Punktgröße je Text', () => {
+    const cover = renderCover(
+      {
+        ...VOLL,
+        texts: {
+          title: { family: 'display', sizePt: 48 },
+          subtitle: { family: 'hand' },
+          spine: { family: 'serif' },
+          backText: { family: 'hand', sizePt: 9 },
+        },
+      },
+      ctx,
+    );
+
+    const titel = box(cover, 'front-title');
+    expect(titel && 'family' in titel ? titel.family : undefined).toBe('display');
+    // Die Punktgröße kommt an, ohne dass ein Adapter sie nachrechnen müsste:
+    // Der Kasten ist aus ihr abgeleitet, die Größe steht in der Box.
+    expect(titel && 'fontSizePt' in titel ? titel.fontSizePt : 0).toBeCloseTo(48, 6);
+    expect(box(cover, 'front-subtitle')).toMatchObject({ family: 'hand' });
+    expect(box(cover, 'spine-text')).toMatchObject({ family: 'serif' });
+    expect(box(cover, 'back-text')).toMatchObject({ family: 'hand', fontSizePt: 9 });
+  });
+
+  it('lässt einen größeren Titel den Untertitel nach unten nicht verschieben', () => {
+    // Beide hängen an der Unterkante des Sicherheitsbereichs: Der Untertitel
+    // steht dort, der Titel wächst nach oben. Ein Titel, der seinen Untertitel
+    // vom Blatt schöbe, wäre die naheliegende und falsche Rechnung.
+    const klein = renderCover(VOLL, ctx);
+    const gross = renderCover({ ...VOLL, texts: { title: { sizePt: 60 } } }, ctx);
+
+    expect(box(gross, 'front-subtitle')?.yMm).toBeCloseTo(box(klein, 'front-subtitle')!.yMm, 9);
+    expect(box(gross, 'front-title')!.yMm).toBeLessThan(box(klein, 'front-title')!.yMm);
+  });
+
+  it('meldet einen Titelsatz, der aus dem Sicherheitsbereich wächst', () => {
+    // Zusammen 242 mm Kastenhöhe auf 260 mm Sicherheitsfläche, plus Zwischenraum
+    // — genau der Fall, für den die Größe keine eigene Grenze braucht: Was zu
+    // groß ist, sagt die Fläche und nicht eine geratene Höchstzahl.
+    const cover = renderCover(
+      { ...VOLL, texts: { title: { sizePt: 240 }, subtitle: { sizePt: 240 } } },
+      ctx,
+    );
+    const befund = cover.warnings.find(
+      (w) => w.code === 'outside-safety' && w.slotId === 'front-title',
+    );
+    expect(befund).toBeDefined();
+  });
+
+  it('legt Titel und Untertitel auf zwei Balken, die aneinanderstoßen', () => {
+    const cover = renderCover(
+      { ...VOLL, texts: { title: { band: '#112233' }, subtitle: { band: '#445566' } } },
+      ctx,
+    );
+    const balken = cover.boxes.filter(
+      (b) => b.kind === 'rect' && (b.fill === '#112233' || b.fill === '#445566'),
+    );
+    expect(balken).toHaveLength(2);
+    const [oben, unten] = balken;
+    // Keine Fuge: Bei gleicher Farbe muss wieder eine durchgehende Fläche
+    // herauskommen, sonst sähe der Vorgabefall nach einem Fehler aus.
+    expect(unten!.yMm).toBeCloseTo(oben!.yMm + oben!.hMm, 9);
+    expect(unten!.yMm + unten!.hMm).toBeCloseTo(cover.heightMm, 9);
+  });
+
+  it('ergibt bei gleicher Balkenfarbe dieselbe Fläche wie ein Balken', () => {
+    const zwei = renderCover(
+      { ...VOLL, texts: { title: { band: '#1a1a1a' }, subtitle: { band: '#1a1a1a' } } },
+      ctx,
+    );
+    const einer = renderCover(VOLL, ctx);
+    const flaeche = (c: RenderedCover) =>
+      c.boxes
+        .filter((b) => b.kind === 'rect' && b.fill === '#1a1a1a' && b.xMm > c.geometry.spineMm)
+        .reduce((summe, b) => summe + b.hMm, 0);
+    expect(flaeche(zwei)).toBeCloseTo(flaeche(einer), 9);
+  });
+
+  it('zeichnet einen Balken auch ohne Bild, wenn eine Farbe gewählt wurde', () => {
+    // Ohne Bild und ohne Wahl bleibt der Text auf blankem Grund — das ist die
+    // Vorgabe. Wer eine Farbe wählt, will sie sehen.
+    const ohne = renderCover({ title: 'Franziska' }, ctx);
+    expect(ohne.boxes.filter((b) => b.kind === 'rect')).toHaveLength(1); // nur der Rücken
+
+    const mit = renderCover({ title: 'Franziska', texts: { title: { band: '#123456' } } }, ctx);
+    expect(mit.boxes.filter((b) => b.kind === 'rect' && b.fill === '#123456')).toHaveLength(1);
+  });
+
+  it('färbt Rücken und Rückseitenbalken je für sich', () => {
+    const cover = renderCover(
+      {
+        ...VOLL,
+        backPhotoId: 'gross',
+        texts: { spine: { band: '#aa0000' }, backText: { band: '#00aa00' } },
+      },
+      ctx,
+    );
+    const geo = cover.geometry;
+    const ruecken = cover.boxes.find(
+      (b) => b.kind === 'rect' && b.hMm === geo.heightMm && b.wMm < 80,
+    );
+    expect(ruecken && 'fill' in ruecken ? ruecken.fill : undefined).toBe('#aa0000');
+    expect(cover.boxes.some((b) => b.kind === 'rect' && b.fill === '#00aa00')).toBe(true);
+  });
+
+  it('legt die Deckelfarben als zwei Flächen unter die Bilder', () => {
+    const cover = renderCover(
+      { ...VOLL, frontBackground: '#eeeeee', backBackground: '#333333' },
+      ctx,
+    );
+    const geo = cover.geometry;
+
+    const vorn = cover.boxes.findIndex((b) => b.kind === 'rect' && b.fill === '#eeeeee');
+    const hinten = cover.boxes.findIndex((b) => b.kind === 'rect' && b.fill === '#333333');
+    const bild = cover.boxes.findIndex((b) => 'slotId' in b && b.slotId === 'front-photo');
+    expect(vorn).toBeGreaterThanOrEqual(0);
+    // Vor dem Bild in der Zeichenreihenfolge: Ein randabfallendes Titelbild
+    // deckt die Farbe zu, sichtbar bleibt sie, wo keines liegt.
+    expect(vorn).toBeLessThan(bild);
+
+    const hinterFlaeche = cover.boxes[hinten]!;
+    expect(hinterFlaeche.xMm).toBe(0);
+    expect(hinterFlaeche.wMm).toBeCloseTo(geo.panels.spine.xMm, 9);
+    expect(hinterFlaeche.hMm).toBeCloseTo(geo.heightMm, 9);
+  });
+
+  it('klemmt einen zu großen Rückentitel und sagt es', () => {
+    const cover = renderCover({ ...VOLL, texts: { spine: { sizePt: 120 } } }, ctx);
+    const geo = cover.geometry;
+    const t = box(cover, 'spine-text');
+    expect(t!.hMm).toBeLessThanOrEqual(geo.spineMm - 2 * geo.spineToleranceMm + 1e-9);
+    const befund = cover.warnings.find((w) => w.code === 'spine-text-clipped');
+    expect(befund).toBeDefined();
+    expect(coverWarningText(befund!)).toContain('Rückenbreite');
+  });
+
+  it('schweigt über die Rückenbreite, solange keine Größe gesetzt ist', () => {
+    // `MAX_SPINE_TEXT_HEIGHT_MM` ist ein Deckel und keine Anforderung: Dass ein
+    // schmaler Rücken ihn nicht ausschöpft, ist der Normalfall.
+    const cover = renderCover(VOLL, { ...ctx, pageCount: 40 });
+    expect(cover.warnings.some((w) => w.code === 'spine-text-clipped')).toBe(false);
   });
 });

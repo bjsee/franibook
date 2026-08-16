@@ -11,6 +11,8 @@ import {
   FULL_CROP,
   type CoverDesign,
   type CoverMosaic,
+  type CoverTextName,
+  type CoverTextStyle,
   type Photo,
   type PhotoGroup,
   type PhotoId,
@@ -36,12 +38,14 @@ export interface Umschlagstand {
   /**
    * Das gebackene Titelmosaik, falls eines gesetzt und fertig ist.
    *
-   * Liegt neben dem Zustand und nicht darin (`project/titelmosaik.ts`): Es
+   * Liegt neben dem Zustand und nicht darin (`project/umschlagmosaik.ts`): Es
    * hängt am Bestand und an der Seitenzahl. Fehlt es, während `cover.frontMosaic`
    * gesetzt ist, heißt das „wird gerade gebacken" — der Umschlag zeigt so lange
    * das gewöhnliche Titelbild und nicht eine leere Fläche.
    */
   titelmosaik?: { photoId: PhotoId; photo: Photo } | undefined;
+  /** Dasselbe für die Rückseite (`cover.backMosaic`). */
+  rueckmosaik?: { photoId: PhotoId; photo: Photo } | undefined;
 }
 
 /**
@@ -79,25 +83,31 @@ export function coverDesign(z: Umschlagstand): CoverDesign {
     // druckbar ist. Der Benutzer wählt in der Coveransicht ein anderes.
     ...(vorschlag ? { frontPhotoId: vorschlag.photoId } : {}),
     ...z.cover,
-    // Zuletzt und damit über allem: Ein gesetztes Mosaik **ist** das Titelbild.
+    // Zuletzt und damit über allem: Ein gesetztes Mosaik **ist** das Deckelbild.
     // Es steht nicht neben `frontPhotoId`, sondern an dessen Stelle — sonst
     // bliebe das vorbelegte Foto als stille Konkurrenz stehen, und welches von
     // beiden gedruckt wird, hinge an der Reihenfolge im Spread.
     ...(z.cover.frontMosaic && z.titelmosaik
       ? { frontPhotoId: z.titelmosaik.photoId, frontCrop: { ...FULL_CROP } }
       : {}),
+    ...(z.cover.backMosaic && z.rueckmosaik
+      ? { backPhotoId: z.rueckmosaik.photoId, backCrop: { ...FULL_CROP } }
+      : {}),
   };
 }
 
 export function renderCover(z: Umschlagstand): RenderedCover {
-  // Das Mosaik ist kein Foto des Bestands und darf keines werden: Es taucht
+  // Ein Mosaik ist kein Foto des Bestands und darf keines werden: Es taucht
   // sonst im Fotopool auf, in Gruppen und in jeder Zählung. Für das Rendern
   // bekommt es einen Platz in einer Kopie der Karte — `renderCover` liest davon
   // nur Breite und Höhe.
-  const photos =
-    z.cover.frontMosaic && z.titelmosaik
-      ? new Map(z.photos).set(z.titelmosaik.photoId, z.titelmosaik.photo)
-      : z.photos;
+  const gebacken = [
+    z.cover.frontMosaic ? z.titelmosaik : undefined,
+    z.cover.backMosaic ? z.rueckmosaik : undefined,
+  ].filter((m): m is { photoId: PhotoId; photo: Photo } => m !== undefined);
+  const photos = gebacken.length
+    ? gebacken.reduce((karte, m) => karte.set(m.photoId, m.photo), new Map(z.photos))
+    : z.photos;
 
   return renderCoverModel(coverDesign(z), {
     profile: z.profile,
@@ -115,21 +125,70 @@ export function renderCover(z: Umschlagstand): RenderedCover {
  * gesetztes Mosaik ließe sich damit nie wieder entfernen. Ein leeres Objekt
  * wäre die Alternative gewesen — es sähe aber aus wie „ein Mosaik ohne
  * Einstellungen" und nicht wie „keines".
+ *
+ * **`texts` wird je Text verschmolzen und nicht ersetzt.** Es ist die eine
+ * verschachtelte Stelle im Umschlag, und die Oberfläche schickt daraus immer
+ * nur, was gerade angefasst wurde — ein flaches Überschreiben löschte beim
+ * Wechseln der Titelschrift dessen Farbe gleich mit. Innerhalb eines Textes
+ * gilt dieselbe Regel wie oben: Ein Feld auf `null` heißt „zurück zur Vorgabe".
  */
 export function updateCover(z: Umschlagstand, patch: CoverPatch): CoverDesign {
   const naechste: CoverDesign = { ...z.cover, ...(patch as Partial<CoverDesign>) };
   for (const key of ['title', 'subtitle', 'spineText', 'backText'] as const) {
     if (naechste[key] === '') delete naechste[key];
   }
+  // Dieselbe Regel für die Farben: Leer heißt „keine eigene Farbe", nicht „die
+  // Farbe #leer". Ohne diesen Zweig ließe sich eine einmal gesetzte Deckelfarbe
+  // nicht mehr zurücknehmen, ohne die Vorgabe von Hand nachzubauen.
+  for (const key of ['frontBackground', 'backBackground'] as const) {
+    const wert = naechste[key] as string | null | undefined;
+    if (wert === '' || wert === null) delete naechste[key];
+  }
   if (patch.frontMosaic === null) delete naechste.frontMosaic;
+  if (patch.backMosaic === null) delete naechste.backMosaic;
+  if (patch.texts) {
+    const texte = verschmelzeTexte(z.cover.texts, patch.texts);
+    // Nicht als `undefined` zuweisen (`exactOptionalPropertyTypes`): Ein Feld
+    // ohne Wert stünde im gespeicherten Projekt und sähe aus wie eine
+    // Gestaltung, die gerade nichts sagt.
+    if (Object.keys(texte).length === 0) delete naechste.texts;
+    else naechste.texts = texte;
+  }
   z.cover = naechste;
   return coverDesign(z);
 }
 
-/** Was `PATCH /api/cover` annimmt — siehe die Anmerkung zu `null` oben. */
-export type CoverPatch = Omit<Partial<CoverDesign>, 'frontMosaic'> & {
+/** Was `PATCH /api/cover` annimmt — siehe die Anmerkungen zu `null` oben. */
+export type CoverPatch = Omit<Partial<CoverDesign>, 'frontMosaic' | 'backMosaic' | 'texts'> & {
   frontMosaic?: CoverMosaic | null;
+  backMosaic?: CoverMosaic | null;
+  texts?: Partial<Record<CoverTextName, Partial<Record<keyof CoverTextStyle, unknown>>>>;
 };
+
+/**
+ * Textstile verschmelzen, eine Ebene tief.
+ *
+ * Ein Eintrag, dessen Felder sämtlich zurückgesetzt wurden, fällt ganz weg —
+ * sonst stünde im gespeicherten Projekt ein leeres Objekt, das aussieht wie eine
+ * Gestaltung und keine ist.
+ */
+function verschmelzeTexte(
+  bestand: CoverDesign['texts'],
+  patch: NonNullable<CoverPatch['texts']>,
+): Partial<Record<CoverTextName, CoverTextStyle>> {
+  const naechste: Record<string, CoverTextStyle> = { ...bestand };
+  for (const [name, stil] of Object.entries(patch)) {
+    if (!stil) continue;
+    const zusammen: Record<string, unknown> = { ...naechste[name] };
+    for (const [feld, wert] of Object.entries(stil)) {
+      if (wert === null || wert === '' || wert === undefined) delete zusammen[feld];
+      else zusammen[feld] = wert;
+    }
+    if (Object.keys(zusammen).length === 0) delete naechste[name];
+    else naechste[name] = zusammen as CoverTextStyle;
+  }
+  return naechste;
+}
 
 /**
  * Bilder, die als Titelbild in Frage kommen.

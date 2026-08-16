@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_COVER_DESIGN,
   DEFAULT_COVER_MOSAIC,
+  MAX_COVER_TEXT_PT,
   MAX_MOSAIC_COLS,
+  MIN_COVER_TEXT_PT,
   MIN_MOSAIC_COLS,
   MOSAIC_ID_PREFIX,
   istMosaikId,
+  pruefeCoverGestaltung,
   pruefeCoverMosaic,
 } from './cover.js';
 
@@ -57,6 +61,56 @@ describe('Anweisung für ein Titelmosaik prüfen', () => {
     expect(pruefeCoverMosaic({ cols: 44, text: '18' })).toBeUndefined();
     // Leer ist erlaubt und heißt „keine Form".
     expect(pruefeCoverMosaic({ cols: 44, text: '' })).toBeUndefined();
+  });
+});
+
+describe('Umschlaggestaltung prüfen', () => {
+  it('lässt einen leeren Rumpf und die Vorgabe durch', () => {
+    expect(pruefeCoverGestaltung({})).toBeUndefined();
+    expect(pruefeCoverGestaltung(DEFAULT_COVER_DESIGN)).toBeUndefined();
+  });
+
+  it('nimmt nur Hexfarben an', () => {
+    // Der Wert geht unverändert in ein SVG-Attribut **und** in pdfkit. Was nur
+    // eines von beidem versteht, wäre eine Parity-Abweichung ohne Meldung.
+    expect(pruefeCoverGestaltung({ frontBackground: '#abc' })).toBeUndefined();
+    expect(pruefeCoverGestaltung({ backBackground: '#A1B2C3' })).toBeUndefined();
+    expect(pruefeCoverGestaltung({ background: 'rebeccapurple' })).toMatch(/Farbe/);
+    expect(pruefeCoverGestaltung({ accent: 'hsl(210 50% 40%)' })).toMatch(/Farbe/);
+    expect(pruefeCoverGestaltung({ texts: { title: { band: 'red' } } })).toMatch(/Farbe/);
+  });
+
+  it('hält die Schriftgröße in ihren Grenzen', () => {
+    expect(
+      pruefeCoverGestaltung({ texts: { title: { sizePt: MIN_COVER_TEXT_PT } } }),
+    ).toBeUndefined();
+    expect(
+      pruefeCoverGestaltung({ texts: { spine: { sizePt: MAX_COVER_TEXT_PT } } }),
+    ).toBeUndefined();
+    expect(pruefeCoverGestaltung({ texts: { title: { sizePt: 0 } } })).toMatch(/Schriftgröße/);
+    expect(pruefeCoverGestaltung({ texts: { title: { sizePt: 1000 } } })).toMatch(/Schriftgröße/);
+    expect(pruefeCoverGestaltung({ texts: { title: { sizePt: NaN } } })).toMatch(/Schriftgröße/);
+  });
+
+  it('kennt nur die vier Schriften des Buchs', () => {
+    expect(pruefeCoverGestaltung({ texts: { subtitle: { family: 'hand' } } })).toBeUndefined();
+    expect(
+      pruefeCoverGestaltung({
+        texts: { subtitle: { family: 'Comic Sans' as never } },
+      }),
+    ).toMatch(/Schrift/);
+  });
+
+  it('lässt das Zurücknehmen durch', () => {
+    // `null` und der leere Text heißen „zurück zur Vorgabe" und kommen beim
+    // Rendern nie an. Sie hier abzuweisen hieße, eine gesetzte Farbe ließe sich
+    // nicht mehr entfernen.
+    expect(
+      pruefeCoverGestaltung({
+        frontBackground: null as never,
+        texts: { title: { color: '' as never, sizePt: null as never } },
+      }),
+    ).toBeUndefined();
   });
 });
 

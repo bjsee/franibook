@@ -2340,6 +2340,42 @@ Die Coverbreite ändert sich also mit jeder Änderung der Seitenzahl. Die Covera
 > ([#1](https://github.com/bjsee/franibook/issues/1)) — solange
 > `provenance.verifiedAt` null ist, weist jeder Coverexport darauf hin.
 
+> **Nachtrag (16. August 2026): der Umschlag wird gestaltbar**
+>
+> Die schlichte Vorgabe von oben bleibt genau das — eine Vorgabe. Vier Stellen
+> lassen sich jetzt einzeln setzen, und alle vier sind so geschnitten, dass ein
+> Umschlag **ohne eine einzige Angabe bitgleich rendert wie vorher**
+> (`render-cover.test.ts` prüft genau das):
+>
+> - **Schrift und Größe je Text** (`CoverTextStyle` in `cover/cover.ts`, ein
+>   Eintrag je `CoverTextName`). Die Größe steht in **Punkt**, nicht als Faktor:
+>   Punkt ist das Maß, in dem man Schrift bestellt, und „1,35×" sagt niemandem,
+>   wie groß das auf dem Deckel steht. Der Preis ist, dass ein Formatwechsel sie
+>   nicht mitskaliert — anders als die Vorgabe, die am Anteil der Seitenhöhe
+>   hängt. Der Kasten folgt der Schrift (`textBoxHeightMm`, die Umkehrung von
+>   `textFontSizePt`) und nicht umgekehrt, denn die Grundlinie hängt in beiden
+>   Adaptern am Kasten.
+> - **Schrift- und Grundfarbe je Text.** Damit liegen Titel und Untertitel auf
+>   **zwei** Balken statt auf einem; sie stoßen in der Mitte des Zwischenraums
+>   aneinander, sodass zwei gleiche Farben wieder genau die durchgehende Fläche
+>   von vorher ergeben. Ein Balken wird gezeichnet, wo ein Bild darunter liegt —
+>   oder wo ausdrücklich eine Farbe gewählt wurde: Wer eine Farbe wählt, will sie
+>   sehen. Der Rücken hat keinen eigenen Balken; seine Grundfarbe **ist** der
+>   Rücken.
+> - **Getrennte Deckelfarben** (`frontBackground`, `backBackground`). Sie liegen
+>   als zwei Rechtecke über dem Bogengrund und nicht als zwei weitere Felder in
+>   `RenderedCover`: Zwischen den Deckeln liegen Rücken, Gelenke und
+>   Umschlagkanten, die keinem von beiden gehören — und mehr Boxen statt eines
+>   neuen Begriffs ist dieselbe Machart wie beim Rahmen im Innenteil.
+> - **Ein eigenes Mosaik für die Rückseite** (`backMosaic`). Dieselbe Rechnung
+>   wie vorn, nur mit `coverImageArea(geo, 'back')`; der Server backt beide
+>   nacheinander und meldet den Deckel im Fortschrittssatz.
+>
+> Farben werden dabei **geprüft** (`pruefeCoverGestaltung`), und zwar auf
+> Hexadezimal: Der Wert geht unverändert in ein SVG-Attribut und in pdfkit, und
+> was nur eines von beidem versteht (`hsl()`, ein Farbname), wäre eine
+> Parity-Abweichung, die niemand bemerkt, bis das Buch gedruckt ist.
+
 > **Wichtig: Zu den Zahlenwerten des Saal-Profils**
 >
 > Saal Digital veröffentlicht die exakten Maßtabellen nur in den herunterladbaren Photoshop- und InDesign-Templates der Professional Zone, nicht als offen abrufbare Spezifikation. Öffentlich dokumentiert sind lediglich die Rahmenregeln: getrennte PDF-Dateien für Cover und Innenteil, Downsampling auf 300 ppi, eingebettete Schriften, Transparenzreduzierung in hoher Auflösung.

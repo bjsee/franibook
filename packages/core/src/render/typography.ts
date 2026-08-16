@@ -221,6 +221,25 @@ export function textFontSizePt(boxHeightMm: number, style: TextStyle): number {
 }
 
 /**
+ * Kastenhöhe zu einer vorgegebenen Schriftgröße — die Umkehrung von
+ * `textFontSizePt`.
+ *
+ * Gebraucht, wo nicht die Fläche die Schrift bestimmt, sondern die Schrift die
+ * Fläche: Auf dem Umschlag darf die Größe von Titel, Untertitel, Rückentext und
+ * Rückentitel in Punkt gesetzt werden (`CoverTextStyle.sizePt`). Der Kasten
+ * bleibt trotzdem der Träger der Grundlinie — beide Adapter rechnen sie aus
+ * `hMm` —, also muss er zur gewünschten Größe passen und nicht umgekehrt.
+ *
+ * Als Umkehrung derselben Funktion und nicht als zweite Formel: Eine eigene
+ * Rechnung wiche um genau den Betrag ab, um den `capHeightRatio` und `CAP_PER_EM`
+ * auseinanderstehen, und dann säße ein Text mit gesetzter Größe minimal anders
+ * als derselbe ohne.
+ */
+export function textBoxHeightMm(fontSizePt: number, style: TextStyle): number {
+  return (ptToMm(fontSizePt) * CAP_PER_EM) / style.capHeightRatio;
+}
+
+/**
  * Grundlinie einer Textzeile, in Millimetern von der Oberkante ihres Kastens.
  *
  * Mittig gesetzt wird das Versalband, nicht die Zeilenbox: „2024“ hat keine

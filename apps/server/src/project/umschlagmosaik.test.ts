@@ -25,7 +25,7 @@ import {
   defaultProfile,
 } from '@franibook/core';
 import type { PreviewSize } from '../previews.js';
-import { backeTitelmosaik } from './titelmosaik.js';
+import { backeUmschlagmosaik } from './umschlagmosaik.js';
 
 /** Ein Foto mit Farbwerten — mehr braucht die Zuordnung nicht. */
 function foto(id: string, farbe: Rgb): Photo {
@@ -82,9 +82,10 @@ describe('Titelmosaik backen', () => {
     const overrides: Record<PhotoId, PhotoOverride> = { a: { orientationTurns: 1 } };
     const quelle = protokollquelle(bildpfad);
 
-    await backeTitelmosaik(
+    await backeUmschlagmosaik(
       { photos, overrides, profile },
       { cols: 6 },
+      'front',
       80,
       quelle,
       join(ordner, 'cache-1'),
@@ -98,9 +99,10 @@ describe('Titelmosaik backen', () => {
     const photos = new Map<PhotoId, Photo>([['b', foto('b', [60, 200, 60])]]);
     const quelle = protokollquelle(bildpfad);
 
-    await backeTitelmosaik(
+    await backeUmschlagmosaik(
       { photos, overrides: {}, profile },
       { cols: 6 },
+      'front',
       80,
       quelle,
       join(ordner, 'cache-2'),
@@ -119,9 +121,10 @@ describe('Titelmosaik backen', () => {
     const overrides: Record<PhotoId, PhotoOverride> = { ziel: { orientationTurns: 2 } };
     const quelle = protokollquelle(bildpfad);
 
-    await backeTitelmosaik(
+    await backeUmschlagmosaik(
       { photos, overrides, profile },
       { cols: 6, photoId: 'ziel' },
+      'front',
       80,
       quelle,
       join(ordner, 'cache-3'),
@@ -132,15 +135,16 @@ describe('Titelmosaik backen', () => {
   });
 
   it('meldet ein fehlendes Zielbild als Satz ohne Dateipfad', async () => {
-    // Der Text landet über `titelmosaikSicherstellen` in der Antwort des
+    // Der Text landet über `umschlagmosaikeSicherstellen` in der Antwort des
     // Servers. Eine rohe Exception trüge den vollen Pfad hinein.
     const photos = new Map<PhotoId, Photo>([['a', foto('a', [200, 60, 60])]]);
     const quelle = protokollquelle(bildpfad);
 
     await expect(
-      backeTitelmosaik(
+      backeUmschlagmosaik(
         { photos, overrides: {}, profile },
         { cols: 6, photoId: 'weg' },
+        'front',
         80,
         quelle,
         join(ordner, 'cache-4'),
