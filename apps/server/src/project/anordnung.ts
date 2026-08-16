@@ -21,6 +21,7 @@ import {
   halfPageById,
   halfPages,
   halvesOfTemplate,
+  hiddenSlotsNachWechsel,
   isBlank,
   isJustified,
   isChapterHalf,
@@ -161,8 +162,20 @@ export function setSpreadTemplate(
     };
   }
 
+  // Die weggenommenen Plätze mit umtragen, bevor die Vorlage wechselt: Eine
+  // Kennung meint in der neuen Vorlage einen anderen Kasten, und der wäre danach
+  // unsichtbar, ohne dass etwas davon berichtet. Nach einer Neuanordnung der
+  // ganzen Doppelseite bleibt in aller Regel nichts übrig — `handwork().plaetze`
+  // sagt das vorher an.
+  const uebrig = hiddenSlotsNachWechsel(
+    spread.hiddenSlots,
+    templateById(spread.templateId),
+    templateById(angeordnet.templateId),
+  );
   spread.templateId = angeordnet.templateId;
   spread.slots = angeordnet.slots;
+  if (uebrig.length > 0) spread.hiddenSlots = uebrig;
+  else delete spread.hiddenSlots;
   return { ok: true, leftover: angeordnet.leftover };
 }
 
