@@ -82,6 +82,18 @@ export function useProbe(seed: number, patch: Record<string, unknown>): Probenst
    */
   const bleiben = useRef<number[]>([]);
 
+  /**
+   * Der Seed, von dem ein Wurf hochzählt.
+   *
+   * Nicht immer der des Projekts: Der Knopf „Neu anordnen" im Buchpanel bringt
+   * seinen eigenen mit (`{ seed: settings.seed + 1 }`), und die Ansicht geht
+   * damit auf. Zählte der Wurf trotzdem vom Projektseed aus, ergäbe der erste
+   * Klick auf „Andere Anordnung" wieder `seed + 1` — dieselbe Rechnung, unter
+   * der Meldung, es werde gewürfelt. Erst der zweite Klick änderte etwas.
+   */
+  const patchSeed = patch['seed'];
+  const basisSeed = typeof patchSeed === 'number' ? patchSeed : seed;
+
   const rechnen = useCallback(
     (neuerWurf: number, satz = 'Rechne das Buch …') => {
       const meins = ++laufend.current;
@@ -89,7 +101,7 @@ export function useProbe(seed: number, patch: Record<string, unknown>): Probenst
       setBusy(neuerWurf > 0 ? 'Würfle eine andere Anordnung …' : satz);
       setFehler(null);
       void probeRechnen(
-        { ...patch, ...(neuerWurf > 0 ? { seed: seed + neuerWurf } : {}) },
+        { ...patch, ...(neuerWurf > 0 ? { seed: basisSeed + neuerWurf } : {}) },
         bleiben.current,
       )
         .then(({ probe: neu }) => {
@@ -225,8 +237,33 @@ export function useProbekacheln(version: string): {
       { root: null, rootMargin: '400px' },
     );
 
-    for (const zeile of el.querySelectorAll('[data-zeile]')) observer.observe(zeile);
-    return () => observer.disconnect();
+    const beobachte = (wurzel: ParentNode) => {
+      for (const zeile of wurzel.querySelectorAll('[data-zeile]')) observer.observe(zeile);
+    };
+    beobachte(el);
+
+    // Zeilen kommen auch später dazu, ohne dass eine neue Probe gerechnet
+    // würde: „Auch die unveränderten zeigen" hängt dreißig auf einmal ein. Der
+    // Beobachter oben kennt nur, was beim Einhängen schon dastand – die neuen
+    // blieben sonst dauerhaft auf ihrem grauen Platzhalter stehen, weil nie
+    // jemand meldet, dass sie in Sichtweite sind. Ein zweiter Parameter mit der
+    // Zeilenzahl täte es auch, nähme dem Haken aber genau die Eigenschaft, um
+    // derentwillen er über `[data-zeile]` geht: Er weiß nichts über die Liste.
+    const zuwachs = new MutationObserver((eintraege) => {
+      for (const eintrag of eintraege) {
+        for (const knoten of eintrag.addedNodes) {
+          if (!(knoten instanceof HTMLElement)) continue;
+          if (knoten.dataset['zeile'] !== undefined) observer.observe(knoten);
+          else beobachte(knoten);
+        }
+      }
+    });
+    zuwachs.observe(el, { childList: true, subtree: true });
+
+    return () => {
+      zuwachs.disconnect();
+      observer.disconnect();
+    };
   }, [version]);
 
   useEffect(() => {

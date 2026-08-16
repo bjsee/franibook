@@ -24,7 +24,12 @@
 import { FULL_CROP } from '../model/crop.js';
 import type { PhotoWeight } from '../model/date.js';
 import type { Photo, PhotoId } from '../model/photo.js';
-import type { SlotAssignment, Spread, TextBlock } from '../model/spread.js';
+import {
+  hiddenSlotsNachWechsel,
+  type SlotAssignment,
+  type Spread,
+  type TextBlock,
+} from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
 import type { PrintProfile } from '../print/profile.js';
 import {
@@ -421,7 +426,11 @@ function alsFreieKaesten(
     );
   }
 
-  return { ok: true, spread: { ...spread, templateId, slots }, leftover: angeordnet.leftover };
+  return {
+    ok: true,
+    spread: mitPlaetzen({ ...spread, templateId, slots }, template, templateById(templateId)),
+    leftover: angeordnet.leftover,
+  };
 }
 
 /**
@@ -544,9 +553,25 @@ export function setChapterHalf(
 
   return {
     ok: true,
-    spread: { ...spread, templateId: neueId, slots },
+    spread: mitPlaetzen({ ...spread, templateId: neueId, slots }, template, neu),
     leftover: angeordnet.leftover,
   };
+}
+
+/**
+ * Trägt die weggenommenen Plätze in die neue Anordnung um.
+ *
+ * Eine Zeile Buchhaltung, aber sie gehört an jede Stelle, die `templateId`
+ * wechselt: Ein Vermerk, der die alte Kennung behielte, versteckte gegenüber
+ * irgendeinen anderen Platz – unbemerkt und ohne Weg zurück. Warum die Stelle
+ * auf dem Blatt entscheidet und nicht die Kennung, steht bei
+ * `hiddenSlotsNachWechsel`.
+ */
+function mitPlaetzen(spread: Spread, alt: Template | undefined, neu: Template | undefined): Spread {
+  const uebrig = hiddenSlotsNachWechsel(spread.hiddenSlots, alt, neu);
+  if (uebrig.length > 0) return { ...spread, hiddenSlots: uebrig };
+  const { hiddenSlots: _fort, ...ohne } = spread;
+  return ohne;
 }
 
 /**
@@ -633,7 +658,11 @@ export function setHalfPage(
   // ein neues Blatt, hier wird ein bestehendes umgestellt.
   return {
     ok: true,
-    spread: { ...spread, templateId: blatt.templateId, slots: blatt.slots },
+    spread: mitPlaetzen(
+      { ...spread, templateId: blatt.templateId, slots: blatt.slots },
+      templateById(spread.templateId),
+      templateById(blatt.templateId),
+    ),
     leftover: angeordnet.leftover,
   };
 }
