@@ -56,6 +56,9 @@ importers:
       '@franibook/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@franibook/fonts':
+        specifier: workspace:*
+        version: link:../../packages/fonts
       '@franibook/geo':
         specifier: workspace:*
         version: link:../../packages/geo
@@ -68,9 +71,16 @@ importers:
       fastify:
         specifier: ^5.11.0
         version: 5.11.0
+      fontkit:
+        specifier: ^2.0.4
+        version: 2.0.4
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@26.1.2)
+    devDependencies:
+      '@types/fontkit':
+        specifier: ^2.0.9
+        version: 2.0.9
 
   apps/web:
     dependencies:
@@ -776,6 +786,9 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/fontkit@2.0.9':
+    resolution: {integrity: sha512-qNYerFky3muCmZPq+R+B3cUDRA5OONw/oh6aGGFxx2LOBz6yu8eamKusrhkHnC6rc2fm76+G9z9QoWSB2SaQaw==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -2109,6 +2122,10 @@ snapshots:
   '@types/esrecurse@4.3.1': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/fontkit@2.0.9':
+    dependencies:
+      '@types/node': 26.1.2
 
   '@types/json-schema@7.0.15': {}
 

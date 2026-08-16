@@ -10,10 +10,15 @@
   },
   "dependencies": {
     "@franibook/core": "workspace:*",
+    "@franibook/fonts": "workspace:*",
+    "@franibook/geo": "workspace:*",
     "@franibook/render-pdf": "workspace:*",
     "exiftool-vendored": "^37.1.0",
     "fastify": "^5.11.0",
-    "sharp": "^0.35.3",
-    "@franibook/geo": "workspace:*"
+    "fontkit": "^2.0.4",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/fontkit": "^2.0.9"
   }
 }

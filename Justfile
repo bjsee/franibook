@@ -86,6 +86,25 @@ start-auf web="5183":
 ports:
     @lsof -nP -iTCP:5173 -iTCP:5174 -sTCP:LISTEN || echo "beide Ports frei"
 
+# --------------------------------------------------------------- Titelmosaik
+
+# Ein Mosaik bauen und ansehen, ohne Server und ohne Oberfläche.
+#
+# Ein Mosaik ist eine Gestaltungsfrage; die beantwortet man, indem man es
+# ansieht. Das Ergebnis liegt unter `apps/server/.franibook-out/mosaik/`.
+# Weitere Regler nennt der Modulkopf von `src/mosaik/werkbank.ts`:
+# --crop feld|ganz, --gap, --tint, --seed, --fotos.
+[doc("Mosaik aus Text bauen: just mosaik 18 44")]
+mosaik text="18" raster="44":
+    pnpm --filter @franibook/server exec tsx src/mosaik/werkbank.ts \
+        '{{ text }}' --raster {{ raster }} --breite 2000
+
+# Dasselbe mit einem Foto als Vorlage — es wird aus Miniaturen nachgebaut.
+[doc("Fotomosaik bauen: just mosaik-foto <pfad> 48")]
+mosaik-foto pfad raster="48":
+    pnpm --filter @franibook/server exec tsx src/mosaik/werkbank.ts \
+        --foto '{{ pfad }}' --raster {{ raster }} --breite 2000 --crop feld --gap 0
+
 # ----------------------------------------------------------------- Prüfen
 
 # Unit-Tests über alle Pakete.

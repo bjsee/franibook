@@ -157,6 +157,24 @@ export function safeArea(geo: CoverGeometry, panel: CoverPanelKind): Rect {
   };
 }
 
+/**
+ * Die Fläche, über die ein Umschlagbild randabfallend läuft.
+ *
+ * **Nicht das Feld selbst.** Ein Titelbild endet nicht an der sichtbaren
+ * Vorderkante, sondern läuft über die Gelenkzone bis zur Blattkante — sonst
+ * zeigte jede Falztoleranz einen weißen Streifen. Wer das Bild vorbereitet
+ * (etwa ein Mosaik, das die Form dieser Fläche haben muss), braucht dieselbe
+ * Rechnung wie der, der es platziert; zweimal geschrieben wären es zwei
+ * Seitenverhältnisse und eine gestauchte Ziffer.
+ */
+export function coverImageArea(geo: CoverGeometry, panel: 'front' | 'back'): Rect {
+  if (panel === 'front') {
+    const xMm = geo.panels['hinge-front'].xMm;
+    return { xMm, yMm: 0, wMm: geo.widthMm - xMm, hMm: geo.heightMm };
+  }
+  return { xMm: 0, yMm: 0, wMm: geo.panels.spine.xMm, hMm: geo.heightMm };
+}
+
 /** In welchem Feld liegt eine x-Koordinate? */
 export function panelAt(geo: CoverGeometry, xMm: number): CoverPanelKind | undefined {
   const order: CoverPanelKind[] = ['back', 'hinge-back', 'spine', 'hinge-front', 'front'];
