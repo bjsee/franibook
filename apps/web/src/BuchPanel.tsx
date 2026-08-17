@@ -22,6 +22,7 @@ import {
   type TimelineFootVariant,
   type TimelineSideVariant,
 } from '@franibook/core';
+import { useEffect, useState } from 'react';
 import { Notanker } from './Notanker.js';
 import { B, T } from './theme.js';
 import { ZeitleisteMini } from './ZeitleisteMini.js';
@@ -45,6 +46,11 @@ export interface BuchEinstellungen {
   seed: number;
   /** Kennung des Druckprofils, also das Buchformat. */
   printProfileId: string;
+  /**
+   * Basisadresse der Videoverweise. Fehlt, solange keine eingerichtet ist – dann
+   * druckt jeder QR-Code seine Zieladresse unmittelbar.
+   */
+  videoBase?: string;
 }
 
 /** Ein wählbares Buchformat. */
@@ -156,6 +162,7 @@ interface Props {
     tilt?: number;
     frame?: FrameId;
     pageNumbers?: boolean;
+    videoBase?: string | null;
   }) => void;
   onNeuEinlesen: () => void;
   /** Nach dem Zurückholen eines Notankers: alles neu laden. */
@@ -528,6 +535,20 @@ export function BuchPanel({
             </button>
           ))}
         </div>
+
+        {/*
+          Die Basisadresse der Videoverweise: reine Darstellung wie Rahmen und
+          Neigung — sie ändert, was in einem QR-Code steht, und kein Foto wandert.
+
+          Sie steht hier und nicht am einzelnen Bild, weil sie für das ganze Buch
+          gilt: Der gedruckte Code trägt `<Basis>/<Kennung>`, und welche Kennung
+          wohin führt, sagt die Umleitungsliste. Genau das ist ihr Zweck — zieht
+          ein Video um, ändert man die Liste statt das Buch neu zu drucken. Ohne
+          Basis druckt jeder Code seine Zieladresse unmittelbar; das geht sofort
+          und macht einen Umzug zum Nachdruck.
+        */}
+        <span style={{ ...B.marke, marginTop: 6 }}>Videoverweise</span>
+        <Videobasis basis={settings.videoBase} onDarstellung={onDarstellung} />
       </div>
 
       <div style={{ ...B.abschnitt, borderBottom: 'none', gap: 10 }}>
@@ -571,7 +592,69 @@ export function BuchPanel({
   );
 }
 
+/**
+ * Die Basisadresse der Videoverweise samt Umleitungsliste.
+ *
+ * Eigene Unterkomponente, weil sie das einzige Feld dieses Panels mit einem
+ * eigenen Zwischenzustand ist: Eine Adresse tippt man fertig, bevor sie gilt —
+ * ein `onChange` je Zeichen schriebe zwanzig halbe Domänen ins Projekt und legte
+ * zwanzig Undo-Schritte an.
+ *
+ * Die Liste wird **nicht** hier angezeigt, sondern heruntergeladen: Sie gehört
+ * auf den Rechner, der die Umleitung bedient, und nicht in eine Ansicht, in der
+ * man sie abschreiben müsste. `_redirects` ist das Format, das statische
+ * Hosting-Dienste lesen — eine Datei, kein Server.
+ */
+function Videobasis({
+  basis,
+  onDarstellung,
+}: {
+  basis: string | undefined;
+  onDarstellung: (patch: { videoBase?: string | null }) => void;
+}) {
+  const [wert, setWert] = useState(basis ?? '');
+  useEffect(() => setWert(basis ?? ''), [basis]);
+
+  const geaendert = wert.trim() !== (basis ?? '');
+
+  return (
+    <>
+      <span style={S.videoZeile}>
+        <input
+          type="text"
+          value={wert}
+          onChange={(e) => setWert(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && geaendert) onDarstellung({ videoBase: wert.trim() || null });
+          }}
+          placeholder="fb.example/v"
+          style={{ ...B.feld, flex: 1 }}
+          title="Kurzadresse, hinter der die Videokennung steht. Leer: der Code trägt die Zieladresse selbst."
+        />
+        <button
+          onClick={() => onDarstellung({ videoBase: wert.trim() || null })}
+          style={geaendert ? B.knopfPrimaer : B.knopf}
+          disabled={!geaendert}
+        >
+          Merken
+        </button>
+      </span>
+      <span style={S.videoHinweis}>
+        {basis
+          ? 'Die Codes tragen diese Adresse und die Videokennung. Ein Umzug ist ein Griff an der Umleitungsliste.'
+          : 'Ohne Basis druckt jeder Code seine Zieladresse. Das geht sofort – aber ein Umzug des Videos kostet dann einen Nachdruck.'}
+      </span>
+      <a href="/api/videos/umleitungen?format=redirects" download="_redirects" style={S.videoLink}>
+        Umleitungsliste holen
+      </a>
+    </>
+  );
+}
+
 const S = {
+  videoZeile: { display: 'flex', gap: 6, alignItems: 'center' },
+  videoHinweis: { fontSize: 11, color: T.fg2, lineHeight: 1.4 },
+  videoLink: { fontSize: 11, color: T.cyanTief, alignSelf: 'flex-start' as const },
   // Die fünf Rahmen umbrechen, statt sie in eine Zeile zu zwingen: Das Panel ist
   // schmal, und „Passepartout" lässt sich nicht abkürzen.
   rahmenGitter: { display: 'flex', flexWrap: 'wrap' as const, gap: 4 },

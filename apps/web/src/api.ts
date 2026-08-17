@@ -136,6 +136,13 @@ export interface Einstellungen {
   seed: number;
   /** Kennung des Druckprofils, also das Buchformat. */
   printProfileId: string;
+  /**
+   * Basisadresse der Videoverweise – fehlt, solange keine eingerichtet ist.
+   *
+   * Ohne sie druckt jeder QR-Code die Zieladresse unmittelbar, und ein Umzug des
+   * Videos kostet einen Nachdruck.
+   */
+  videoBase?: string;
   birthDate?: string;
 }
 
@@ -267,7 +274,19 @@ export interface ImportDiff {
 
 export const projektLaden = () => hole<ProjectInfo>('/api/project');
 
-export const einstellungenAendern = (patch: Partial<Einstellungen>) =>
+/**
+ * Was sich an den Einstellungen ändern lässt.
+ *
+ * `videoBase` darf hier **`null`** sein, die Einstellung selbst nicht: `null` ist
+ * die Anweisung „nimm die Basisadresse weg", nicht der Wert danach. Ohne diesen
+ * Unterschied gäbe es keinen Weg zurück zu „ohne Basis" — ein leerer String wäre
+ * eine Adresse, die nirgendwohin führt.
+ */
+export type Einstellungspatch = Partial<Omit<Einstellungen, 'videoBase'>> & {
+  videoBase?: string | null;
+};
+
+export const einstellungenAendern = (patch: Einstellungspatch) =>
   sende<unknown>('PATCH', '/api/settings', patch);
 
 /**
@@ -766,6 +785,13 @@ export interface FotoInfo {
    * auf ihrer Mitte, und das ist kein Zustand, den der Server mitteilen müsste.
    */
   adjust?: PhotoAdjust;
+  /**
+   * Das Video, für das dieses Foto das Standbild ist.
+   *
+   * Fehlt bei jedem gewöhnlichen Foto. `url` fehlt, solange niemand eine Adresse
+   * hinterlegt hat – dann steht auch kein Code im Buch.
+   */
+  video?: { kennung: string; url?: string };
 }
 
 // ─── Doppel ─────────────────────────────────────────────────────────────────
@@ -891,6 +917,118 @@ export function bildEinwerfen(
     body: datei,
   });
 }
+
+// ─── Videos ─────────────────────────────────────────────────────────────────
+
+/**
+ * Die Medientypen der Videoendungen – aus dem Namen abgeleitet, nicht aus
+ * `File.type`.
+ *
+ * Anders als beim Bildeinwurf, der **immer** `octet-stream` schickt, muss hier
+ * der echte Typ mit: Am Medientyp hängt, welcher Parser die Anfrage annimmt, und
+ * nur der Videoparser reicht den Strom durch, statt ein Gigabyte in den Speicher
+ * zu lesen (`app.ts` im Server). Auf `File.type` ist dabei kein Verlass – für
+ * eine `.m4v` liefern Browser mitunter einen leeren String.
+ */
+const VIDEO_TYPEN: Record<string, string> = {
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/x-m4v',
+  '.avi': 'video/x-msvideo',
+};
+
+function endungVon(name: string): string {
+  const punkt = name.lastIndexOf('.');
+  return punkt < 0 ? '' : name.slice(punkt).toLowerCase();
+}
+
+/**
+ * Ob diese Datei als Video eingeworfen wird.
+ *
+ * Über die Endung und nicht über den Medientyp: Dieselbe Entscheidung trifft der
+ * Server über dieselbe Liste (`VIDEO_EXT` in `import.ts`), und ein Browser, der
+ * keinen Typ mitschickt, würde sonst ein Video als Bild einwerfen – die Antwort
+ * wäre ein Fehler über eine unerlaubte Endung.
+ */
+export function istVideodatei(name: string): boolean {
+  return endungVon(name) in VIDEO_TYPEN;
+}
+
+/** Was der Server nach dem Aufnehmen über das Video weiß. */
+export interface Videoaufnahme {
+  kennung: string;
+  dauerSek: number;
+  /** Eine Adresse, die für dieses Video schon einmal hinterlegt wurde. */
+  adresse?: string;
+}
+
+/**
+ * Nimmt ein Video auf. Es entsteht dabei **kein Foto** – nur eine Kennung.
+ *
+ * Der zweite Schritt (`videoStandbildEinwerfen`) wählt die Sekunde und legt das
+ * Standbild ins Buch. Zweistufig, weil die Fotokennung der Bildinhalt ist: Ein
+ * anderes Standbild wäre ein anderes Foto, und der Wechsel müsste jedes Vorkommen
+ * umhängen (Begründung in `project/video.ts` im Server).
+ */
+export function videoAufnehmen(datei: File): Promise<Videoaufnahme> {
+  const typ = VIDEO_TYPEN[endungVon(datei.name)];
+  if (!typ) throw new Error(`„${datei.name}" ist kein Video`);
+
+  return ruf<Videoaufnahme>(`/api/videos?${new URLSearchParams({ name: datei.name })}`, {
+    method: 'POST',
+    headers: { 'content-type': typ },
+    body: datei,
+  });
+}
+
+/**
+ * Die Adresse eines Standbildes zu einer Sekunde – für den Schieber.
+ *
+ * Eine Adresse und kein Aufruf: Das Bild hängt in einem `<img>`, und der Browser
+ * lädt es selbst. Es wird nicht zwischengespeichert (`no-store` am Endpunkt).
+ */
+export function videoStandbildAdresse(kennung: string, sekunde: number): string {
+  return `/api/videos/${kennung}/standbild?t=${sekunde.toFixed(2)}`;
+}
+
+/** Zieht das Standbild an dieser Sekunde und setzt es ein. */
+export function videoStandbildEinwerfen(
+  kennung: string,
+  sekunde: number,
+  ziel: { kind: 'pool' } | { kind: 'spread'; index: number; punkt?: { x: number; y: number } },
+  /** Name des Films – das Standbild heißt danach `<name>-<sekunde>s.jpg`. */
+  name?: string,
+): Promise<Einwurfergebnis & { kennung?: string; uebernommeneAdresse?: string }> {
+  return sende('POST', `/api/videos/${kennung}/standbild`, {
+    sekunde,
+    ...(name ? { name } : {}),
+    ...(ziel.kind === 'spread'
+      ? { spread: ziel.index, ...(ziel.punkt ? { x: ziel.punkt.x, y: ziel.punkt.y } : {}) }
+      : {}),
+  });
+}
+
+/**
+ * Hinterlegt die Adresse, unter der das Video zu sehen ist – oder nimmt sie weg.
+ *
+ * Wirkt an **allen** Standbildern desselben Films; wie viele es waren, sagt
+ * `geaendert`.
+ */
+export const videoAdresseSetzen = (photoId: string, url: string | null) =>
+  sende<{
+    ok: true;
+    geaendert: number;
+    kennung?: string;
+    photo?: FotoInfo;
+    spread?: SpreadResponse;
+  }>('PUT', `/api/photos/${photoId}/video`, { url });
+
+/** Kennung → Zieladresse, für die Umleitung hinter der Kurzadresse. */
+export const videoUmleitungen = () =>
+  hole<{
+    basis: string | null;
+    umleitungen: { kennung: string; ziel: string; photoId: string }[];
+  }>('/api/videos/umleitungen');
 
 /**
  * Eine Datumskorrektur, wie der Server sie annimmt.

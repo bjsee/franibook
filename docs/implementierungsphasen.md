@@ -348,8 +348,13 @@ Den Entwurf komfortabel korrigieren können.
 > gibt es jetzt im laufenden Betrieb, ohne das Buch zu verwerfen — der Knopf zum
 > Neuanordnen sagt umgekehrt vorher an, welche Handarbeit er kostet.
 >
-> Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste,
-> Gewichtung setzen, Doppelseite sperren.
+> Ebenfalls dazugekommen: **Gewicht am Bild** (`Hauptbild`/`normal`/`Beifoto` im
+> Bildpanel und im Stapel über `Fotodaten`), **Festhalten** je Doppelseite,
+> **Ebenen**, **Bildanpassung** und das **freie Platzieren** eines Bildes an
+> einer Stelle des Papiers.
+>
+> Offen: Timeline-Drag-and-drop, Layoutwechsel über eine Kandidatenliste mit
+> Live-Vorschau.
 
 **Inhalt**
 
@@ -502,14 +507,20 @@ Vor dem ersten Auftrag über das ganze Buch: eine einzelne Doppelseite mit Farbf
 
 Die optionalen Textelemente und die Jahresgliederung.
 
-> **Stand: angefangen**
+> **Stand: weit gediehen**
 >
 > Jahresauftakte und Gruppentitel erscheinen im Buch und stehen in Vorschau und PDF
 > an derselben Stelle – seit [#5](https://github.com/bjsee/franibook/issues/5) in
 > der eigenen Schrift Franibook Sans, ins PDF eingebettet, mit den Stilen
-> `yearLarge` und `groupTitle`. Bildunterschriften, Ort und Freitext,
-> Inline-Bearbeitung, `none`/`subtle`/`full` je Jahreswechsel, die
-> Sicherheitsbereichsprüfung und der Cover-Editor fehlen.
+> `yearLarge` und `groupTitle`.
+>
+> Dazugekommen seit dem 15. August: **Bildunterschriften** (`model/caption.ts`,
+> mengenwertig über `POST /api/book/captions`), **bewegliche Vorlagentexte** samt
+> Griffen, der **Umschlag-Editor** mit Texten, Deckelfarben und einem Mosaik je
+> Deckel, und **Videoverweise** — Standbild, Adresse, QR-Code (Issue #26).
+>
+> Offen: Ort und Freitext als eigene Textstile, `none`/`subtle`/`full` je
+> Jahreswechsel.
 
 **Inhalt**
 
@@ -567,7 +578,7 @@ Der komplette Weg von leerem Zustand bis PDF ist ohne Blick in den Code gehbar u
 | 3     | Chronologie korrigierbar                      | offen, am Bestand kaum nötig         | 5–6 d |
 | 4     | Ereignisse erkannt und editierbar             | ✅ anders gelöst: Kalender + Gruppen | ~1 d  |
 | 5     | **Vollständiger automatischer Buchentwurf**   | ✅ erledigt, 80 Doppelseiten         | ~1 d  |
-| 6     | Buch komfortabel korrigierbar                 | teilweise, JSON statt Direktgriff    | 4–5 d |
+| 6     | Buch komfortabel korrigierbar                 | ✅ weitgehend, Direktgriff steht     | ~2 d  |
 | 7     | Persistenz belastbar                          | ✅ erledigt                          | —     |
 | 8     | **Druckfertiges PDF**                         | teilweise, Innenteil läuft           | 3–4 d |
 | 9     | Texte, Kapitel, Cover                         | angefangen, Schrift steht            | 3–4 d |

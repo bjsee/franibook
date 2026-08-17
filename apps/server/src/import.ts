@@ -26,7 +26,14 @@ import type { PhotoSource } from './sources.js';
  * sonst läge sie im Quellordner und wäre nach dem nächsten Einlesen wieder weg.
  */
 export const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff']);
-const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
+/**
+ * Endungen, die der Scan als Video überspringt – und die der Videoeinwurf
+ * annimmt.
+ *
+ * Eine Liste für beides: Was der Import als Video erkennt, muss man einwerfen
+ * können, sonst hieße es „übersprungen" und ließe sich doch nicht nachholen.
+ */
+export const VIDEO_EXT = new Set(['.mov', '.mp4', '.m4v', '.avi']);
 const HASH_WINDOW = 64 * 1024;
 
 export interface ImportResult {
@@ -61,6 +68,19 @@ function kennungAus(size: number, head: Buffer, tail: Buffer): string {
     .update(tail)
     .digest('hex')
     .slice(0, 16);
+}
+
+/**
+ * Die Kennung einer Datei, die noch nicht gescannt wurde.
+ *
+ * Gebraucht für Videos: Sie liegen nicht im Bestand und gehen deshalb nie durch
+ * `scanSource`, brauchen aber eine Kennung aus demselben Verfahren – dasselbe
+ * Video zweimal eingeworfen soll dieselbe sein, sonst zeigt ein längst
+ * gedruckter Code plötzlich woandershin (`model/video.ts` im Kern).
+ */
+export async function dateiKennung(path: string): Promise<string> {
+  const { size } = await stat(path);
+  return contentHash(path, size);
 }
 
 /** Die Kennung einer Datei, gelesen mit zwei Sprüngen statt einem Durchlauf. */
