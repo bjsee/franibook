@@ -26,7 +26,7 @@
  */
 import { FULL_CROP } from '../model/crop.js';
 import type { PhotoOverride, PhotoWeight } from '../model/date.js';
-import { effectivePhotos } from '../model/effective-photo.js';
+import { effectivePhoto, effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
 import type { Spread } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
@@ -37,6 +37,7 @@ import {
   groupOpenerTemplates,
   templateById,
 } from '../templates/index.js';
+import { istEinwurfPlatz, mitEinwurf } from './einwurf.js';
 import { layoutSpread } from './rebuild.js';
 
 export type MoveSource =
@@ -54,6 +55,23 @@ export type MoveTarget =
    * werden neu angeordnet.
    */
   | { kind: 'spread'; spreadIndex: number }
+  /**
+   * Eine Stelle auf dem Papier, ohne Platz aus der Vorlage.
+   *
+   * Die dritte Absicht neben Tausch und Umzug: „Das Bild gehört **hierhin**."
+   * Es bekommt einen freien Platz an der Fallstelle (`layout/einwurf.ts`), und
+   * die übrigen Bilder rühren sich nicht — anders als beim Zug auf die ganze
+   * Seite, der beide Seiten neu anordnet und dabei jeden Ausschnitt verwirft.
+   *
+   * Damit lässt sich eine Seite auch dann füllen, wenn ihre Vorlage keinen
+   * Platz mehr frei hat: Das Bild zählt danach zu ihr, also stehen die
+   * Anordnungen für eine Bilderzahl mehr zur Wahl (`templateChoices`) und ein
+   * `auto` ordnet sie mit ihm neu an.
+   *
+   * `punkt` ist normiert auf den Endformatbereich der Doppelseite, wie ein
+   * Templateslot — dieselbe Einheit wie beim Dateieinwurf.
+   */
+  | { kind: 'frei'; spreadIndex: number; punkt: { x: number; y: number } }
   | { kind: 'pool' };
 
 /** Was das Neuanordnen braucht. Nur für Züge auf eine ganze Doppelseite. */
@@ -77,6 +95,15 @@ export interface MoveResult {
   spreads: Spread[];
   /** Betroffene Doppelseiten – die Vorschau muss nur diese nachladen. */
   touched: number[];
+  /**
+   * Der Platz, der dabei entstanden ist – nur beim Zug auf eine Stelle des
+   * Papiers (`kind: 'frei'`).
+   *
+   * Die Oberfläche wählt ihn danach aus, ohne nachzufragen: Man hat das Bild
+   * eben hingelegt, es ist das gemeinte. Dieselbe Auskunft wie beim
+   * Dateieinwurf.
+   */
+  slotId?: string;
 }
 
 /**
@@ -214,6 +241,11 @@ export function movePhoto(
     return moveToSpread(spreads, source, target.spreadIndex, reflow, unveraendert);
   }
 
+  if (target.kind === 'frei') {
+    if (!reflow) return unveraendert('Zum Platzieren auf dem Papier fehlt der Bildbestand');
+    return moveToFrei(spreads, source, target, reflow, unveraendert);
+  }
+
   // --- Quelle auflösen ---------------------------------------------------
   let photoId: PhotoId;
   if (source.kind === 'slot') {
@@ -274,6 +306,116 @@ export function movePhoto(
 }
 
 /**
+ * Räumt den Ausgangsplatz eines Zuges.
+ *
+ * Ein Platz der Vorlage bleibt stehen und leer – dort ist der Kasten die
+ * Anordnung. Ein **frei gesetzter** fällt ganz weg: Er ist nur da, weil ein
+ * Bild dort lag, und bliebe sonst als leerer Rahmen genau an der Stelle
+ * stehen, von der man das Bild eben weggezogen hat.
+ *
+ * Nicht über `withSlot`, und der Unterschied ist eine eigene Lage: Der baut den
+ * Platz als `{ slotId, photoId, crop }` neu und lässt dabei `rect` fallen. Für
+ * einen Platz aus der Vorlage ist das richtig, für die beiden Fälle, die ihre
+ * Lage selbst tragen, nicht – justierte Zeilen (`justiert.n`) und die wörtlich
+ * übernommene Gegenseite einer einzeln umgestellten Buchseite
+ * (`paar:<x>+halb:leer`). Dort steht die Kennung in keiner Vorlage: Ohne `rect`
+ * gibt `wirksamePlaetze` den Kasten nicht mehr aus, und der leere Platz, den
+ * dieser Zug zusagt, verschwände einfach.
+ */
+function ohneQuelle(spread: Spread, slotId: string): Spread {
+  if (istEinwurfPlatz(slotId)) {
+    return { ...spread, slots: spread.slots.filter((s) => s.slotId !== slotId) };
+  }
+  return {
+    ...spread,
+    slots: spread.slots.map((s) =>
+      s.slotId === slotId
+        ? {
+            slotId: s.slotId,
+            photoId: null,
+            crop: { ...FULL_CROP },
+            ...(s.rect ? { rect: s.rect } : {}),
+          }
+        : s,
+    ),
+  };
+}
+
+/**
+ * Legt ein Foto frei auf eine Doppelseite – dorthin, wo die Hand losgelassen
+ * hat.
+ *
+ * Der dritte Zug neben Tausch und Umzug, und der einzige, der **keine**
+ * Anordnung anfasst: Das Bild bekommt einen eigenen Kasten an der Fallstelle
+ * (`layout/einwurf.ts`), alle übrigen bleiben in ihren Plätzen samt Ausschnitt,
+ * Rahmen und Neigung. Damit nimmt eine Seite auch dann ein Bild an, wenn ihre
+ * Vorlage voll ist – die Frage „und jetzt eine Anordnung für sechs?" stellt
+ * sich danach, mit dem Bild schon auf der Seite.
+ *
+ * **Auch eine festgehaltene Seite nimmt es an.** `locked` heißt, dass die
+ * Automatik die Finger davon lässt; hier legt niemand automatisch etwas um. Der
+ * Zug auf die ganze Seite (`moveToSpread`) bleibt dort verwehrt – der ordnet
+ * neu an und verwürfe genau das, wofür die Seite festgehalten wurde.
+ */
+function moveToFrei(
+  spreads: readonly Spread[],
+  source: MoveSource,
+  target: { spreadIndex: number; punkt: { x: number; y: number } },
+  reflow: ReflowContext,
+  unveraendert: (error: string) => MoveResult,
+): MoveResult {
+  if (!spreads[target.spreadIndex]) {
+    return unveraendert(`Doppelseite ${target.spreadIndex + 1} gibt es nicht`);
+  }
+
+  let photoId: PhotoId;
+  if (source.kind === 'slot') {
+    const gefunden = slotOf(spreads, source);
+    if ('error' in gefunden) return unveraendert(gefunden.error);
+    if (!gefunden.slot.photoId) return unveraendert('Der Ausgangsslot ist leer');
+    photoId = gefunden.slot.photoId;
+  } else {
+    const liegtAuf = findSpreadIndex(spreads, source.photoId);
+    if (liegtAuf >= 0) return unveraendert(`Das Foto liegt schon auf Doppelseite ${liegtAuf + 1}`);
+    photoId = source.photoId;
+  }
+
+  // Ohne Maße hat der Kasten keine Form – das Bild stünde als Quadrat da, und
+  // zwar unbemerkt. Trifft ein aussortiertes Bild, dessen Slot noch auf es zeigt.
+  const photo = reflow.photos.get(photoId);
+  if (!photo) return unveraendert('Dieses Foto gehört nicht mehr zum Bestand');
+
+  const kopie = [...spreads];
+
+  // Erst räumen, dann legen: Kommt das Bild von derselben Seite, müssen beide
+  // Schritte auf demselben Stand geschehen – sonst trüge die neue Fassung den
+  // alten Platz wieder ein.
+  if (source.kind === 'slot') {
+    kopie[source.spreadIndex] = ohneQuelle(kopie[source.spreadIndex]!, source.slotId);
+  }
+
+  // Aufgelöst übergeben: Eine korrigierte Ausrichtung tauscht Breite und Höhe,
+  // und der Kasten soll die Form haben, die das Bild wirklich hat.
+  const { spread: neu, slotId } = mitEinwurf(
+    kopie[target.spreadIndex]!,
+    effectivePhoto(photo, reflow.overrides?.[photoId]),
+    target.punkt,
+    reflow.profile,
+  );
+  kopie[target.spreadIndex] = neu;
+
+  return {
+    ok: true,
+    spreads: kopie,
+    touched:
+      source.kind === 'slot' && source.spreadIndex !== target.spreadIndex
+        ? [source.spreadIndex, target.spreadIndex].sort((a, b) => a - b)
+        : [target.spreadIndex],
+    slotId,
+  };
+}
+
+/**
  * Hängt ein Foto auf eine andere Doppelseite um und ordnet beide neu an.
  *
  * Anders als der Platztausch ändert das die Bilderzahl beider Seiten. Deshalb
@@ -286,6 +428,14 @@ export function movePhoto(
  * Vorlage, und eine Seite aus dem Buch zu nehmen würde alle folgenden
  * Seitenzahlen verschieben – im Zweifel mitten unter den Händen des Benutzers.
  * Der Zug wird dann abgelehnt statt geraten.
+ *
+ * **Festgehaltene Seiten sind weder Ziel noch Quelle**, genau wie im Stapel
+ * (`unantastbar` in `movePhotos`). Hier fehlte die Prüfung: Ein Bild aus dem
+ * Nachbarstreifen auf eine festgehaltene Seite gezogen ordnete sie neu an und
+ * verwarf jeden Ausschnitt, jeden Rahmen und jede Neigung, für die sie
+ * festgehalten wurde. Wer ein Bild dorthin legen will, ohne die Seite
+ * umzuwerfen, zieht es auf eine **Stelle** (`moveToFrei`) – dort ordnet
+ * niemand um, und deshalb ist es dort auch erlaubt.
  */
 function moveToSpread(
   spreads: readonly Spread[],
@@ -296,6 +446,12 @@ function moveToSpread(
 ): MoveResult {
   const ziel = spreads[zielIndex];
   if (!ziel) return unveraendert(`Doppelseite ${zielIndex + 1} gibt es nicht`);
+  if (ziel.locked) {
+    return unveraendert(
+      `Doppelseite ${zielIndex + 1} ist festgehalten – erst lösen, dann umhängen. ` +
+        `Auf eine Stelle des Papiers gezogen geht es auch so.`,
+    );
+  }
 
   // --- Quelle auflösen ---
   let photoId: PhotoId;
@@ -304,6 +460,13 @@ function moveToSpread(
     if ('error' in gefunden) return unveraendert(gefunden.error);
     if (!gefunden.slot.photoId) return unveraendert('Der Ausgangsslot ist leer');
     photoId = gefunden.slot.photoId;
+
+    const quelle = spreads[source.spreadIndex];
+    if (quelle?.locked) {
+      return unveraendert(
+        `Doppelseite ${source.spreadIndex + 1} ist festgehalten – erst lösen, dann umhängen.`,
+      );
+    }
 
     if (source.spreadIndex === zielIndex) {
       // Innerhalb derselben Seite gibt es nichts umzuhängen. Kein Fehler: Wer

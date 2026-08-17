@@ -15,6 +15,17 @@ import { renderPdf } from '@franibook/render-pdf';
 import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
 
 /**
+ * Ob eine Fallstelle brauchbar ist: zwei Zahlen im Endformatbereich.
+ *
+ * Dieselbe Prüfung wie beim Dateieinwurf (`lesePunkt` in `routes/spreads.ts`),
+ * nur aus dem Rumpf statt aus der Query.
+ */
+function stelleGueltig(punkt: unknown): boolean {
+  const { x, y } = (punkt ?? {}) as { x?: unknown; y?: unknown };
+  return [x, y].every((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1);
+}
+
+/**
  * Der Bereich aus dem Rumpf – oder der Satz, warum er nicht taugt.
  *
  * Die Seitenzahl wird hier geprüft und nicht erst beim Zug: Eine Doppelseite,
@@ -246,11 +257,15 @@ export function buchRouten(
    * Slots; die Antwort liefert die betroffenen Doppelseiten fertig gerendert
    * zurück, damit die Oberfläche nicht nachfragen muss.
    *
-   * Zwei Züge, ein Endpunkt, unterschieden allein durch die Art des Ziels: Auf
+   * Drei Züge, ein Endpunkt, unterschieden allein durch die Art des Ziels: Auf
    * einen Slot gezogen tauschen zwei Bilder ihre Plätze. Auf eine ganze
    * Doppelseite (`{ kind: 'spread' }`) gezogen zieht das Bild um, und beide
    * beteiligten Seiten werden neu angeordnet – dort ändert sich die Bilderzahl,
    * und eine Lücke stehen zu lassen wäre keine Aufteilung, sondern ein Loch.
+   * Auf eine **Stelle** des Papiers (`{ kind: 'frei', punkt }`) gezogen bekommt
+   * es einen freien Kasten dort und sonst ändert sich nichts – der Zug für eine
+   * Seite, deren Vorlage keinen Platz mehr frei hat. `x` und `y` sind auf den
+   * Endformatbereich normiert, wie beim Dateieinwurf.
    *
    * **Mit `moves` nimmt dieselbe Route einen Stapel** – mengenwertig wie
    * `PATCH /api/photos`, und aus demselben Grund: Zwei Bilder auf eine andere
@@ -267,6 +282,16 @@ export function buchRouten(
         if (!Array.isArray(moves) || moves.length === 0) {
           return reply.code(400).send({ error: 'moves ist leer' });
         }
+        // Der Stapel kennt nur die ganze Seite und den Pool. Die **Stelle** auf
+        // dem Papier gehört nicht dazu: Sie ist eine Geste am aufgeschlagenen
+        // Blatt, im Baum gibt es keine. Ungeprüft durchgereicht fiele sie in
+        // `movePhotos` in den Zweig „kein Ziel" – das Bild verschwände von
+        // seiner Seite in den Pool, gemeldet als Erfolg.
+        if (moves.some((zug) => zug?.target?.kind !== 'spread' && zug?.target?.kind !== 'pool')) {
+          return reply.code(400).send({
+            error: 'Ein Zug im Stapel zielt weder auf eine Doppelseite noch auf den Pool',
+          });
+        }
         const stapel = project.movePhotos(moves);
         if (!stapel.ok) return reply.code(409).send({ ok: false, error: stapel.error });
 
@@ -282,6 +307,13 @@ export function buchRouten(
 
       if (!source || !target) return reply.code(400).send({ error: 'source und target fehlen' });
 
+      // Die Fallstelle prüft die Route und nicht der Kern: Sie kommt als Zahl
+      // aus einer Anfrage, und `aufsBlatt` klemmt zwar auf das Blatt, macht aus
+      // einem `NaN` aber keine Stelle.
+      if (target.kind === 'frei' && !stelleGueltig(target.punkt)) {
+        return reply.code(400).send({ error: 'Die Fallstelle ist keine Zahl zwischen 0 und 1' });
+      }
+
       const result = project.movePhoto(source, target);
       if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
 
@@ -289,6 +321,7 @@ export function buchRouten(
       return {
         ok: true,
         touched: result.touched,
+        ...(result.slotId ? { slotId: result.slotId } : {}),
         spreads: result.touched.map((index) => spreadAntwort(project, index)),
         report: project.lastReport,
       };
