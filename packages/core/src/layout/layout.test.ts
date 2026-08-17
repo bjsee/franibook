@@ -1045,7 +1045,8 @@ describe('Jahresereignisse auf dem Kapitelauftakt', () => {
 });
 
 describe('Jahresauftakt auf einer Seite', () => {
-  it('setzt links das Jahr und rechts die ersten Fotos des Jahres', () => {
+  /** Der Auftakt eines Buches über einen einzigen Jahrgang. */
+  function auftaktVon(seed?: number) {
     const { photos, dated } = buildBestand({ 2017: 30 });
     const result = generateBook({
       structure: buildStructure(dated),
@@ -1054,24 +1055,52 @@ describe('Jahresauftakt auf einer Seite', () => {
       targetPages: 60,
       chapterOpeners: true,
       yearEvents: { 2017: ['Erstes', 'Zweites'] },
+      ...(seed !== undefined ? { seed } : {}),
     });
-
     const auftakt = result.spreads.find((s) => s.texts?.some((t) => t.role === 'year'))!;
-    const bilder = auftakt.slots.filter((sl) => sl.photoId !== null);
+    return { result, dated, auftakt };
+  }
+
+  /** Die Bilder einer Doppelseite, in der Reihenfolge ihrer Plätze. */
+  const bilderVon = (spread: { slots: readonly { photoId: string | null }[] }) =>
+    spread.slots.map((sl) => sl.photoId).filter((id): id is string => id !== null);
+
+  it('setzt links das Jahr und rechts Fotos aus dem Jahrgang', () => {
+    const { result, auftakt } = auftaktVon();
+    const bilder = bilderVon(auftakt);
     expect(bilder.length).toBeGreaterThan(0);
     expect(auftakt.texts!.find((t) => t.slotId === 't-events')!.content.split('\n')).toHaveLength(
       2,
     );
 
     // Die Bilder des Auftakts stehen nicht noch einmal im Fluss.
-    const alle = result.spreads.flatMap((s) =>
-      s.slots.map((sl) => sl.photoId).filter((x): x is string => x !== null),
-    );
+    const alle = result.spreads.flatMap(bilderVon);
     expect(new Set(alle).size).toBe(alle.length);
+  });
 
-    // Und es sind die chronologisch ersten des Jahres.
+  it('streut die Auftaktbilder über den Jahrgang, statt seinen Anfang zu nehmen', () => {
+    const { dated, auftakt } = auftaktVon();
+    const bilder = bilderVon(auftakt);
+    const stellen = bilder.map((id) => dated.findIndex((d) => d.id === id));
+
+    // Der Auftakt soll das Jahr zeigen und nicht seinen Januar: Das späteste
+    // Bild liegt jenseits der Hälfte des Jahrgangs, und die ersten n sind es
+    // ausdrücklich nicht.
+    expect(Math.max(...stellen)).toBeGreaterThan(dated.length / 2);
     const erste = dated.slice(0, bilder.length).map((d) => d.id);
-    expect(bilder.map((b) => b.photoId).sort()).toEqual([...erste].sort());
+    expect([...bilder].sort()).not.toEqual([...erste].sort());
+  });
+
+  it('wählt bei anderem Seed andere Bilder – bei gleichem dieselben', () => {
+    const a = bilderVon(auftaktVon(1).auftakt);
+    const b = bilderVon(auftaktVon(1).auftakt);
+    const c = bilderVon(auftaktVon(7).auftakt);
+
+    // Determinismus: derselbe Seed, dasselbe Blatt.
+    expect(a).toEqual(b);
+    // Und ein neuer Wurf greift auch die Auftaktseite an – vorher war sie die
+    // einzige Doppelseite, die „Andere Anordnung" nie anfasste.
+    expect(c).not.toEqual(a);
   });
 
   it('nimmt die bildlose Fassung, wenn das Jahr dafür zu wenige Fotos hat', () => {

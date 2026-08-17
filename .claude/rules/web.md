@@ -110,6 +110,15 @@ eigenen Cursor. Deshalb gibt es auch kein `onSlotPointerDown` in `render-dom` me
 der Renderer liefert das Rechteck (`slotOverlay`), die Flächen darin baut die
 Oberfläche.
 
+**Das Papier ist eine Ablage — für Dateien von außen und für Bilder des
+Projekts** (`papierAblage` in `spread/useSpreadEditor.ts`). Auf einem Platz
+gelandet tauschen zwei Bilder ihre Plätze, daneben kommt eines frei dazu
+(`.claude/rules/anordnen.md`). Welcher der beiden Fälle gilt, entscheidet
+`platzGetroffen` — ein Ref und kein Zustand, weil beides in **einem** Ereignis
+geschieht und ein `setState` erst danach ankäme. Die Fallmarke sagt, was passiert:
+„hier einwerfen" nimmt eine Datei auf, „hier ablegen" holt ein vorhandenes Bild
+her.
+
 **Größe und Winkel zieht man an Griffen am Element** (Inkscape-Geste,
 `spread/Griffe.tsx` — für Bilder **und** Texte). Am Bild drei Stufen
 (`spread/griffmodus.ts`): Klick wählt nur (blauer Rand, keine Griffe, Zoomknöpfe
