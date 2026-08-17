@@ -238,6 +238,54 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
+ * Ein eigener Zufallsstrom je Jahrgang.
+ *
+ * Getrennt vom Strom des Flusses, und das ist der Punkt: `mulberry32` liefert
+ * eine Folge, aus der `chooseTemplate` je Doppelseite einen Wert zieht. Würden
+ * die Auftakte aus derselben Folge ziehen, verschöbe eine Änderung an ihnen
+ * jede spätere Entnahme – ein Jahrgang, dessen Auftakt entfällt, weil er
+ * festgehalten ist, legte dann das halbe Buch anders.
+ *
+ * Je Jahr ein eigener Strom, damit die Auswahl eines Jahrgangs nicht davon
+ * abhängt, wie viele Jahre vor ihm liegen: Ein neu hinzugekommenes 2007 soll
+ * den Auftakt von 2019 nicht umwerfen.
+ */
+function jahresStrom(seed: number, jahr: number): () => number {
+  return mulberry32((Math.imul(seed >>> 0, 0x9e3779b1) + jahr) >>> 0);
+}
+
+/**
+ * Die Bilder, die auf den Auftakt eines Jahrgangs kommen.
+ *
+ * Der Jahrgang wird in so viele gleich lange Abschnitte geteilt, wie Bilder
+ * gebraucht werden, und aus jedem eines gezogen. Zwei Eigenschaften, beide
+ * gewollt:
+ *
+ * - **Gestreut statt vom Anfang.** Der Auftakt zeigt damit das Jahr und nicht
+ *   seinen Januar – bei einem Jahrgang mit 90 Bildern lagen die ersten neun
+ *   regelmäßig an einem einzigen Wochenende.
+ * - **Die Stelle im Abschnitt würfelt der Seed.** Damit ändert „Andere
+ *   Anordnung" auch die Auftaktseiten, und dieselbe Eingabe ergibt trotzdem
+ *   exakt dasselbe Buch.
+ *
+ * Die chronologische Reihenfolge bleibt erhalten; welches Bild in welchem Platz
+ * landet, entscheidet danach ohnehin die Zuordnung.
+ */
+function auftaktAuswahl(frei: readonly Photo[], anzahl: number, rng: () => number): Photo[] {
+  const gewaehlt: Photo[] = [];
+  for (let i = 0; i < anzahl; i++) {
+    // Aufrufer sichern `frei.length >= anzahl * 2` zu, also ist jeder Abschnitt
+    // mindestens zwei Bilder breit und `bis` liegt echt über `von`.
+    const von = Math.floor((i * frei.length) / anzahl);
+    const bis = Math.floor(((i + 1) * frei.length) / anzahl);
+    const stelle = Math.min(von + Math.floor(rng() * (bis - von)), bis - 1);
+    const foto = frei[stelle];
+    if (foto) gewaehlt.push(foto);
+  }
+  return gewaehlt;
+}
+
+/**
  * Sucht das beste Template für eine Gruppe.
  *
  * Bewertet alle Templates mit passender Slotzahl, jeweils mit optimaler
@@ -448,7 +496,7 @@ function kannAuftaktTragen(
 /**
  * Erzeugt die Auftaktdoppelseite eines Jahres.
  *
- * Links das Jahr und was in ihm geschah, rechts die ersten Fotos des Jahres.
+ * Links das Jahr und was in ihm geschah, rechts Fotos aus dem Jahrgang.
  * Eine ganze Doppelseite nur für eine Jahreszahl wäre bei neunzehn Jahrgängen
  * ein Viertel des Buches – zu viel für eine Zahl und drei Zeilen. Der Auftakt
  * trägt jetzt Bilder mit und kostet damit nichts extra.
@@ -460,6 +508,11 @@ function kannAuftaktTragen(
  *
  * Sind zu wenige Fotos übrig, wird die bildlose Fassung gesetzt statt eine
  * Vorlage mit leeren Plätzen zu füllen.
+ *
+ * **Der Wurf gilt auch hier** (`jitter`): Unter den Fassungen, die gleich gut
+ * passen, entscheidet der Seed. Ohne das blieb die Auftaktseite die einzige
+ * Doppelseite, die ein „Andere Anordnung" nie anfasste — sie stand in der
+ * Vorschau des Neuanordnens jedes Mal als unverändert.
  */
 function buildChapterOpener(
   id: string,
@@ -470,6 +523,8 @@ function buildChapterOpener(
   weightOf: (photoId: PhotoId) => PhotoWeight,
   /** Ob die Fassungen mit Bildern auf der Jahresseite mitspielen. */
   dicht: boolean,
+  /** Der Zufallsstrom dieses Jahrgangs – bricht den Gleichstand der Fassungen. */
+  jitter: () => number,
   /** Ereignisse des Jahres, je Zeile eines. */
   events?: readonly string[],
 ): { spread: Spread; usedPhotoIds: PhotoId[] } {
@@ -485,7 +540,7 @@ function buildChapterOpener(
   const passend = auftakte.filter((t) => t.slots.length === bilder.length);
   const gewaehlt =
     passend.length > 0
-      ? layoutSpread({ photos: bilder, profile, weightOf, candidates: passend })
+      ? layoutSpread({ photos: bilder, profile, weightOf, candidates: passend, jitter })
       : undefined;
 
   const template = gewaehlt
@@ -673,11 +728,16 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   }
 
   /**
-   * Bilder für die Jahresauftakte: die ersten des Jahres, chronologisch.
+   * Bilder für die Jahresauftakte: über den Jahrgang gestreut.
    *
-   * Sie stehen rechts auf der Auftaktseite und dürfen im Fluss nicht noch
-   * einmal auftauchen. Wie viele es sind, gibt die Bibliothek vor – die
-   * größte Auftaktvorlage, für die das Jahr genug Bilder übrig hat.
+   * Sie stehen auf der Auftaktseite und dürfen im Fluss nicht noch einmal
+   * auftauchen. Wie viele es sind, gibt die Bibliothek vor – die größte
+   * Auftaktvorlage, für die das Jahr genug Bilder übrig hat.
+   *
+   * Vorher waren es schlicht die ersten n des Jahrgangs. Das hatte zwei Folgen,
+   * und beide waren ungewollt: Der Auftakt zeigte den Januar statt das Jahr,
+   * und er war seedunabhängig – die einzige Doppelseite, an der ein neuer Wurf
+   * nichts änderte (siehe `auftaktAuswahl`).
    */
   const auftaktGroessen = chapterTemplates(dichteOpeners)
     .map((t) => t.slots.length)
@@ -700,7 +760,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       // Genug muss übrig bleiben, damit das Jahr auch im Fluss noch Bilder hat.
       const groesse = auftaktGroessen.find((n) => frei.length >= n * 2);
       if (groesse === undefined) continue;
-      const gewaehlt = frei.slice(0, groesse);
+      const gewaehlt = auftaktAuswahl(frei, groesse, jahresStrom(opts.seed ?? 1, chapter.year));
       jahresBilder.set(chapter.year, gewaehlt);
       for (const p of gewaehlt) schonVergeben.add(p.id);
     }
@@ -789,6 +849,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
         profile,
         weightOf,
         dichteOpeners,
+        jahresStrom(opts.seed ?? 1, chapter.year),
         opts.yearEvents?.[chapter.year],
       );
       spreads.push(spread);

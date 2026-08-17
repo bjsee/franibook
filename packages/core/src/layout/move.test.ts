@@ -198,6 +198,136 @@ describe('movePhoto auf eine ganze Doppelseite', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toContain('Bildbestand');
   });
+
+  it('lässt eine festgehaltene Seite als Ziel und als Quelle stehen', () => {
+    // Dieser Zug ordnet beide Seiten neu an und verwürfe damit genau das, wofür
+    // eine Seite festgehalten wird – dieselbe Sperre wie im Stapel. Wer dort ein
+    // Bild hinlegen will, zieht es auf eine Stelle (`kind: 'frei'`).
+    const alsZiel = buch();
+    alsZiel[1]!.locked = true;
+    expect(movePhoto(alsZiel, slot(0, 'a'), seite(1), reflow).error).toContain('festgehalten');
+    expect(alsZiel[1]!.slots.map((s) => s.photoId)).toEqual(['p3', null]);
+
+    const alsQuelle = buch();
+    alsQuelle[0]!.locked = true;
+    expect(movePhoto(alsQuelle, slot(0, 'a'), seite(1), reflow).error).toContain('festgehalten');
+  });
+});
+
+describe('movePhoto auf eine Stelle des Papiers', () => {
+  function bestand(ids: readonly string[]): ReadonlyMap<PhotoId, Photo> {
+    return new Map(
+      ids.map((id) => [
+        id,
+        {
+          id,
+          sourceId: 'q',
+          relPath: `${id}.jpg`,
+          fileName: `${id}.jpg`,
+          bytes: 1_000_000,
+          width: 4000,
+          height: 3000,
+          takenAt: '2020-01-01T12:00:00',
+        } as Photo,
+      ]),
+    );
+  }
+
+  const reflow = { photos: bestand(['p1', 'p2', 'p3', 'p9']), profile: defaultProfile() };
+  const stelle = (spreadIndex: number, x = 0.5, y = 0.5) =>
+    ({ kind: 'frei', spreadIndex, punkt: { x, y } }) as const;
+
+  it('legt ein Bild aus dem Pool dazu, ohne die Anordnung anzufassen', () => {
+    const vorher = buch();
+    const r = movePhoto(vorher, { kind: 'pool', photoId: 'p9' }, stelle(0, 0.3, 0.6), reflow);
+
+    expect(r.ok).toBe(true);
+    // Die beiden bisherigen Bilder liegen unverändert in ihren Plätzen …
+    expect(r.spreads[0]!.slots.slice(0, 2)).toEqual(vorher[0]!.slots);
+    expect(r.spreads[0]!.templateId).toBe(vorher[0]!.templateId);
+    // … und das neue steht als freier Platz dahinter, also obenauf.
+    const neu = r.spreads[0]!.slots.at(-1)!;
+    expect(neu.photoId).toBe('p9');
+    expect(neu.rect).toBeDefined();
+    expect(r.slotId).toBe(neu.slotId);
+    expect(r.touched).toEqual([0]);
+  });
+
+  it('zählt das Bild zur Seite – die Anordnungen für eine mehr stehen danach zur Wahl', () => {
+    const r = movePhoto(buch(), { kind: 'pool', photoId: 'p9' }, stelle(0), reflow);
+    // Genau das ist der Zweck: Eine Seite mit zwei Bildern hat danach drei, und
+    // ein Vorlagenwechsel rechnet mit dreien.
+    expect(r.spreads[0]!.slots.filter((s) => s.photoId !== null)).toHaveLength(3);
+  });
+
+  it('nimmt auch eine festgehaltene Seite an', () => {
+    // `locked` schützt vor der Automatik, nicht vor der eigenen Hand: Hier
+    // ordnet niemand um.
+    const spreads = buch();
+    spreads[0]!.locked = true;
+    const r = movePhoto(spreads, { kind: 'pool', photoId: 'p9' }, stelle(0), reflow);
+    expect(r.ok).toBe(true);
+    expect(r.spreads[0]!.slots).toHaveLength(3);
+  });
+
+  it('räumt den Ausgangsplatz und lässt ihn leer stehen', () => {
+    const r = movePhoto(buch(), slot(0, 'a'), stelle(1), reflow);
+    expect(r.ok).toBe(true);
+    // Ein Platz der Vorlage bleibt – dort ist der Kasten die Anordnung.
+    expect(r.spreads[0]!.slots[0]!.photoId).toBeNull();
+    expect(r.spreads[1]!.slots.at(-1)!.photoId).toBe('p1');
+    expect(r.touched).toEqual([0, 1]);
+  });
+
+  it('lässt einem Platz, der seine Lage selbst trägt, sein Rechteck', () => {
+    // Justierte Zeilen und die wörtlich übernommene Gegenseite (`halb:leer`)
+    // stehen in keiner Vorlage: Ohne `rect` gäbe `wirksamePlaetze` den Kasten
+    // nicht mehr aus, und der leere Platz verschwände statt stehen zu bleiben.
+    const spreads = buch();
+    spreads[0]!.templateId = 'justiert.2';
+    spreads[0]!.slots[0]!.rect = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+    const r = movePhoto(spreads, slot(0, 'a'), stelle(1), reflow);
+
+    expect(r.ok).toBe(true);
+    const geraeumt = r.spreads[0]!.slots[0]!;
+    expect(geraeumt.photoId).toBeNull();
+    expect(geraeumt.rect).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+  });
+
+  it('nimmt einen frei gesetzten Ausgangsplatz ganz weg', () => {
+    // Sonst bliebe ein leerer Rahmen genau dort stehen, von wo man das Bild
+    // eben weggezogen hat – ein freier Platz beschreibt nichts ohne sein Bild.
+    const gelegt = movePhoto(buch(), { kind: 'pool', photoId: 'p9' }, stelle(0, 0.2, 0.2), reflow);
+    const frei = gelegt.slotId!;
+    const r = movePhoto(gelegt.spreads, slot(0, frei), stelle(1, 0.8, 0.8), reflow);
+
+    expect(r.ok).toBe(true);
+    expect(r.spreads[0]!.slots.map((s) => s.slotId)).not.toContain(frei);
+    expect(r.spreads[1]!.slots.at(-1)!.photoId).toBe('p9');
+  });
+
+  it('verweigert ein Foto, das schon im Buch liegt', () => {
+    const r = movePhoto(buch(), { kind: 'pool', photoId: 'p3' }, stelle(0), reflow);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Doppelseite 2');
+  });
+
+  it('lehnt ein Foto ab, das nicht mehr zum Bestand gehört', () => {
+    // Ohne Maße hätte der Kasten keine Form – das Bild stünde als Quadrat da.
+    const r = movePhoto(buch(), { kind: 'pool', photoId: 'weg' }, stelle(0), reflow);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Bestand');
+  });
+
+  it('meldet eine unbekannte Zielseite', () => {
+    expect(movePhoto(buch(), slot(0, 'a'), stelle(7), reflow).error).toContain('Doppelseite 8');
+  });
+
+  it('verlangt den Bildbestand – ohne ihn hätte der Kasten keine Form', () => {
+    const r = movePhoto(buch(), slot(0, 'a'), stelle(1));
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Bildbestand');
+  });
 });
 
 describe('movePhotos – mehrere Bilder in einem Zug', () => {

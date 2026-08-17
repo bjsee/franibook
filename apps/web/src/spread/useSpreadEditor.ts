@@ -202,6 +202,20 @@ export function useSpreadEditor({
    * Rückmeldung: Was der Zug tut, entscheidet beim Ablegen der Server.
    */
   const [ueberSlot, setUeberSlot] = useState<string | null>(null);
+  /**
+   * Ob das gerade laufende Zeigerereignis schon von einem Platz beantwortet
+   * wurde.
+   *
+   * Der Platz feuert zuerst und lässt sein Ereignis absichtlich durchblubbern –
+   * so erreicht ein Dateieinwurf die Bühne auch dann, wenn er zwischen den
+   * Bildern landet (siehe `papierAblage`). Für den Zug aus dem Buch braucht die
+   * Bühne aber die Unterscheidung: Über einem Platz tauschen zwei Bilder, auf
+   * freiem Papier kommt eines dazu.
+   *
+   * Ein Ref und kein Zustand, weil beides in **einem** Ereignis geschieht: Ein
+   * `setState` käme erst danach an, und die Bühne läse den Stand von vorhin.
+   */
+  const platzGetroffen = useRef(false);
   const [pool, setPool] = useState<PoolPhoto[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [infos, setInfos] = useState<Map<string, PhotoInfo>>(new Map());
@@ -1371,6 +1385,43 @@ export function useSpreadEditor({
   );
 
   /**
+   * Legt ein Bild frei auf das Papier – aus dem Fotopool oder von einem Platz.
+   *
+   * Der Zug für eine Seite, deren Vorlage voll ist: Das Bild bekommt einen
+   * eigenen Kasten an der Fallstelle, alles andere bleibt stehen. Es zählt
+   * danach zur Seite, also stehen die Anordnungen für ein Bild mehr zur Wahl —
+   * die Frage „und jetzt eine Vorlage für sechs?" beantwortet man danach, mit
+   * dem Bild schon auf dem Papier.
+   *
+   * Anders als `verschieben` bleibt die Auswahl **nicht** leer: Der neue Platz
+   * wird gewählt, damit die Griffe gleich am eben abgelegten Bild liegen. Es
+   * ist dasselbe Versprechen wie beim Dateieinwurf – man hat es hingelegt, es
+   * ist das gemeinte Bild.
+   */
+  const freiPlatzieren = useCallback(
+    async (source: MoveSource, punkt: { x: number; y: number }) => {
+      setNote(null);
+      try {
+        const data = await fotoVerschieben(source, { kind: 'frei', spreadIndex: index, punkt });
+        const k = data.touched.indexOf(index);
+        const neu = k >= 0 ? data.spreads[k] : undefined;
+        if (neu) onSpread(neu);
+        setPendingCrop(null);
+        if (data.slotId) {
+          onSelect(data.slotId);
+          setGriffModus('keine');
+        }
+        setBuchVersion((v) => v + 1);
+        poolLaden();
+        onChanged();
+      } catch (e) {
+        setNote(`Das Bild ließ sich nicht ablegen: ${fehlertext(e)}`);
+      }
+    },
+    [index, onSpread, onSelect, onChanged, poolLaden],
+  );
+
+  /**
    * Die Doppelseite neu anordnen lassen – die Rechnung wählt die Vorlage.
    *
    * Der Ausweg, wenn sich die Bilder geändert haben und die Vorlage nicht: Ein
@@ -1416,15 +1467,26 @@ export function useSpreadEditor({
 
   /** Der Einwurf ist unterwegs – das Papier zeigt es, und ein zweiter wartet. */
   const [einwurfLaeuft, setEinwurfLaeuft] = useState(false);
-  /** Die Fallstelle, solange eine Datei über dem Papier hängt. */
-  const [dateiUeber, setDateiUeber] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * Die Fallstelle, solange etwas über dem Papier hängt.
+   *
+   * `art` unterscheidet, was fällt: eine Datei von außen oder ein Bild, das
+   * schon zum Projekt gehört. Für das Papier ist das derselbe Vorgang – ein
+   * Kasten an der Stelle –, für die Beschriftung nicht: „hier einwerfen" nimmt
+   * eine Datei auf, „hier ablegen" holt ein vorhandenes Bild her.
+   */
+  const [papierUeber, setPapierUeber] = useState<{
+    x: number;
+    y: number;
+    art: 'datei' | 'bild';
+  } | null>(null);
 
   // Die Frage gilt für **diese** Doppelseite. Blieb sie beim Blättern stehen,
   // ordnete „Neu anordnen" die Seite neu, auf der man gerade gelandet ist – und
   // verwürfe deren Ausschnitte, ohne dass jemand danach gefragt hätte.
   useEffect(() => {
     setEinwurfFrage(null);
-    setDateiUeber(null);
+    setPapierUeber(null);
   }, [index]);
 
   /**
@@ -1458,6 +1520,47 @@ export function useSpreadEditor({
       x: klemme((p.xMm - beschnittMm) / trimBreiteMm),
       y: klemme((p.yMm - beschnittMm) / trimHoeheMm),
     };
+  }
+
+  /**
+   * Das Bild unter der Zeigerstelle – oder nichts, wenn dort Papier ist.
+   *
+   * Der Vorrang des Platzes hängt sonst daran, welches Element das Ereignis
+   * gefangen hat (`platzGetroffen`), und das ist nicht überall der Platz: Die
+   * beweglichen Texte und die Griffe liegen als Geschwister **über** der
+   * Zeichnung. Wer ein Bild auf ein Foto zieht, über dem zufällig ein Textkasten
+   * sitzt – auf einer Auftaktseite ist das die Jahreszahl –, bekäme statt des
+   * Tauschs einen freien Kasten obendrauf.
+   *
+   * Deshalb wird zusätzlich die Stelle befragt, und zwar rückwärts durch die
+   * Boxen: Die Zeichenreihenfolge ist die Stapelfolge, das zuletzt Gezeichnete
+   * liegt oben. Das ist Trefferprüfung am fertigen RSM und keine
+   * Layoutentscheidung – gerechnet hat die Lagen der Kern.
+   *
+   * Geprüft wird das achsenparallele Rechteck, die Neigung bleibt außen vor: Sie
+   * liegt bei 1,2° und verschöbe die Ecken um Bruchteile eines Millimeters – für
+   * die Frage „welches Bild ist gemeint" ohne Belang.
+   */
+  function bildAnStelle(punkt: { x: number; y: number }): string | undefined {
+    const xMm = beschnittMm + punkt.x * trimBreiteMm;
+    const yMm = beschnittMm + punkt.y * trimHoeheMm;
+    for (let i = angezeigt.boxes.length - 1; i >= 0; i--) {
+      const box = angezeigt.boxes[i];
+      if (box?.kind !== 'image' || !box.slotId) continue;
+      // Das Hintergrundbild deckt das ganze Blatt. Zählte es mit, gäbe es auf
+      // einer Seite mit Hintergrund keine freie Stelle mehr – jeder Wurf wäre
+      // ein Tausch mit ihm.
+      if (box.slotId === BACKGROUND_SLOT_ID) continue;
+      if (
+        xMm >= box.xMm &&
+        xMm <= box.xMm + box.wMm &&
+        yMm >= box.yMm &&
+        yMm <= box.yMm + box.hMm
+      ) {
+        return box.slotId;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -1500,28 +1603,74 @@ export function useSpreadEditor({
   }
 
   /**
-   * Ereignisse, die aus dem Papier eine Ablage für Dateien machen.
+   * Ereignisse, die aus dem Papier eine Ablage machen – für Dateien von außen
+   * **und** für Bilder, die schon zum Projekt gehören.
    *
    * Liegen sie auf der Bühne und nicht am Slot, gilt sie auch zwischen den
    * Bildern – und der Slot lässt sein `onDrop` durchblubbern, weil er nur
    * `preventDefault` ruft. Ein eigener Handler je Platz hätte dieselbe Handlung
    * an fünfzehn Stellen wiederholt.
+   *
+   * **Der Platz hat Vorrang** (`platzGetroffen`): Über einem Bild gezogen
+   * tauschen zwei Bilder ihre Plätze, das ist die ältere und die genauere
+   * Geste. Erst daneben – auf Papier, das keinen Platz trägt – legt der Zug ein
+   * Bild frei dazu. Beides im selben Ereignis zu entscheiden geht nur über den
+   * Ref: Der Slot hat sein `setUeberSlot` da erst angemeldet, nicht gesetzt.
    */
-  const dateiAblage = {
+  const papierAblage = {
     onDragOver: (e: React.DragEvent) => {
-      if (!zieltDatei(e)) return;
-      // Ohne preventDefault lehnt der Browser das Fallenlassen ab – und öffnet
-      // das Bild stattdessen im Tab, was die Arbeit des Abends beendet.
+      const aufPlatz = platzGetroffen.current;
+      platzGetroffen.current = false;
+
+      if (zieltDatei(e)) {
+        // Ohne preventDefault lehnt der Browser das Fallenlassen ab – und öffnet
+        // das Bild stattdessen im Tab, was die Arbeit des Abends beendet.
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setUeberSlot(null);
+        setPapierUeber({ ...fallstelle(e), art: 'datei' });
+        return;
+      }
+
+      if (!zug) return;
+      if (aufPlatz) {
+        // Der Platz zeigt schon seine eigene Rückmeldung; zwei Marken für einen
+        // Zug wären eine Frage zu viel.
+        setPapierUeber(null);
+        return;
+      }
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-      setUeberSlot(null);
-      setDateiUeber(fallstelle(e));
+      e.dataTransfer.dropEffect = 'move';
+      const punkt = fallstelle(e);
+      // Liegt dort ein Bild, das seine Ereignisse an einen Text oder einen Griff
+      // verloren hat, gilt der Platz – und dann trägt er auch die Rückmeldung.
+      const darunter = bildAnStelle(punkt);
+      setUeberSlot(darunter ?? null);
+      setPapierUeber(darunter ? null : { ...punkt, art: 'bild' });
     },
-    onDragLeave: () => setDateiUeber(null),
+    onDragLeave: () => setPapierUeber(null),
     onDrop: (e: React.DragEvent) => {
-      if (!zieltDatei(e)) return;
+      const aufPlatz = platzGetroffen.current;
+      platzGetroffen.current = false;
+
+      if (!zieltDatei(e)) {
+        // Auf einem Platz hat `slotDrop` den Zug schon ausgeführt.
+        if (aufPlatz || !zug) return;
+        e.preventDefault();
+        setPapierUeber(null);
+        const punkt = fallstelle(e);
+        // Lag über dem Bild ein Textkasten oder ein Griff, hat der Platz sein
+        // Ereignis nie gesehen. Die Stelle sagt trotzdem, was gemeint war.
+        const darunter = bildAnStelle(punkt);
+        if (darunter)
+          void verschieben(zug.source, { kind: 'slot', spreadIndex: index, slotId: darunter });
+        else void freiPlatzieren(zug.source, punkt);
+        setZug(null);
+        setUeberSlot(null);
+        return;
+      }
       e.preventDefault();
-      setDateiUeber(null);
+      setPapierUeber(null);
       const datei = ersteDatei(e);
       if (!datei) return;
       // Kein zweiter Wurf, solange der erste unterwegs ist: Beide träfen
@@ -1589,10 +1738,19 @@ export function useSpreadEditor({
   }
 
   function slotDrop(slotId: string) {
+    // Auch ohne Zug vermerkt: Die Bühne darf daraus kein freies Ablegen machen,
+    // nur weil der Zug schon abgeräumt war (siehe `papierAblage`).
+    platzGetroffen.current = true;
     if (!zug) return;
     void verschieben(zug.source, { kind: 'slot', spreadIndex: index, slotId });
     setZug(null);
     setUeberSlot(null);
+  }
+
+  /** Der Zeiger steht über einem Platz – die Bühne behandelt ihn dann nicht. */
+  function slotDragOver(slotId: string) {
+    platzGetroffen.current = true;
+    setUeberSlot(slotId);
   }
 
   function zugBeenden() {
@@ -1890,7 +2048,7 @@ export function useSpreadEditor({
       // zuletzt überfahrenen Platz stehen und verspräche einen Tausch, der
       // hier gar nicht mehr zur Wahl steht.
       setUeberSlot(null);
-      setDateiUeber(null);
+      setPapierUeber(null);
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
@@ -2019,7 +2177,7 @@ export function useSpreadEditor({
     kastenZiehen,
     slotDragStart,
     slotDrop,
-    slotDragOver: setUeberSlot,
+    slotDragOver,
     zugBeenden,
 
     // Text
@@ -2062,9 +2220,10 @@ export function useSpreadEditor({
     /** Ob gerade ein Bild aus der Doppelseite gezogen wird – der Pool wird dann Ziel. */
     poolIstZiel: zug?.source.kind === 'slot',
 
-    // Einwurf
-    dateiAblage,
-    dateiUeber,
+    // Einwurf und freies Ablegen
+    papierAblage,
+    papierUeber,
+    freiPlatzieren,
     einwurfLaeuft,
     einwurfFrage,
     einwurfAnordnen,

@@ -238,7 +238,7 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
   }
 
   return (
-    <div ref={stageRef} style={S.wrap} {...model.dateiAblage}>
+    <div ref={stageRef} style={S.wrap} {...model.papierAblage}>
       <SpreadView
         spread={angezeigt}
         widthPx={stageBreite}
@@ -293,21 +293,27 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
       <Griffe model={model} />
 
       {/*
-        Eine Datei hängt über dem Papier: Das Blatt bekommt einen Rand, und an
-        der Fallstelle steht ein Kreuz. Beides ist Rückmeldung und keine
-        Vorschau – wie groß das Bild wird, weiß erst der Server, der seine
-        Pixelmaße gelesen hat.
+        Etwas hängt über dem Papier: Das Blatt bekommt einen Rand, und an der
+        Fallstelle steht ein Kreuz. Beides ist Rückmeldung und keine Vorschau –
+        wie groß das Bild wird, rechnet der Server aus seinen Pixelmaßen.
+
+        Der Wortlaut trennt die beiden Fälle, die Geste nicht: Eine Datei wird
+        aufgenommen, ein Bild des Projekts nur hierhergelegt. Auf einem Platz
+        steht die Marke nicht – dort tauschen zwei Bilder, und das zeigt der
+        Platz selbst an.
       */}
-      {model.dateiUeber && (
+      {model.papierUeber && (
         <div style={S.dateiZone}>
           <span
             style={{
               ...S.fallstelle,
-              left: `${(beschnittMm + model.dateiUeber.x * trimBreiteMm) * pxPerMm}px`,
-              top: `${(beschnittMm + model.dateiUeber.y * trimHoeheMm) * pxPerMm}px`,
+              left: `${(beschnittMm + model.papierUeber.x * trimBreiteMm) * pxPerMm}px`,
+              top: `${(beschnittMm + model.papierUeber.y * trimHoeheMm) * pxPerMm}px`,
             }}
           >
-            <span style={S.fallmarke}>hier einwerfen</span>
+            <span style={S.fallmarke}>
+              {model.papierUeber.art === 'datei' ? 'hier einwerfen' : 'hier ablegen'}
+            </span>
           </span>
         </div>
       )}

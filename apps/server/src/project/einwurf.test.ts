@@ -303,13 +303,32 @@ describe('Ein eingeworfenes Bild', () => {
     expect(stand.spreads[0]!.slots.filter((s) => s.photoId === erst.photo!.id)).toHaveLength(1);
   });
 
-  it('lässt eine festgehaltene Seite in Ruhe, behält das Bild aber im Bestand', async () => {
+  it('nimmt eine festgehaltene Seite an, solange eine Fallstelle dabei ist', async () => {
+    // `locked` heißt, dass die Automatik die Finger davon lässt. Mit Fallstelle
+    // ordnet niemand um: Das Bild bekommt einen eigenen Kasten, die vier
+    // bisherigen bleiben in ihren Plätzen.
     stand.spreads[0]!.locked = true;
 
     const ergebnis = await einwerfen(
       stand,
       { name: 'neu.png', bytes: await bytes(1200, 900) },
       { kind: 'spread', index: 0, punkt: { x: 0.5, y: 0.5 } },
+    );
+
+    expect(ergebnis.ok).toBe(true);
+    expect(stand.spreads[0]!.slots).toHaveLength(5);
+    expect(stand.spreads[0]!.slots.at(-1)!.rect).toBeDefined();
+  });
+
+  it('lehnt eine festgehaltene Seite ohne Fallstelle ab, behält das Bild aber im Bestand', async () => {
+    // Ohne Stelle würde die Seite neu angeordnet – und verlöre genau das,
+    // wofür sie festgehalten wurde.
+    stand.spreads[0]!.locked = true;
+
+    const ergebnis = await einwerfen(
+      stand,
+      { name: 'neu.png', bytes: await bytes(1200, 900) },
+      { kind: 'spread', index: 0 },
     );
 
     expect(ergebnis.ok).toBe(false);
