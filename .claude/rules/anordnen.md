@@ -117,6 +117,17 @@ weniger als achtzehn übrigen Bildern behält die schlanke Fassung. Am echten
 Bestand sind das 57 Bilder mehr in den Auftakten, rund vier Doppelseiten.
 Begründung und verworfene Fassungen: `docs/konzept.md`, Abschnitt „Auftaktseiten".
 
+**Der Auftakt hängt am Seed wie jede andere Doppelseite.** Seine Bilder sind über
+den Jahrgang gestreut (`auftaktAuswahl` in `layout/generate.ts`: so viele
+Abschnitte, wie Bilder gebraucht werden, aus jedem eines, die Stelle darin würfelt
+der Seed), und die Fassung bekommt denselben Zufallsanteil von 0,01, mit dem
+`chooseTemplate` den Gleichstand bricht (`layoutSpread`-Option `jitter`). Vorher
+waren es die ersten n des Jahrgangs und die Fassung rein nach Passung — die
+Jahresseite war damit die einzige Seite, die ein „Andere Anordnung" nie anfasste,
+und sie zeigte den Januar statt das Jahr. Der Zufallsstrom ist **je Jahrgang
+eigen** (`jahresStrom` aus Seed und Jahreszahl): aus dem Strom des Flusses gezogen
+verschöbe jeder entfallene Auftakt alle späteren Entnahmen.
+
 **Von Hand steht der Jahresauftakt für jede Bilderzahl von 1 bis 12 zur Wahl**, je
 drei Fassungen (hochkant, quer, gemischt) — `chapterChoices()` gegen
 `chapterTemplates()`. Der Unterschied ist das Tag **`nur-wahl`**: Die Automatik
@@ -155,10 +166,15 @@ dahinter ist **mengenwertig** (`movePhotos` in `layout/move.ts`,
 Viererseite ergeben in einem Zug 6 und 6 und **ein** Cmd+Z, statt zweier
 Anordnungen und zweier Schritte; dieselbe Begründung wie bei `PATCH /api/photos`.
 
-Zwei Regeln stehen quer zum Einzelzug und sind Absicht: Eine leer gezogene Seite
+Eine Regel steht quer zum Einzelzug und ist Absicht: Eine leer gezogene Seite
 **bleibt stehen** (leere Vorlage, gemeldet über `leer`) statt den Stapel
-abzulehnen, und **festgehaltene Seiten sind weder Ziel noch Quelle** – sie
-verlören, wofür sie festgehalten wurden. **Ein Auftakt nimmt Bilder an**, wechselt
+abzulehnen. **Festgehaltene Seiten sind weder Ziel noch Quelle** – sie verlören,
+wofür sie festgehalten wurden; das gilt für den Stapel (`unantastbar`) **und für
+den Einzelzug auf eine ganze Doppelseite** (`moveToSpread`), wo die Prüfung
+lange fehlte: Ein Bild aus dem Nachbarstreifen dorthin gezogen ordnete die Seite
+neu an. Wer eines hinlegen will, ohne die Seite umzuwerfen, zieht es auf eine
+**Stelle** (`kind: 'frei'`, siehe unten) – dort ordnet niemand um.
+**Ein Auftakt nimmt Bilder an**, wechselt
 dabei innerhalb seiner Familie (`chapterChoices`, Textplätze bleiben) und lehnt
 nur die Zahlen ab, für die es keine Fassung gibt – beim Jahresauftakt alles über
 zwölf, entschieden in `anordnen`.
@@ -168,7 +184,7 @@ Bilddaten kommen weiter über `GET /api/photos`; der Texteditor der Aufteilung l
 unter `/aufteilung/json`. Begründung und verworfene Fassungen: `docs/konzept.md`,
 Abschnitt „Aufteilung im Baum".
 
-## Eingeworfene Bilder
+## Bilder an eine Stelle legen
 
 **Eine Datei lässt sich ins Buch werfen** (`project/einwurf.ts`,
 `layout/einwurf.ts`): aus dem Finder auf das Papier, in den Fotopool oder auf eine
@@ -180,6 +196,30 @@ angeordnet wird, **fragt** eine Karte auf der Bühne; von selbst geschieht es
 nicht, denn das verwürfe die Ausschnitte der ganzen Seite. Im Baum wird dagegen
 neu angeordnet — eine Zeile hat keine Stelle im Millimeterraster. Begründung:
 `docs/konzept.md`, Abschnitt „Bilder einwerfen".
+
+**Dasselbe gilt für ein Bild, das schon zum Projekt gehört**: `MoveTarget` kennt
+neben Platz und Seite die **Stelle** (`{ kind: 'frei', spreadIndex, punkt }` in
+`layout/move.ts`, gerechnet über dieselbe Funktion `mitEinwurf`). Aus dem Fotopool
+oder von einem Platz auf freies Papier gezogen kommt das Bild dorthin, wo die Hand
+losgelassen hat — auch dann, wenn die Vorlage keinen Platz mehr frei hat. Drei
+Festlegungen dazu:
+
+- **Der Platz hat Vorrang vor der Stelle.** Über einem Bild gezogen tauschen die
+  beiden, erst daneben kommt eines dazu. Zwei Prüfungen tragen das: das Ereignis
+  (`platzGetroffen` in `spread/useSpreadEditor.ts`, weil der Platz sein `onDrop`
+  absichtlich durchblubbern lässt) **und** die Stelle (`bildAnStelle`, rückwärts
+  durch die Boxen des RSM). Die zweite ist nötig, weil Textkästen und Griffe
+  über der Zeichnung liegen: Über ihnen sieht der Platz sein Ereignis nie.
+- **Das Bild zählt danach zur Seite** — das ist der Zweck. Eine Seite mit fünf
+  Bildern hat sechs, also stehen die Anordnungen für sechs zur Wahl
+  (`templateChoices` zählt über die Slots) und `auto` ordnet sie mit ihm an.
+- **Auch eine festgehaltene Seite nimmt es an**, für den Zug wie für den
+  Dateieinwurf: `locked` heißt, dass die Automatik die Finger davon lässt, und
+  hier ordnet niemand um. **Ohne** Fallstelle (Baum, Zug auf die ganze Seite)
+  bleibt die Absage.
+
+Der Ausgangsplatz wird geräumt: ein Vorlagenplatz bleibt leer stehen, ein frei
+gesetzter fällt ganz weg (`ohneQuelle`) — ohne sein Bild beschreibt er nichts.
 
 ## Einen leeren Platz wegnehmen
 

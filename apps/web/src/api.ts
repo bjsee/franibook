@@ -646,6 +646,11 @@ export interface Zugergebnis {
   touched: number[];
   spreads: SpreadResponse[];
   report: Report | null;
+  /**
+   * Der Platz, der dabei entstanden ist – nur beim Zug auf eine Stelle des
+   * Papiers (`{ kind: 'frei' }`). Die Bühne wählt ihn danach aus.
+   */
+  slotId?: string;
 }
 
 export const fotoVerschieben = (source: MoveSource, target: MoveTarget) =>

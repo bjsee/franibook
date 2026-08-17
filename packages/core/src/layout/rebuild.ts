@@ -50,6 +50,20 @@ export interface LayoutSpreadOptions {
    * sein.
    */
   candidates?: readonly Template[];
+  /**
+   * Winziger Zufallsanteil je Kandidat, damit gleichwertige Vorlagen nicht
+   * immer in Bibliotheksreihenfolge gewinnen.
+   *
+   * Dieselbe Rechnung wie in `chooseTemplate` (`layout/generate.ts`) und aus
+   * demselben Grund: Der Jahresauftakt wählte sonst bei jedem Wurf dieselbe
+   * Fassung, obwohl drei gleich gut passen — „Andere Anordnung" ließ die
+   * Auftaktseiten unberührt. Die Passung behält dabei ihren Vorrang; 0,01
+   * kippt nur, was ohnehin fast gleich steht.
+   *
+   * Ohne Angabe bleibt die Wahl rein nach Passung — der Vorlagenwechsel von
+   * Hand soll auf denselben Bildern zweimal dasselbe ergeben.
+   */
+  jitter?: () => number;
 }
 
 export interface LayoutSpreadResult {
@@ -109,11 +123,12 @@ export function layoutSpread(opts: LayoutSpreadOptions): LayoutSpreadResult | un
   for (const template of candidates) {
     const cost = kostenmatrix(photos, template.slots, profile, weightOf);
     const assignment = assign(cost);
-    const score = assignment.reduce((sum, slotIndex, photoIndex) => {
-      // Ein Foto ohne Platz kostet nichts – es steht hinterher in `leftover`.
-      if (slotIndex < 0 || slotIndex >= template.slots.length) return sum;
-      return sum + cost[photoIndex]![slotIndex]!;
-    }, 0);
+    const score =
+      assignment.reduce((sum, slotIndex, photoIndex) => {
+        // Ein Foto ohne Platz kostet nichts – es steht hinterher in `leftover`.
+        if (slotIndex < 0 || slotIndex >= template.slots.length) return sum;
+        return sum + cost[photoIndex]![slotIndex]!;
+      }, 0) + (opts.jitter ? opts.jitter() * 0.01 : 0);
 
     if (score < bestScore) {
       bestScore = score;

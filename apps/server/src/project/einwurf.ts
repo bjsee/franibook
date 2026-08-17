@@ -326,10 +326,16 @@ function aufSeite(
 ): { ok: boolean; error?: string; slotId?: string; touched?: number[] } {
   const spread = z.spreads[ziel.index];
   if (!spread) return { ok: false, error: `Doppelseite ${ziel.index + 1} gibt es nicht` };
-  if (spread.locked) {
+  // Festgehalten heißt, dass die **Automatik** die Finger davon lässt. Mit
+  // Fallstelle ordnet niemand um – das Bild bekommt einen eigenen Kasten, die
+  // übrigen bleiben in ihren Plätzen. Ohne Fallstelle wird die Seite neu
+  // angeordnet, und das verwürfe genau das, wofür sie festgehalten wurde.
+  if (spread.locked && !ziel.punkt) {
     return {
       ok: false,
-      error: `Doppelseite ${ziel.index + 1} ist festgehalten – erst lösen, dann einwerfen.`,
+      error:
+        `Doppelseite ${ziel.index + 1} ist festgehalten – erst lösen, dann einwerfen. ` +
+        `Auf eine Stelle des Papiers geworfen geht es auch so.`,
     };
   }
 

@@ -1537,6 +1537,32 @@ Zwei Arten, unterschiedlich geregelt:
   > gegenüber die Halbseiten. Eine Flusshälfte auf der Textseite wird abgelehnt
   > und gar nicht erst angeboten.
 
+  > **Nachtrag (17. August 2026): der Auftakt nimmt am Wurf teil**
+  >
+  > „Andere Anordnung" legte jede Doppelseite des Buches anders — außer den
+  > Jahresauftakten. Sie waren die einzigen seedunabhängigen Seiten: Die Bilder
+  > waren die **ersten n** des Jahrgangs, die Fassung wählte `layoutSpread` rein
+  > nach Passung. Am echten Buch stand in der Vorschau des Neuanordnens deshalb
+  > jede Jahresseite als unverändert — was aussah, als würde sie übersprungen.
+  >
+  > Zwei Änderungen, beide klein: Die Bilder werden über den Jahrgang **gestreut**
+  > (so viele gleich lange Abschnitte, wie Bilder gebraucht werden, aus jedem eines
+  > — die Stelle darin würfelt der Seed, `auftaktAuswahl` in `layout/generate.ts`),
+  > und `layoutSpread` nimmt einen `jitter` entgegen, denselben Zufallsanteil von
+  > 0,01, mit dem `chooseTemplate` seit je den Gleichstand unter Vorlagen bricht.
+  > Die Passung behält damit ihren Vorrang; gewürfelt wird nur unter dem, was
+  > ohnehin gleich gut passt.
+  >
+  > Nebenbei behebt die Streuung einen zweiten Fehler: Der Auftakt zeigte den
+  > Januar und nicht das Jahr — bei einem Jahrgang mit 90 Bildern lagen die ersten
+  > neun regelmäßig an einem einzigen Wochenende.
+  >
+  > Der Zufallsstrom ist dabei **je Jahrgang eigen** (`jahresStrom`, aus Seed und
+  > Jahreszahl) und nicht der des Flusses. Sonst verschöbe jede Änderung an einem
+  > Auftakt alle späteren Entnahmen: Ein Jahrgang, dessen Auftakt entfällt, weil er
+  > festgehalten ist, legte das halbe Buch anders. Festgehaltene Auftakte bleiben
+  > unangetastet — sie werden gar nicht erst gebaut (`keptOpeners`).
+
 - **Gruppenauftakt** (`settings.groupOpeners`, Vorgabe `'auto'`) ist an den Zeitstrahl gekoppelt: `'auto'` bedeutet das Gegenteil von `timeline`. Trägt der Zeitstrahl den Gruppentitel auf jeder Doppelseite der Gruppe, kostet eine eigene Auftaktseite zwei Seiten, ohne etwas hinzuzufügen. Vorrang hat `PhotoGroup.opener` für die einzelne Gruppe – Gruppen sind bestätigt und stabil, diese Entscheidung übersteht jedes Neugenerieren. Die Regel, dass nur tragfähige Gruppen einen Auftakt bekommen (eigenes Hauptbild oder ab `groupOpenerMinPhotos` Fotos), bleibt: bei 61 Gruppen wären es sonst 122 Seiten allein für Auftakte.
 
 ### Seitenhintergrund
@@ -2742,6 +2768,40 @@ Griff, der genau das zusagt.
 Ein Einwurf ist **eine** Datei. Mehrere an dieselbe Stelle zu legen ergäbe einen
 Stapel, in dem man die unteren nicht mehr findet; wer viele Bilder nachlegt, legt
 sie in den Ordner und liest neu ein. Gesagt wird es beim Versuch.
+
+> **Nachtrag (17. August 2026): Was für die Datei gilt, gilt für jedes Bild**
+>
+> Die Fallstelle war bisher der Datei vorbehalten. Ein Bild aus dem Fotopool
+> konnte man nur in einen **Platz** ziehen — hatte die Vorlage keinen frei, ging
+> es gar nicht, und der Ausweg war ein Zug auf die ganze Seite, der sie neu
+> anordnet und ihre Ausschnitte verwirft. Das ist die Umkehrung dessen, was man
+> will: „Dieses Bild gehört hierhin" soll nicht das halbe Blatt umstellen.
+>
+> `MoveTarget` kennt deshalb ein drittes Ziel: `{ kind: 'frei', spreadIndex,
+punkt }` (`layout/move.ts`, über dieselbe Rechnung wie der Einwurf —
+> `mitEinwurf` in `layout/einwurf.ts`). Auf der Bühne fällt ein gezogenes Bild
+> damit auch **neben** die Plätze; der Platz behält Vorrang, denn dort ist der
+> Tausch die genauere Geste (`papierAblage` in `spread/useSpreadEditor.ts`).
+>
+> **Und das Bild zählt danach zur Seite.** Genau darum geht es: Eine Seite mit
+> fünf Bildern hat danach sechs, also stehen die Anordnungen für sechs zur Wahl
+> (`templateChoices` zählt über die Slots, nicht über die Vorlage) und ein `auto`
+> ordnet sie mit dem neuen Bild an. Der freie Kasten ist die Zwischenstation, aus
+> der eine Anordnung werden kann — nicht die Endstation.
+>
+> **Auch eine festgehaltene Seite nimmt ein Bild an**, solange eine Fallstelle
+> dabei ist — für den Zug aus dem Buch wie für den Dateieinwurf, der das vorher
+> mit einem Satz ablehnte. `locked` heißt, dass die **Automatik** die Finger
+> davon lässt; hier ordnet niemand um. Ohne Fallstelle (Baum, Zug auf die ganze
+> Seite) bleibt die Absage: Dort wird neu angeordnet, und das verwürfe genau das,
+> wofür die Seite festgehalten wurde. Am echten Buch sind 64 von 80 Doppelseiten
+> festgehalten — mit der alten Regel wäre die Geste dort viermal von fünf
+> wirkungslos gewesen.
+>
+> Der Ausgangsplatz wird dabei geräumt: ein Platz der Vorlage bleibt leer stehen,
+> ein **frei gesetzter** fällt ganz weg (`ohneQuelle`). Er beschreibt ohne sein
+> Bild nichts und bliebe sonst als leerer Rahmen genau dort stehen, von wo man das
+> Bild eben weggezogen hat.
 
 ### Wenn Bild und Platz quer zueinander stehen
 
