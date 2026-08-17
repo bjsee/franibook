@@ -22,6 +22,7 @@ import {
   type PoolFoto,
   baumLaden,
   bildEinwerfen,
+  istVideodatei,
   fehlertext,
   fotopoolLaden,
   fotosLaden,
@@ -251,6 +252,15 @@ export function useBaum(standVersion: number, onChanged: () => void): BaumModell
 
   const dateiEinwerfen = useCallback(
     async (datei: File, ziel: Herkunft) => {
+      // Wie im Fotopool: Aus einem Video wird erst ein Foto, wenn eine Sekunde
+      // gewählt ist, und dafür gibt es genau eine Stelle — die Doppelseite mit
+      // ihrem Schieber. Eine Zeile im Baum hat keine.
+      if (istVideodatei(datei.name)) {
+        setNote(
+          `„${datei.name}" ist ein Video – wirf es auf die Doppelseite, dann lässt sich das Standbild wählen.`,
+        );
+        return;
+      }
       setBusy(true);
       try {
         const ergebnis = await bildEinwerfen(

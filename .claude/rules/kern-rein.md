@@ -15,9 +15,13 @@ Architektur trägt, sind stattdessen vier Eigenschaften dieses Pakets.
 Verboten sind in `packages/core/src/**`:
 
 - Node-Builtins (`node:fs`, `node:path`, …) und `require()`
-- `sharp`, `pdfkit`, `fastify` — überhaupt jede Abhängigkeit außerhalb von `@franibook/core` selbst
+- `sharp`, `pdfkit`, `fastify` — jede Abhängigkeit außer den ausdrücklich
+  erlaubten (siehe unten)
 - `fetch(`
 - `process.env`
+- Umgebungs-Globals wie `URL` — die tsconfig dieses Pakets kennt sie
+  folgerichtig nicht (`istVideoAdresse` in `model/video.ts` prüft deshalb mit
+  einem Ausdruck)
 
 Der Grund ist nicht Reinheit, sondern Testbarkeit: Die Engine lässt sich ohne eine
 einzige Bilddatei prüfen, und sie läuft unverändert im Browser — `ZeitleisteMini`
@@ -28,6 +32,23 @@ Alles, was die Engine über ein Foto wissen muss, steht im Domänenmodell
 (`model/photo.ts`): Maße, Datum, Orientierung. Wer eine Pixelinformation braucht,
 die dort nicht steht, erweitert das Modell und den Import — nicht den Kern um einen
 Dateizugriff.
+
+### Die eine erlaubte Abhängigkeit
+
+`uqr` rechnet die QR-Matrix (`render/qr.ts`). Bis dahin hatte dieses Paket
+**keine** Abhängigkeit, und die Regel lautete „überhaupt keine".
+
+Gebrochen wurde sie, weil die Alternative schlechter war: Reed-Solomon-Kodierung
+und die Wahl unter acht Maskenmustern sind rund 400 Zeilen, deren Fehler man
+nicht sieht — ein selbst gebauter Code wirkt richtig, bis ein gedrucktes Buch
+nicht scanbar ist.
+
+Die Bedingung, unter der das tragbar bleibt, steht als Test
+(`tests/architektur/`, „Der Kern hat genau eine Abhängigkeit"): Die Liste ist
+geschlossen, das erlaubte Paket bringt **selbst keine Abhängigkeit** mit, und
+sein Bündel enthält kein `require`, kein `node:`, kein `Math.random` und kein
+`Date.now`. Wer ein zweites Paket aufnimmt, ändert diesen Test — und begründet
+es dort.
 
 ## 2. Deterministisch
 

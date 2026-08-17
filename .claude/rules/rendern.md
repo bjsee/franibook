@@ -118,6 +118,36 @@ Zeitstrahl bleiben darüber. Wirkt beim Rendern wie Neigung und Rahmen, wird vom
 Neuaufbau aber verworfen (`handwork().ebenen`). Begründung: `docs/konzept.md`,
 Abschnitt „Ebenen: wer liegt vor wem".
 
+## Der QR-Code am Bild
+
+`render/qr.ts` setzt an ein Bild mit Videoverweis
+(`PhotoOverride.video`, `model/video.ts`) einen Code in die Ecke: **eine weiße
+Fläche und darüber schwarze `RectBox`en**, ein Kasten je waagerechtem Lauf
+dunkler Module. Wie beim Rahmen ist das kein neuer Begriff im Modell, sondern
+mehr Boxen — eine `QrBox` mit der Matrix darin hätte jeden Renderer selbst
+zeichnen lassen, und das ist genau die Fehlerklasse, die der Parity-Test
+verhindert. Er hat dort einen eigenen Fall.
+
+Vier Festlegungen, die man beim Ändern beibehält:
+
+- **Die Größe folgt aus der Zielmodulgröße**, nicht aus der Bildkante: so groß,
+  dass jedes Modul `QR_ZIEL_MODUL_MM` misst, gedeckelt auf 22 mm und 40 % der
+  kürzeren Kastenkante. Der erste Entwurf gab dem Code einen Anteil der
+  Bildkante mit einer Klemme bei 15 mm — und verfehlte damit sein eigenes Ziel,
+  weil eine Kurzadresse dort auf 0,45 mm je Modul kommt.
+- **Gewarnt wird über die Modulkante, nicht über die Kantenlänge**
+  (`qr-below-target-module`, `qr-below-min-module`): Dieselben 15 mm sind bei
+  einer kurzen Adresse bequem lesbar und bei einer langen unbrauchbar. Beide
+  Schwellen sind **gesetzt und nicht gemessen**, wie `gutterLossMm`; den Wert
+  sagt der erste Testdruck.
+- **Die Ecke weicht Falzzone und Beschnitt aus** (`qrEckeFuer`). Unter den
+  sicheren Ecken gewinnt die **äußere** und bei Gleichstand die untere: Ein Code
+  unten außen liegt im gebundenen Buch flach, und oben konkurriert er mit dem
+  Motiv. Bleibt keine sichere Ecke, meldet `qr-at-edge` den Grund.
+- **Die Ruhezone sind vier Module**, wie die Norm es verlangt, und die Fläche
+  ist reines Weiß — nicht das warme Kartonweiß der Rahmen. Hier ist die Farbe
+  Funktion und nicht Gestaltung.
+
 ## Der Falz frisst mit
 
 `page.gutterLossMm` sagt, wieviel Papier ein Bild über der Falzachse an der

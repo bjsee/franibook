@@ -26,6 +26,7 @@ import { TemplatePicker } from '../TemplatePicker.js';
 import type { TextBlockData } from '../TextBlocks.js';
 import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Videoverweis } from './Videoverweis.js';
 import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
@@ -262,6 +263,7 @@ function BildLeiste({ model }: { model: SpreadEditorModel }) {
         {info ? (zeitpunkt(info) ?? 'ohne Datum') : '…'}
       </span>
       <Bilddaten model={model} />
+      <Videoverweis model={model} />
       <Bildanpassung model={model} />
       <Bildbefunde model={model} />
       <span style={B.trenner} />

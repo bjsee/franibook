@@ -86,6 +86,17 @@ export const BEFUNDARTEN = [
    */
   { art: 'datei-fehlt', titel: 'Bilddatei nicht auffindbar', schwer: true },
   { art: 'unter-mindest-dpi', titel: 'Unter der Mindestauflösung', schwer: true },
+  /**
+   * Ein gedruckter QR-Code, den niemand scannen kann – zu kleine Module oder eine
+   * Lage im Beschnitt oder Falz.
+   *
+   * **Zwei Ursachen, eine Art**, wie bei `ruecken-zu-schmal`: Der Mangel ist
+   * derselbe, und im Bericht soll er untereinander stehen; den Unterschied nennt
+   * der Wortlaut. Schwer, weil ein Code das einzige am Bild ist, das eine Aufgabe
+   * hat – ein unlesbarer verspricht ein Video und liefert nichts, und anders als
+   * bei einem Gesicht im Beschnitt kann das niemand als Gestaltung gemeint haben.
+   */
+  { art: 'qr-unlesbar', titel: 'QR-Code nicht lesbar', schwer: true },
   { art: 'im-rand', titel: 'Text im Sicherheitsabstand', schwer: true },
   { art: 'im-falz', titel: 'Text in der Falzzone', schwer: true },
   { art: 'seitenzahl', titel: 'Seitenzahl passt nicht zum Format', schwer: true },
@@ -95,6 +106,16 @@ export const BEFUNDARTEN = [
   { art: 'lage-quer', titel: 'Bild und Platz stehen quer', schwer: false },
   { art: 'gesicht-am-rand', titel: 'Gesicht im Beschnitt oder im Falz', schwer: false },
   { art: 'hintergrund-weich', titel: 'Hintergrundbild zu weich', schwer: false },
+  /**
+   * Der Code ist kleiner, als für ein sicheres Auslösen empfohlen – aber über dem
+   * Mindestmaß.
+   *
+   * Getrennt von `qr-unlesbar` und leicht, aus demselben Grund, aus dem die
+   * Zielauflösung von der Mindestauflösung getrennt ist: Das eine ist ein Wunsch,
+   * das andere eine Grenze. Anders als bei der Auflösung bleibt es hier eine
+   * Zeile je Fund – Videos sind eine Handvoll, keine achthundert.
+   */
+  { art: 'qr-knapp', titel: 'QR-Code knapp bemessen', schwer: false },
   /**
    * Die eine Art, die als **Summe** im Bericht steht und nicht je Bild.
    *
@@ -250,7 +271,16 @@ export function seitenbefunde(
       befunde.push({
         ...fund,
         ort: ort(box.slotId),
-        schluessel: `${fund.art}#foto:${box.photoId}`,
+        // Die **Unterart** kommt nur dort dazu, wo eine Art aus mehreren
+        // Warnungen entstehen kann: `qr-below-min-module` und `qr-at-edge` sind
+        // beide `qr-unlesbar`, und ohne Unterscheidung hätten zwei Funde
+        // denselben Schlüssel — ein „Weiß ich, ist ok" nickte beide zugleich ab,
+        // und die Oberfläche vergäbe zweimal denselben React-Key.
+        //
+        // Und **nur** dort: Der Schlüssel ist die Kennung, unter der eine
+        // Zustimmung im Projekt liegt (`abnahmen`). Ihn überall zu erweitern
+        // hätte jeden längst abgenickten Fund des Buches zurückgebracht.
+        schluessel: `${fund.art}${fund.unterart ? `:${fund.unterart}` : ''}#foto:${box.photoId}`,
       });
     }
   }
@@ -478,7 +508,9 @@ function merkeZiel(stand: { anzahl: number; schwaechstes: number }, dpi: number)
  * liegt notwendig außerhalb des Sicherheitsabstands. Und `below-target-dpi`
  * sammelt `pruefeBuch` zu einer Zeile — siehe die Tabelle oben.
  */
-function ausBildwarnung(w: RenderWarning): Pick<Befund, 'art' | 'text'> | null {
+function ausBildwarnung(
+  w: RenderWarning,
+): (Pick<Befund, 'art' | 'text'> & { unterart?: string }) | null {
   switch (w.code) {
     case 'photo-missing':
       return { art: 'foto-fehlt', text: `Bild ${w.photoId} liegt nicht im Bestand` };
@@ -507,11 +539,44 @@ function ausBildwarnung(w: RenderWarning): Pick<Befund, 'art' | 'text'> | null {
             ? `${gesichter(w.anzahl)} jenseits der Endformatkante`
             : `${gesichter(w.anzahl)} in der Falzzone`,
       };
+    case 'qr-below-min-module':
+      return {
+        art: 'qr-unlesbar',
+        unterart: w.code,
+        text:
+          `Modulkante nur ${modul(w.modulMm)} – unter dem Mindestmaß von ` +
+          `${modul(w.minModulMm)}. Eine kürzere Adresse oder ein größeres Bild hilft.`,
+      };
+    case 'qr-at-edge':
+      return {
+        art: 'qr-unlesbar',
+        unterart: w.code,
+        text:
+          w.wo === 'beschnitt'
+            ? 'der Code liegt jenseits der Sicherheitslinie und wird angeschnitten'
+            : 'der Code liegt in der Falzzone und verschwindet zum Teil im Bund',
+      };
+    case 'qr-below-target-module':
+      return {
+        art: 'qr-knapp',
+        text: `Modulkante ${modul(w.modulMm)}, empfohlen sind ${modul(w.targetModulMm)}`,
+      };
     case 'crosses-gutter':
     case 'outside-safety':
     case 'below-target-dpi':
       return null;
   }
+}
+
+/**
+ * Eine Modulkante als Satzteil.
+ *
+ * Zwei Nachkommastellen, weil die Unterschiede, um die es geht, dort liegen: Der
+ * Abstand zwischen „knapp" und „unlesbar" ist ein Zehntelmillimeter, und auf
+ * ganze gerundet stünde in beiden Zeilen dieselbe Zahl.
+ */
+function modul(mm: number): string {
+  return `${mm.toFixed(2).replace('.', ',')} mm`;
 }
 
 function gesichter(anzahl: number): string {

@@ -24,6 +24,7 @@ import { textName } from './bewegtext.js';
 import { Bildgriffe } from './Bildgriffe.js';
 import { Griffe } from './Griffe.js';
 import type { PhotoInfo, SpreadEditorModel } from './useSpreadEditor.js';
+import { VideoWahl } from './VideoWahl.js';
 
 /** Wortlaut der Datumsquellen aus `model/date.ts`, für die Anzeige. */
 export const DATUMSQUELLE: Record<string, string> = {
@@ -330,6 +331,12 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
         drei Fassungen gleich. Sie verschwindet nur durch eine Antwort – ein
         Hinweis, der von selbst wegblendet, wäre bei zwei Knöpfen eine Falle.
       */}
+      {/*
+        Die Wahl des Standbildes liegt aus demselben Grund hier wie die Frage
+        nach dem Neuanordnen: Sie gehört zu dem Film, der gerade gefallen ist.
+      */}
+      <VideoWahl model={model} />
+
       {model.einwurfFrage && (
         <div style={S.einwurfKarte}>
           <span style={S.einwurfText}>

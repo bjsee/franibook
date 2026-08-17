@@ -18,6 +18,7 @@ import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
 import type { Umschlagmosaik } from '../project/umschlagmosaik.js';
 import type { Sources } from '../sources.js';
+import type { Videowerkzeuge } from '../video.js';
 import type { AbstandsErkennung } from '../vision.js';
 
 /**
@@ -81,6 +82,28 @@ export function leseEinwurf(
   return { datei: { name, bytes: body } };
 }
 
+/**
+ * Die Fallstelle eines Einwurfs, normiert auf das Endformat.
+ *
+ * Drei Ergebnisse und nicht zwei: Fehlt sie ganz, ist das die Ansage „ordne die
+ * Seite neu an" (so wirft der Baum ein Bild ein). Steht dort etwas Unbrauchbares,
+ * ist es ein Fehler – stillschweigend als „keine Stelle" zu lesen hieße, aus
+ * einem Tippfehler ein Neuanordnen zu machen.
+ *
+ * Hier und nicht in `spreads.ts`, seit der Videoeinwurf dieselbe Stelle liest:
+ * Zwei gleichlautende Prüfungen wären zwei Gelegenheiten, die Grenzen
+ * auseinanderlaufen zu lassen.
+ */
+export function lesePunkt(
+  x: string | undefined,
+  y: string | undefined,
+): { x: number; y: number } | undefined | 'unbrauchbar' {
+  if (x === undefined && y === undefined) return undefined;
+  const zahlen = [Number(x), Number(y)];
+  if (!zahlen.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) return 'unbrauchbar';
+  return { x: zahlen[0]!, y: zahlen[1]! };
+}
+
 export interface Kontext {
   project: Project;
   sources: Sources;
@@ -105,6 +128,14 @@ export interface Kontext {
    * öffnen.
    */
   cacheDir: string;
+  /**
+   * Die Griffe, die eine Videodatei anfassen — normalerweise nicht gesetzt.
+   *
+   * Ausdrücklich austauschbar, damit die Zusagen des Videoeinwurfs ohne `ffmpeg`
+   * prüfbar sind (Begründung bei `Videowerkzeuge` in `video.ts`). Fehlt das Feld,
+   * gelten die echten.
+   */
+  videos?: Videowerkzeuge;
   /** Vorgabe für `FRANIBOOK_LIMIT`, wenn eine Anfrage keine eigene mitbringt. */
   importLimit?: number | undefined;
 }
