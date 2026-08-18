@@ -56,7 +56,9 @@ pnpm --filter @franibook/server start   # ohne watch, wie im Parity-Test
 pnpm --filter @franibook/web dev
 ```
 
-`pnpm test:parity` braucht `pdftoppm` (poppler) im Pfad. Er rendert die Fixtures aus
+`pnpm test:parity` braucht `pdftoppm` (poppler) im Pfad; der Videoeinwurf braucht
+`ffmpeg` und `ffprobe` (`brew install ffmpeg`) — ohne sie sagt der Server einen
+Satz und die übrigen Funktionen laufen weiter. Er rendert die Fixtures aus
 `tests/parity/fixtures/`, nicht den echten Bestand, und startet beide Server selbst —
 ein bereits laufender `pnpm dev` muss dafür beendet sein (`reuseExistingServer: false`,
 `strictPort`).

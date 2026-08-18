@@ -13,6 +13,7 @@ import { FRAMES, photoPixelsOf, type PhotoWeight } from '@franibook/core';
 import { B, T, dpiFarbe } from '../theme.js';
 import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Videoverweis } from './Videoverweis.js';
 import { AbnickKnopf, Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
@@ -61,6 +62,7 @@ export function BildPanel({ model }: { model: SpreadEditorModel }) {
           {info?.camera && ` · ${info.camera}`}
         </p>
         <Bilddaten model={model} />
+        <Videoverweis model={model} />
         <Bildbefunde model={model} ausser={['lage-quer', 'gesicht-am-rand']} />
 
         {/*

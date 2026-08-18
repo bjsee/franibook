@@ -16,6 +16,7 @@ import {
   TIMELINE_SIDE_VARIANTS,
   type TimelineFootVariant,
   type TimelineSideVariant,
+  videoBasis,
 } from '@franibook/core';
 import type { Kontext } from './kontext.js';
 
@@ -94,8 +95,9 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
       tilt?: number;
       frame?: string;
       pageNumbers?: boolean;
+      videoBase?: string | null;
     };
-  }>('/api/settings', async (req) => {
+  }>('/api/settings', async (req, reply) => {
     if (req.body.timeline !== undefined) project.settings.timeline = req.body.timeline;
     // Fuß oder Rand: eine Frage der Darstellung, keine der Fotoverteilung.
     if (req.body.timelineStyle === 'foot' || req.body.timelineStyle === 'side') {
@@ -133,6 +135,28 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
     // Die Seitenzahl aus demselben Grund: Sie wird beim Zeichnen aus dem Platz
     // der Doppelseite gerechnet und rührt die Verteilung nicht an.
     if (req.body.pageNumbers !== undefined) project.settings.pageNumbers = req.body.pageNumbers;
+    // Die Basisadresse der Videoverweise gehört hierher, weil sie allein den
+    // Inhalt eines QR-Codes ändert – kein Foto wandert, keine Vorlage wechselt.
+    //
+    // **Ein unbrauchbarer Wert ist hier ein Fehler**, anders als bei den
+    // Zeitstrahlfassungen, wo eine Verzierung entfiele. Zuerst löschte er die
+    // gespeicherte Basis (mit dem Argument, eine alte Basis dürfe nach einer
+    // verworfenen Eingabe nicht stehenbleiben) — und damit hätte ein Tippfehler
+    // wie `https://fb example/v` jeden Code des Buches stumm von der Kurzadresse
+    // auf die Zieladresse umgestellt, bei einer 200 und einem Feld, das sich
+    // selbst leert. `null` bleibt der ausdrückliche Weg, sie wegzunehmen.
+    if (req.body.videoBase !== undefined) {
+      if (req.body.videoBase === null) delete project.settings.videoBase;
+      else {
+        const basis = videoBasis(req.body.videoBase);
+        if (!basis) {
+          return reply.code(400).send({
+            error: `„${req.body.videoBase}" ist keine brauchbare Adresse – erwartet wird etwas wie fb.example/v`,
+          });
+        }
+        project.settings.videoBase = basis;
+      }
+    }
     await project.save();
     return { settings: project.settings };
   });

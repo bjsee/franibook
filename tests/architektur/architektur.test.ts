@@ -86,6 +86,63 @@ describe('Der Kern ist frei von I/O', () => {
   });
 });
 
+describe('Der Kern hat genau eine Abhängigkeit', () => {
+  /**
+   * Die Pakete, die `packages/core` benutzen darf — und warum es überhaupt eine
+   * Liste gibt.
+   *
+   * Bis zum QR-Code hatte der Kern **keine** Abhängigkeit, und die Prosaregel in
+   * `.claude/rules/kern-rein.md` lautete entsprechend „überhaupt keine". Gebrochen
+   * wurde sie für die QR-Matrix (`render/qr.ts`): Reed-Solomon-Kodierung und die
+   * Wahl unter acht Maskenmustern selbst zu schreiben ist die Stelle, an der ein
+   * Fehler nicht auffällt, bis ein gedrucktes Buch nicht scanbar ist.
+   *
+   * Die Liste ist die Bedingung, unter der das tragbar bleibt: Sie steht als Test
+   * und nicht als Absichtserklärung, also fällt die **zweite** Abhängigkeit
+   * jemandem auf, der sie hinzufügt — und muss hier begründet werden.
+   */
+  const ERLAUBT = new Set(['uqr']);
+
+  function paket(pfad: string): { dependencies?: Record<string, string> } {
+    return JSON.parse(readFileSync(join(WURZEL, pfad), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
+  }
+
+  it('führt nur erlaubte Pakete', () => {
+    const deps = Object.keys(paket('packages/core/package.json').dependencies ?? {});
+    expect(deps.filter((d) => !ERLAUBT.has(d))).toEqual([]);
+  });
+
+  it('und die bringen selbst keine mit', () => {
+    // Der eigentliche Punkt: Eine reine Rechenbibliothek ohne eigene
+    // Abhängigkeiten kann die Zusagen dieses Pakets nicht brechen — sie kann
+    // nichts nachladen, was `node:fs` oder die Uhr benutzt. Eine, die einen
+    // Baum mitbringt, könnte es, und niemand hätte es gesehen.
+    for (const name of ERLAUBT) {
+      const deps = paket(`packages/core/node_modules/${name}/package.json`).dependencies ?? {};
+      expect(Object.keys(deps), `${name} bringt Abhängigkeiten mit`).toEqual([]);
+    }
+  });
+
+  it('und rechnen ohne Umgebung, Uhr und Zufall', () => {
+    // Dieselben drei Fragen, die dieser Test dem eigenen Quelltext stellt,
+    // gestellt an den fremden: Ein `Math.random` in der Bibliothek machte die
+    // Generierung unreproduzierbar, ein `node:fs` sie im Browser unbrauchbar.
+    for (const name of ERLAUBT) {
+      const dir = join(WURZEL, 'packages/core/node_modules', name, 'dist');
+      const dateien = readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile() && /\.(m?js|cjs)$/.test(e.name))
+        .map((e) => readFileSync(join(e.parentPath, e.name), 'utf8'));
+
+      expect(dateien.length, `${name} hat kein Bündel unter dist/`).toBeGreaterThan(0);
+      for (const text of dateien) {
+        expect(/require\(|from ['"]node:|Math\.random\(|Date\.now\(/.test(text)).toBe(false);
+      }
+    }
+  });
+});
+
 describe('Der Kern ist deterministisch', () => {
   // Gleiche Eingaben, gleiches Buch. Variation läuft über settings.seed; die
   // Bildneigung (render/tilt.ts) ist das Muster dafür.

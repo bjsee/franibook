@@ -548,6 +548,7 @@ export function App() {
     timelineAccent?: string;
     tilt?: number;
     pageNumbers?: boolean;
+    videoBase?: string | null;
   }) {
     await einstellungenAendern(patch);
     loadInfo();

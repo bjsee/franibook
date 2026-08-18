@@ -2803,6 +2803,67 @@ punkt }` (`layout/move.ts`, über dieselbe Rechnung wie der Einwurf —
 > Bild nichts und bliebe sonst als leerer Rahmen genau dort stehen, von wo man das
 > Bild eben weggezogen hat.
 
+### Videos einwerfen: Standbild, Adresse, QR-Code
+
+Ein Fotobuch kann kein Video zeigen. Es kann aber darauf **verweisen**, und genau
+das tut ein Standbild mit einem QR-Code in der Ecke: Wer das Buch durchblättert,
+sieht den Moment als Bild; wer den Code scannt, sieht den Film.
+
+**Der Unterschied zu den Anbietern ist das Hosting.** CEWE und Pixum bieten das
+seit Jahren, immer mit Ablage bei sich — Pixum nimmt Videos bis fünf Minuten, ab
+3 € Aufpreis, mit im Warenkorb gewählter Speicherdauer. Hier ist es umgekehrt:
+**Wir legen nichts ab.** Die Adresse gibt der Benutzer an, ein geteiltes Album,
+eine Freigabe auf dem NAS, ein eigener Server. Damit gibt es keinen Ablauf und
+keinen Vertrag — und keine Garantie: Zieht die Adresse um, verweist der gedruckte
+Code auf nichts. Das gehört so in der Oberfläche gesagt und nicht ins
+Kleingedruckte, und es steht dort zweimal: in der Karte, mit der man das
+Standbild wählt, und am Bild, solange keine Adresse hinterlegt ist.
+
+**Dagegen steht die Kurzadresse.** Gedruckt wird nicht das Ziel, sondern
+`<Basisadresse>/<Kennung>` (`settings.videoBase`, `model/video.ts`); welche
+Kennung wohin führt, sagt eine Umleitungsliste, die man ohne Nachdruck ändern
+kann (`GET /api/videos/umleitungen`, auch als `_redirects` für statische
+Hosting-Dienste). Das hat einen zweiten, ganz praktischen Vorteil: Der Code wird
+kleiner. Ein iCloud-Link mit 59 Zeichen braucht QR-Version 4, eine Kurzadresse
+mit 25 Zeichen Version 2 — bei gleicher Modulgröße sind das 16,5 statt 20,5 mm
+Kantenlänge. Ohne Basisadresse druckt der Code die Zieladresse unmittelbar; das
+geht sofort und macht einen Umzug zum Nachdruck. Beides ist eine Wahl, und die
+Oberfläche sagt, welche gilt.
+
+**Der Anlass, das überhaupt so zu bauen:** Ein iCloud-Link aus der Fotos-App
+läuft nach 30 Tagen ab (Apple, „iCloud Links automatically expire after 30
+days"), und zwar unabänderlich. Für ein gedrucktes Buch ist das unbrauchbar. Was
+hält, ist ein **geteiltes Album mit öffentlicher Website** — ohne Ablauf, dafür
+mit 720p und 15 Minuten Grenze. Für ein Bewegtbild auf dem Handy reicht das; die
+gedruckten Pixel kommen ohnehin aus unserem Standbild.
+
+**Der Ablauf ist zweistufig**, und das ist keine Umständlichkeit, sondern die
+Folge der Fotokennung: Sie ist der Inhaltshash, ein anderes Standbild also ein
+anderes Foto. Erst wird der Film aufgenommen (im Cache, nicht in der Bildquelle —
+`apps/server/src/video.ts`), dann wählt ein Schieber die Sekunde, und daraus
+entsteht das Standbild als gewöhnliches eingeworfenes Foto. Verworfen: **Bild aus
+der Mitte nehmen und den Zeitpunkt später ändern.** Der Wechsel hätte jedes
+Vorkommen umhängen müssen — Slots, Korrekturen, Gruppen, Hintergrund, Umschlag —,
+und diesen Apparat gibt es nirgends sonst im Server.
+
+**Der Code selbst ist kein neuer Begriff im Modell**, sondern eine weiße Fläche
+und eine Reihe schwarzer Rechtecke (`render/qr.ts`) — je ein Kasten pro
+waagerechtem Lauf dunkler Module, rund 80 statt 300 Boxen. Verworfen: eine
+`QrBox` mit der Matrix darin, aus der jeder Renderer selbst zeichnet; das wären
+zwei unabhängige Zeichenwege für dieselbe Form. Die Matrix rechnet `uqr`, die
+erste Abhängigkeit des Kerns überhaupt (Begründung in
+`.claude/rules/kern-rein.md`); Geometrie, Fehlerkorrekturstufe und Eckenwahl
+liegen bei uns.
+
+**Was ihn unlesbar macht, ist die Modulgröße** — nicht die Kantenlänge. Deshalb
+folgt die Größe aus der Zielmodulkante von 0,5 mm statt aus der Bildkante, und
+deshalb warnt der Abnahmebericht über Millimeter je Modul (`qr-unlesbar`,
+`qr-knapp`). Die beiden Schwellen sind **gesetzt und nicht gemessen**, wie
+`gutterLossMm`: Was eine Handykamera auf diesem Papier wirklich liest, sagt erst
+ein Testdruck. Bewiesen ist bis dahin die Kette bis zum PDF — der Code wird aus
+dem mit 300 dpi gerasterten Export zurückgelesen, im Test
+(`render/qr-lesbar.test.ts`) und am echten Export.
+
 ### Wenn Bild und Platz quer zueinander stehen
 
 Eine Ausrichtungskorrektur kippt das Bild, seinen Platz aber nicht. Danach steht

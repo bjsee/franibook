@@ -43,6 +43,8 @@ import {
   type DoppelKandidat,
   type DoppelOptions,
   type TextBlock,
+  type VideoUmleitung,
+  type VideoVerweis,
   type TimelineFootVariant,
   type TimelineSideVariant,
   splitKept,
@@ -86,8 +88,10 @@ import {
   templateById,
   ungroupPhotos,
   updateGroup,
+  videoUmleitungen,
 } from '@franibook/core';
 import type { DecodeCache } from './decode.js';
+import type { Videowerkzeuge } from './video.js';
 import type { PreviewCache } from './previews.js';
 import * as anordnung from './project/anordnung.js';
 import { type BaumSeite, baum } from './project/baum.js';
@@ -95,6 +99,7 @@ import * as bestand from './project/bestand.js';
 import type { Aussortiert, DateienBericht, ImportDiff, QuellenBericht } from './project/bestand.js';
 import * as einwurf from './project/einwurf.js';
 import * as fotodaten from './project/fotodaten.js';
+import * as video from './project/video.js';
 import * as gruppen from './project/gruppen.js';
 import { type Handarbeitsbilanz, handarbeitsbilanz } from './project/handarbeit.js';
 import { type Bestandsfilter, filtereFotos, platzierteFotos } from './project/filter.js';
@@ -238,6 +243,19 @@ export interface ProjectSettings {
    * Seitenverhältnis – der Zuschnitt.
    */
   printProfileId: string;
+  /**
+   * Basisadresse der Videoverweise, hinter der die Kennung steht — etwa
+   * `https://fb.example/v`.
+   *
+   * Wie Neigung und Rahmen eine reine Rendereinstellung: Sie ändert, was in
+   * einem QR-Code steht, aber kein Foto und keine Vorlage.
+   *
+   * **Fehlt sie, druckt jeder Code die Zieladresse unmittelbar.** Dann ist ein
+   * Umzug des Videos ein Nachdruck des Buches; mit Basis genügt eine geänderte
+   * Umleitung (`model/video.ts` im Kern, `GET /api/videos/umleitungen`). Kein
+   * Vorgabewert, weil es keinen richtigen gibt: Die Domäne gehört dem Benutzer.
+   */
+  videoBase?: string;
   /** Für die Geburtstagserkennung und die Plausibilitätsprüfung. */
   birthDate?: string;
   subjectName?: string;
@@ -477,6 +495,13 @@ export interface PhotoView extends Photo {
   weight?: PhotoWeight;
   /** Eingestellte Bildanpassung, wenn eine gesetzt ist. Fehlt wie `weight` sonst. */
   adjust?: PhotoAdjust;
+  /**
+   * Das Video, für das dieses Foto das Standbild ist – wenn es eines ist.
+   *
+   * Fehlt bei jedem gewöhnlichen Foto, also bei fast allen: Ein Feld, das
+   * achthundertmal `null` durch die Fotoliste trägt, sagt nichts.
+   */
+  video?: VideoVerweis;
 }
 
 export class Project {
@@ -766,6 +791,30 @@ export class Project {
     ziel: einwurf.Einwurfziel,
   ): Promise<einwurf.Einwurfergebnis> {
     return einwurf.einwerfen(this, datei, ziel);
+  }
+
+  /**
+   * Zieht ein Standbild aus einem aufgenommenen Video und setzt es ein.
+   *
+   * Der Cacheordner kommt von außen: Er ist eine Umgebungsangabe und gehört
+   * nicht in den Projektzustand — dieselbe Aufteilung wie beim Mosaik.
+   */
+  videoStandbild(
+    cacheDir: string,
+    auftrag: { kennung: string; sekunde: number; ziel: einwurf.Einwurfziel; name?: string },
+    werkzeuge?: Videowerkzeuge,
+  ): Promise<video.Videoeinwurf> {
+    return video.standbildEinwerfen(this, cacheDir, auftrag, werkzeuge);
+  }
+
+  /** Hinterlegt die Adresse eines Videos – an allen Standbildern daraus. */
+  videoAdresse(photoId: PhotoId, url: string | null) {
+    return video.adresseSetzen(this, photoId, url);
+  }
+
+  /** Alle Umleitungen des Buchs: Kennung → Zieladresse. */
+  videoUmleitungen(): VideoUmleitung[] {
+    return videoUmleitungen(this.overrides);
   }
 
   importPhotos(limit?: number, nurQuellen?: readonly string[]): Promise<QuellenBericht> {
@@ -2029,6 +2078,9 @@ export class Project {
       // Nur ein gewählter Rahmen wird durchgereicht: Ohne die Angabe steht
       // jedes Bild ohne, und das ist die Vorgabe.
       ...(settings.frame !== 'keiner' ? { frame: settings.frame } : {}),
+      // Ohne Basisadresse druckt ein Videoverweis seine Zieladresse selbst –
+      // auch das ein Schalter, der beim Aufrufer lebt und nicht in der Engine.
+      ...(settings.videoBase ? { videoBase: settings.videoBase } : {}),
     });
   }
 
@@ -2576,6 +2628,10 @@ export class Project {
       ...(override?.placeOverride ? { placeManual: true } : {}),
       ...(override?.weight ? { weight: override.weight } : {}),
       ...(override?.adjust ? { adjust: override.adjust } : {}),
+      // Der Videoverweis, damit die Oberfläche am Bild zeigen kann, wohin der
+      // gedruckte Code führt – und ein Feld anbieten, wenn noch keine Adresse
+      // hinterlegt ist.
+      ...(override?.video ? { video: override.video } : {}),
     };
   }
 

@@ -6,25 +6,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { BACKGROUND_COLORS, BACKGROUND_MIN_DPI } from '@franibook/core';
-import { type Kontext, leseEinwurf, spreadAntwort } from './kontext.js';
-
-/**
- * Die Fallstelle eines Einwurfs, normiert auf das Endformat.
- *
- * Drei Ergebnisse und nicht zwei: Fehlt sie ganz, ist das die Ansage „ordne die
- * Seite neu an" (so wirft der Baum ein Bild ein). Steht dort etwas Unbrauchbares,
- * ist es ein Fehler – stillschweigend als „keine Stelle" zu lesen hieße, aus
- * einem Tippfehler ein Neuanordnen zu machen.
- */
-function lesePunkt(
-  x: string | undefined,
-  y: string | undefined,
-): { x: number; y: number } | undefined | 'unbrauchbar' {
-  if (x === undefined && y === undefined) return undefined;
-  const zahlen = [Number(x), Number(y)];
-  if (!zahlen.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) return 'unbrauchbar';
-  return { x: zahlen[0]!, y: zahlen[1]! };
-}
+import { type Kontext, leseEinwurf, lesePunkt, spreadAntwort } from './kontext.js';
 
 export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
   app.get<{ Params: { index: string } }>('/api/spreads/:index', async (req, reply) => {

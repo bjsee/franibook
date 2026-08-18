@@ -217,6 +217,38 @@ und kommt beim nächsten Einlesen als neues Foto zurück. Das ist die ehrlichere
 Antwort als eine Rücknahme, die eine Datei löschen müsste und daran scheitern
 kann — und keine `barriere`, denn ein eingeworfenes Bild soll ein Cmd+Z wert sein.
 
+## Videos: der Film bleibt draußen
+
+`video.ts`, `project/video.ts`, `routes/videos.ts`. Ins Buch kommt nie ein Video,
+sondern ein **Standbild** daraus als gewöhnliches Foto — daneben ein QR-Code mit
+der Adresse, unter der der Film zu sehen ist (`model/video.ts` im Kern).
+
+Vier Festlegungen tragen das:
+
+- **Wir hosten nichts.** Kein Endpunkt liefert ein Video aus. Die Adresse gibt
+  der Benutzer an; zieht sie um, ist der gedruckte Code toter Buchstabe. Dagegen
+  steht die Kurzadresse (`settings.videoBase` plus Kennung) und die
+  Umleitungsliste `GET /api/videos/umleitungen` — ein Umzug ist dann ein Griff an
+  einer Datei und kein Nachdruck.
+- **Der Film liegt im Cache, das Standbild in der Bildquelle.** Ein halbes
+  Gigabyte gehört nicht in den Fotobestand, den ein Sync-Dienst bewirtschaftet;
+  das Standbild dagegen ist ein Foto des Buches und nimmt den normalen
+  Einwurfweg. Wird der Cache gelöscht, lässt sich nur kein **neues** Standbild
+  mehr wählen — das Buch verliert nichts.
+- **Der Ablauf ist zweistufig**: `POST /api/videos` nimmt den Film auf (Strom auf
+  die Platte, eigener Parser in `app.ts`, Grenze beim Schreiben statt am
+  `bodyLimit`), `POST /api/videos/:kennung/standbild` zieht das Bild an der
+  gewählten Sekunde. Einstufig wäre ein Standbildwechsel eine neue Fotokennung
+  und damit ein Umhängen jedes Vorkommens — Begründung im Modulkopf.
+- **Jedes Foto nimmt eine Adresse an** (`PUT /api/photos/:id/video`), nicht nur
+  ein Standbild: Der häufigere Fall ist der Film, der längst im geteilten Album
+  liegt. Sie gilt an allen Standbildern desselben Films.
+
+`ffmpeg` und `ffprobe` sind dafür Voraussetzung — geprüft und mit einem Satz
+gemeldet, nicht angenommen (`videoWerkzeuge`). Was sie tun, ist als
+`Videowerkzeuge` austauschbar, damit die Zusagen des Einwurfs ohne sie prüfbar
+bleiben; derselbe Gedanke wie bei `project/speichern.ts`.
+
 ## Der Umgang mit fremden Dateien
 
 **Bildquellen werden gelesen, nicht bewirtschaftet.** Kopiert wird nichts,
