@@ -550,6 +550,12 @@ Das Ganze soll sich gut anfühlen.
 >
 > Offen ist zusätzlich zum geplanten Inhalt die Gestaltungsdurchsicht des
 > automatischen Entwurfs — [#7](https://github.com/bjsee/franibook/issues/7).
+>
+> Vorgezogen und in keiner Phase geplant: **mehrere Fenster am selben Buch**
+> (18. August 2026). Jedes Fenster hält eine SSE-Leitung, und was eines ändert,
+> laden die anderen nach — vorher schrieb ein zweites Fenster den Stand von
+> vorhin zurück. Der Server bleibt dabei auf `127.0.0.1`; ein zweiter _Rechner_
+> bräuchte vorher eine Authentifizierung.
 
 **Inhalt**
 

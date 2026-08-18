@@ -115,6 +115,12 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     schluessel: (p) => `ereignisse:${p['year'] ?? '?'}`,
   },
 
+  // Der Ereignisstrom ist eine offene Leitung und ändert nichts – er sagt nur,
+  // was andere geändert haben (`routes/ereignisse.ts`). Er steht hier trotzdem,
+  // weil die Tabelle lückenlos sein soll; die Prüfung sieht ohnehin nur
+  // mutierende Methoden, ein `GET` fiele ihr nie auf.
+  'GET /api/ereignisse': null,
+
   // ---------------------------------------------------------- Doppelseiten
   'POST /api/book/move': {
     // Dieselbe Route nimmt einen Zug oder einen Stapel; „Foto umgehängt" wäre
@@ -377,7 +383,13 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
         : 'Abnahme zurückgenommen',
   },
 
-  // ------------------------------------------- Was den Zustand nicht anfasst
+  // --------------------------------------- Was keinen Verlaufsschritt anlegt
+  //
+  // Das ist **nicht** dasselbe wie „ändert nichts", und der Unterschied hat den
+  // Ereignisstrom einmal Geld gekostet: Zurücknehmen und Wiederholen tauschen
+  // den ganzen Stand aus, legen aber selbst keinen Schritt an. Wer hier eine
+  // Route mit `null` einträgt, sagt in `routes/ereignisse.ts`, ob die anderen
+  // Fenster davon erfahren müssen – ein Test dort verlangt die Entscheidung.
   'POST /api/export/pdf': null,
   'POST /api/export/abzug': null,
   'POST /api/export/cover': null,
@@ -401,10 +413,48 @@ const AENDERND = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
  * angemeldete `POST`/`PATCH`/`PUT`/`DELETE`-Route, geprüft von `undo.test.ts`.
  */
 export function eintragFuer(req: FastifyRequest): UndoEintrag | null | undefined {
+  const schluessel = routenSchluessel(req);
+  return schluessel === undefined ? undefined : UNDO_ROUTEN[schluessel];
+}
+
+/**
+ * Der Schlüssel dieser Anfrage in `UNDO_ROUTEN` – `undefined` bei lesenden.
+ *
+ * Exportiert, weil der Ereignisstrom die Tabelle ein zweites Mal befragt und
+ * dabei denselben Schlüssel bilden muss. Zweimal `${method} ${url}` an zwei
+ * Stellen wäre zweimal die Gelegenheit, es unterschiedlich zu tun.
+ */
+export function routenSchluessel(req: FastifyRequest): string | undefined {
   if (!AENDERND.has(req.method)) return undefined;
   const url = req.routeOptions.url;
   if (url === undefined) return undefined;
-  return UNDO_ROUTEN[`${req.method} ${url}`];
+  return `${req.method} ${url}`;
+}
+
+/**
+ * Was dieser Griff heißt und wo er hinzeigt.
+ *
+ * Die Ausleser der Tabelle einmal ausgewertet. Gebraucht an zwei Stellen — der
+ * Verlauf beschriftet damit den Zurück-Knopf, der Ereignisstrom die Meldung an
+ * die anderen Fenster —, und beide sollen denselben Satz zeigen: „Ausschnitt
+ * gesetzt" am eigenen Knopf und „Ausschnitt gesetzt" im anderen Fenster ist
+ * dieselbe Auskunft über denselben Griff.
+ *
+ * `label` fällt auf „Geändert" zurück, wenn ein Ausleser nichts findet: Ein
+ * leerer Knopf wäre schlimmer als ein grober Satz.
+ */
+export function beschreibe(
+  eintrag: UndoEintrag,
+  req: FastifyRequest,
+): { label: string; spreadIndex: number | undefined } {
+  const params = (req.params ?? {}) as Record<string, string>;
+  return {
+    label:
+      typeof eintrag.label === 'string'
+        ? eintrag.label
+        : (eintrag.label(params, req.body) ?? 'Geändert'),
+    spreadIndex: eintrag.spreadIndex?.(params, req.body),
+  };
 }
 
 /**
@@ -422,8 +472,14 @@ const angelegt = new WeakMap<FastifyRequest, boolean>();
  * Zwei Fälle, und sie sind nicht dasselbe: Die Anfrage ist **gescheitert**, oder
  * sie war **wirkungslos**. Für den Verlauf zählt nur das Ergebnis — ein Schritt,
  * der nichts zurücknimmt, sieht beim Cmd+Z aus wie ein Fehler.
+ *
+ * Exportiert für den Ereignisstrom (`routes/ereignisse.ts`), der dieselbe Frage
+ * stellt: Was keinen Verlaufsschritt wert war, ist auch den anderen Fenstern
+ * keine Meldung wert. Eine zweite Fassung dieser Prüfung wäre eine, die
+ * irgendwann anders antwortet als diese — und dann lüde ein Fenster nach einem
+ * Griff neu, den es gar nicht gab.
  */
-function ohneWirkung(reply: FastifyReply, payload: unknown): boolean {
+export function ohneWirkung(reply: FastifyReply, payload: unknown): boolean {
   if (reply.statusCode >= 400) return true;
   if (typeof payload !== 'string') return false;
 
@@ -508,10 +564,7 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
     if (!eintrag) return;
 
     const params = (req.params ?? {}) as Record<string, string>;
-    const label =
-      typeof eintrag.label === 'string'
-        ? eintrag.label
-        : (eintrag.label(params, req.body) ?? 'Geändert');
+    const { label, spreadIndex } = beschreibe(eintrag, req);
 
     const ankern =
       eintrag.anker === true ||
@@ -522,7 +575,6 @@ export function verlaufHaken(app: FastifyInstance, { project }: Kontext): void {
     if (eintrag.barriere) return;
 
     const schluessel = eintrag.schluessel?.(params, req.body);
-    const spreadIndex = eintrag.spreadIndex?.(params, req.body);
 
     angelegt.set(
       req,

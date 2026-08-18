@@ -11,11 +11,13 @@
  * `main.ts` bleibt, was es war: Umgebung lesen, die vier Objekte bauen, starten.
  */
 import Fastify, { type FastifyInstance } from 'fastify';
+import { Ereignisstrom } from './ereignisse.js';
 import { EINWURF_MAX_BYTES } from './project/einwurf.js';
 import { anordnungRouten } from './routes/anordnung.js';
 import { buchRouten } from './routes/buch.js';
 import { fotoRouten } from './routes/fotos.js';
 import { gruppenRouten } from './routes/gruppen.js';
+import { ereignisHaken, ereignisRouten } from './routes/ereignisse.js';
 import type { Kontext } from './routes/kontext.js';
 import { projektRouten } from './routes/projekt.js';
 import { quellenRouten } from './routes/quellen.js';
@@ -51,9 +53,20 @@ export interface AppOptionen {
 export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOptionen): {
   app: FastifyInstance;
   routen: RoutenEintrag[];
+  ereignisse: Ereignisstrom;
 } {
   const app = Fastify({ logger });
   const routen: RoutenEintrag[] = [];
+  /**
+   * Die offenen Fenster.
+   *
+   * Hier und nicht im `Kontext`: Der Strom ist kein Adapter zur Außenwelt wie
+   * die vier Objekte dort, sondern gehört zu **dieser** App – er lebt und
+   * stirbt mit ihr, und zwei Apps in einem Test hätten sonst dieselben Zuhörer.
+   * Zurückgegeben aus demselben Grund wie die Routenliste: Er entsteht beim
+   * Bauen und ist danach nicht mehr zu bekommen.
+   */
+  const ereignisse = new Ereignisstrom();
 
   /**
    * Eingeworfene Bilder kommen als rohe Bytes, nicht als Formular.
@@ -149,6 +162,9 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
   // Undo-Schritt anlegt.
   ursprungHaken(app);
   verlaufHaken(app, kontext);
+  // Nach dem Verlauf: Beide hängen im `onSend`, und was keinen Verlaufsschritt
+  // wert war, soll auch keine Meldung auslösen.
+  ereignisHaken(app, ereignisse);
 
   projektRouten(app, kontext);
   anordnungRouten(app, kontext);
@@ -161,6 +177,7 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
   umschlagRouten(app, kontext);
   videoRouten(app, kontext);
   undoRouten(app, kontext);
+  ereignisRouten(app, ereignisse);
 
-  return { app, routen };
+  return { app, routen, ereignisse };
 }
