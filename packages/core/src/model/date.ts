@@ -90,6 +90,52 @@ export interface PhotoOverride {
   excluded?: boolean;
   weight?: PhotoWeight;
   caption?: string;
+  /**
+   * Das Video, für das dieses Foto das Standbild ist.
+   *
+   * **Am Foto und nicht am Slot** – dieselbe Überlegung wie beim Gewicht und bei
+   * der Bildanpassung: Der Verweis gilt dem Bild, und wenn eine Neuanordnung es
+   * auf eine andere Doppelseite trägt, wandert der gedruckte Code mit. Am Platz
+   * bliebe er liegen und stünde am nächsten Foto.
+   *
+   * **Als Korrektur und nicht als `Photo`-Feld**, obwohl der Server ihn beim
+   * Einwurf anlegt: `Photo` spiegelt, was in der Datei steht, und ein erneuter
+   * Import überschreibt es. Eine hinterlegte Adresse überlebt genau deshalb, weil
+   * sie hier steht.
+   */
+  video?: VideoVerweis;
+}
+
+/**
+ * Der Verweis von einem Standbild auf sein Video.
+ *
+ * **Wir hosten nichts.** Die Adresse gibt der Benutzer an – ein geteiltes Album,
+ * eine NAS-Freigabe, was auch immer. Damit gibt es keinen Ablauf und keinen
+ * Vertrag, aber auch keine Garantie: Zieht das Ziel um, ist der gedruckte Code
+ * toter Buchstabe. Genau dagegen steht die Trennung dieser beiden Felder.
+ */
+export interface VideoVerweis {
+  /**
+   * Stabile Kennung des Videos – **das**, was im gedruckten Code steht (hinter
+   * der Basisadresse aus `settings.videoBase`).
+   *
+   * Sie kommt aus dem Inhalt des Videos und nicht aus dem des Standbildes: Wer
+   * denselben Film mit einem anderen Standbild noch einmal einwirft, bekommt
+   * dieselbe Kennung, und ein längst gedruckter Code zeigt weiter auf dasselbe.
+   * Aus der Foto-Kennung abgeleitet wäre sie an das eine JPEG gebunden, das
+   * gerade zufällig gewählt wurde.
+   */
+  kennung: string;
+  /**
+   * Wohin die Kennung führt. Fehlt, solange niemand eine Adresse hinterlegt hat.
+   *
+   * Getrennt von der Kennung, weil nur so ein Umzug ohne Nachdruck möglich ist:
+   * Der Code trägt die Kennung, die Umleitungsliste (`videoUmleitungen`) bildet
+   * sie auf diese Adresse ab. Steht keine Basisadresse im Buch, druckt der Code
+   * diese Adresse unmittelbar – dann ist ein Umzug tatsächlich ein Nachdruck,
+   * und die Oberfläche sagt das.
+   */
+  url?: string;
 }
 
 export type PhotoWeight = 'hero' | 'normal' | 'filler';

@@ -60,6 +60,10 @@ import {
   ausrichtungKippen as apiAusrichtungKippen,
   ausschnittZuruecksetzen as apiAusschnittZuruecksetzen,
   bildEinwerfen,
+  istVideodatei,
+  videoAdresseSetzen,
+  videoAufnehmen,
+  videoStandbildEinwerfen,
   datumKorrigieren,
   ebeneSetzen,
   fehlertext,
@@ -1467,6 +1471,26 @@ export function useSpreadEditor({
 
   /** Der Einwurf ist unterwegs – das Papier zeigt es, und ein zweiter wartet. */
   const [einwurfLaeuft, setEinwurfLaeuft] = useState(false);
+
+  /**
+   * Ein aufgenommenes Video, dessen Standbild noch zu wählen ist.
+   *
+   * Der Zwischenschritt, den ein Bild nicht hat: Aus einem Film wird erst ein
+   * Foto, wenn eine Sekunde feststeht. Solange dieser Zustand steht, hält die
+   * Bühne den Schieber offen; das Buch ist unverändert, ein Abbrechen kostet
+   * nichts als den Platz im Zwischenspeicher.
+   *
+   * `punkt` ist die Fallstelle von damals – sie muss den Umweg über den Schieber
+   * überleben, sonst landete das Standbild nicht dort, wo die Hand losgelassen
+   * hat.
+   */
+  const [videoWahl, setVideoWahl] = useState<{
+    kennung: string;
+    name: string;
+    dauerSek: number;
+    punkt: { x: number; y: number };
+    adresse?: string;
+  } | null>(null);
   /**
    * Die Fallstelle, solange etwas über dem Papier hängt.
    *
@@ -1487,6 +1511,9 @@ export function useSpreadEditor({
   useEffect(() => {
     setEinwurfFrage(null);
     setPapierUeber(null);
+    // Auch die Videowahl: Ihre Fallstelle gehört zu der Seite, auf der der Film
+    // gelandet ist. Auf der nächsten wäre sie eine Stelle auf fremdem Papier.
+    setVideoWahl(null);
   }, [index]);
 
   /**
@@ -1576,6 +1603,25 @@ export function useSpreadEditor({
     // vielleicht eine gesetzt, die gilt – etwa „von fünf Dateien kommt eine".
     // Hier würde sie überschrieben, bevor jemand sie gelesen hat.
     setEinwurfLaeuft(true);
+    // Ein Video nimmt den Umweg über den Schieber: Aus ihm wird kein Foto, bevor
+    // eine Sekunde feststeht. Bis dahin ändert sich am Buch nichts.
+    if (istVideodatei(datei.name)) {
+      try {
+        const aufnahme = await videoAufnehmen(datei);
+        setVideoWahl({
+          kennung: aufnahme.kennung,
+          name: datei.name,
+          dauerSek: aufnahme.dauerSek,
+          punkt,
+          ...(aufnahme.adresse ? { adresse: aufnahme.adresse } : {}),
+        });
+      } catch (e) {
+        setNote(`„${datei.name}" ließ sich nicht aufnehmen: ${fehlertext(e)}`);
+      } finally {
+        setEinwurfLaeuft(false);
+      }
+      return;
+    }
     try {
       const data = await bildEinwerfen(datei, { kind: 'spread', index, punkt });
       if (data.spread) onSpread(data.spread);
@@ -1698,6 +1744,17 @@ export function useSpreadEditor({
    * wohin." Keine Frage nach dem Neuanordnen – es ist nichts angeordnet worden.
    */
   async function dateiInPool(datei: File) {
+    // Ein Video braucht eine Stelle auf dem Papier: Sein Standbild entsteht erst,
+    // wenn eine Sekunde feststeht, und der Schieber dafür hängt an der
+    // Fallstelle. Ihn hier ein zweites Mal aufzubauen — ohne Stelle, mit einem
+    // Ziel im Pool — wäre ein zweiter Ort für dieselbe Handlung; die Absage sagt
+    // dafür, was zu tun ist.
+    if (istVideodatei(datei.name)) {
+      setNote(
+        `„${datei.name}" ist ein Video – zieh es auf das Papier, dann lässt sich das Standbild wählen.`,
+      );
+      return;
+    }
     setEinwurfLaeuft(true);
     try {
       const data = await bildEinwerfen(datei, { kind: 'pool' });
@@ -1724,6 +1781,83 @@ export function useSpreadEditor({
 
   function einwurfBelassen() {
     setEinwurfFrage(null);
+  }
+
+  /**
+   * Das Standbild an dieser Sekunde einsetzen – der zweite Schritt des
+   * Videoeinwurfs.
+   *
+   * Danach ist es ein Foto wie jedes andere: an der Fallstelle, ausgewählt, mit
+   * der Frage nach dem Neuanordnen. Der einzige Unterschied steht in der Meldung –
+   * ohne Adresse druckt das Buch keinen Code, und das soll man wissen, bevor man
+   * die Seite für fertig hält.
+   */
+  async function videoStandbildNehmen(sekunde: number) {
+    const wahl = videoWahl;
+    if (!wahl) return;
+
+    setEinwurfLaeuft(true);
+    try {
+      const data = await videoStandbildEinwerfen(
+        wahl.kennung,
+        sekunde,
+        { kind: 'spread', index, punkt: wahl.punkt },
+        wahl.name,
+      );
+      if (data.spread) onSpread(data.spread);
+      setPendingCrop(null);
+      setBuchVersion((v) => v + 1);
+      poolLaden();
+      onChanged();
+      setVideoWahl(null);
+      if (data.slotId) {
+        onSelect(data.slotId);
+        setGriffModus('keine');
+        setEinwurfFrage({ slotId: data.slotId, name: wahl.name });
+      }
+      setNote(
+        data.uebernommeneAdresse
+          ? `Standbild eingesetzt – die Adresse dieses Videos war schon hinterlegt.`
+          : `Standbild eingesetzt. Ohne Adresse steht kein Code im Buch – am Bild eintragen.`,
+      );
+    } catch (e) {
+      setNote(`Das Standbild ließ sich nicht einsetzen: ${fehlertext(e)}`);
+    } finally {
+      setEinwurfLaeuft(false);
+    }
+  }
+
+  /** Den Schieber verwerfen. Das Video bleibt im Zwischenspeicher liegen. */
+  function videoWahlAbbrechen() {
+    setVideoWahl(null);
+  }
+
+  /**
+   * Die Adresse des Videos am gewählten Bild setzen oder wegnehmen.
+   *
+   * Sie gilt für **alle** Standbilder desselben Films (der Server sagt, wie
+   * viele) – die Adresse gehört zum Video, nicht zum Bild. Die Doppelseite kommt
+   * neu gerendert zurück, weil der Code darauf entsteht oder verschwindet.
+   */
+  async function videoAdresse(url: string | null) {
+    const box = gewaehlteBox;
+    if (!box) return;
+
+    try {
+      const data = await videoAdresseSetzen(box.photoId, url);
+      if (data.spread) onSpread(data.spread);
+      onChanged();
+      setBuchVersion((v) => v + 1);
+      setNote(
+        url === null || url.trim() === ''
+          ? 'Adresse entfernt – das Bild steht ohne Code im Buch.'
+          : data.geaendert > 1
+            ? `Adresse an ${data.geaendert} Standbildern dieses Videos hinterlegt.`
+            : 'Adresse hinterlegt.',
+      );
+    } catch (e) {
+      setNote(`Die Adresse ließ sich nicht setzen: ${fehlertext(e)}`);
+    }
   }
 
   function slotDragStart(slotId: string) {
@@ -2226,6 +2360,10 @@ export function useSpreadEditor({
     freiPlatzieren,
     einwurfLaeuft,
     einwurfFrage,
+    videoWahl,
+    videoStandbildNehmen,
+    videoWahlAbbrechen,
+    videoAdresse,
     einwurfAnordnen,
     einwurfBelassen,
     buchVersion,

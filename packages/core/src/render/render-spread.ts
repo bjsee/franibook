@@ -31,6 +31,8 @@ import {
 } from './background.js';
 import type { FrameId } from './frame.js';
 import { frameBoxes, frameInset } from './frame.js';
+import { qrBoxen } from './qr.js';
+import { videoQrText } from '../model/video.js';
 import type {
   Guide,
   ImageBox,
@@ -163,6 +165,15 @@ export interface RenderContext {
    * beim Aufrufer statt in der Engine.
    */
   frame?: FrameId;
+  /**
+   * Basisadresse der Videoverweise, hinter der die Kennung steht.
+   *
+   * Fehlt sie, druckt ein QR-Code die Zieladresse unmittelbar – wie bei Neigung
+   * und Rahmen lebt der globale Schalter beim Aufrufer und nicht in der Engine.
+   * Was daraus folgt, steht in `model/video.ts`; ohne hinterlegte Adresse
+   * entsteht ohnehin kein Code.
+   */
+  videoBase?: string;
 }
 
 /**
@@ -345,13 +356,56 @@ function frameOf(assignment: SlotAssignment, aussen: Rect, ctx: RenderContext): 
   return assignment.frame ?? ctx.frame ?? 'keiner';
 }
 
+/** Die Mitte eines Rechtecks – der Punkt, um den alle Boxen eines Platzes fahren. */
+function mitteVon(rect: Rect): { xMm: number; yMm: number } {
+  return { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
+}
+
 /**
- * Alle Boxen eines belegten Slots: Rahmen dahinter, Bild, Rahmen davor.
+ * Der QR-Code an einem Bild – oder nichts.
+ *
+ * Nichts ist der Normalfall: Nur ein Standbild trägt einen Verweis, und auch das
+ * erst, wenn eine Adresse hinterlegt ist (`videoQrText`). Ein Code, der ins Leere
+ * führt, wäre schlimmer als keiner.
+ *
+ * Der Code sitzt im **inneren** Kasten, also innerhalb eines Rahmens: Auf dem
+ * Polaroidkarton stünde er neben dem Bild statt darauf, und im Fuß läge er über
+ * der Bildunterschrift.
+ *
+ * Der Drehpunkt ist immer ausdrücklich die Mitte des **Außenmaßes** – anders als
+ * bei der Bildbox, die ihn weglässt, wenn er ihrer eigenen Mitte entspricht. Der
+ * Code liegt in einer Ecke, seine eigene Mitte ist also niemals der richtige
+ * Punkt: Um sie gedreht wanderte er beim Neigen aus dem Bild heraus.
+ */
+function qrFuer(
+  photoId: PhotoId,
+  geo: SlotGeometrie,
+  ctx: RenderContext,
+): { boxes: RenderBox[]; warnings: RenderWarning[] } | undefined {
+  const verweis = ctx.overrides?.[photoId]?.video;
+  if (!verweis) return undefined;
+
+  const text = videoQrText(verweis, ctx.videoBase);
+  if (!text) return undefined;
+
+  const { boxes, warnings } = qrBoxen({
+    text,
+    kasten: geo.innen,
+    profile: ctx.profile,
+    ...(geo.drehung !== 0 ? { rotateDeg: geo.drehung, rotateAboutMm: mitteVon(geo.aussen) } : {}),
+  });
+  return { boxes, warnings };
+}
+
+/**
+ * Alle Boxen eines belegten Slots: Rahmen dahinter, Bild, Rahmen davor, Code
+ * darüber.
  *
  * Die Reihenfolge ist die Zeichenreihenfolge – beide Renderer arbeiten die
  * Liste von vorn nach hinten ab. Deshalb steht sie hier und nicht in einer
  * `z`-Angabe an der Box: Eine zweite Ordnung neben der Liste wäre eine zweite
- * Wahrheit.
+ * Wahrheit. Der QR-Code kommt zuletzt und damit über alles andere: Ein
+ * Klebestreifen quer über den Modulen machte ihn unlesbar.
  */
 function slotBoxes(
   slot: TemplateSlot,
@@ -379,14 +433,18 @@ function slotBoxes(
     ...(assignment.caption ? { caption: assignment.caption } : {}),
   });
 
-  const bild = buildImageBox(slot, assignment, photo, ctx, gerechnet, {
-    aussen,
-    innen,
-    drehung,
-    frame,
-  });
+  const geo = { aussen, innen, drehung, frame };
+  const bild = buildImageBox(slot, assignment, photo, ctx, gerechnet, geo);
 
-  return [...rahmen.hinter, ...bild, ...rahmen.davor];
+  // Was der Code über seine Lesbarkeit weiß, gehört an die Bildbox: Dort sammelt
+  // der Abnahmebericht die Warnungen ein, und dort steht auch schon der Rest, was
+  // über dieses Bild zu sagen ist. Eine eigene Warnliste an einer `RectBox` wäre
+  // ein zweiter Ort für dieselbe Sorte Auskunft.
+  const qr = qrFuer(photo.id, geo, ctx);
+  const erste = bild[0];
+  if (qr && erste) bild[0] = { ...erste, warnings: [...erste.warnings, ...qr.warnings] };
+
+  return [...rahmen.hinter, ...bild, ...rahmen.davor, ...(qr?.boxes ?? [])];
 }
 
 /**
@@ -572,8 +630,8 @@ function buildImageBox(
   // Polaroid liegt die Mitte des Kartons unter der des Bildes, und beide müssen
   // um denselben Punkt fahren. Bei gleichmäßigem Rand – und ohne Rahmen – ist
   // es die Mitte der Box, also die Vorgabe des Modells.
-  const mitte = { xMm: aussen.xMm + aussen.wMm / 2, yMm: aussen.yMm + aussen.hMm / 2 };
-  const eigeneMitte = { xMm: rect.xMm + rect.wMm / 2, yMm: rect.yMm + rect.hMm / 2 };
+  const mitte = mitteVon(aussen);
+  const eigeneMitte = mitteVon(rect);
   const versetzt =
     Math.abs(mitte.xMm - eigeneMitte.xMm) > 1e-6 || Math.abs(mitte.yMm - eigeneMitte.yMm) > 1e-6;
 

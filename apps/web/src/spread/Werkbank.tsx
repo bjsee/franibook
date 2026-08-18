@@ -21,6 +21,7 @@ import { TemplatePicker } from '../TemplatePicker.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
+import { Videoverweis } from './Videoverweis.js';
 import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { Unterschriften } from './Unterschriften.js';
@@ -310,6 +311,7 @@ function BildKarte({ model }: { model: SpreadEditorModel }) {
         {info?.camera && ` · ${info.camera}`}
       </p>
       <Bilddaten model={model} />
+      <Videoverweis model={model} />
       <Bildanpassung model={model} />
       <Bildbefunde model={model} />
 

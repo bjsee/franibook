@@ -185,6 +185,26 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   'POST /api/spreads/:index/einwurf': { label: 'Bild eingeworfen', spreadIndex: ausIndex },
   'POST /api/photos/einwurf': { label: 'Bild eingeworfen' },
 
+  // Ein Video **aufzunehmen** ändert das Projekt nicht: Der Film landet im Cache,
+  // und dort wohnt kein Projektzustand — wie eine Vorschau, die auch niemand
+  // zurücknimmt. Erst das Standbild wird ein Foto, und das ist der Schritt.
+  'POST /api/videos': null,
+  'GET /api/videos/:kennung/standbild': null,
+  'GET /api/videos/umleitungen': null,
+  'POST /api/videos/:kennung/standbild': {
+    label: 'Standbild eingeworfen',
+    spreadIndex: (_p, body) => {
+      const wohin = (body as { spread?: number } | null)?.spread;
+      return typeof wohin === 'number' ? wohin : undefined;
+    },
+  },
+  // Die Adresse ist eine getippte Angabe, also ein Verschmelzschlüssel: Wer beim
+  // Einfügen einmal zu früh loslässt, soll nicht zwei Schritte im Verlauf haben.
+  'PUT /api/photos/:id/video': {
+    label: 'Videoadresse gesetzt',
+    schluessel: (p) => `videoadresse:${p['id'] ?? '?'}`,
+  },
+
   // ------------------------------------------------- Bilder und Texte darauf
   'PATCH /api/spreads/:index/slots/:slotId/crop': {
     label: 'Ausschnitt gesetzt',

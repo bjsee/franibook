@@ -21,6 +21,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { type APIRequestContext, type Page, expect, test } from '@playwright/test';
+import jsQR from 'jsqr';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
@@ -219,18 +220,23 @@ async function eineDoppelseite(request: APIRequestContext): Promise<void> {
 
 /**
  * Die Messkette in einem Stück: Vorschau schießen, PDF exportieren, rastern,
- * vergleichen. Gibt den Anteil abweichender Pixel zurück und legt Vorschau,
- * Raster und Differenzbild unter `<name>` in den Artefakten ab.
+ * vergleichen. Legt Vorschau, Raster und Differenzbild unter `<name>` in den
+ * Artefakten ab.
  *
  * Gebaut für die Fälle, von denen es mehrere gleichartige gibt – die Fassungen
  * der Zeitleisten. Die älteren Fälle behalten ihren eigenen Ablauf, weil ihre
  * Schwellen gegen ihn gemessen sind.
+ *
+ * Zurück kommt neben dem Anteil auch das **Differenzbild** samt Maßen: Wer eine
+ * kleine Fläche prüft – den Fußraum, das Feld eines QR-Codes –, braucht die
+ * Abweichung dort und nicht über das ganze Blatt. Ein zweiter Vergleich für
+ * dieselbe Frage wäre eine zweite Messung mit eigener Rundung.
  */
 async function messeParitaet(
   page: Page,
   request: APIRequestContext,
   name: string,
-): Promise<number> {
+): Promise<{ ratio: number; diff: PNG; width: number; height: number }> {
   await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
   const stage = page.getByTestId('spread');
   await expect(stage).toBeVisible();
@@ -282,7 +288,7 @@ async function messeParitaet(
   });
   await writeFile(join(ARTIFACTS, `diff-${name}.png`), PNG.sync.write(diff));
 
-  return differing / (width * height);
+  return { ratio: differing / (width * height), diff, width, height };
 }
 
 test.beforeAll(async ({ playwright }) => {
@@ -827,7 +833,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     expect(rsm.boxes.filter((b: { kind: string }) => b.kind === 'rect')).toHaveLength(5);
     expect(rsm.boxes.filter((b: { kind: string }) => b.kind === 'polygon')).toHaveLength(2);
 
-    const ratio = await messeParitaet(page, request, 'frames');
+    const { ratio } = await messeParitaet(page, request, 'frames');
     console.log(`Parity (Rahmen): ${(ratio * 100).toFixed(3)} % abweichend`);
 
     expect(
@@ -892,7 +898,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
       expect(m.m.join()).not.toBe([1, 0, 0, 0, 1, 0, 0, 0, 1].join());
     }
 
-    const ratio = await messeParitaet(page, request, 'adjust');
+    const { ratio } = await messeParitaet(page, request, 'adjust');
     console.log(`Parity (Bildanpassung): ${(ratio * 100).toFixed(3)} % abweichend`);
 
     expect(
@@ -1035,7 +1041,7 @@ test.describe('Vorschau und PDF stimmen überein', () => {
       const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
       expect(rsm.boxes).not.toEqual(bestand.boxes);
 
-      const ratio = await messeParitaet(page, request, `${ort}-${variant}`);
+      const { ratio } = await messeParitaet(page, request, `${ort}-${variant}`);
       console.log(
         `Parity (Zeitleiste ${ort}/${variant}): ${(ratio * 100).toFixed(3)} % abweichend`,
       );
@@ -1068,6 +1074,88 @@ test.describe('Vorschau und PDF stimmen überein', () => {
     expect(trim[1]).toBeCloseTo(mm2pt(3), 1);
     expect(trim[2]).toBeCloseTo(mm2pt(SPREAD_W_MM - 3), 1);
     expect(trim[3]).toBeCloseTo(mm2pt(SPREAD_H_MM - 3), 1);
+  });
+
+  /**
+   * Der QR-Code eines Videoverweises: rund hundert kleine Rechtecke, die im
+   * Druck aneinanderstoßen müssen.
+   *
+   * Der schärfste Fall für die Kantenbehandlung der beiden Adapter. Ein Modul ist
+   * hier 0,5 mm groß, bei der Vergleichsbreite also **zwei Pixel**: Rundet einer
+   * der beiden Renderer eine Kante anders, entstehen weiße Fugen zwischen den
+   * Läufen — und ein Code mit Fugen ist kein Code mehr. Deshalb wird zusätzlich
+   * gezählt, wieviel der Abweichung überhaupt im Codefeld liegt.
+   *
+   * Die Adresse wird an einem der Fixture-Fotos hinterlegt und **nicht** über den
+   * Videoeinwurf erzeugt: Der schriebe ein Standbild in den Fixture-Ordner, und
+   * der Test, der dort vier Fotos erwartet, fände beim nächsten Lauf fünf.
+   */
+  test('ein QR-Code deckt sich in Vorschau und PDF', async ({ page, request }) => {
+    await eineDoppelseite(request);
+    await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+    const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const erstes = rsm.boxes.find((b: { kind: string }) => b.kind === 'image');
+    expect(erstes).toBeDefined();
+
+    const gesetzt = await request.put(`http://127.0.0.1:5174/api/photos/${erstes.photoId}/video`, {
+      data: { url: 'https://fb.example/v/parity' },
+    });
+    expect(gesetzt.ok()).toBe(true);
+
+    // Der Code muss im Modell angekommen sein, sonst wäre der Test grün, ohne
+    // etwas zu prüfen: weiße Grundfläche plus schwarze Läufe.
+    const mitCode = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+    const dunkel = mitCode.boxes.filter(
+      (b: { kind: string; fill?: string }) => b.kind === 'rect' && b.fill === '#000000',
+    );
+    expect(dunkel.length).toBeGreaterThan(20);
+
+    const { ratio } = await messeParitaet(page, request, 'qr');
+    console.log(`Parity (QR-Code): ${(ratio * 100).toFixed(3)} % abweichend`);
+    expect(
+      ratio,
+      `Vorschau und PDF weichen mit QR-Code um ${(ratio * 100).toFixed(3)} % ab. ` +
+        `Vergleichsbilder in ${ARTIFACTS}`,
+    ).toBeLessThan(MAX_DIFF_RATIO);
+
+    // **Und die eigentliche Zusage: Was das PDF druckt, ist scanbar.**
+    //
+    // Der Pixelvergleich allein sagt das nicht. Bei 0,5 mm Modul und der
+    // Vergleichsbreite von 2321 px sind es 2,1 Pixel je Modul — ein Codefeld ist
+    // dort fast nur Kante, und beide Adapter setzen ihre Kanten um Bruchteile
+    // eines Pixels verschieden. Gemessen sind das 767 abweichende Pixel im Feld
+    // (12,3 % seiner Fläche) bei völlig unauffälligem Gesamtwert.
+    //
+    // Ein Anteilsschwellwert für dieses Feld war der erste Versuch und sagt
+    // nichts: Die Gegenprobe — alle Läufe um ein halbes Modul verschoben —
+    // **senkte** ihn auf 11,0 %. Sie musste das, denn eine Änderung im Kern
+    // verschiebt Vorschau und PDF gleichermaßen; dieser Test kann per
+    // Konstruktion nur Adapterfehler finden. Also wird hier geprüft, was der
+    // Leser am Ende tut: den Code aus dem gedruckten PDF lesen, gerastert mit
+    // der Auflösung des Innenteils.
+    const scanPrefix = join(ARTIFACTS, 'pdf-qr-300');
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r',
+      '300',
+      '-singlefile',
+      join(OUT, 'parity-qr.pdf'),
+      scanPrefix,
+    ]);
+    const { data, info } = await sharp(`${scanPrefix}.png`)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const gelesen = jsQR(new Uint8ClampedArray(data), info.width, info.height);
+    console.log(`  aus dem PDF gelesen: ${gelesen?.data ?? 'nichts'}`);
+    expect(gelesen?.data).toBe('https://fb.example/v/parity');
+
+    // Aufräumen: Der Verweis lebt im Projekt, und die folgenden Fälle messen
+    // ohne ihn.
+    await request.put(`http://127.0.0.1:5174/api/photos/${erstes.photoId}/video`, {
+      data: { url: null },
+    });
   });
 
   test('erzeugte Artefakte sind vorhanden', async () => {

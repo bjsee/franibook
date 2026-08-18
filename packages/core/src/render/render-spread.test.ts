@@ -6,6 +6,7 @@ import type { Spread, TextElement } from '../model/spread.js';
 import { requireTemplate } from '../templates/index.js';
 import { renderSpread } from './render-spread.js';
 import { DEFAULT_TILT_DEG } from './tilt.js';
+import type { RectBox } from './rendered-spread.js';
 import { imageBoxes, slotImageBox } from './rendered-spread.js';
 import { PAGE_NUMBER_SLOT_PREFIX } from './page-number.js';
 import { photoPixelsOf } from './inspect.js';
@@ -1449,5 +1450,111 @@ describe('Seitenzahlen im Fuß', () => {
         .sort((a, b) => a - b)[0]!;
 
     expect(achse(mit)).toBeGreaterThan(achse(ohne));
+  });
+});
+
+describe('Der QR-Code eines Standbildes', () => {
+  const VERWEIS = { kennung: '3f9a1c', url: 'https://nas.example/ostern.mp4' };
+  const spread = spreadWith(['p1', 'p2', 'p3', 'p4']);
+
+  /** Die Boxen, die zum Code gehören – schwarze und weiße Rechtecke in Modulgröße. */
+  function codeBoxen(rsm: ReturnType<typeof renderSpread>): RectBox[] {
+    return rsm.boxes.filter(
+      (b): b is RectBox => b.kind === 'rect' && (b.fill === '#000000' || b.fill === '#ffffff'),
+    );
+  }
+
+  it('entsteht am Bild mit hinterlegter Adresse und nur dort', () => {
+    const ohne = renderSpread(spread, ctx);
+    const mit = renderSpread(spread, { ...ctx, overrides: { p2: { video: VERWEIS } } });
+
+    expect(codeBoxen(ohne)).toHaveLength(0);
+    expect(codeBoxen(mit).length).toBeGreaterThan(20);
+  });
+
+  it('bleibt aus, solange keine Adresse hinterlegt ist', () => {
+    // Ein eingeworfenes Video ohne Adresse ist der Normalzustand zwischen
+    // Einwurf und Eintippen – und ein Code ins Leere wäre schlimmer als keiner.
+    const rsm = renderSpread(spread, {
+      ...ctx,
+      overrides: { p2: { video: { kennung: '3f9a1c' } } },
+    });
+    expect(codeBoxen(rsm)).toHaveLength(0);
+  });
+
+  it('liegt innerhalb des Bildkastens', () => {
+    const rsm = renderSpread(spread, { ...ctx, overrides: { p2: { video: VERWEIS } } });
+    // Über `imageBoxes`, weil nur dort der Typ die Kennung kennt.
+    const bild = slotImageBox(rsm, imageBoxes(rsm).find((b) => b.photoId === 'p2')!.slotId)!;
+
+    for (const box of codeBoxen(rsm)) {
+      expect(box.xMm).toBeGreaterThanOrEqual(bild.xMm - 1e-9);
+      expect(box.yMm).toBeGreaterThanOrEqual(bild.yMm - 1e-9);
+      expect(box.xMm + box.wMm).toBeLessThanOrEqual(bild.xMm + bild.wMm + 1e-9);
+      expect(box.yMm + box.hMm).toBeLessThanOrEqual(bild.yMm + bild.hMm + 1e-9);
+    }
+  });
+
+  it('wird über allem anderen dieses Platzes gezeichnet', () => {
+    // Ein Klebestreifen quer über den Modulen machte den Code unlesbar.
+    //
+    // Geprüft wird der Abschnitt dieses einen Platzes und nicht die ganze Seite:
+    // Der Versatzschatten der Rahmen ist ebenfalls schwarz, ein Filter über die
+    // Füllfarbe träfe also auch ihn – und der liegt zu Recht ganz hinten.
+    const rsm = renderSpread(spread, {
+      ...ctx,
+      frame: 'klebestreifen',
+      overrides: { p2: { video: VERWEIS } },
+    });
+    const von = rsm.boxes.findIndex((b) => b.kind === 'image' && b.photoId === 'p2');
+    const bis = rsm.boxes.findIndex((b, i) => i > von && b.kind === 'image');
+    const abschnitt = rsm.boxes.slice(von, bis);
+
+    const letztesPolygon = abschnitt.findLastIndex((b) => b.kind === 'polygon');
+    const erstesModul = abschnitt.findIndex((b) => b.kind === 'rect' && b.fill === '#ffffff');
+
+    expect(letztesPolygon).toBeGreaterThan(0);
+    expect(erstesModul).toBeGreaterThan(letztesPolygon);
+  });
+
+  it('trägt seine Warnungen an der Bildbox, nicht an einer eigenen Box', () => {
+    // Dort sammelt der Abnahmebericht sie ein. Der Fall: ein winziges Bild mit
+    // einer langen Adresse – die Module fallen unter das Mindestmaß.
+    const eng: Spread = {
+      ...spread,
+      slots: spread.slots.map((s, i) =>
+        i === 0 ? { ...s, rect: { x: 0.2, y: 0.3, w: 0.06, h: 0.06 } } : s,
+      ),
+    };
+    const rsm = renderSpread(eng, {
+      ...ctx,
+      overrides: {
+        p1: {
+          video: {
+            kennung: '3f9a1c',
+            url: 'https://share.icloud.com/photos/06c6xebiYYAPTdsYXJFMrRKAA#Deutschland',
+          },
+        },
+      },
+    });
+    const box = imageBoxes(rsm).find((b) => b.photoId === 'p1')!;
+
+    expect(box.warnings.map((w) => w.code)).toContain('qr-below-min-module');
+  });
+
+  it('neigt sich mit dem Bild um dessen Drehpunkt', () => {
+    const rsm = renderSpread(spread, {
+      ...ctx,
+      tilt: { maxDeg: DEFAULT_TILT_DEG, seed: 7 },
+      overrides: { p2: { video: VERWEIS } },
+    });
+    const bild = imageBoxes(rsm).find((b) => b.photoId === 'p2')!;
+    const code = codeBoxen(rsm);
+
+    expect(bild.rotateDeg).toBeDefined();
+    expect(code.every((b) => b.rotateDeg === bild.rotateDeg)).toBe(true);
+    // Der Code liegt in einer Ecke: Um seine eigene Mitte gedreht wanderte er aus
+    // dem Bild. Deshalb trägt jede seiner Boxen den Drehpunkt ausdrücklich.
+    expect(code.every((b) => b.rotateAboutMm !== undefined)).toBe(true);
   });
 });

@@ -524,3 +524,116 @@ describe('Abnahmebericht', () => {
     expect(leer.map((b) => (b.ort.kind === 'spread' ? b.ort.index : -1))).toEqual([0, 2]);
   });
 });
+
+describe('QR-Codes im Bericht', () => {
+  /** Dasselbe Bild, aber mit einem Videoverweis samt Adresse. */
+  function mitVerweis(url: string, rect?: { x: number; y: number; w: number; h: number }) {
+    const roh = spreadWith(['p1', 'p2', 'p3', 'p4']);
+    const spread: Spread = rect
+      ? { ...roh, slots: roh.slots.map((s, i) => (i === 0 ? { ...s, rect } : s)) }
+      : roh;
+    return renderSpread(spread, {
+      profile,
+      template,
+      photos: PHOTOS,
+      overrides: { p1: { video: { kennung: '3f9a1c', url } } },
+    });
+  }
+
+  it('schweigt über einen Code, der Platz hat', () => {
+    const funde = seitenbefunde(mitVerweis('https://nas.example/ostern.mp4'), 0, profile);
+    expect(funde.map((b) => b.art)).not.toContain('qr-knapp');
+    expect(funde.map((b) => b.art)).not.toContain('qr-unlesbar');
+  });
+
+  it('meldet einen zu klein geratenen Code als schweren Fund', () => {
+    const rsm = mitVerweis(
+      'https://share.icloud.com/photos/06c6xebiYYAPTdsYXJFMrRKAA#Deutschland',
+      {
+        x: 0.2,
+        y: 0.3,
+        w: 0.06,
+        h: 0.06,
+      },
+    );
+    const fund = seitenbefunde(rsm, 0, profile).find((b) => b.art === 'qr-unlesbar');
+
+    expect(fund?.text).toMatch(/Modulkante nur 0,\d\d mm/);
+    // Der Satz sagt, was zu tun ist – ein Bericht, der nur den Mangel nennt,
+    // schickt einen zurück zum Rechnen.
+    expect(fund?.text).toMatch(/kürzere Adresse|größeres Bild/);
+    // Der Platz steht daneben, damit die Oberfläche zum Bild springen kann.
+    expect(fund?.ort).toEqual({ kind: 'spread', index: 0, slotId: template.slots[0]?.id });
+  });
+
+  it('nennt die Modulkante auf Hundertstel', () => {
+    // Zwischen „knapp" und „unlesbar" liegt ein Zehntelmillimeter: auf ganze
+    // gerundet stünde in beiden Zeilen dieselbe Zahl.
+    const rsm = mitVerweis('https://nas.example/ostern-in-der-eifel-mit-oma.mp4', {
+      x: 0.2,
+      y: 0.3,
+      w: 0.09,
+      h: 0.09,
+    });
+    const fund = seitenbefunde(rsm, 0, profile).find((b) => b.art.startsWith('qr-'));
+    expect(fund?.text).toMatch(/0,\d\d mm/);
+  });
+
+  it('hängt den Fund an das Foto, nicht an den Platz', () => {
+    // Damit ein „Weiß ich, ist ok" eine Neuanordnung übersteht – dieselbe
+    // Überlegung wie beim quer stehenden Bild.
+    const rsm = mitVerweis(
+      'https://share.icloud.com/photos/06c6xebiYYAPTdsYXJFMrRKAA#Deutschland',
+      {
+        x: 0.2,
+        y: 0.3,
+        w: 0.06,
+        h: 0.06,
+      },
+    );
+    const fund = seitenbefunde(rsm, 0, profile).find((b) => b.art === 'qr-unlesbar');
+    expect(fund?.schluessel).toContain('p1');
+  });
+});
+
+describe('Zwei Ursachen derselben Art bleiben zwei Funde', () => {
+  it('gibt einem zu kleinen und einem angeschnittenen Code eigene Schlüssel', () => {
+    // Beide Warnungen fallen auf `qr-unlesbar`. Ohne Unterscheidung hätten sie
+    // denselben Schlüssel — ein „Weiß ich, ist ok" nickte beide zugleich ab, und
+    // die Oberfläche vergäbe zweimal denselben React-Key.
+    //
+    // Die Box wird hier von Hand gesetzt und nicht aus einer Doppelseite
+    // gerendert: Geprüft wird die Schlüsselvergabe, und ein Kasten, der beide
+    // Warnungen zugleich auslöst, wäre ein Balanceakt zwischen Modulgröße und
+    // Lage — er würde bei jeder Kalibrierung der Schwellen kippen.
+    const bild: RenderBox = {
+      kind: 'image',
+      xMm: 20,
+      yMm: 20,
+      wMm: 40,
+      hMm: 30,
+      slotId: 'a',
+      photoId: 'p1',
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' },
+      effectiveDpi: 400,
+      warnings: [
+        { code: 'qr-below-min-module', modulMm: 0.31, minModulMm: 0.4 },
+        { code: 'qr-at-edge', wo: 'beschnitt' },
+      ],
+    };
+    const funde = seitenbefunde(leeresBlatt([bild]), 0, profile).filter(
+      (b) => b.art === 'qr-unlesbar',
+    );
+
+    expect(funde).toHaveLength(2);
+    expect(new Set(funde.map((f) => f.schluessel)).size).toBe(2);
+  });
+
+  it('lässt den Schlüssel jeder eindeutigen Art unverändert', () => {
+    // Der Schlüssel ist die Kennung, unter der eine Zustimmung im Projekt liegt.
+    // Ihn zu erweitern hätte jeden längst abgenickten Fund zurückgebracht.
+    const bericht = pruefeBuch({ spreads: [gerendert(['klein', 'p2', 'p3', 'p4'])], profile });
+    const fund = bericht.befunde.find((b) => b.art === 'unter-mindest-dpi');
+    expect(fund?.schluessel).toBe('unter-mindest-dpi#foto:klein');
+  });
+});

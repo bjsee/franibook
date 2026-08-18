@@ -282,7 +282,28 @@ export type RenderWarning =
    * Beschnitt liegt, ist ganz weg; was im Falz liegt, verschwindet nur zum Teil
    * im Bund.
    */
-  | { code: 'face-at-edge'; wo: 'beschnitt' | 'falz'; anzahl: number };
+  | { code: 'face-at-edge'; wo: 'beschnitt' | 'falz'; anzahl: number }
+  /**
+   * Der QR-Code an diesem Bild wird kleiner gedruckt, als eine Mobilkamera
+   * zuverlässig liest.
+   *
+   * Zwei Schwellen wie bei der Auflösung, und aus demselben Grund: Die
+   * Zielgröße ist ein Wunsch, das Mindestmaß eine Grenze. Gemeldet wird die
+   * **Modulkante** und nicht die Kantenlänge des Codes — dieselben 15 mm sind
+   * bei einer kurzen Adresse bequem lesbar und bei einer langen unbrauchbar,
+   * weil die Matrix mit dem Text wächst (`render/qr.ts`).
+   */
+  | { code: 'qr-below-target-module'; modulMm: number; targetModulMm: number }
+  | { code: 'qr-below-min-module'; modulMm: number; minModulMm: number }
+  /**
+   * Der Code liegt in der Falzzone oder jenseits der Sicherheitslinie.
+   *
+   * Anders als bei `face-at-edge` ist das nie eine Gestaltung: Ein angeschnittener
+   * Code verweist auf nichts. Die Eckenwahl weicht beidem aus, soweit der Kasten
+   * es hergibt (`qrEckeFuer`) — bleibt die Warnung, ist das Bild selbst zu nah an
+   * Kante oder Achse, und dann hilft nur ein anderer Platz oder kein Code.
+   */
+  | { code: 'qr-at-edge'; wo: 'beschnitt' | 'falz' };
 
 /** Hilfslinien. Ausschließlich für die Vorschau – nie Teil des PDFs. */
 export interface Guide {

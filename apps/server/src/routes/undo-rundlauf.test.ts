@@ -124,6 +124,14 @@ async function probe(): Promise<Probe> {
     abstaende: null as never,
     cacheDir: '.franibook-cache',
     outDir: dir,
+    // Ausgetauschte Videowerkzeuge: Der Rundlauf prüft, dass ein Standbild als
+    // Foto im Bestand landet und ein Cmd+Z es wieder herausnimmt – nicht, dass
+    // ffmpeg dekodieren kann (Begründung bei `Videowerkzeuge` in `video.ts`).
+    videos: {
+      findeVideo: async () => join(dir, 'film.mp4'),
+      standbild: async () => await bildBytes(1200, 800),
+      videoDauerSek: async () => 12,
+    },
   } as Kontext;
 
   const { app } = baueApp({ kontext, anlauf: () => null, logger: false });
@@ -605,6 +613,26 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
       payload: { schluessel: project.abnahme().befunde[0]?.schluessel ?? 'seitenzahl' },
     });
     return { method: 'DELETE', url: '/api/book/pruefung/abnahmen' };
+  },
+
+  // Das Standbild nimmt den Weg jedes eingeworfenen Bildes; die ausgetauschten
+  // Werkzeuge liefern das Bild, statt einen Film zu dekodieren.
+  'POST /api/videos/:kennung/standbild': async () => ({
+    method: 'POST',
+    url: '/api/videos/3f9a1c/standbild',
+    payload: { sekunde: 4, spread: 1, x: 0.3, y: 0.4 },
+  }),
+
+  // Die Adresse setzt sich nur an ein Bild, das schon einen Videoverweis trägt –
+  // der gehört damit zur Ausgangslage, wie das Abnicken beim Abnahmebericht.
+  'PUT /api/photos/:id/video': async ({ project, photoIds }) => {
+    const id = photoIds[0]!;
+    project.overrides[id] = { ...project.overrides[id], video: { kennung: '3f9a1c' } };
+    return {
+      method: 'PUT',
+      url: `/api/photos/${id}/video`,
+      payload: { url: 'https://nas.example/ostern.mp4' },
+    };
   },
 
   'POST /api/history/:name': async ({ app, project }) => {

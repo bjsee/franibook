@@ -22,6 +22,7 @@ import { quellenRouten } from './routes/quellen.js';
 import { slotRouten } from './routes/slots.js';
 import { spreadRouten } from './routes/spreads.js';
 import { umschlagRouten } from './routes/umschlag.js';
+import { videoRouten } from './routes/videos.js';
 import { undoRouten, ursprungHaken, verlaufHaken } from './routes/undo.js';
 
 /** Eine angemeldete Route, wie die Vollständigkeitsprüfung sie sieht. */
@@ -81,6 +82,47 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
     (_req, body, done) => done(null, body),
   );
 
+  /**
+   * Videos dagegen werden **nicht** gepuffert, sondern durchgereicht.
+   *
+   * Der Unterschied zum Bild ist die Größenordnung: Eine Minute 4K sind rund
+   * 400 MB, und ein Buffer dieser Größe im Speicher wäre der Unterschied zwischen
+   * einem laufenden und einem beendeten Server. Der Parser gibt deshalb den Strom
+   * selbst weiter (`done(null, req)` statt `parseAs`), und die Route schreibt ihn
+   * unmittelbar auf die Platte (`nimmVideoAuf`).
+   *
+   * **Die Größengrenze steht deshalb nicht hier**, sondern beim Schreiben: Ein
+   * `bodyLimit` wirkt über `Content-Length`, und den schickt ein Upload ohne
+   * Längenangabe nicht mit. Wer zählt, muss lesen.
+   *
+   * `application/octet-stream` fehlt bewusst in dieser Liste – der Medientyp
+   * gehört schon dem Bildeinwurf, und zwei Parser für denselben Typ kann Fastify
+   * nicht halten. Die Oberfläche schickt für Videos den echten Typ mit
+   * (`video/quicktime` bei `.mov`), und den kennt jeder Browser.
+   *
+   * **Er prüft die Adresse, weil Fastify das nicht tut.** Ein Parser wird allein
+   * am Medientyp gewählt und gilt damit für *jede* Route: Ohne diese Zeilen
+   * bekäme auch `PATCH /api/photos` mit `Content-Type: video/mp4` den rohen
+   * Strom als `body` – und damit keine der Grenzen, die diese Route erwartet.
+   * Die Alternative wäre ein eigener `register`-Scope für die Videoroute; das
+   * hätte die Routenanmeldung asynchron gemacht und damit die Routenliste, an
+   * der die Vollständigkeitsprüfung der Undo-Tabelle hängt. Eine Prüfung von
+   * vier Zeilen ist der billigere Weg zum selben Ziel.
+   */
+  app.addContentTypeParser(
+    ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/x-msvideo'],
+    (req, _payload, done) => {
+      if (req.raw.url?.startsWith('/api/videos')) {
+        done(null, req.raw);
+        return;
+      }
+      const fehler = Object.assign(new Error('Videodaten nimmt nur /api/videos an'), {
+        statusCode: 415,
+      });
+      done(fehler);
+    },
+  );
+
   app.addHook('onRoute', (route) => {
     const methoden = Array.isArray(route.method) ? route.method : [route.method];
     for (const method of methoden) routen.push({ method, url: route.url });
@@ -117,6 +159,7 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
   fotoRouten(app, kontext);
   quellenRouten(app, kontext);
   umschlagRouten(app, kontext);
+  videoRouten(app, kontext);
   undoRouten(app, kontext);
 
   return { app, routen };
