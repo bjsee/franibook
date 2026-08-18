@@ -249,6 +249,42 @@ gemeldet, nicht angenommen (`videoWerkzeuge`). Was sie tun, ist als
 `Videowerkzeuge` austauschbar, damit die Zusagen des Einwurfs ohne sie prüfbar
 bleiben; derselbe Gedanke wie bei `project/speichern.ts`.
 
+## Wer sonst noch am Buch sitzt
+
+`ereignisse.ts`, `routes/ereignisse.ts`. Das Buch lässt sich in mehreren Fenstern
+öffnen; jedes hält eine Leitung (`GET /api/ereignisse`, Server-Sent Events), und
+nach jedem Griff, der gewirkt hat, geht eine Zeile an **alle anderen**.
+
+- **Der Haken stellt dieselben zwei Fragen wie der Verlauf** — `eintragFuer`
+  („ändert diese Route etwas?") und `ohneWirkung` („hat sie es getan?"). Deshalb
+  kostet das Melden fast keinen Code: `UNDO_ROUTEN` listet lückenlos jede
+  mutierende Route samt deutschem Satz und Seitenbezug, und eine neue meldet sich
+  von selbst.
+- **`null` in der Tabelle heißt „legt keinen Verlaufsschritt an", nicht „ändert
+  nichts".** Für Export, Probe und Videoaufnahme fällt beides zusammen; für
+  `POST /api/undo` und `/api/redo` nicht — sie tauschen den ganzen Stand aus.
+  Diese Ausnahme steht in `MELDET_OHNE_SCHRITT`, und `ereignisse.test.ts`
+  verlangt für **jede** `null`-Route eine Entscheidung: melden oder ausdrücklich
+  schweigen. Wer eine neue `null`-Route einträgt, wird vom Test danach gefragt.
+- **Zugestellt wird die Bezeichnung, nicht der Stand.** Der neue Stand käme sonst
+  in einer zweiten Fassung jeder Antwortform, und eine davon wäre die ältere.
+- **Der Absender bekommt sein Echo nicht** — sonst lüde er nach jedem eigenen
+  Griff neu. Seine Kennung kommt auf **zwei** Wegen an (`fensterVon`): im Kopf
+  `x-franibook-fenster` bei den mutierenden Anfragen, in der Adresse
+  (`?fenster=`) bei der Leitung selbst. `EventSource` kann keine eigenen
+  Kopfzeilen setzen; mit dem Kopf allein war jede Leitung namenlos, und
+  namenlose Fenster bekommen absichtlich alles — also jedes sein eigenes Echo.
+  Die Servertests waren dabei grün, weil sie mit `fetch` verbinden und Köpfe
+  setzen können. Wer hier etwas ändert, prüft es an zwei echten Fenstern.
+- **Eine tote Leitung reißt die anderen nicht mit.** `Ereignisstrom.#zustellen`
+  fängt jeden Schreibfehler und meldet den Hörer ab; ohne das hinge die Zusage
+  „alle Fenster erfahren es" an einer Absprache, und ein einziger Wurf ließe die
+  Fenster dahinter lautlos veralten.
+
+Der Strom ist **kein Projektzustand**: nichts davon wird gespeichert, nichts
+überlebt einen Neustart. Er lebt an der App (`baueApp` gibt ihn zurück) und nicht
+im `Kontext` — zwei Apps in einem Test hätten sonst dieselben Zuhörer.
+
 ## Der Umgang mit fremden Dateien
 
 **Bildquellen werden gelesen, nicht bewirtschaftet.** Kopiert wird nichts,
@@ -397,6 +433,12 @@ Doppelrechnung samt Bildvergleich für eine Auskunft, die die Oberfläche schon 
 Der Server bindet nur an `127.0.0.1` und hat keine Authentifizierung. Er darf
 nicht ins Netz — kein `0.0.0.0`, kein CORS für fremde Ursprünge, keine
 Tunnelfreigabe. Wer das ändern will, braucht vorher eine Authentifizierung.
+
+**Das gilt auch für den Ereignisstrom.** „Mehrere Fenster" heißt mehrere Fenster
+an _einem_ Rechner. Ein zweiter Rechner im LAN ist keine Portfreigabe, sondern
+die Aufgabe, das Sicherheitsmodell zu ersetzen — mindestens ein Token, und die
+Oberfläche müsste von irgendwo ausgeliefert werden (heute liefert der Server kein
+Bundle aus, das macht Vite).
 
 ## HEIC
 

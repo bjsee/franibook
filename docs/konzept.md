@@ -3337,6 +3337,65 @@ Eine ausklappbare Leiste zeigt nicht platzierte und ausgeschlossene Fotos. Von d
 
 Alle drei Kontexte unterstützen Tastaturbedienung über die Sensor-API von dnd-kit; die Cropverschiebung ist zusätzlich über Pfeiltasten mit Feinraster bedienbar.
 
+### Mehrere Fenster am selben Buch
+
+Das Buch lässt sich in mehreren Fenstern öffnen — zwei Tabs, zwei Bildschirme,
+zwei Leute. Bis August 2026 merkte keines davon etwas vom anderen: Wer im
+zweiten Fenster eine Doppelseite umbaute, sah im ersten weiter den Stand von
+vorhin und **schrieb ihn beim nächsten Griff zurück**. Der Server wusste es die
+ganze Zeit; er hat es nur nie gesagt.
+
+Jetzt sagt er es. Jedes Fenster hält eine Leitung (`GET /api/ereignisse`,
+Server-Sent Events), und nach jedem Griff, der gewirkt hat, geht eine Zeile an
+alle anderen. Fünf Festlegungen tragen das:
+
+- **Der Server bleibt die einzige Wahrheit.** Kein Client-Zustand wird
+  zusammengeführt, also kein CRDT, keine Operational Transforms, keine
+  Datenbank. Bei gleichzeitigen Änderungen am selben Objekt gewinnt der letzte —
+  für ein Familienbuch mit zwei Bearbeitern die richtige, einfache Antwort.
+- **Zugestellt wird die Bezeichnung, nicht der neue Stand.** Die Zeile sagt nur,
+  _dass_ und _was_ sich geändert hat („Ausschnitt gesetzt", Doppelseite 12);
+  abgeholt wird über dieselben Endpunkte wie sonst. Den neuen Stand
+  mitzuschicken hieße, jede Antwortform (`spreadAntwort`, `gruppenAntwort` …)
+  ein zweites Mal zu führen, und eine der beiden wäre irgendwann die ältere.
+- **Was gemeldet wird, steht schon in `UNDO_ROUTEN`.** Dieselbe Tabelle, die den
+  Zurück-Knopf beschriftet, liefert den deutschen Satz und den Seitenbezug — und
+  `undo.test.ts` lässt keine neue Route durch, die nicht darin steht. Eine neue
+  Route meldet sich damit von selbst an die anderen Fenster.
+- **Der Absender bekommt sein eigenes Echo nicht.** Er hat die Antwort schon;
+  sonst lüde er nach jedem eigenen Griff alles neu, bei einem gezogenen Regler
+  einmal je Zwischenstellung. Seine Kennung reist auf zwei Wegen: im Kopf
+  `x-franibook-fenster` bei den mutierenden Anfragen, in der Adresse
+  (`?fenster=`) bei der Leitung — `EventSource` kann keine eigenen Kopfzeilen
+  setzen, und mit dem Kopf allein blieb jede Leitung namenlos und bekam ihr
+  eigenes Echo. Aufgefallen ist das erst an zwei echten Fenstern: Die
+  Servertests verbinden mit `fetch` und können Köpfe setzen, der Browser nicht.
+- **Nachgeladen wird nicht mitten im Griff.** Eine Meldung, die während einer
+  Zeigergeste eintrifft, wird gesammelt und beim Loslassen abgearbeitet — sonst
+  verlöre ein gezogener Ausschnitt das Bild unter dem Zeiger, und was am Ende
+  gespeichert wird, hat niemand so gemeint.
+
+**Die eine Stelle, an der die Tabelle nicht ausreicht**, ist ihr Wert `null`. Er
+heißt „legt keinen Verlaufsschritt an" und **nicht** „ändert nichts", und für
+fast alle diese Routen fällt beides zusammen — ein Export, eine Anordnungsprobe,
+ein aufgenommenes Video. Für Zurücknehmen und Wiederholen fällt es auseinander:
+Sie tauschen den ganzen Stand aus und führen den Verlauf dabei selbst. Genau das
+blieb im ersten Anlauf unbemerkt, bis ein zweites Fenster nach einem Cmd+Z im
+ersten weiter die alte Seite zeigte. `MELDET_OHNE_SCHRITT` in
+`routes/ereignisse.ts` hält die Ausnahme, und ein Test verlangt für **jede**
+`null`-Route eine Entscheidung: gemeldet oder ausdrücklich stumm.
+
+Nachgeladen wird über denselben Weg wie nach einem Zurücknehmen — `loadInfo`,
+`neuRendern` und ein erhöhtes `standVersion` (siehe
+[Zurücknehmen](#zurücknehmen-ganze-stände-statt-patches)). Gesprungen wird
+dabei **nicht**: Ein Cmd+Z zeigt die betroffene Stelle, weil man sonst etwas
+zurücknimmt, das man nicht sieht; hier hat ein anderer gehandelt, und der Blick
+gehört dem, der hier sitzt. Wo es geschah, sagt die Notiz.
+
+Der Server bindet weiterhin nur an `127.0.0.1`. Mehrere Fenster heißt vorerst
+mehrere Fenster **an einem Rechner**; ein zweiter Rechner im LAN bräuchte
+vorher eine Authentifizierung (siehe „Sicherheit" in `.claude/rules/server.md`).
+
 ## Gestalt der Oberfläche
 
 Die Oberfläche war bis August 2026 gewachsen und nicht gestaltet: eine

@@ -69,6 +69,39 @@ export function fehlertext(e: unknown): string {
 }
 
 /**
+ * Wer dieses Fenster ist.
+ *
+ * Geht als Kopf an **jede** Anfrage, damit der Server die Meldung über einen
+ * Griff nicht an den zurückschickt, der ihn getan hat (`ereignisse.ts` im
+ * Server). Ohne das lüde jedes Fenster nach jedem eigenen Handgriff alles neu,
+ * und bei einem gezogenen Regler wäre das eine Neuladung je Zwischenstellung.
+ *
+ * Eine Konstante je Seitenladung, bewusst **nicht** im `sessionStorage`: Der
+ * wird beim Duplizieren eines Tabs mitkopiert, und zwei Fenster mit derselben
+ * Kennung hielten einander für sich selbst — eines von beiden erführe nie
+ * wieder etwas. Ein Neuladen ist dann eben ein neues Fenster; das kostet
+ * nichts, denn die Kennung hat keine Bedeutung über die Sitzung hinaus.
+ */
+const FENSTER =
+  globalThis.crypto?.randomUUID?.() ?? `f${Math.random().toString(36).slice(2)}${Date.now()}`;
+
+/** Der Kopf, an dem der Server das Fenster erkennt (`FENSTER_KOPF` im Server). */
+const FENSTER_KOPF = 'x-franibook-fenster';
+
+/**
+ * Ergänzt den Fensterkopf an einer Anfrage.
+ *
+ * Als Funktion und nicht als Zeile in `antwort`, weil es in dieser Datei eine
+ * zweite Anfrage gibt, die `antwort` bewusst umgeht (`layoutAnwendenAnfrage` –
+ * sie schickt rohen Text und deutet die Antwort selbst). Sie hatte den Kopf
+ * vergessen, und ihr Fenster lud nach jedem eingespielten Layout sich selbst
+ * neu, mit der Meldung, ein anderes hätte es getan.
+ */
+function mitFenster(headers?: HeadersInit): Record<string, string> {
+  return { ...(headers as Record<string, string> | undefined), [FENSTER_KOPF]: FENSTER };
+}
+
+/**
  * Eine Anfrage und ihre Antwort.
  *
  * Geworfen wird auch bei `{ ok: false }` mit Status 200: Ein Endpunkt, der
@@ -83,7 +116,9 @@ function ruf<T>(pfad: string, init?: RequestInit): Promise<T> {
 }
 
 async function antwort<T>(pfad: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(pfad, init);
+  // Der Fensterkopf an einer Stelle für alle: Ihn je Aufrufer zu setzen hieße,
+  // ihn irgendwo zu vergessen – und dort käme dann das eigene Echo zurück.
+  const res = await fetch(pfad, { ...init, headers: mitFenster(init?.headers) });
   const roh = await res.text();
   const daten: unknown = roh ? JSON.parse(roh) : {};
   const satz = (daten as { error?: string } | null)?.error;
@@ -1528,7 +1563,7 @@ export function layoutAnwenden(rohtext: string): Promise<LayoutErgebnis> {
 async function layoutAnwendenAnfrage(rohtext: string): Promise<LayoutErgebnis> {
   const res = await fetch('/api/book/layout', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: mitFenster({ 'content-type': 'application/json' }),
     body: rohtext,
   });
   const roh = await res.text();
@@ -1570,3 +1605,83 @@ export const pdfExportieren = (spreadIndex?: number) =>
  * man in der Vorschau, und zum Blättern gibt es nichts, wenn es ein Blatt ist.
  */
 export const abzugExportieren = () => sende<ExportErgebnis>('POST', '/api/export/abzug', {});
+
+// ─── Wer sonst noch am Buch sitzt ───────────────────────────────────────────
+
+/** Eine Änderung, die ein anderes Fenster ausgelöst hat. */
+export interface FremdeAenderung {
+  /**
+   * Fortlaufend ab 1, je Server. **Keine Lückenerkennung** – dem eigenen
+   * Fenster fehlen die Nummern seiner eigenen Griffe (Begründung am Feld im
+   * Server). Dass die Leitung weg war, sagt `onWiederVerbunden`.
+   */
+  nr: number;
+  /** Deutscher Satzanfang, wie am Zurück-Knopf: „Ausschnitt gesetzt". */
+  label: string;
+  /** Welche Doppelseite es betrifft, wenn es eine gibt. */
+  spreadIndex?: number;
+}
+
+/** Was am Ereignisstrom eintreffen kann. */
+export interface Strommelder {
+  /** Ein anderes Fenster hat etwas geändert. */
+  onAenderung(a: FremdeAenderung): void;
+  /** Wie viele Fenster gerade offen sind – dieses mitgezählt. */
+  onFenster(anzahl: number): void;
+  /**
+   * Die Leitung stand, war weg und steht wieder.
+   *
+   * Nicht dasselbe wie eine Änderung, aber die gleiche Folge: In der Lücke kann
+   * etwas geschehen sein, das dieses Fenster nicht erfahren hat. Wer den Melder
+   * baut, lädt danach einmal nach – der `nr`-Sprung allein hilft nicht, denn die
+   * verpasste Meldung kam ja nie an.
+   */
+  onWiederVerbunden(): void;
+}
+
+/**
+ * Hört, was die anderen Fenster tun.
+ *
+ * `EventSource` und kein eigener Verbindungsaufbau: Der Browser verbindet nach
+ * einem Abbruch von selbst neu, mit wachsendem Abstand, und genau das will man
+ * hier — ein Server, der gerade neu startet, soll nicht von einer Schleife
+ * bestürmt werden.
+ *
+ * Hier in `api.ts` und nicht im Haken, aus demselben Grund wie jedes `fetch`:
+ * Was der Server kann, steht an einer Stelle. Der Haken (`useEreignisse.ts`)
+ * entscheidet, *wann* nachgeladen wird.
+ *
+ * @returns den Griff zum Schließen. Ohne ihn bliebe die Leitung offen, und der
+ * Server zählte ein Fenster, das es nicht mehr gibt.
+ */
+export function ereignisseHoeren(melder: Strommelder): () => void {
+  // Die Kennung steht in der **Adresse** und nicht im Kopf, und das ist keine
+  // Geschmacksfrage: `EventSource` kann keine eigenen Kopfzeilen setzen – die
+  // API kennt außer `withCredentials` keine Option dafür. Mit dem Kopf war die
+  // Leitung für den Server namenlos, jedes Fenster bekam sein eigenes Echo und
+  // lud nach jedem eigenen Griff neu – samt der Meldung, ein anderes Fenster
+  // hätte es getan. Die mutierenden Anfragen tragen ihn weiter im Kopf; nur
+  // diese eine kann es nicht.
+  const quelle = new EventSource(`/api/ereignisse?fenster=${encodeURIComponent(FENSTER)}`);
+  // Erst beim zweiten `open` ist es eine Wiederverbindung. Das erste ist der
+  // Anfang, und da hat das Fenster seine Daten gerade frisch geladen.
+  let stand = false;
+
+  quelle.addEventListener('open', () => {
+    if (stand) melder.onWiederVerbunden();
+    stand = true;
+  });
+  quelle.addEventListener('aenderung', (e) => {
+    melder.onAenderung(JSON.parse((e as MessageEvent<string>).data) as FremdeAenderung);
+  });
+  quelle.addEventListener('fenster', (e) => {
+    const { anzahl } = JSON.parse((e as MessageEvent<string>).data) as { anzahl: number };
+    melder.onFenster(anzahl);
+  });
+  // `herzschlag` braucht keinen Hörer: Die Zeile hält die Leitung offen, mehr
+  // soll sie nicht. Ein Fehler ebenso wenig — `EventSource` verbindet selbst
+  // neu, und eine Meldung „Verbindung verloren" wäre bei einem Server auf
+  // demselben Rechner meistens schon wieder falsch, bevor jemand sie liest.
+
+  return () => quelle.close();
+}
