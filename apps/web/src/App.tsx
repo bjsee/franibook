@@ -43,6 +43,7 @@ import {
   zurueckNehmen,
 } from './api.js';
 import { ausstehendSenden } from './ausstehend.js';
+import { useEreignisse, type Nachladegrund } from './useEreignisse.js';
 import { BildfassungenProvider, bildSrcVon } from './bildadresse.js';
 import { B, T } from './theme.js';
 import { Kennzahlen } from './Kennzahlen.js';
@@ -481,6 +482,47 @@ export function App() {
       setNote(fehlertext(e));
     }
   }, [nachSchritt]);
+
+  // ------------------------------------------------- Die anderen Fenster
+
+  /**
+   * Was ein anderes Fenster geändert hat, hier nachladen.
+   *
+   * Dieselben drei Zeilen wie nach einem Zurücknehmen (`nachSchritt`), und aus
+   * demselben Grund grob: Der Server sagt, **dass** und **was** sich geändert
+   * hat, nicht welche Scheibe der Oberfläche davon betroffen ist. Eine
+   * Bereichsangabe wäre eine zweite Tabelle neben `UNDO_ROUTEN`, die
+   * irgendwann nicht mehr stimmt — und ein veralteter Stand, den niemand sieht,
+   * ist genau der Fehler, den dieses Feature beheben soll.
+   *
+   * **Nicht gesprungen wird.** Ein Zurücknehmen zeigt die betroffene Stelle,
+   * weil man sonst etwas zurücknimmt, das man nicht sieht; hier hat ein anderer
+   * gehandelt, und der Blick gehört dem, der hier sitzt. Wo es geschah, sagt
+   * die Notiz — hingehen kann man selbst.
+   */
+  const nachladen = useCallback(
+    (grund: Nachladegrund) => {
+      loadInfo();
+      neuRendern();
+      setStandVersion((v) => v + 1);
+      if (grund.grund === 'luecke') {
+        // Was in der Lücke geschah, weiß dieses Fenster nicht – also sagt es das
+        // und nicht den Namen irgendeines Griffs.
+        setNote('Die Verbindung war kurz weg. Der Stand ist neu geladen.');
+        return;
+      }
+      const { letzte, anzahl } = grund;
+      const wo = letzte.spreadIndex !== undefined ? ` (Doppelseite ${letzte.spreadIndex + 1})` : '';
+      setNote(
+        anzahl === 1
+          ? `Aus einem anderen Fenster: ${letzte.label}${wo}`
+          : `Aus einem anderen Fenster: ${anzahl} Änderungen, zuletzt ${letzte.label}${wo}`,
+      );
+    },
+    [loadInfo, neuRendern],
+  );
+
+  const { fenster } = useEreignisse({ aktiv: !bare, onNachladen: nachladen });
 
   useEffect(() => {
     if (bare) return;
@@ -926,6 +968,25 @@ export function App() {
           </span>
 
           {/*
+          Dass jemand anders am selben Buch sitzt, muss zu sehen sein, bevor
+          etwas passiert – sonst ist die erste Auskunft darüber eine Seite, die
+          sich von selbst geändert hat. Kein Knopf: Es gibt nichts anzuklicken.
+
+          Neutral gefärbt, mit Absicht: Ein zweites Fenster ist keine Warnung
+          über das Buch (dafür stehen Rot, Gelb und Grün) und keine Auswahl
+          (dafür Türkis), sondern eine Auskunft über die Lage.
+        */}
+          {fenster > 1 && (
+            <span
+              style={S.fenster}
+              title={`Das Buch ist in ${fenster} Fenstern offen. Änderungen aus den anderen erscheinen hier von selbst.`}
+            >
+              <span style={S.fensterPunkt} />
+              {fenster} Fenster
+            </span>
+          )}
+
+          {/*
           Eine nicht eingehängte Quelle fällt sonst erst auf, wenn Bilder im PDF
           fehlen – der Grundbestand liegt auf einem Netzlaufwerk.
         */}
@@ -1272,6 +1333,8 @@ const S = {
     padding: 0,
   },
   punkt: { width: 7, height: 7, borderRadius: '50%', background: T.warn },
+  fenster: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: T.fg3 },
+  fensterPunkt: { width: 7, height: 7, borderRadius: '50%', background: T.fg4 },
   /** Wie ein Segmentknopf, nur schmaler – das Zeichen trägt keine Wortlänge. */
   verlaufKnopf: {
     font: 'inherit',
