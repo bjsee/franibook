@@ -241,6 +241,19 @@ selbst lädt, nimmt darum `standVersion` in ihre Ladeabhängigkeit
 Auswahl, Filter und Scrollstand bleiben. Ein `key` an der Ansicht wäre eine Zeile
 weniger und würfe sie bei jedem Cmd+Z weg.
 
+**Dieselbe Kette trägt die anderen Fenster** (`useEreignisse.ts`). Ändert jemand
+im zweiten Tab etwas, meldet der Server es (`ereignisseHoeren` in `api.ts`), und
+die Oberfläche tut genau dasselbe wie nach einem Zurücknehmen: `loadInfo`,
+`neuRendern`, `standVersion` hoch. Eine Ansicht, die `standVersion` beachtet, ist
+damit ohne eigenes Zutun mehrfenstertauglich — und eine, die es nicht tut, zeigt
+einen Stand, den es nicht mehr gibt.
+
+Zwei Dinge macht der Haken dabei von sich aus, und beide gehören nicht in eine
+Ansicht: Er **sammelt Meldungen, solange ein Zeiger unten ist** (ein Nachladen
+mitten im Ziehen verlöre das Bild unter dem Griff), und er **schickt vorher alles
+Ausstehende zum Server** (`ausstehendSenden`), damit ein verzögerter PATCH nicht
+nach dem Nachladen einträfe und die eben geholte Fassung überschriebe.
+
 ## Was aus dem Kern kommen darf
 
 `@franibook/core` ist I/O-frei und im Browser lauffähig. Die Oberfläche nutzt
