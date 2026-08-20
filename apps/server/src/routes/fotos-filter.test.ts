@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { baueApp } from '../app.js';
 import { Project } from '../project.js';
 import { Sources } from '../sources.js';
+import { Zuletzt } from '../zuletzt.js';
 import type { Kontext } from './kontext.js';
 
 async function probe(): Promise<{ app: FastifyInstance; project: Project }> {
@@ -46,6 +47,7 @@ async function probe(): Promise<{ app: FastifyInstance; project: Project }> {
   const kontext = {
     project,
     sources,
+    zuletzt: new Zuletzt(join(dir, 'zuletzt.json')),
     previews: null as never,
     decodes: null as never,
     abstaende: null as never,

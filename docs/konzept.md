@@ -370,6 +370,31 @@ Fabian18.franibook/
 
 Die Aufteilung in mehrere Dateien ist bewusst: `book.json` ändert sich bei jeder Layoutaktion, `photos.json` praktisch nie. Ein Autosave schreibt nur, was sich geändert hat.
 
+> **Korrektur (18. August 2026): eine Datei mit dieser Endung, kein Verzeichnis**
+>
+> Die Endung `.franibook` trägt jetzt die **Datei** selbst —
+> `franziska-2019.franibook` ist der ganze Stand, und die Notanker liegen daneben
+> in `franziska-2019.franibook.history/`. Der Grund ist die Bedienung: Öffnen und
+> „Speichern unter" sind Handgriffe an einer Datei, und ein Dateidialog wählt
+> eine Datei. Ein Verzeichnis mit einem festen Dateinamen darin ließe sich weder
+> auswählen noch weitergeben, ohne es zu erklären.
+>
+> **Was ein Pfad bedeutet, entscheidet allein die Endung** (`project/ablage.ts`),
+> nicht ein Blick auf die Platte: Ein „Speichern unter" nennt eine Datei, die es
+> noch nicht gibt. Endet ein Pfad nicht auf `.franibook`, gilt er als Verzeichnis
+> der alten Form mit `project.json` und `history/` darin — deshalb blieb
+> `FRANIBOOK_PROJECT=.franibook-project` gültig und der Bestand musste nicht
+> umziehen.
+>
+> Damit kann der Server die Datei **zur Laufzeit wechseln**:
+> `POST /api/ablage/oeffnen`, `/speichern-unter`, `/neu` (`routes/ablage.ts`), und
+> welche Projekte zuletzt offen waren, steht außerhalb jedes Projekts in
+> `~/.franibook/zuletzt.json`. Der Pfad kommt aus dem Dateidialog des Systems
+> (`osascript`), aus demselben Grund, aus dem der Quellordner getippt wird: Ein
+> Browser gibt keinen Pfad heraus, der Server läuft aber auf demselben Rechner.
+> Ein Wechsel ist eine Barriere im Verlauf und legt keinen Anker — die alte Datei
+> liegt vollständig an ihrem Platz.
+
 ### Schreibstrategie
 
 Jede Datei wird atomar geschrieben (`write` in `*.tmp` im selben Verzeichnis, `fsync`, `rename`). Damit ist ein halb geschriebenes Projekt bei Absturz oder Stromausfall ausgeschlossen. Autosave läuft debounced 800 ms nach der letzten Änderung, zusätzlich beim Verlassen der Seite über `navigator.sendBeacon`.
@@ -3468,6 +3493,22 @@ Der Umschlag wurde bei der Gelegenheit vom `?cover`-Sonderweg zu einem echten
 Reiter; die alte Adresse wählt ihn nur noch aus. Der Grund für den Sonderweg —
 die Hauptansicht nicht anfassen zu müssen — ist mit dem Umbau der Kopfzeile
 weggefallen.
+
+> **Nachgezogen (18. August 2026): die Projektwahl ist ebenso ein Reiter**
+>
+> Als der Server die Projektdatei wechseln lernte, war ihr Zugang zuerst der
+> **Buchname in der Kopfzeile** — mit dem Argument, die Reiter seien die Ansichten
+> _auf_ ein Buch und die Wahl stehe darüber. Das ist genau der Sonderweg, den
+> dieser Abschnitt zwei Zeilen höher für den Umschlag abgeschafft hat: eine zweite
+> Navigationsart neben der Reiterleiste, die niemand sucht, wo er sie findet.
+> Jetzt ist „Projekt" der erste Reiter von links, der Buchname daneben nur noch
+> Auskunft wie die Jahresspanne.
+>
+> Ebenfalls zurückgenommen: ein Auftritt **ohne** Kopfzeile, solange kein Buch
+> geladen ist. „Die Kopfzeile steht in allen Varianten" gilt auch für ein leeres
+> Projekt — sie kostet dort nichts und ist der Weg zu den Bildquellen, die als
+> nächstes gebraucht werden. Geblieben ist nur, dass ein leeres Projekt mit der
+> Projektwahl **startet**.
 
 ### Adressen
 

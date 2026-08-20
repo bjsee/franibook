@@ -5,6 +5,16 @@ const FIXTURES = resolve('tests/parity/fixtures');
 const CACHE = resolve('tests/parity/.cache');
 const OUT = resolve('tests/parity/.out');
 const PROJECT = resolve('tests/parity/.project');
+/**
+ * Auch die Liste der zuletzt geöffneten Projekte gehört in den Testordner.
+ *
+ * Sonst schreibt der Testserver seinen Fixture-Stand in
+ * `~/.franibook/zuletzt.json` — und der nächste `just start` **ohne**
+ * `FRANIBOOK_PROJECT` öffnet die vier Fixtures statt des echten Buches. Genau so
+ * passiert; derselbe Gedanke wie bei `FRANIBOOK_PROJECT` eine Zeile höher, nur
+ * für die Datei außerhalb jedes Projekts.
+ */
+const ZULETZT = resolve('tests/parity/.project-zuletzt.json');
 
 /**
  * Der Parity-Test braucht beide Prozesse: den Server, der importiert und
@@ -48,6 +58,7 @@ export default defineConfig({
         // sonst einen Stand, den der nächste Lauf einliest – der Hauptfall
         // würde dann verschobene statt automatischer Ausschnitte vergleichen.
         FRANIBOOK_PROJECT: PROJECT,
+        FRANIBOOK_ZULETZT: ZULETZT,
         FRANIBOOK_FRESH: '1',
         // Keine Bildmerkmale: Die Erkennung läuft nach dem Anlauf im
         // Hintergrund und verschiebt danach die automatischen Ausschnitte.

@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { baueApp } from '../app.js';
 import { Project } from '../project.js';
 import { Sources } from '../sources.js';
+import { Zuletzt } from '../zuletzt.js';
 import type { Kontext } from './kontext.js';
 
 async function server() {
@@ -27,6 +28,7 @@ async function server() {
   const kontext = {
     project,
     sources,
+    zuletzt: new Zuletzt(join(dir, 'zuletzt.json')),
     previews: null as never,
     decodes: null as never,
     abstaende: null as never,

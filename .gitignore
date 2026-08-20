@@ -11,6 +11,13 @@ dist/
 spikes/out/
 
 # Projektdaten und Caches
+#
+# `*.franibook` ist seit dem 18.08.2026 die Projektdatei selbst (vorher ein
+# Verzeichnis dieses Namens): ein ganzer Buchstand samt Fotoliste. Wer eines
+# davon zum Ausprobieren im Arbeitsverzeichnis ablegt, soll es nicht versehentlich
+# einchecken — die Notanker daneben ebenso wenig.
+*.franibook
+*.franibook.history/
 *.franibook/cache/
 *.franibook.bak-*/
 
@@ -21,6 +28,7 @@ spikes/out/
 .franibook-cache/
 .franibook-out/
 tests/parity/.cache/
+tests/parity/.project-zuletzt.json
 tests/parity/.project/
 tests/parity/.out/
 tests/parity/.artifacts/

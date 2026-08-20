@@ -14,13 +14,15 @@
  * liegen in `routes/` je Ressource — sie standen einmal zu sechzigst in dieser
  * Datei, und eine Route war nur noch über die Suche zu finden.
  */
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { baueApp } from './app.js';
 import { DecodeCache } from './decode.js';
 import { PreviewCache } from './previews.js';
 import { Project } from './project.js';
 import { Sources } from './sources.js';
 import { AbstandsErkennung, VisionErkennung } from './vision.js';
+import { Zuletzt } from './zuletzt.js';
 import { shutdownImport } from './import.js';
 import type { Kontext } from './routes/kontext.js';
 
@@ -35,7 +37,34 @@ const IMPORT_LIMIT = process.env['FRANIBOOK_LIMIT']
   ? Number(process.env['FRANIBOOK_LIMIT'])
   : undefined;
 
-const PROJECT_DIR = resolve(process.env['FRANIBOOK_PROJECT'] ?? '.franibook-project');
+/**
+ * Welche Projekte zuletzt offen waren — außerhalb jedes Projekts.
+ *
+ * `FRANIBOOK_ZULETZT` gibt es für Tests und für einen zweiten Rechner, auf dem
+ * die Liste nicht im Heimatverzeichnis stehen soll.
+ */
+const zuletzt = new Zuletzt(
+  resolve(process.env['FRANIBOOK_ZULETZT'] ?? join(homedir(), '.franibook', 'zuletzt.json')),
+);
+
+/**
+ * Welche Projektdatei beim Start geöffnet wird — in dieser Reihenfolge:
+ *
+ * 1. `FRANIBOOK_PROJECT`, wenn gesetzt. Eine ausdrückliche Vorgabe schlägt alles:
+ *    `just probe` schreibt damit in seinen Wegwerf-Ordner, und der Parity-Test
+ *    darf nicht davon abhängen, woran gerade gearbeitet wurde.
+ * 2. Das zuletzt geöffnete Projekt, sofern seine Datei noch da ist. Ein Eintrag,
+ *    dessen Datei fehlt, wird übersprungen statt neu angelegt — sonst entstünde
+ *    an der Stelle eines gelöschten Projekts stillschweigend ein leeres.
+ * 3. `.franibook-project`, die Vorgabe von früher. Sie bleibt der Rückfall,
+ *    damit ein Bestand ohne Liste beim ersten Start nach diesem Umbau genau da
+ *    weitermacht, wo er war.
+ */
+const PROJECT_DIR = resolve(
+  process.env['FRANIBOOK_PROJECT'] ??
+    (await zuletzt.liste()).find((v) => v.vorhanden)?.pfad ??
+    '.franibook-project',
+);
 
 /**
  * Die Bildquellen des Projekts.
@@ -67,6 +96,11 @@ const abstaende = new AbstandsErkennung(CACHE_DIR);
 const kontext: Kontext = {
   project,
   sources,
+  zuletzt,
+  // Was ein geöffnetes Projekt nachzieht, ist dieselbe Kette wie beim Start.
+  // Sie steht hier, weil sie `vision` und `previews` braucht — beides kennt
+  // keine Route (Begründung an `nachlauf` in `routes/kontext.ts`).
+  nachlauf,
   previews,
   decodes,
   abstaende,
@@ -101,6 +135,7 @@ async function start(): Promise<void> {
   // der Hook jede Anfrage mit 503 und dem Satz, der gerade zutrifft.
   await app.listen({ port: PORT, host: '127.0.0.1' });
   process.stdout.write(`Server auf http://127.0.0.1:${PORT}\n`);
+  process.stdout.write(`Projekt: ${project.ablageInfo.pfad}\n`);
 
   anlauf = 'Das gespeicherte Projekt wird geladen.';
 
@@ -176,16 +211,33 @@ async function start(): Promise<void> {
     await project.save();
   }
 
+  // Der Ort gehört in die Liste, sobald der Server dort arbeitet — auch bei
+  // einem frisch angelegten Projekt: Beim nächsten Start ist er damit der Weg
+  // zurück, ohne dass jemand einen Pfad merken muss.
+  await zuletzt.merke(project.ablageInfo);
+
   // Ab hier ist der Server auskunftsfähig. Vor den Vorschauen: Die wärmen im
   // Hintergrund, und auf sie zu warten hieße, die Oberfläche minutenlang
   // hinzuhalten, obwohl sie längst blättern könnte.
   anlauf = null;
 
-  // Vorschauen im Hintergrund aufwärmen, damit die Oberfläche sofort nutzbar
-  // ist. Wer schneller blättert, als der Cache füllt, erzeugt sie on demand.
-  //
-  // Danach die Bildmerkmale, nicht parallel: Beide lesen dieselben Dateien und
-  // dieselben Kerne, und die Vorschauen sind das, worauf jemand wartet.
+  nachlauf();
+}
+
+/**
+ * Was ein Bestand im Hintergrund noch bekommt: Vorschauen, Merkmale, Zahlen.
+ *
+ * Vorschauen zuerst, damit die Oberfläche sofort nutzbar ist — wer schneller
+ * blättert, als der Cache füllt, erzeugt sie on demand. Danach die Bildmerkmale,
+ * nicht parallel: Beide lesen dieselben Dateien und dieselben Kerne, und die
+ * Vorschauen sind das, worauf jemand wartet.
+ *
+ * Eine eigene Funktion, seit der Server die Projektdatei wechseln kann: Ein
+ * geöffnetes Projekt braucht genau dieselbe Kette wie ein gestarteter Server,
+ * und sie zweimal hinzuschreiben hieße, sie beim nächsten Schritt einmal zu
+ * vergessen. Niemand wartet darauf, auch der Aufrufer nicht.
+ */
+function nachlauf(): void {
   void previews
     .warm(project.effectivePhotoList(), 'preview', 6)
     .then(() => process.stdout.write('Vorschaubilder vollständig\n'))
