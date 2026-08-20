@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 export type View =
+  | 'projekt'
   | 'overview'
   | 'spread'
   | 'groups'
@@ -39,6 +40,15 @@ export type View =
   | 'neuanordnen';
 
 export type Route =
+  /**
+   * Die Projektwahl: welche Datei offen ist, welche zuletzt offen waren.
+   *
+   * Eine eigene Station und kein Dialog: Sie ist der Schritt **vor** dem Buch —
+   * bei einem leeren Projekt füllt sie das Fenster allein, sonst erreicht man sie
+   * über den Buchnamen in der Kopfzeile. Als Dialog wäre sie nach dem ersten
+   * Browser-Zurück weg, mitten in einem Wechsel.
+   */
+  | { view: 'projekt' }
   | { view: 'overview' }
   /**
    * Die Doppelseite, wahlweise mit dem Platz, auf den geschaut werden soll.
@@ -86,6 +96,7 @@ const VERSCHMELZ_MS = 1500;
 
 /** Pfad je Ansicht, ohne die Doppelseiten-Nummer und ohne Gruppenkennung. */
 const PFADE: Record<View, string> = {
+  projekt: '/projekt',
   overview: '/',
   spread: '/doppelseite',
   groups: '/gruppen',
@@ -162,7 +173,14 @@ export function routeVon(pfad: string, suche = ''): Route {
   }
 
   // Die übrigen Ansichten tragen keine Kennung im Pfad.
-  for (const view of ['years', 'fotodaten', 'sources', 'cover', 'neuanordnen'] as const) {
+  for (const view of [
+    'projekt',
+    'years',
+    'fotodaten',
+    'sources',
+    'cover',
+    'neuanordnen',
+  ] as const) {
     if (PFADE[view] === `/${erstes}`) return { view };
   }
   return { view: 'overview' };
@@ -170,6 +188,7 @@ export function routeVon(pfad: string, suche = ''): Route {
 
 /** Beschriftung je Ansicht, für den Fenstertitel. */
 const WORTE: Record<View, string> = {
+  projekt: 'Projekt',
   overview: 'Übersicht',
   spread: 'Doppelseite',
   groups: 'Gruppen',

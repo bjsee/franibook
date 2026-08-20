@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { pfadVon, querySauber, type Route, routeVon, titelVon } from './router.js';
 
 const ALLE: Route[] = [
+  { view: 'projekt' },
   { view: 'overview' },
   { view: 'spread', index: 0 },
   { view: 'spread', index: 41 },
@@ -33,6 +34,7 @@ describe('pfadVon', () => {
 
   it('nennt die Ansichten deutsch', () => {
     expect(pfadVon({ view: 'overview' })).toBe('/');
+    expect(pfadVon({ view: 'projekt' })).toBe('/projekt');
     expect(pfadVon({ view: 'sources' })).toBe('/bildquellen');
     expect(pfadVon({ view: 'edit' })).toBe('/aufteilung');
     expect(pfadVon({ view: 'cover' })).toBe('/umschlag');

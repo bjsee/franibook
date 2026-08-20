@@ -65,19 +65,33 @@ ein bereits laufender `pnpm dev` muss dafür beendet sein (`reuseExistingServer:
 
 ### Umgebungsvariablen des Servers
 
-| Variable              | Vorgabe                                   | Wirkung                                           |
-| --------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `FRANIBOOK_SOURCE`    | `/Users/nutzer/fotos/buch` | Erste Bildquelle beim allerersten Start           |
-| `FRANIBOOK_PROJECT`   | `.franibook-project`                      | Persistiertes Projekt (JSON)                      |
-| `FRANIBOOK_CACHE`     | `.franibook-cache`                        | WebP-Vorschauen                                   |
-| `FRANIBOOK_OUT`       | `.franibook-out`                          | PDF-Ausgabe                                       |
-| `FRANIBOOK_LIMIT`     | —                                         | Import auf n Fotos begrenzen (schneller Start)    |
-| `FRANIBOOK_FRESH`     | —                                         | Gespeichertes Projekt ignorieren, neu importieren |
-| `FRANIBOOK_NO_VISION` | —                                         | Keine Bildmerkmale erkennen (Gesichter, Salienz)  |
-| `PORT`                | `5174`                                    | Serverport                                        |
+| Variable              | Vorgabe                                        | Wirkung                                           |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------- |
+| `FRANIBOOK_SOURCE`    | `/Users/nutzer/fotos/buch`      | Erste Bildquelle beim allerersten Start           |
+| `FRANIBOOK_PROJECT`   | zuletzt geöffnetes, sonst `.franibook-project` | Projektdatei beim Start (siehe unten)             |
+| `FRANIBOOK_ZULETZT`   | `~/.franibook/zuletzt.json`                    | Liste der zuletzt geöffneten Projekte             |
+| `FRANIBOOK_CACHE`     | `.franibook-cache`                             | WebP-Vorschauen                                   |
+| `FRANIBOOK_OUT`       | `.franibook-out`                               | PDF-Ausgabe                                       |
+| `FRANIBOOK_LIMIT`     | —                                              | Import auf n Fotos begrenzen (schneller Start)    |
+| `FRANIBOOK_FRESH`     | —                                              | Gespeichertes Projekt ignorieren, neu importieren |
+| `FRANIBOOK_NO_VISION` | —                                              | Keine Bildmerkmale erkennen (Gesichter, Salienz)  |
+| `PORT`                | `5174`                                         | Serverport                                        |
 
 Ohne `FRANIBOOK_LIMIT` importiert ein Kaltstart den vollen Bestand (~830 Fotos) und
 erzeugt anschließend alle Vorschauen — beim Entwickeln lohnt ein Limit.
+
+**Ein Projekt ist eine Datei** — `franziska-2019.franibook`, die Notanker daneben in
+`franziska-2019.franibook.history/`. Öffnen, „Speichern unter" und „Neues Projekt"
+laufen zur Laufzeit über `/api/ablage` und den Dateidialog des Systems; die
+Oberfläche zeigt sie unter `/projekt`, erreichbar über den Buchnamen in der
+Kopfzeile. Endet ein Pfad **nicht** auf `.franibook`, gilt er als Verzeichnis der
+alten Form (`project.json` und `history/` darin) — deshalb bleibt
+`FRANIBOOK_PROJECT=.franibook-project` gültig und `just probe` schreibt weiter in
+seinen Wegwerf-Ordner. Ohne gesetztes `FRANIBOOK_PROJECT` öffnet der Server das
+zuletzt geöffnete Projekt, sofern seine Datei noch da ist.
+
+Ein Testlauf mit eigenem Stand setzt **auch** `FRANIBOOK_ZULETZT`: Sonst steht das
+Wegwerf-Projekt anschließend oben in der Liste des echten Betriebs.
 
 ## Architektur
 

@@ -27,6 +27,7 @@ import { baueApp } from '../app.js';
 import { DecodeCache } from '../decode.js';
 import { Project } from '../project.js';
 import { Sources } from '../sources.js';
+import { Zuletzt } from '../zuletzt.js';
 import type { Kontext } from './kontext.js';
 import { UNDO_ROUTEN } from './undo.js';
 
@@ -119,6 +120,7 @@ async function probe(): Promise<Probe> {
   const kontext = {
     project,
     sources,
+    zuletzt: new Zuletzt(join(dir, 'zuletzt.json')),
     previews: null as never,
     decodes,
     abstaende: null as never,
