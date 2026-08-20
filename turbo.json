@@ -18,10 +18,12 @@
       "passThroughEnv": [
         "FRANIBOOK_SOURCE",
         "FRANIBOOK_PROJECT",
+        "FRANIBOOK_ZULETZT",
         "FRANIBOOK_CACHE",
         "FRANIBOOK_OUT",
         "FRANIBOOK_LIMIT",
         "FRANIBOOK_FRESH",
+        "FRANIBOOK_NO_VISION",
         "FRANIBOOK_WEB_PORT",
         "FRANIBOOK_API_PORT",
         "PORT"

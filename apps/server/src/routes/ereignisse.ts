@@ -67,6 +67,10 @@ function fensterVon(req: FastifyRequest): string | undefined {
 const MELDET_OHNE_SCHRITT: Record<string, string> = {
   'POST /api/undo': 'Zurückgenommen',
   'POST /api/redo': 'Wiederholt',
+  // Das Buch bleibt, wie es war — aber es heißt jetzt anders und liegt woanders.
+  // Jedes Fenster schreibt den Namen in seine Kopfzeile, und der wäre sonst bis
+  // zum nächsten Griff der alte.
+  'POST /api/ablage/speichern-unter': 'Projekt anderswo gespeichert',
 };
 
 /**
@@ -90,6 +94,13 @@ const MELDET_NICHT = new Set([
   'POST /api/videos',
   'GET /api/videos/:kennung/standbild',
   'GET /api/videos/umleitungen',
+  // Der Dialog fragt einen Menschen und gibt einen Pfad zurück. Geschehen ist
+  // damit nichts — erst `oeffnen`, `neu` oder `speichern-unter` tun etwas, und
+  // die melden sich selbst.
+  'POST /api/ablage/dialog',
+  // Die Liste der letzten Projekte ist kein Buch. Sie steht nur in der
+  // Projektwahl, und die holt sie beim Öffnen frisch.
+  'DELETE /api/ablage/zuletzt',
   // Die Leitung selbst.
   'GET /api/ereignisse',
 ]);

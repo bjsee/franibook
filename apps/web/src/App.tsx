@@ -57,6 +57,7 @@ import { Baum } from './baum/Baum.js';
 import { LayoutEditor } from './LayoutEditor.js';
 import { PhotoGroups } from './PhotoGroups.js';
 import { PhotoSources } from './PhotoSources.js';
+import { Projektwahl } from './Projektwahl.js';
 import { YearEvents } from './YearEvents.js';
 import { InsertSpread } from './InsertSpread.js';
 import { SpreadEditor } from './SpreadEditor.js';
@@ -75,6 +76,11 @@ import { Link, type NavOptionen, type Route, useRoute, type View } from './route
 const ANLAUF_TAKT_MS = 1000;
 
 const REITER: { id: View; label: string }[] = [
+  // Zuerst, weil er vor allen anderen kommt: Welches Buch offen ist, entscheidet
+  // sich, bevor man es ansieht. Ein echter Reiter und kein Sonderweg über die
+  // Kopfzeile — dieselbe Entscheidung wie beim Umschlag, der vom `?cover`-Weg zu
+  // einem Reiter wurde (`docs/konzept.md`, „Drei Rahmen um dieselbe Bühne").
+  { id: 'projekt', label: 'Projekt' },
   { id: 'overview', label: 'Übersicht' },
   { id: 'spread', label: 'Doppelseite' },
   { id: 'groups', label: 'Gruppen' },
@@ -306,6 +312,26 @@ export function App() {
   useEffect(() => {
     if (route.view === 'spread') setLetzterSpread(route.index);
   }, [route]);
+
+  /**
+   * Ohne Buch beginnt die Oberfläche mit der Projektwahl.
+   *
+   * Der vorgelagerte Schritt: Ein Projekt ohne Fotos hätte neun Reiter auf
+   * nichts, und der erste Handgriff wäre in jedem Fall „öffnen" oder „neu". Wer
+   * danach bewusst in eine andere Ansicht geht, bleibt dort — deshalb nur beim
+   * ersten Eintreffen der Projektauskunft und nicht bei jedem Rendern.
+   *
+   * `bare` ausgenommen: Diese Adresse zeigt eine nackte Doppelseite für den
+   * Parity-Test, und die darf keine Navigation auslösen.
+   */
+  const [wahlGeprueft, setWahlGeprueft] = useState(false);
+  useEffect(() => {
+    if (bare || !info || wahlGeprueft) return;
+    setWahlGeprueft(true);
+    if (info.photoCount === 0 && info.spreadCount === 0 && route.view === 'overview') {
+      navigieren({ view: 'projekt' }, { ersetzen: true });
+    }
+  }, [bare, info, wahlGeprueft, route.view, navigieren]);
 
   /**
    * Projektdaten holen – und warten, solange der Server noch anläuft.
@@ -759,6 +785,24 @@ export function App() {
     navigieren({ view: 'neuanordnen' });
   }
 
+  /**
+   * Nach einem Projektwechsel gilt nichts weiter, was geladen war.
+   *
+   * Wie nach einem Notanker, nur noch grundsätzlicher: Es ist nicht derselbe
+   * Stand in anderer Fassung, sondern ein anderes Buch. Die Ansicht bleibt
+   * dabei die Projektwahl — dort ist gerade geklickt worden, dort steht die
+   * Meldung, und wer weiterblättern will, klickt einen Reiter.
+   */
+  function nachProjektwechsel(satz: string) {
+    setProbePatch({});
+    loadInfo();
+    neuRendern();
+    setStandVersion((v) => v + 1);
+    setSpread(null);
+    setLetzterSpread(0);
+    setNote(satz);
+  }
+
   /** Nach dem Übernehmen: Das Buch ist ein anderes, also gilt nichts Geladenes weiter. */
   function nachNeuanordnen(satz: string) {
     // Die Frage ist beantwortet: Ein nächster Aufruf soll nicht wieder mit
@@ -899,6 +943,18 @@ export function App() {
         <header style={S.kopf}>
           <span style={S.marke}>
             <strong style={S.name}>Franibook</strong>
+            {/*
+            Der Name des offenen Buches, als Auskunft wie die Jahresspanne
+            daneben — **kein** Link. Der Weg zur Projektwahl ist ihr Reiter; ein
+            anklickbarer Name wäre eine zweite Navigationsart neben der
+            Reiterleiste, und genau die hat der Umbau der Kopfzeile abgeschafft
+            (`docs/konzept.md`: der Umschlag vom `?cover`-Sonderweg zum Reiter).
+          */}
+            {info && (
+              <span style={S.buch} title={info.ablage.pfad}>
+                {info.ablage.name}
+              </span>
+            )}
             {spanne && <span style={S.spanne}>{spanne}</span>}
           </span>
 
@@ -1023,7 +1079,11 @@ export function App() {
             </span>
           )}
 
-          {view !== 'cover' && (
+          {/*
+          Nicht am Umschlag (der hat seinen eigenen Export) und nicht an der
+          Projektwahl: Dort geht es um die Datei, nicht um das Buch darin.
+        */}
+          {view !== 'cover' && view !== 'projekt' && (
             <>
               {/*
               Der Abzug steht neben dem Druck-PDF und nicht darin versteckt: Er
@@ -1064,7 +1124,19 @@ export function App() {
           />
         )}
 
-        {view === 'overview' && info ? (
+        {view === 'projekt' && info ? (
+          <Projektwahl
+            offen={info.ablage}
+            photoCount={info.photoCount}
+            busy={!!busy}
+            onGewechselt={nachProjektwechsel}
+            onUmbenannt={(satz) => {
+              loadInfo();
+              setNote(satz);
+            }}
+            onZuBildquellen={() => navigieren({ view: 'sources' })}
+          />
+        ) : view === 'overview' && info ? (
           <div style={S.inhaltReihe}>
             <div style={S.scrollFlaeche}>
               <Overview
@@ -1320,6 +1392,8 @@ const S = {
     letterSpacing: 'var(--tracking-tight)',
   },
   spanne: { fontSize: 13, color: T.fg3, fontVariantNumeric: 'tabular-nums' as const },
+  /** Der Buchname in der Kopfzeile: derselbe Ton wie die Jahresspanne daneben. */
+  buch: { fontSize: 13, color: T.fg2 },
   offline: {
     display: 'flex',
     alignItems: 'center',

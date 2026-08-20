@@ -3,5 +3,11 @@ dist/
 .turbo/
 spikes/out/
 
+# Projektstände: Das sind Daten des Betriebs, keine Quelltexte — und der Server
+# schreibt sie im Hintergrund, während `pnpm format` läuft.
+*.franibook
+.franibook-project*/
+apps/server/.franibook-project*/
+
 # Arbeitskopien paralleler Agenten
 .claude/worktrees/

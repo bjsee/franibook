@@ -219,6 +219,8 @@ export interface Kapitel {
 }
 
 export interface ProjectInfo {
+  /** Welche Projektdatei offen ist und wie sie heißt. */
+  ablage: AblageInfo;
   /** Die Ordner, aus denen das Buch gespeist wird. */
   sources: { id: string; label: string; root: string; erreichbar: boolean }[];
   /**
@@ -308,6 +310,70 @@ export interface ImportDiff {
 }
 
 export const projektLaden = () => hole<ProjectInfo>('/api/project');
+
+// ─── Die Projektdatei ───────────────────────────────────────────────────────
+
+/** Wo das offene Projekt liegt und wie es heißt. */
+export interface AblageInfo {
+  /** Der volle Pfad zur Projektdatei. */
+  pfad: string;
+  /** Der Dateiname ohne Endung — was die Kopfzeile zeigt. */
+  name: string;
+}
+
+/**
+ * Ein Projekt, das zuletzt offen war.
+ *
+ * `vorhanden` sagt, ob die Datei noch da ist: Ein fehlendes Projekt wird nicht
+ * aus der Liste geworfen (es kann ein abgehängtes Laufwerk sein), sondern blass
+ * gezeigt und auf Verlangen vergessen.
+ */
+export interface LetztesProjekt extends AblageInfo {
+  /** Wann es zuletzt offen war. */
+  zeit: string;
+  vorhanden: boolean;
+  bytes?: number;
+  /** Wann die Datei zuletzt geschrieben wurde, falls sie da ist. */
+  gespeichert?: string;
+}
+
+export const ablageLaden = () =>
+  hole<{ ablage: AblageInfo; zuletzt: LetztesProjekt[]; endung: string }>('/api/ablage');
+
+/**
+ * Öffnet den Dateidialog des Systems.
+ *
+ * `pfad: null` heißt abgebrochen und ist kein Fehler. Zwei Schritte statt einem
+ * — erst wählen, dann öffnen oder speichern —, damit ein Rechner ohne
+ * `osascript` mit einem getippten Pfad weiterkommt.
+ */
+export const dateidialog = (art: 'oeffnen' | 'speichern' | 'neu') =>
+  sende<{ pfad: string | null }>('POST', '/api/ablage/dialog', { art });
+
+/** Öffnet eine andere Projektdatei. Danach ist alles Geladene ungültig. */
+export const projektOeffnen = (pfad: string) =>
+  sende<{ ok: true; pfad: string; name: string; photoCount: number; spreadCount: number }>(
+    'POST',
+    '/api/ablage/oeffnen',
+    { pfad },
+  );
+
+/** Schreibt den Stand an eine andere Stelle und arbeitet dort weiter. */
+export const projektSpeichernUnter = (pfad: string) =>
+  sende<{ ok: true; pfad: string; name: string }>('POST', '/api/ablage/speichern-unter', { pfad });
+
+/** Beginnt ein leeres Projekt. Die Bildquellen bleiben, die Fotos nicht. */
+export const projektNeu = (pfad: string) =>
+  sende<{ ok: true; pfad: string; name: string; hinweise: string[] }>('POST', '/api/ablage/neu', {
+    pfad,
+  });
+
+/** Nimmt ein Projekt aus der Liste der letzten. Die Datei bleibt liegen. */
+export const letztesVergessen = (pfad: string) =>
+  sende<{ ok: true; zuletzt: LetztesProjekt[] }>(
+    'DELETE',
+    `/api/ablage/zuletzt?pfad=${encodeURIComponent(pfad)}`,
+  );
 
 /**
  * Was sich an den Einstellungen ändern lässt.

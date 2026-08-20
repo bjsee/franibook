@@ -15,6 +15,7 @@ import { baueApp } from './app.js';
 import { Ereignisstrom, FENSTER_KOPF, type Hoerer } from './ereignisse.js';
 import { Project } from './project.js';
 import { Sources } from './sources.js';
+import { Zuletzt } from './zuletzt.js';
 import { MELDEENTSCHEIDUNG } from './routes/ereignisse.js';
 import type { Kontext } from './routes/kontext.js';
 import { UNDO_ROUTEN } from './routes/undo.js';
@@ -180,6 +181,7 @@ async function probe() {
   const kontext = {
     project,
     sources,
+    zuletzt: new Zuletzt(join(dir, 'zuletzt.json')),
     previews: null as never,
     decodes: null as never,
     abstaende: null as never,

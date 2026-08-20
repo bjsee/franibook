@@ -6,8 +6,8 @@
  * Ausnahme ist `einwerfen`, das eine **neue** Datei in der ersten Bildquelle
  * anlegt (`project/einwurf.ts`).
  */
-import { copyFile, mkdir, readFile, rename } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { copyFile, mkdir, readFile, rename, stat } from 'node:fs/promises';
+import { basename, dirname } from 'node:path';
 import {
   type Chapter,
   type CoverDesign,
@@ -123,13 +123,8 @@ import * as doppel from './project/doppel.js';
 import type { DoppelBericht } from './project/doppel.js';
 import type { AbstandsErkennung, VisionErkennung } from './vision.js';
 import * as layoutDokument from './project/layout-dokument.js';
-import {
-  type Anker,
-  ANKER_ORDNER,
-  ankerLegen,
-  ankerLesen,
-  ankerListe,
-} from './project/notanker.js';
+import { type Ablage, ablageVon } from './project/ablage.js';
+import { type Anker, ankerLegen, ankerLesen, ankerListe } from './project/notanker.js';
 import * as seiten from './project/seiten.js';
 import { schreibeAtomar } from './project/speichern.js';
 import * as umschlag from './project/umschlag.js';
@@ -504,6 +499,74 @@ export interface PhotoView extends Photo {
   video?: VideoVerweis;
 }
 
+/**
+ * Die Einstellungen eines Buches, wie sie ohne jede Entscheidung gelten.
+ *
+ * Eine Funktion und nicht eine Konstante: Sie liefert jedes Mal ein frisches
+ * Objekt. `settings` wird an vielen Stellen mit `{ ...this.settings, ... }`
+ * ersetzt, aber auch direkt beschrieben (`project.settings.timeline = …` in den
+ * Routen) — eine geteilte Konstante wäre nach dem ersten solchen Griff nicht
+ * mehr die Vorgabe, sondern der Stand irgendeines Projekts.
+ *
+ * Gebraucht an zwei Stellen: beim Anlegen eines Projekts und bei `Project.neu()`
+ * — ein neues Buch soll aussehen wie eines aus einem frischen Server und nicht
+ * die Regler des vorherigen erben.
+ */
+export function standardSettings(): ProjectSettings {
+  return {
+    targetPages: 160,
+    chapterOpeners: true,
+    // Aus: Die leere Jahresseite ist der Atemzug vor dem Jahrgang. Wer die
+    // Seiten braucht, schaltet die dichten Auftakte im Buchpanel dazu; ein
+    // geladenes Projekt ohne dieses Feld bleibt damit beim Bestand.
+    chapterOpenersDense: false,
+    // An den Zeitstrahl gekoppelt: Läuft er, benennt er die Gruppe auf jeder
+    // ihrer Doppelseiten, und eine eigene Trennerseite kostet nur zwei Seiten,
+    // ohne etwas hinzuzufügen. Ohne Zeitstrahl bekommen tragfähige Gruppen
+    // wieder ihren Auftakt.
+    groupOpeners: 'auto',
+    groupOpenerMinPhotos: 6,
+    // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
+    // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
+    timeline: true,
+    timelineStyle: 'foot',
+    // Der Bestand als Vorgabe: Die drei neuen Fassungen je Achse sind eine
+    // Wahl und keine Verbesserung, und ein geladenes Projekt soll aussehen wie
+    // vorher. Beim Laden ergänzt `{ ...this.settings, ...data.settings }`
+    // fehlende Felder von hier – eine eigene Migration braucht das nicht.
+    timelineFootVariant: 'classic',
+    timelineSideVariant: 'classic',
+    timelineAccent: 'auto',
+    // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
+    // deshalb die Palette in render/background.ts.
+    background: DEFAULT_BACKGROUND,
+    // An: Die Farbe wechselt am Jahreswechsel und macht die Kapitelgrenze auch
+    // dann sichtbar, wenn man die Jahreszahl überschlägt.
+    chapterColors: true,
+    // An: Ein Raster aus exakt waagerechten Kästen sieht gezeichnet aus, nicht
+    // eingeklebt. Der Wert ist bewusst klein – siehe render/tilt.ts.
+    tilt: DEFAULT_TILT_DEG,
+    // Ohne: Ein Rahmen ist eine Aussage über das ganze Buch, und die trifft man
+    // ausdrücklich. Ein geladenes Projekt ohne dieses Feld sieht damit aus wie
+    // vorher – siehe render/frame.ts.
+    frame: DEFAULT_FRAME,
+    // An: Ohne Seitenzahlen gibt es keinen Verweis auf eine Seite – kein
+    // Register, keine Jahresübersicht, kein „siehe Seite 44". Ein geladenes
+    // Projekt ohne dieses Feld bekommt sie damit, und das ist gewollt: Sie sind
+    // im Buch der Normalfall, nicht die Ausnahme.
+    pageNumbers: true,
+    seed: 1,
+    // Das gewählte Buchformat. Ein geladenes Projekt ohne dieses Feld bekommt
+    // es hier – die Vorgabe ist dasselbe Format, mit dem vorher gerechnet
+    // wurde, also ändert sich für einen bestehenden Stand nichts.
+    printProfileId: DEFAULT_PROFILE_ID,
+    // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
+    // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
+    birthDate: '2008-09-11',
+    subjectName: 'Franziska',
+  };
+}
+
 export class Project {
   /**
    * Das Druckprofil zur gewählten Formatkennung.
@@ -563,58 +626,7 @@ export class Project {
    */
   cover: CoverDesign = {};
 
-  settings: ProjectSettings = {
-    targetPages: 160,
-    chapterOpeners: true,
-    // Aus: Die leere Jahresseite ist der Atemzug vor dem Jahrgang. Wer die
-    // Seiten braucht, schaltet die dichten Auftakte im Buchpanel dazu; ein
-    // geladenes Projekt ohne dieses Feld bleibt damit beim Bestand.
-    chapterOpenersDense: false,
-    // An den Zeitstrahl gekoppelt: Läuft er, benennt er die Gruppe auf jeder
-    // ihrer Doppelseiten, und eine eigene Trennerseite kostet nur zwei Seiten,
-    // ohne etwas hinzuzufügen. Ohne Zeitstrahl bekommen tragfähige Gruppen
-    // wieder ihren Auftakt.
-    groupOpeners: 'auto',
-    groupOpenerMinPhotos: 6,
-    // An: Der Zeitstrahl ordnet jede Doppelseite in den Kalender ein und macht
-    // damit sichtbar, wie viel Zeit zwischen zwei Seiten liegt.
-    timeline: true,
-    timelineStyle: 'foot',
-    // Der Bestand als Vorgabe: Die drei neuen Fassungen je Achse sind eine
-    // Wahl und keine Verbesserung, und ein geladenes Projekt soll aussehen wie
-    // vorher. Beim Laden ergänzt `{ ...this.settings, ...data.settings }`
-    // fehlende Felder von hier – eine eigene Migration braucht das nicht.
-    timelineFootVariant: 'classic',
-    timelineSideVariant: 'classic',
-    timelineAccent: 'auto',
-    // Weiß als Vorgabe – über achtzig Doppelseiten wirkt es allerdings leer,
-    // deshalb die Palette in render/background.ts.
-    background: DEFAULT_BACKGROUND,
-    // An: Die Farbe wechselt am Jahreswechsel und macht die Kapitelgrenze auch
-    // dann sichtbar, wenn man die Jahreszahl überschlägt.
-    chapterColors: true,
-    // An: Ein Raster aus exakt waagerechten Kästen sieht gezeichnet aus, nicht
-    // eingeklebt. Der Wert ist bewusst klein – siehe render/tilt.ts.
-    tilt: DEFAULT_TILT_DEG,
-    // Ohne: Ein Rahmen ist eine Aussage über das ganze Buch, und die trifft man
-    // ausdrücklich. Ein geladenes Projekt ohne dieses Feld sieht damit aus wie
-    // vorher – siehe render/frame.ts.
-    frame: DEFAULT_FRAME,
-    // An: Ohne Seitenzahlen gibt es keinen Verweis auf eine Seite – kein
-    // Register, keine Jahresübersicht, kein „siehe Seite 44". Ein geladenes
-    // Projekt ohne dieses Feld bekommt sie damit, und das ist gewollt: Sie sind
-    // im Buch der Normalfall, nicht die Ausnahme.
-    pageNumbers: true,
-    seed: 1,
-    // Das gewählte Buchformat. Ein geladenes Projekt ohne dieses Feld bekommt
-    // es hier – die Vorgabe ist dasselbe Format, mit dem vorher gerechnet
-    // wurde, also ändert sich für einen bestehenden Stand nichts.
-    printProfileId: DEFAULT_PROFILE_ID,
-    // Schaltet die Geburtstagserkennung frei: Für ein Buch zum 18. Geburtstag
-    // sind das achtzehn sichere Ankerpunkte, die kein anderer Detektor liefert.
-    birthDate: '2008-09-11',
-    subjectName: 'Franziska',
-  };
+  settings: ProjectSettings = standardSettings();
 
   /**
    * Ereignisse je Jahr für die Kapitelauftakte, von Hand gepflegt.
@@ -655,12 +667,37 @@ export class Project {
    */
   readonly verlauf: Verlauf<Stand>;
 
+  /**
+   * Wo der Stand liegt — Datei und Notankerordner.
+   *
+   * Veränderlich, seit der Server die Projektdatei zur Laufzeit wechseln kann
+   * (`oeffne`, `speichereUnter`, `neu`). Der Konstruktor nimmt weiter einen
+   * Pfad: `ablageVon` deutet ihn, und ein Verzeichnis der alten Form bleibt
+   * damit gültig — jeder Test und `FRANIBOOK_PROJECT` übergeben genau das.
+   */
+  private ablage: Ablage;
+
+  /**
+   * Ein Projekt ohne Ort schreibt und liest nichts.
+   *
+   * `new Project(…, '')` ist im Repo der Ausdruck dafür, dass ein Test nur
+   * rechnet — dreißig Stellen in `project.test.ts` tun das. Vor der Ablage lief
+   * das von selbst ins Leere, weil `join('', 'project.json')` ein relativer Pfad
+   * ohne Verzeichnis war und `mkdir('')` scheiterte. Seit `ablageVon` den Pfad
+   * absolut macht, wäre es das Arbeitsverzeichnis — und nach jedem Testlauf läge
+   * eine `project.json` im Wurzelverzeichnis des Repos. Die Aussage „nirgends"
+   * steht deshalb jetzt ausdrücklich hier, statt aus einem Fehlschlag zu folgen.
+   */
+  private readonly ortLos: boolean;
+
   constructor(
     readonly sources: Sources,
     readonly previews: PreviewCache,
     readonly decodes: DecodeCache,
-    private readonly projectPath: string,
+    projectPath: string,
   ) {
+    this.ablage = ablageVon(projectPath);
+    this.ortLos = projectPath.trim().length === 0;
     this.verlauf = new Verlauf<Stand>({
       lies: () => this.stand(),
       schreib: (stand) => this.setzeStand(stand),
@@ -2904,9 +2941,10 @@ export class Project {
   }
 
   private async schreibeJetzt(): Promise<void> {
+    if (this.ortLos) return;
     const data = this.daten();
 
-    const target = join(this.projectPath, 'project.json');
+    const target = this.ablage.datei;
     // Eindeutiger Name je Vorgang: Die Serialisierung oben verhindert das
     // Rennen innerhalb eines Prozesses, zwei Server auf demselben Verzeichnis
     // wären davon unberührt. Ein Name, den nur dieser Vorgang kennt, ist
@@ -2914,7 +2952,7 @@ export class Project {
     const tmp = `${target}.${process.pid}-${++this.schreibZaehler}.tmp`;
 
     try {
-      await mkdir(this.projectPath, { recursive: true });
+      await mkdir(dirname(target), { recursive: true });
       await schreibeAtomar(target, JSON.stringify(data, null, 2), tmp);
     } catch (fehler) {
       // Die Nebendatei räumt `schreibeAtomar` selbst weg, soweit das die
@@ -2930,7 +2968,12 @@ export class Project {
   // -------------------------------------------------------------- Notanker
 
   private get ankerOrdner(): string {
-    return join(this.projectPath, ANKER_ORDNER);
+    return this.ablage.anker;
+  }
+
+  /** Wo das offene Projekt liegt und wie es heißt — für Kopfzeile und Antwort. */
+  get ablageInfo(): { pfad: string; name: string } {
+    return { pfad: this.ablage.datei, name: this.ablage.name };
   }
 
   /**
@@ -2940,6 +2983,7 @@ export class Project {
    * fehlen oder älter sein, weil `save()` nebenläufig läuft.
    */
   async notanker(aktion: string): Promise<Anker | null> {
+    if (this.ortLos) return null;
     try {
       await mkdir(this.ankerOrdner, { recursive: true });
       return await ankerLegen(this.ankerOrdner, this.daten(), aktion);
@@ -2974,7 +3018,36 @@ export class Project {
     const data = migriere(roh);
     if (data === null) return false;
 
-    if (data.sources?.length) this.sources.restore(data.sources);
+    this.uebernimm(data);
+    this.refreshReport();
+    await this.save();
+    return true;
+  }
+
+  /**
+   * Setzt einen gelesenen Stand in Kraft.
+   *
+   * Eine Stelle für drei Wege in denselben Zustand: der Start (`load`), ein
+   * Notanker (`ankerZurueck`) und das Öffnen einer anderen Projektdatei
+   * (`oeffne`). Vorher stand die Zuweisung zweimal wörtlich da, und beim
+   * dritten Weg wäre sie dreimal dagestanden — mit der üblichen Folge, dass ein
+   * neues Feld in einem der Blöcke fehlt und ein geladenes Projekt still einen
+   * Teil seiner Arbeit verliert.
+   *
+   * Zwei Feinheiten, die nur im Vergleich zu sehen sind:
+   *
+   * **Die Quellenliste wird ganz ausgetauscht, nicht ergänzt.** Sonst schleppte
+   * ein geöffnetes Projekt die Ordner des vorherigen mit, und `POST /api/import`
+   * läse anschließend Fotos ein, die in diesem Buch nichts zu suchen haben.
+   *
+   * **Die Einstellungen setzen auf der Vorgabe auf und nicht auf den laufenden.**
+   * Fehlende Felder sollen aus `standardSettings()` kommen — das ist der Sinn der
+   * Sache, seit ein geladener Stand ohne `frame` aussehen soll wie vorher. Auf
+   * `this.settings` aufzusetzen hieße dagegen, dass ein zweites Projekt die
+   * Regler des ersten erbt.
+   */
+  private uebernimm(data: PersistedProject): void {
+    this.sources.restore(data.sources ?? []);
     this.photos.clear();
     for (const p of data.photos) this.photos.set(p.id, p);
     this.aussortiert = Object.fromEntries((data.aussortiert ?? []).map((a) => [a.photo.id, a]));
@@ -2987,17 +3060,174 @@ export class Project {
     this.cover = data.cover ?? {};
     this.abnahmen = merkkarteAus(data.abnahmen);
     this.doppelBehalten = merkkarteAus(data.doppelBehalten);
-    this.settings = { ...this.settings, ...data.settings };
+    this.settings = { ...standardSettings(), ...data.settings };
     this.importedAt = data.importedAt ?? this.importedAt;
     this.rebuildStructure();
+  }
+
+  // ------------------------------------------------------- Die Projektdatei
+
+  /**
+   * Öffnet eine andere Projektdatei.
+   *
+   * Anders als `load()` — und der Unterschied ist der Grund für eine zweite
+   * Methode statt eines Umschalters:
+   *
+   * - **Erst lesen, dann übernehmen.** Scheitert das Lesen, bleibt der offene
+   *   Stand unangetastet und der Aufrufer bekommt einen Satz. Ein halber
+   *   Wechsel wäre ein Projekt aus zwei Büchern.
+   * - **Die fremde Datei wird nicht angefasst.** `load()` legt eine unlesbare
+   *   `project.json` beiseite, weil sie sonst beim nächsten `save()` überschrieben
+   *   würde. Hier ist die Datei nur eine Wahl des Benutzers: Wer sich verklickt,
+   *   soll nicht danach eine umbenannte Datei suchen müssen.
+   *
+   * Gespeichert wird nach dem Wechsel **nicht**: Der Stand *ist* die Datei.
+   * Migriert wird er dagegen wie beim Start, samt Sicherung — ein Projekt aus
+   * einer älteren Fassung ist genau der Fall, für den es Migrationen gibt.
+   */
+  async oeffne(pfad: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
+    const ziel = ablageVon(pfad);
+
+    let roh: string;
+    try {
+      roh = await readFile(ziel.datei, 'utf8');
+    } catch (fehler) {
+      const code = (fehler as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return { ok: false, fehler: `Es gibt keine Datei ${ziel.datei}` };
+      return { ok: false, fehler: `${ziel.datei} ist nicht lesbar: ${String(fehler)}` };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(roh);
+    } catch {
+      return { ok: false, fehler: `${ziel.datei} ist keine Projektdatei (kein deutbares JSON)` };
+    }
+
+    if (!istBrauchbareStruktur(parsed)) {
+      return { ok: false, fehler: `${ziel.datei} sieht nicht wie ein Franibook-Projekt aus` };
+    }
+    if (parsed.schemaVersion !== SCHEMA_VERSION) {
+      await this.sichereVorMigration(ziel.datei, parsed.schemaVersion);
+    }
+    const data = migriere(parsed);
+    if (data === null) {
+      return {
+        ok: false,
+        fehler:
+          `${ziel.datei} liegt in Fassung ${parsed.schemaVersion} vor, und diese Programmfassung ` +
+          `kennt nur ${SCHEMA_VERSION} — sie stammt vermutlich aus einer neueren Version.`,
+      };
+    }
+
+    this.ablage = ziel;
+    this.uebernimm(data);
     this.refreshReport();
-    await this.save();
-    return true;
+    return { ok: true };
+  }
+
+  /**
+   * Schreibt den Stand an eine andere Stelle und arbeitet dort weiter.
+   *
+   * Die alte Datei bleibt liegen — das ist der Sinn von „Speichern unter": Sie
+   * ist danach der Stand von vorher. Der Notankerordner wandert mit und ist am
+   * neuen Ort zunächst leer; die Anker des alten Projekts bleiben bei ihm, denn
+   * sie beschreiben dessen Verlauf.
+   *
+   * Geschrieben wird **nicht** über `save()`, obwohl das die Kette wäre, die
+   * Schreibvorgänge serialisiert: `save()` verschluckt jeden Fehler mit einer
+   * Meldung auf der Konsole (Begründung dort), und ein „Speichern unter", das
+   * stillschweigend nichts tut, wäre die falsche Zusage. Ein nebenläufiger
+   * `save()` in die alte Datei ist dabei harmlos: Er schreibt denselben Stand.
+   *
+   * @throws wenn sich am Ziel nicht schreiben lässt.
+   */
+  async speichereUnter(pfad: string): Promise<{ pfad: string; name: string }> {
+    const ziel = ablageVon(pfad);
+    const inhalt = JSON.stringify(this.daten(), null, 2);
+    await mkdir(dirname(ziel.datei), { recursive: true });
+    await schreibeAtomar(
+      ziel.datei,
+      inhalt,
+      `${ziel.datei}.${process.pid}-${++this.schreibZaehler}.tmp`,
+    );
+    this.ablage = ziel;
+    return this.ablageInfo;
+  }
+
+  /**
+   * Beginnt ein leeres Projekt an einer neuen Stelle.
+   *
+   * **Die Bildquellen bleiben.** Ein neues Buch entsteht fast immer aus demselben
+   * Fotoarchiv — anderes Format, andere Auswahl, ein Probelauf —, und einen
+   * Ordner wegzunehmen ist ein Klick, ihn wiederzufinden kostet den Dateidialog.
+   * Fotos werden dabei **nicht** eingelesen: Ein Import über den vollen Bestand
+   * dauert Minuten, und wer ein neues Projekt beginnt, will vorher vielleicht
+   * gerade die Quellen wechseln. Der Weg ist also: neu, Quellen prüfen,
+   * einlesen.
+   *
+   * **Eine bestehende Datei wird nicht überschrieben.** Ein leeres Projekt über
+   * ein volles zu schreiben ist der einzige Griff hier, der Arbeit vernichtet,
+   * ohne etwas dafür zu geben — und der Notanker am alten Ort hilft nicht, wenn
+   * die Datei selbst weg ist. Wer den Namen wirklich will, räumt ihn im Finder
+   * weg.
+   */
+  async neu(pfad: string): Promise<{ ok: true } | { ok: false; fehler: string }> {
+    const ziel = ablageVon(pfad);
+
+    try {
+      await stat(ziel.datei);
+      return {
+        ok: false,
+        fehler: `${ziel.datei} gibt es schon — wähle einen anderen Namen oder öffne die Datei.`,
+      };
+    } catch (fehler) {
+      if ((fehler as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return { ok: false, fehler: `${ziel.datei} ist nicht prüfbar: ${String(fehler)}` };
+      }
+    }
+
+    const leer: PersistedProject = {
+      schemaVersion: SCHEMA_VERSION,
+      sources: [...this.sources.list()],
+      settings: standardSettings(),
+      photos: [],
+      aussortiert: [],
+      overrides: {},
+      groups: [],
+      yearEvents: {},
+      book: { spreads: [] },
+      cover: {},
+      abnahmen: {},
+      doppelBehalten: {},
+      importedAt: new Date().toISOString(),
+    };
+
+    // Erst schreiben, dann den offenen Stand aufgeben: Scheitert das Schreiben —
+    // kein Recht, kein Ordner, volle Platte —, ist noch nichts verloren.
+    try {
+      await mkdir(dirname(ziel.datei), { recursive: true });
+      await schreibeAtomar(
+        ziel.datei,
+        JSON.stringify(leer, null, 2),
+        `${ziel.datei}.${process.pid}-${++this.schreibZaehler}.tmp`,
+      );
+    } catch (fehler) {
+      return { ok: false, fehler: `${ziel.datei} ist nicht beschreibbar: ${String(fehler)}` };
+    }
+
+    this.ablage = ziel;
+    this.uebernimm(leer);
+    this.skippedVideos = [];
+    this.failed = [];
+    this.lastReport = null;
+    return { ok: true };
   }
 
   /** @returns ob ein gespeichertes Projekt gefunden wurde. */
   async load(): Promise<boolean> {
-    const pfad = join(this.projectPath, 'project.json');
+    if (this.ortLos) return false;
+    const pfad = this.ablage.datei;
 
     let raw: string;
     try {
@@ -3048,23 +3278,7 @@ export class Project {
         return false;
       }
 
-      if (data.sources?.length) this.sources.restore(data.sources);
-
-      this.photos.clear();
-      for (const p of data.photos) this.photos.set(p.id, p);
-      this.aussortiert = Object.fromEntries((data.aussortiert ?? []).map((a) => [a.photo.id, a]));
-      this.overrides = data.overrides ?? {};
-      this.groups = data.groups ?? [];
-      this.groupStamp = data.groupStamp;
-      this.structureStamp = data.structureStamp;
-      this.yearEvents = data.yearEvents ?? {};
-      this.spreads = data.book?.spreads ?? [];
-      this.cover = data.cover ?? {};
-      this.abnahmen = merkkarteAus(data.abnahmen);
-      this.doppelBehalten = merkkarteAus(data.doppelBehalten);
-      this.settings = { ...this.settings, ...data.settings };
-      this.importedAt = data.importedAt ?? this.importedAt;
-      this.rebuildStructure();
+      this.uebernimm(data);
       return this.photos.size > 0;
     } catch {
       return false;
