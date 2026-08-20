@@ -18,7 +18,10 @@ routes/kontext.ts   was jedes Routenmodul kennt — und die drei geteilten Antwo
 routes/*.ts         die Endpunkte je Ressource
 project.ts          der Zustand, die Persistenz, Erzeugen und Rendern
 project/*.ts        die Fachlogik darauf, je Thema
+project/ablage.ts   was ein Pfad über den Ort des Projekts sagt
 sources.ts          Bildquellen; einzige Stelle, an der aus einem Foto ein Pfad wird
+zuletzt.ts          welche Projekte zuletzt offen waren (außerhalb jedes Projekts)
+dateidialog.ts      der Dateidialog des Systems (macOS `osascript`)
 import.ts           Scan und EXIF-Auswertung
 decode.ts           HEIC/JPEG → Rohbild (macOS `sips`, siehe unten)
 previews.ts         WebP-Vorschauen (320 px / 1600 px lange Kante)
@@ -99,13 +102,67 @@ Verworfen wurde, einfach früher zu lauschen und die leeren Antworten
 auszuliefern: Die Oberfläche zeigte dann stumm ein Buch mit null Fotos, und das
 sieht aus wie Datenverlust.
 
+## Die Projektdatei
+
+**Ein Projekt ist eine Datei mit Namen** — `franziska-2019.franibook` —, und der
+Server kann sie zur Laufzeit wechseln (`POST /api/ablage/oeffnen`,
+`/speichern-unter`, `/neu`). Was ein Pfad bedeutet, entscheidet allein die
+Endung (`project/ablage.ts`): Endet er auf `.franibook`, ist er die Datei selbst
+und die Notanker liegen daneben in `<datei>.history/`; heißt er `project.json`,
+ist das Verzeichnis darüber gemeint; sonst ist er selbst ein Verzeichnis der
+alten Form mit `project.json` und `history/` darin. **Die Deutung ist damit
+wiederholbar** (`ablageVon(ablageVon(p).datei)` ergibt dasselbe) — daran hängt
+die Liste der letzten Projekte, denn sie vermerkt die Datei und nicht den Pfad,
+mit dem geöffnet wurde. **Kein `stat`
+in dieser Entscheidung** — ein „Speichern unter" nennt eine Datei, die es noch
+nicht gibt, und eine Regel, die von der Platte abhängt, wäre für denselben Pfad
+zweimal verschieden zu lesen. Nebengewinn: `FRANIBOOK_PROJECT=.franibook-project`
+gilt unverändert, der Bestand musste nicht wandern.
+
+Vier Eigenschaften, die man beim Erweitern beibehält:
+
+- **Erst lesen, dann übernehmen.** `Project.oeffne` deutet die fremde Datei
+  vollständig, bevor es den offenen Stand aufgibt; ein Fehlschlag ist ein Satz und
+  keine halbe Ablösung. Anders als `load()` legt es die Datei dabei **nicht**
+  beiseite: Sie ist die Wahl eines Menschen, und wer sich verklickt, soll danach
+  keine umbenannte Datei suchen müssen.
+- **Ein Wechsel ist eine Barriere im Verlauf, aber kein Notanker.** Ein Cmd+Z
+  danach schriebe den Stand des vorherigen Buches in die neue Datei; ein Anker
+  wäre dagegen überflüssig, denn die alte Projektdatei liegt vollständig an ihrem
+  Platz.
+- **Die Feldübernahme steht genau einmal** (`Project.uebernimm`) und setzt die
+  Einstellungen auf `standardSettings()` auf, nicht auf die laufenden — sonst
+  erbte ein geöffnetes Buch die Regler seines Vorgängers. Die Quellenliste wird
+  dabei ganz ausgetauscht.
+- **„Neues Projekt" überschreibt keine bestehende Datei** (409 mit Satz). Es ist
+  der einzige Griff hier, der Arbeit vernichten kann, ohne etwas dafür zu geben.
+  Die Bildquellen bleiben dagegen erhalten, die Fotos nicht: Ein neues Buch
+  entsteht fast immer aus demselben Archiv, und einlesen kostet Minuten, die
+  niemand ungefragt bekommen soll.
+
+**Die Liste der zuletzt geöffneten Projekte liegt außerhalb jedes Projekts**
+(`~/.franibook/zuletzt.json`, `zuletzt.ts`): Was zuletzt offen war, ist eine
+Aussage über den Benutzer und nicht über das Buch — in `project.json` wäre sie in
+jeder Kopie mit unterwegs und nach dem ersten Weitergeben falsch. Sie ist ein
+Adapter im `Kontext` wie `Sources`, **ohne Rückfall**, damit kein Test die echte
+Liste des Benutzers umschreibt. Ein fehlender Eintrag wird nicht stillschweigend
+gelöscht (ein abgehängtes Laufwerk ist kein Datenverlust), sondern blass gezeigt.
+
+**Den Pfad gibt der Dateidialog des Systems heraus** (`dateidialog.ts`, macOS
+`osascript`) — ein Browser kann keinen Pfad liefern, und ein Verzeichnisbrowser
+im Server wäre ein Leseloch mit größerer Reichweite als alles andere hier. Der
+Dialog ist über den `Kontext` austauschbar wie die Videowerkzeuge: Ein Test darf
+kein Fenster aufgehen lassen, auf das niemand klickt. Fehlt `osascript`, antwortet
+der Endpunkt mit `503` und einem Satz, und die Oberfläche fällt auf die
+Pfadeingabe zurück.
+
 ## Persistenz
 
 Genau ein Projekt im Speicher, atomar als JSON geschrieben — erst in eine
 Nebendatei, dann `rename` (`project/speichern.ts`). Keine Datenbank. Jeder
 Endpunkt speichert mit `void project.save()`, also nebenläufig.
 
-**Die Zusage lautet: `project.json` ist zu jedem Zeitpunkt ganz der alte oder
+**Die Zusage lautet: die Projektdatei ist zu jedem Zeitpunkt ganz der alte oder
 ganz der neue Stand.** Sie hängt daran, dass `rename` innerhalb eines
 Verzeichnisses unteilbar ist, und sie ist geprüft — `speichern.test.ts` bricht
 den Vorgang an jeder Stelle ab und sieht an echten Dateien nach, was liegen

@@ -13,6 +13,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { Ereignisstrom } from './ereignisse.js';
 import { EINWURF_MAX_BYTES } from './project/einwurf.js';
+import { ablageRouten } from './routes/ablage.js';
 import { anordnungRouten } from './routes/anordnung.js';
 import { buchRouten } from './routes/buch.js';
 import { fotoRouten } from './routes/fotos.js';
@@ -167,6 +168,7 @@ export function baueApp({ kontext, anlauf, logger = { level: 'warn' } }: AppOpti
   ereignisHaken(app, ereignisse);
 
   projektRouten(app, kontext);
+  ablageRouten(app, kontext);
   anordnungRouten(app, kontext);
   buchRouten(app, kontext);
   spreadRouten(app, kontext);

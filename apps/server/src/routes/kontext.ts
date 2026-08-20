@@ -13,6 +13,7 @@
  * Doppelseiten, gehört sie nach `project.ts` oder in den Kern.
  */
 import { coverWarningText, mosaicWarningText, teilbar } from '@franibook/core';
+import type { Dateidialog } from '../dateidialog.js';
 import type { DecodeCache } from '../decode.js';
 import type { PreviewCache } from '../previews.js';
 import type { Project } from '../project.js';
@@ -20,6 +21,7 @@ import type { Umschlagmosaik } from '../project/umschlagmosaik.js';
 import type { Sources } from '../sources.js';
 import type { Videowerkzeuge } from '../video.js';
 import type { AbstandsErkennung } from '../vision.js';
+import type { Zuletzt } from '../zuletzt.js';
 
 /**
  * Ein Dateiname für den PDF-Export.
@@ -107,6 +109,15 @@ export function lesePunkt(
 export interface Kontext {
   project: Project;
   sources: Sources;
+  /**
+   * Welche Projekte zuletzt offen waren (`~/.franibook/zuletzt.json`).
+   *
+   * Ein Pflichtfeld ohne Rückfall, anders als `videos` und `dialog` darunter:
+   * Ein Rückfall müsste die echte Datei im Heimatverzeichnis nehmen, und ein
+   * Test, der die Liste der letzten Projekte des Benutzers umschreibt, wäre ein
+   * Test mit Nebenwirkungen auf dessen Arbeit.
+   */
+  zuletzt: Zuletzt;
   previews: PreviewCache;
   decodes: DecodeCache;
   /**
@@ -136,6 +147,24 @@ export interface Kontext {
    * gelten die echten.
    */
   videos?: Videowerkzeuge;
+  /**
+   * Der Dateidialog des Systems — normalerweise nicht gesetzt.
+   *
+   * Austauschbar aus demselben Grund wie `videos`: Ein Test, der „Projekt
+   * öffnen" prüft, darf keinen Dialog aufgehen lassen, auf den niemand klickt.
+   * Fehlt das Feld, gilt der echte (`echterDialog`).
+   */
+  dialog?: Dateidialog;
+  /**
+   * Was nach einem Projektwechsel im Hintergrund nachgezogen wird.
+   *
+   * Vorschauen wärmen, Bildmerkmale, Bildqualität, Farbwerte — dieselbe Kette,
+   * die ein Serverstart durchläuft. Sie steht in `main.ts`, weil sie die
+   * Werkzeuge braucht, die dort gebaut werden (Vision), und keine Route sie
+   * kennt. Als Rückruf und nicht als Objekt im Kontext: Die Route soll nichts
+   * über die Reihenfolge dieser vier Schritte wissen müssen.
+   */
+  nachlauf?: () => void;
   /** Vorgabe für `FRANIBOOK_LIMIT`, wenn eine Anfrage keine eigene mitbringt. */
   importLimit?: number | undefined;
 }

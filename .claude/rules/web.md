@@ -41,6 +41,25 @@ Zustand und Serverzugriff einer größeren Ansicht gehören in einen Hook neben 
 Komponente (`spread/useSpreadEditor.ts`, `useNachbarn.ts`, `usePlatz.ts`), nicht
 in die JSX-Datei.
 
+**Eine Ansicht steht vor allen anderen: die Projektwahl** (`Projektwahl.tsx`,
+`/projekt`) — und ist trotzdem ein Reiter wie jede andere, der erste von links.
+Zwei Sonderwege sind hier probiert und wieder weggeräumt worden: der Buchname in
+der Kopfzeile als Link und ein Auftritt ohne Kopfzeile bei leerem Projekt. Beide
+widersprechen dem Umbau der Kopfzeile (`docs/konzept.md`, „Drei Rahmen um
+dieselbe Bühne"): Der Umschlag wurde damals vom `?cover`-Sonderweg **zu einem
+echten Reiter**, die Kommandopalette entfiel mit dem Satz „sie hätte nichts zu
+tun, was die Reiter nicht schon tun", und die Kopfzeile steht ausdrücklich in
+_allen_ Varianten, damit ein Wechsel nie den Zugang zu einer Ansicht kostet. Wer
+eine Ansicht ergänzt, ergänzt einen Reiter — nicht eine zweite Navigationsart.
+
+Der Buchname steht weiter in der Kopfzeile, aber als **Auskunft** wie die
+Jahresspanne daneben. Bei leerem Projekt ist die Projektwahl die Startansicht
+(`App.tsx` leitet einmal dorthin um, `ersetzen: true`).
+
+Nach einem Projektwechsel gilt **nichts** weiter, was geladen war
+(`nachProjektwechsel` in `App.tsx`): Es ist nicht derselbe Stand in anderer
+Fassung wie bei einem Notanker, sondern ein anderes Buch.
+
 ## Die Doppelseite hat drei Rahmen — jede Funktion gilt in allen dreien
 
 Inspektor, Werkbank und Lesetisch (`spread/varianten.ts`) sind drei Rahmen um

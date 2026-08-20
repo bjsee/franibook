@@ -115,6 +115,22 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     schluessel: (p) => `ereignisse:${p['year'] ?? '?'}`,
   },
 
+  // ------------------------------------------------------- Die Projektdatei
+  // Der Dialog fragt den Benutzer und rührt nichts an — er gibt einen Pfad
+  // zurück, mehr nicht.
+  'POST /api/ablage/dialog': null,
+  // Barriere und ausdrücklich **kein** Anker: Ein Cmd+Z nach dem Wechsel würde
+  // den Stand des vorherigen Buches in die neue Datei schreiben, und einen
+  // Notanker braucht es nicht — die alte Projektdatei liegt vollständig an ihrem
+  // Platz und ist selbst der Weg zurück.
+  'POST /api/ablage/oeffnen': { label: 'Projekt geöffnet', barriere: true },
+  'POST /api/ablage/neu': { label: 'Neues Projekt begonnen', barriere: true },
+  // Ändert nicht das Buch, sondern nur, wohin es geschrieben wird. Ein Cmd+Z
+  // danach nimmt den letzten Griff am Buch zurück, und das ist richtig so.
+  'POST /api/ablage/speichern-unter': null,
+  // Die Liste der letzten Projekte liegt außerhalb jedes Projekts.
+  'DELETE /api/ablage/zuletzt': null,
+
   // Der Ereignisstrom ist eine offene Leitung und ändert nichts – er sagt nur,
   // was andere geändert haben (`routes/ereignisse.ts`). Er steht hier trotzdem,
   // weil die Tabelle lückenlos sein soll; die Prüfung sieht ohnehin nur

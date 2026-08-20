@@ -24,6 +24,11 @@ export function projektRouten(app: FastifyInstance, { project, sources, importLi
   app.get('/api/health', async () => ({ status: 'ok' }));
 
   app.get('/api/project', async () => ({
+    // Welche Projektdatei offen ist. Hier und nicht nur unter `/api/ablage`:
+    // Die Kopfzeile schreibt den Namen an, und diese Auskunft holt die
+    // Oberfläche nach jeder Änderung ohnehin — ein zweiter Abruf wäre immer
+    // einen Handgriff hinterher.
+    ablage: project.ablageInfo,
     sources: await sources.status(),
     profile: project.profile,
     // Die wählbaren Formate, auf das reduziert, was die Oberfläche zeigt.
