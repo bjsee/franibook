@@ -248,6 +248,55 @@ export function layoutHalf(opts: {
 }
 
 /**
+ * Wählt unter mehreren Halbseiten die, die diese Bilder am besten trägt.
+ *
+ * Dieselbe Rechnung wie die Vorlagenwahl in `layoutSpread` – Kostenmatrix,
+ * Zuordnung, Summe –, nur über Halbseiten und ohne die Sonderwege für justierte
+ * Zeilen: Eine halbe Seite hat keine justierte Fassung, ihre Rechtecke sind über
+ * die ganze Satzbreite gerechnet.
+ *
+ * Gebraucht, wo eine Buchseite eine **andere Bilderzahl** bekommt, ohne dass
+ * jemand eine Anordnung gewählt hat: beim Zusammenpacken zweier Buchseiten
+ * (`mergeSinglePages`). `layoutHalf` ordnet nur zu, es wählt nicht – und die
+ * Wahl von Hand zu verlangen hieße, für einen Griff zwei zu brauchen.
+ *
+ * @returns Kennung, Zuweisungen und was keinen Platz fand – oder `undefined`,
+ *   wenn keine Halbseite angeboten wurde.
+ */
+export function chooseHalf(opts: {
+  photos: readonly Photo[];
+  halves: readonly { id: string; slots: readonly TemplateSlot[] }[];
+  profile: PrintProfile;
+  weightOf?: (photoId: PhotoId) => PhotoWeight;
+}): { halfId: string; slots: SlotAssignment[]; leftover: PhotoId[] } | undefined {
+  const weightOf = opts.weightOf ?? (() => 'normal' as PhotoWeight);
+  if (opts.halves.length === 0) return undefined;
+
+  let besteId = opts.halves[0]!.id;
+  let besteZuordnung: number[] = [];
+  let besteSlots: readonly TemplateSlot[] = opts.halves[0]!.slots;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const halbseite of opts.halves) {
+    const cost = kostenmatrix(opts.photos, halbseite.slots, opts.profile, weightOf);
+    const assignment = assign(cost);
+    const score = assignment.reduce((summe, slotIndex, photoIndex) => {
+      if (slotIndex < 0 || slotIndex >= halbseite.slots.length) return summe;
+      return summe + cost[photoIndex]![slotIndex]!;
+    }, 0);
+    if (score < bestScore) {
+      bestScore = score;
+      besteId = halbseite.id;
+      besteSlots = halbseite.slots;
+      besteZuordnung = assignment;
+    }
+  }
+
+  const { slots, leftover } = zuweisungen(opts.photos, besteSlots, besteZuordnung, opts.profile);
+  return { halfId: besteId, slots, leftover };
+}
+
+/**
  * Die Doppelseite, die eine gewählte Halbseite mit der besten Gegenseite paart.
  *
  * Gebraucht, wenn jemand die Anordnung *einer* Buchseite wählt und die

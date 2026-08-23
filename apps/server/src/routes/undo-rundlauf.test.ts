@@ -334,6 +334,48 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
 
   'DELETE /api/spreads/:index': () => ({ method: 'DELETE', url: '/api/spreads/1' }),
 
+  'PATCH /api/spreads/:index/vergroessern': ({ project }) => {
+    // Die Buchseite suchen, an der wirklich etwas zu holen ist: Auf einer, die
+    // ihren Satzspiegel schon füllt, wäre der Aufruf wirkungslos und der Test
+    // grün, ohne etwas zu sagen.
+    for (let i = 0; i < project.spreads.length; i++) {
+      const auskunft = project.vergroesserungen(i);
+      for (const seite of ['left', 'right'] as const) {
+        const wert = auskunft[seite];
+        if (typeof wert === 'object' && (wert.maxX > 1.001 || wert.maxY > 1.001)) {
+          return {
+            method: 'PATCH',
+            url: `/api/spreads/${i}/vergroessern`,
+            payload: { seite, faktor: 'einpassen' },
+          };
+        }
+      }
+    }
+    throw new Error('Keine Buchseite mit Luft zum Vergrößern');
+  },
+
+  'POST /api/spreads/:index/packen': ({ project }) => {
+    const gruende = project.spreads.map((_, i) => project.packbar(i).seiten);
+    const index = gruende.findIndex((g) => g.ok);
+    if (index < 0) {
+      throw new Error(
+        `Keine zwei Doppelseiten zum Packen: ${gruende.map((g) => g.error).join(' | ')}`,
+      );
+    }
+    return { method: 'POST', url: `/api/spreads/${index}/packen` };
+  },
+
+  'POST /api/spreads/:index/seiten-packen': ({ project }) => {
+    const gruende = project.spreads.map((_, i) => project.packbar(i).buchseiten);
+    const index = gruende.findIndex((g) => g.ok);
+    if (index < 0) {
+      throw new Error(
+        `Keine zwei Buchseiten zum Packen: ${gruende.map((g) => g.error).join(' | ')}`,
+      );
+    }
+    return { method: 'POST', url: `/api/spreads/${index}/seiten-packen` };
+  },
+
   'PATCH /api/spreads/:index/locked': () => ({
     method: 'PATCH',
     url: '/api/spreads/1/locked',

@@ -103,6 +103,11 @@ const MELDET_NICHT = new Set([
   'DELETE /api/ablage/zuletzt',
   // Die Leitung selbst.
   'GET /api/ereignisse',
+  // Zwei Auskünfte über das, was ein Griff bringen würde: „wie viel größer geht
+  // diese Buchseite" und „lässt sich hier packen". Sie rechnen und antworten,
+  // ändern aber nichts – wie die Anordnungsprobe.
+  'GET /api/spreads/:index/vergroesserung',
+  'GET /api/spreads/:index/packbar',
 ]);
 
 /** Für den Test: die beiden Listen, gegen die jede `null`-Route geprüft wird. */

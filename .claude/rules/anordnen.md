@@ -221,6 +221,39 @@ Bilddaten kommen weiter über `GET /api/photos`; der Texteditor der Aufteilung l
 unter `/aufteilung/json`. Begründung und verworfene Fassungen: `docs/konzept.md`,
 Abschnitt „Aufteilung im Baum".
 
+**Ein Tausch tauscht Bilder, nicht Kästen.** Zwei Sätze teilen jedes Feld von
+`SlotAssignment` auf, und beide sind in `layout/move.ts` als Funktion
+niedergelegt:
+
+- **Dem Platz gehören Lage und Neigung** (`platzgestalt`). Genau daran fehlte
+  lange das `rect`: Auf einer justierten Seite trägt **jeder** Platz sein
+  Rechteck selbst, ein Platz ohne fällt auf das Rückfallgitter der
+  Trägervorlage – die beiden getauschten Bilder standen danach gleich groß
+  mitten in der Seite und überdeckten ihre Nachbarn. Am echten Buch tragen 58
+  von 80 Doppelseiten solche Plätze. Die Neigung bleibt mit: Sie ist die Antwort
+  auf die Stelle, und die Automatik gibt einem getauschten Bild ohnehin einen
+  neuen Winkel (`slotId:photoId` in `render/tilt.ts`).
+- **Dem Bild gehören Rahmen, Unterschrift und Ebene** (`bildeigenes`) – dieselbe
+  Aufteilung, die `layout/single-page.ts` bei der Blattzerlegung schon
+  festgelegt hat. Rahmen und Unterschrift müssen dabei zusammen wandern: Nur das
+  Polaroid hat einen Fuß, in dem eine Unterschrift erscheint.
+- **Der Ausschnitt wird auf automatisch gestellt**, weil er am Seitenverhältnis
+  seines alten Platzes hängt.
+
+Dasselbe gilt für den Zug auf eine **Stelle** des Papiers, mit einer Ausnahme:
+Rahmen und Unterschrift nimmt das Bild mit (`mitEinwurf` bekommt sie als
+`mitgebracht` – ohne das verlor eine getippte Zeile, wer sein Bild fünf
+Millimeter neben seinen Platz zog), die **Ebene** bleibt zurück. Der freie Platz
+kommt hinten dazu und liegt damit obenauf; eine mitgenommene Ebene legte ein
+eben hingelegtes Bild unter seine Nachbarn.
+
+**Wer sein Bild verliert, wird geräumt** (`ohneQuelle`), gleich ob es in den
+Fotopool, auf eine Stelle des Papiers oder in einen leeren Platz zieht: Ein
+Vorlagenplatz bleibt leer stehen und behält seine Lage und Neigung, ein frei
+gesetzter fällt ganz weg – ohne sein Bild beschreibt er nichts. Rahmen,
+Unterschrift und Ebene bleiben dort nicht liegen; sie sind mit dem Bild gegangen
+oder – beim Zug in den Fotopool – mit ihm aus dem Buch verschwunden.
+
 ## Bilder an eine Stelle legen
 
 **Eine Datei lässt sich ins Buch werfen** (`project/einwurf.ts`,
@@ -257,6 +290,73 @@ Festlegungen dazu:
 
 Der Ausgangsplatz wird geräumt: ein Vorlagenplatz bleibt leer stehen, ein frei
 gesetzter fällt ganz weg (`ohneQuelle`) — ohne sein Bild beschreibt er nichts.
+
+## Dichter setzen: gegen zu viel leeres Papier
+
+Zwei Griffe mit demselben Anlass und verschiedener Reichweite. Beide rechnen im
+Kern, beide sind ein Cmd+Z, beide melden, was sie gekostet haben.
+
+**Alle Bilder einer Buchseite gemeinsam größer** (`layout/vergroessern.ts`,
+`PATCH /api/spreads/:index/vergroessern`). Ein Maß für alle Kästen der Seite,
+Größen und Abstände zusammen — nicht das größte Bild wächst, sondern die
+Anordnung. Zwei Rechnungen, und der Unterschied ist gemessen:
+
+- **proportional** (`faktor`, `'max'`) wahrt jede Kastenform, also gilt **jeder
+  von Hand gesetzte Ausschnitt weiter**. Der Preis: Es begrenzt die knappste
+  Richtung, und das ist fast immer die Breite — am echten Buch im Mittel
+  **+7,3 %**, nie mehr als +9,8 % (36 Buchseiten mit eigenen Rechtecken).
+- **einpassen** (`'einpassen'`) streckt Höhe und Breite getrennt bis an den
+  Satzspiegel. Das ist der wirksame Griff gegen den leeren Rand — auf
+  Doppelseite 76 wächst die linke Seite um 58 % in der Höhe —, und er kostet:
+  Die Kästen ändern ihre Form, es wird stärker beschnitten, und manuelle
+  Ausschnitte gehen auf automatisch zurück. Wie viele, steht in der Antwort.
+
+Vier Festlegungen, die man beim Erweitern beibehält: **je Buchseite** (der leere
+Platz sitzt fast immer auf einer, und kein Kasten wächst über den Falz);
+**skaliert um die Mitte der Bildgruppe**, nicht der Seite (sonst wüchsen Bilder
+im oberen Drittel aus dem Papier, und der Faktor wäre bei 1,05 am Ende);
+**Grenze ist der Satzspiegel**, erweitert um die vorhandenen Kästen (eine
+randabfallende Seite wird nicht nach innen gezogen); und **materialisiert als
+`rect`** und nicht als Faktor am Spread — eine Layoutentscheidung gehört nach
+`layout/`, und die Griffe der Oberfläche ziehen an `rect`. Der Preis steht in
+`handwork().positionen`. Eine Buchseite mit Text der Vorlage lehnt ab: Der
+Freiraum um die Jahreszahl ist Teil der Gestaltung.
+
+**Zwei Seiten zu einer packen**, in zwei Größen:
+
+- **Zwei Doppelseiten** (`layout/verschmelzen.ts`, `POST /api/spreads/:index/packen`):
+  Alle Bilder beider Blätter werden gemeinsam neu angeordnet — durch
+  `ordneSpreadAn`, damit die Auftaktregel auch hier gilt —, das Buch wird ein
+  Blatt kürzer. Die erste Seite bleibt mit Kennung, Anker, Jahresfarbe und
+  Zeitstrahl; ein Auftakt als **zweite** Seite ist eine Absage, denn seine
+  Beschriftung wäre unbemerkt weg. Vorlagentexte werden auf die Textplätze der
+  neuen Vorlage umgehängt (`haengeTexteUm`, über die Rolle) — nicht über die
+  alte Kennung, sonst wäre der Titel gespeichert und unsichtbar. Was keinen
+  Platz fand, wird gezählt und gemeldet.
+- **Zwei Buchseiten** eines Blattes (`mergeSinglePages` in
+  `layout/single-page.ts`, `POST /api/spreads/:index/seiten-packen`): Das Buch
+  wird **eine** Seite kürzer, und jedes Blatt dahinter paart sich neu — dieselbe
+  Rechnung wie beim Einfügen und Herausnehmen einer Buchseite. Die Anordnung
+  wählt `chooseHalf` (`layout/rebuild.ts`), dieselbe Kostenrechnung wie die
+  Vorlagenwahl: Eine neue Bilderzahl braucht eine neue Halbseite, und die von
+  Hand zu verlangen hieße, für einen Griff zwei zu brauchen.
+
+Beide Auskünfte davor liefert **eine** Route (`GET /api/spreads/:index/packbar`,
+`{ seiten, buchseiten }`): zwei Fragen zur selben Stelle, getrennt geladen zeigte
+die eine kurz die Lage von vorher. Sie rechnen wirklich an — eine billigere
+Prüfung wäre eine zweite Wahrheit, und ausgerechnet die Anordnung ist der Grund,
+warum ein Griff scheitert.
+
+**Eine Lücke ist bekannt und festgeschrieben:** Auf einer justierten
+Doppelseite meldet `handwork().positionen` nach dem Vergrößern weiter 0 — dort
+steht die Zahl bewusst auf null, weil justierte Rechtecke gerechnet sind und der
+Neuaufbau sie wiederherstellt. Nach dem Griff stimmt das nicht mehr. Wer es
+schließt, braucht in `handarbeitAn` die gerechneten Zeilen zum Vergleich oder ein
+Feld am Spread; `project/verdichten.test.ts` hält den Stand fest, damit die Lücke
+nicht in Vergessenheit gerät.
+
+Messwerte, verworfene Fassungen und die Grenzfälle stehen in `docs/konzept.md`,
+Abschnitt „Dichter setzen: gegen zu viel leeres Papier".
 
 ## Einen leeren Platz wegnehmen
 

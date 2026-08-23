@@ -39,6 +39,8 @@ import {
   type RenderedSpread,
   type SinglePageResult,
   type Spread,
+  type Buchseite,
+  type Wunsch,
   type Structure,
   type DoppelKandidat,
   type DoppelOptions,
@@ -2094,6 +2096,37 @@ export class Project {
 
   templateChoices(index: number) {
     return anordnung.templateChoices(this, index);
+  }
+
+  /** Alle Bilder einer Buchseite gemeinsam größer setzen. */
+  vergroessereBuchseite(index: number, seite: Buchseite, wunsch: Wunsch) {
+    const ergebnis = anordnung.vergroessereBuchseite(this, index, seite, wunsch);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
+  }
+
+  /** Was ein Vergrößern je Buchseite bringen würde – eine Auskunft, kein Griff. */
+  vergroesserungen(index: number) {
+    return anordnung.vergroesserungen(this, index);
+  }
+
+  /** Ob sich diese Doppelseite mit der nächsten packen lässt – eine Auskunft. */
+  packbar(index: number) {
+    return anordnung.packbarkeit(this, index);
+  }
+
+  /** Diese Doppelseite mit der nächsten zu einer packen. */
+  packeMitNaechster(index: number) {
+    const ergebnis = anordnung.packeMitNaechster(this, index);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
+  }
+
+  /** Die beiden Buchseiten dieses Blattes zu einer packen. */
+  packeBuchseiten(index: number) {
+    const ergebnis = anordnung.packeBuchseiten(this, index);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
   }
 
   /**
