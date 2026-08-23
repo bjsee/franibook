@@ -1781,6 +1781,83 @@ Erreichbar ist das Aussortieren an den drei Stellen, an denen man Fotos einzeln 
 
 Dass die Herkunft danebensteht, ist der eigentliche Zweck: Ein interpoliertes Datum sieht sonst genauso verbindlich aus wie ein aus dem EXIF gelesenes, und gerade die geschätzten sind es, die man beim Durchblättern korrigieren will.
 
+### Dichter setzen: gegen zu viel leeres Papier
+
+Ein Befund am fertigen Buch, den keine Kennzahl gemeldet hat: Auf vielen Seiten
+steht zu viel Weiß. Justierte Zeilen füllen die Satz*breite*, die Höhe aber nicht
+— acht Bilder in zwei Zeilen lassen oben und unten je ein Fünftel frei —, und
+eine Flussvorlage für zwei Bilder ist bei ungünstigen Seitenverhältnissen
+schlicht luftig. Zwei Griffe antworten darauf, mit gemessenem Unterschied.
+
+**Alle Bilder einer Buchseite gemeinsam größer** (`layout/vergroessern.ts`). Ein
+Maß für alle Kästen der Seite, Größen und Abstände zusammen: Nicht das größte
+Bild wächst, sondern die Anordnung. Die Rechnung skaliert um die Mitte der
+Bildgruppe und schiebt sie anschließend nur so weit, wie sie in ihren Bereich
+passen muss — um die Seitenmitte skaliert wüchsen Bilder im oberen Drittel aus
+dem Papier heraus, und der mögliche Faktor läge bei 1,05.
+
+Der Bereich ist der Satzspiegel der Buchseite, nach innen um die Falzzone
+verkleinert, nach unten um den Zeitstrahl (14 mm) und nach außen um sein
+Seitenband — er ist gedruckte Gestaltung mit Platzbedarf. **Erweitert um die
+vorhandenen Kästen**: Eine Seite mit randabfallenden Bildern liegt schon jenseits
+dieser Grenzen, und der erste Griff darf sie nicht nach innen ziehen.
+
+Zwei Rechnungen stehen zur Wahl, und die Zahlen dahinter sind am echten Buch
+gemessen (36 Buchseiten mit eigenen Rechtecken):
+
+|                      | proportional  | einpassen             |
+| -------------------- | ------------- | --------------------- |
+| Zuwachs im Mittel    | +7,3 %        | Flächenfaktor 1,16    |
+| bester Fall          | +9,8 %        | 1,70                  |
+| Kastenform           | bleibt        | ändert sich           |
+| manuelle Ausschnitte | gelten weiter | gehen auf automatisch |
+
+Proportional wahrt jede Kastenform, also gilt jeder von Hand gesetzte Ausschnitt
+weiter — begrenzt aber die knappste Richtung, und das ist fast immer die Breite.
+Das Einpassen streckt Höhe und Breite getrennt bis an den Satzspiegel; auf
+Doppelseite 76 des echten Buchs wächst die linke Seite dadurch um 58 % in der
+Höhe. Der Preis wird gemeldet und nicht verschwiegen: stärkerer Beschnitt,
+zurückgestellte Ausschnitte, und in der Oberfläche die Zahl der Bilder, die dabei
+unter die Zielauflösung fallen.
+
+Das Ergebnis steht als `SlotAssignment.rect` an jedem Platz und **nicht** als
+Faktor am Spread. Zwei Gründe: Eine Layoutentscheidung gehört nach `layout/` und
+nicht in den Renderer, und die Griffe der Oberfläche ziehen an `rect` — ein
+Faktor daneben hieße, dass ein von Hand verschobenes Bild zweimal skaliert wird.
+Der Preis steht in `handwork().positionen`.
+
+Abgelehnt wird, wo etwas verloren ginge: eine Buchseite mit **gesetztem**
+Vorlagentext (ihr Freiraum ist die Auszeichnung der Jahreszahl), ein Bild über dem
+Falz (es gehört beiden Seiten), eine Seite ohne Bild. Ausdrücklich _nicht_
+abgelehnt wird bei einem leeren Textplatz: 102 der 117 Vorlagen führen einen,
+meist einen `eventTitle`, und eine Regel am Platz statt am Text hätte den Griff
+auf fast jeder Seite des Buches verweigert.
+
+**Zwei Seiten zu einer packen**, in zwei Größen. Bei zwei **Doppelseiten**
+(`layout/verschmelzen.ts`) werden alle Bilder beider Blätter gemeinsam neu
+angeordnet und das Buch ein Blatt kürzer; die erste Seite bleibt mit Kennung,
+Anker, Jahresfarbe und Zeitstrahl. Bei zwei **Buchseiten** eines Blattes
+(`mergeSinglePages` in `layout/single-page.ts`) wird es eine Seite kürzer, und
+jedes Blatt dahinter paart sich neu — dieselbe Rechnung wie beim Einfügen und
+Herausnehmen einer Seite, mit derselben Einschränkung: Geht die Parität nicht auf,
+füllt eine leere Halbseite auf, und dann ist das Buch nicht kürzer geworden. Die
+Oberfläche sagt das hinterher, statt einen wirkungslosen Erfolg zu melden.
+
+Eine Grenze bleibt offen und ist als Test festgehalten: Auf einer justierten
+Doppelseite zählt `handwork().positionen` die Vergrößerung nicht, weil dort
+gerechnete Rechtecke stehen und die Zahl deshalb bewusst auf null gesetzt ist.
+Die Vorschau „Neu anordnen" sagt an solchen Seiten also „kostet nichts", obwohl
+der Griff verloren geht. Es zu schließen kostet entweder die gerechneten Zeilen
+zum Vergleich in `handarbeitAn` (Fotos und Profil, die es heute nicht bekommt)
+oder ein Feld am Spread, also einen Schemasprung.
+
+Beide Absagen sind Sätze und keine Codes, und beide Auskünfte davor
+(`GET /api/spreads/:index/packbar`) rechnen wirklich an: Eine billigere Prüfung
+wäre eine zweite Wahrheit, und ausgerechnet die Vorlagenwahl ist der Grund,
+warum ein Griff scheitert. Ein Auftakt als _zweite_ Seite ist tabu — seine
+Beschriftung wäre unbemerkt weg; als _erste_ nimmt er Bilder auf und bleibt in
+seiner Familie.
+
 ### Neu einlesen und neu anordnen
 
 Zwei Vorgänge, die leicht verwechselt werden und deshalb getrennt sind:

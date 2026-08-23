@@ -696,6 +696,85 @@ export const seiteNeuAnordnen = (index: number) => vorlageSetzen(index, 'auto');
 export const halbseiteSetzen = (index: number, side: 'left' | 'right', halfId: string) =>
   sende<AnordnungErgebnis>('PATCH', `/api/spreads/${index}/half`, { side, halfId });
 
+// ─── Dichter setzen ─────────────────────────────────────────────────────────
+
+/** Was an einer Buchseite zu holen wäre — oder der Satz, warum nichts. */
+export interface Vergroesserungsauskunft {
+  /** Größtes Vielfaches unter Erhalt der Kastenform. */
+  max: number;
+  /** Wie weit Breite und Höhe reichen, wenn beide getrennt eingepasst werden. */
+  maxX: number;
+  maxY: number;
+  plaetze: number;
+  /** Wie viele Ausschnitte ein Einpassen auf automatisch zurückstellen würde. */
+  ausschnitte: number;
+}
+
+export const vergroesserungLaden = (index: number) =>
+  hole<{
+    left: Vergroesserungsauskunft | string;
+    right: Vergroesserungsauskunft | string;
+  }>(`/api/spreads/${index}/vergroesserung`);
+
+/**
+ * Setzt alle Bilder einer Buchseite gemeinsam größer.
+ *
+ * `faktor` ist ein Vielfaches, `'max'` das größtmögliche unter Erhalt der Form,
+ * `'einpassen'` streckt Höhe und Breite getrennt bis an den Satzspiegel. Die
+ * Antwort nennt das wirklich benutzte Maß — ein zu großer Wunsch wird geklemmt.
+ */
+export const bilderVergroessern = (
+  index: number,
+  seite: 'left' | 'right',
+  faktor: number | 'max' | 'einpassen',
+) =>
+  sende<{
+    ok: boolean;
+    faktorX: number;
+    faktorY: number;
+    ausschnitte: number;
+    spread: SpreadResponse;
+    report: Report | null;
+  }>('PATCH', `/api/spreads/${index}/vergroessern`, { seite, faktor });
+
+/** Ein Griff, der noch nicht getan ist: geht er, und was käme dabei heraus? */
+export interface Packbarkeit {
+  ok: boolean;
+  error?: string;
+  bilder?: number;
+  texteVerworfen?: number;
+}
+
+/**
+ * Zwei Fragen zur selben Stelle: die beiden Doppelseiten oder die beiden
+ * Buchseiten dieses Blattes.
+ */
+export const packbarLaden = (index: number) =>
+  hole<{ seiten: Packbarkeit; buchseiten: Packbarkeit }>(`/api/spreads/${index}/packbar`);
+
+/** Packt diese Doppelseite mit der nächsten zu einer — das Buch wird ein Blatt kürzer. */
+export const seitenPacken = (index: number) =>
+  sende<{
+    ok: boolean;
+    bilder: number;
+    spreadCount: number;
+    hintergrundVerworfen?: string;
+    texteVerworfen?: number;
+  }>('POST', `/api/spreads/${index}/packen`);
+
+/**
+ * Packt die beiden Buchseiten dieses Blattes zu einer — das Buch wird **eine**
+ * Seite kürzer, und alles dahinter paart sich neu.
+ */
+export const buchseitenPacken = (index: number) =>
+  sende<{
+    ok: boolean;
+    bilder: number;
+    leftover: string[];
+    spreadCount: number;
+    bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
+  }>('POST', `/api/spreads/${index}/seiten-packen`);
+
 // ─── Seiten einfügen ────────────────────────────────────────────────────────
 
 /** Eine Ausgangsform für eine neu eingefügte Seite. */

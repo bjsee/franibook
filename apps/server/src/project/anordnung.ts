@@ -5,6 +5,11 @@
  * Doppelseite (`setSpreadTemplate`) oder eine einzelne Buchseite
  * (`setSpreadHalf`). Dazu die beiden Auskünfte, aus denen die Oberfläche ihre
  * Skizzen zeichnet.
+ *
+ * Am Ende zwei Griffe mit demselben Anlass — zu viel leeres Papier: die Bilder
+ * einer Buchseite gemeinsam größer setzen (`vergroessereBuchseite`) und zwei
+ * Doppelseiten zu einer packen (`packeMitNaechster`). Gerechnet wird beides im
+ * Kern (`layout/vergroessern.ts`, `layout/verschmelzen.ts`).
  */
 import {
   type Photo,
@@ -37,6 +42,18 @@ import {
   setHalfPage,
   templateById,
   templateMeta,
+  type Buchseite,
+  type Freiraum,
+  type Vergroesserung,
+  type Wunsch,
+  SIDE_AXIS_BAND_MM,
+  TIMELINE_FOOT_HEIGHT_MM,
+  vergroesserung,
+  vergroessereSeite,
+  verschmelzeDoppelseiten,
+  packbar,
+  mergeSinglePages,
+  effectivePhotos,
 } from '@franibook/core';
 
 /** Was diese Funktionen vom Projekt brauchen. */
@@ -45,6 +62,12 @@ export interface Bestand {
   photos: ReadonlyMap<PhotoId, Photo>;
   profile: PrintProfile;
   overrides: Record<PhotoId, PhotoOverride>;
+  /**
+   * Nur, was das Vergrößern über den Zeitstrahl wissen muss: ob er steht und in
+   * welcher Fassung. Er kostet Platz auf der Seite, und die Bilder dürfen nicht
+   * darunter wachsen (`Freiraum` in `layout/vergroessern.ts`).
+   */
+  settings: { timeline: boolean; timelineStyle: 'foot' | 'side' };
 }
 
 /** Die Gewichtung eines Fotos, wie die Engine sie erwartet. */
@@ -508,4 +531,203 @@ export function templateChoices(
       a.slotCount - b.slotCount ||
       a.id.localeCompare(b.id),
   );
+}
+
+// ─── Dichter setzen: Bilder größer, zwei Seiten zu einer ────────────────────
+
+/**
+ * Der Kontext, den die beiden Rechnungen des Kerns brauchen.
+ *
+ * Einmal an einer Stelle gebaut, damit die Gewichtung nicht an einem Griff
+ * mitkommt und am anderen fehlt – eine Auszeichnung, die nur bei jedem zweiten
+ * Neuanordnen gilt, wäre schlimmer als keine.
+ */
+function reflowVon(z: Bestand) {
+  return { photos: z.photos, overrides: z.overrides, profile: z.profile, weightOf: gewicht(z) };
+}
+
+/**
+ * Was der Zeitstrahl dieser Doppelseite an Rand verlangt.
+ *
+ * Die Doppelseite darf ihn einzeln abschalten (`Spread.timeline`), sonst gilt die
+ * Buchvorgabe. Am Fuß sind es die 14 mm, die auch jede Vorlage frei lässt; an der
+ * Seite das Achsenband an der Außenkante.
+ */
+function zeitstrahlFreiraum(z: Bestand, spread: Spread): Freiraum {
+  const steht = spread.timeline ?? z.settings.timeline;
+  if (!steht) return {};
+  const { trimWidthMm, trimHeightMm } = z.profile.page;
+  return z.settings.timelineStyle === 'side'
+    ? { aussen: SIDE_AXIS_BAND_MM / (2 * trimWidthMm) }
+    : { unten: TIMELINE_FOOT_HEIGHT_MM / trimHeightMm };
+}
+
+/**
+ * Setzt alle Bilder einer Buchseite gemeinsam größer.
+ *
+ * Rechnet der Kern (`vergroessereSeite`), hier steht nur, woher die Vorlage
+ * kommt und wohin das Ergebnis geht. Der zurückgegebene Faktor ist der wirklich
+ * benutzte: Ein zu großer Wunsch wird geklemmt und nicht abgelehnt.
+ */
+export function vergroessereBuchseite(
+  z: Bestand,
+  index: number,
+  seite: Buchseite,
+  wunsch: Wunsch,
+): { ok: boolean; error?: string; faktorX?: number; faktorY?: number; ausschnitte?: number } {
+  const spread = z.spreads[index];
+  if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+  const template = templateById(spread.templateId);
+  if (!template) return { ok: false, error: `Unbekannte Vorlage ${spread.templateId}` };
+
+  const ergebnis = vergroessereSeite(
+    spread,
+    template,
+    seite,
+    wunsch,
+    z.profile,
+    zeitstrahlFreiraum(z, spread),
+  );
+  if (typeof ergebnis === 'string') return { ok: false, error: ergebnis };
+
+  // Nichts gewachsen heißt nichts geändert – und das gehört als Satz gemeldet,
+  // nicht als stiller Erfolg: Der Verlaufsschritt entfiele sonst nicht, und ein
+  // Cmd+Z darauf sähe aus wie ein Fehler.
+  if (ergebnis.faktorX === 1 && ergebnis.faktorY === 1) {
+    return { ok: false, error: 'Diese Buchseite füllt ihren Satzspiegel schon aus' };
+  }
+
+  z.spreads[index] = ergebnis.spread;
+  return {
+    ok: true,
+    faktorX: ergebnis.faktorX,
+    faktorY: ergebnis.faktorY,
+    ausschnitte: ergebnis.ausschnitte,
+  };
+}
+
+/** Was an dieser Doppelseite zu holen wäre – je Buchseite, für die Knöpfe. */
+export function vergroesserungen(
+  z: Bestand,
+  index: number,
+): {
+  ok: boolean;
+  error?: string;
+  left?: Vergroesserung | string;
+  right?: Vergroesserung | string;
+} {
+  const spread = z.spreads[index];
+  if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+  const template = templateById(spread.templateId);
+  if (!template) return { ok: false, error: `Unbekannte Vorlage ${spread.templateId}` };
+
+  const frei = zeitstrahlFreiraum(z, spread);
+  return {
+    ok: true,
+    left: vergroesserung(spread, template, 'left', z.profile, frei),
+    right: vergroesserung(spread, template, 'right', z.profile, frei),
+  };
+}
+
+/** Ein Griff, der noch nicht getan ist: geht er, und was käme dabei heraus? */
+export interface Packbarkeit {
+  ok: boolean;
+  error?: string;
+  bilder?: number;
+  hintergrundVerworfen?: PhotoId;
+  texteVerworfen?: number;
+}
+
+/**
+ * Was sich hier packen ließe — die beiden Doppelseiten oder die beiden
+ * Buchseiten dieses Blattes.
+ *
+ * Zwei Fragen zur selben Stelle in einer Antwort: Die Oberfläche zeigt beide
+ * Knöpfe nebeneinander, und getrennt geladen zeigte der eine kurz die Lage von
+ * vorher. Gerechnet wird für beide wirklich angeordnet — eine billigere Prüfung
+ * wäre eine zweite Wahrheit, und ausgerechnet die Anordnung ist der Grund,
+ * warum ein Griff scheitert.
+ */
+export function packbarkeit(
+  z: Bestand,
+  index: number,
+): { seiten: Packbarkeit; buchseiten: Packbarkeit } {
+  const seiten = packbar(z.spreads, index, reflowVon(z));
+  const halb = mergeSinglePages(
+    z.spreads,
+    index * 2,
+    { profile: z.profile, weightOf: gewicht(z) },
+    effectivePhotos(z.photos, z.overrides),
+  );
+
+  return {
+    seiten: typeof seiten === 'string' ? { ok: false, error: seiten } : { ok: true, ...seiten },
+    buchseiten: halb.ok
+      ? { ok: true, bilder: halb.bilder }
+      : { ok: false, ...(halb.error ? { error: halb.error } : {}) },
+  };
+}
+
+/**
+ * Packt die beiden Buchseiten dieses Blattes zu einer.
+ *
+ * Das Buch wird **eine** Seite kürzer, nicht zwei — und alles dahinter paart
+ * sich neu (`layout/single-page.ts`). Was keinen Platz mehr fand, liegt danach
+ * im Fotopool; der Bericht sagt, wie viele Blätter dabei neu zusammengesetzt
+ * wurden.
+ */
+export function packeBuchseiten(
+  z: Bestand,
+  index: number,
+): {
+  ok: boolean;
+  error?: string;
+  bilder?: number;
+  leftover?: PhotoId[];
+  bericht?: { neuGepaart: number; leerseiten: number; leereBlaetter: number };
+} {
+  const ergebnis = mergeSinglePages(
+    z.spreads,
+    index * 2,
+    { profile: z.profile, weightOf: gewicht(z) },
+    effectivePhotos(z.photos, z.overrides),
+  );
+  if (!ergebnis.ok) return { ok: false, ...(ergebnis.error ? { error: ergebnis.error } : {}) };
+
+  z.spreads.splice(0, z.spreads.length, ...ergebnis.spreads);
+  z.spreads.forEach((s, i) => (s.index = i));
+
+  return {
+    ok: true,
+    bilder: ergebnis.bilder,
+    leftover: ergebnis.leftover,
+    ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+  };
+}
+
+/**
+ * Packt diese Doppelseite mit der nächsten zusammen.
+ *
+ * Die Indizes werden danach nachgezogen wie beim Herausnehmen einer Seite
+ * (`removeSpread`): `Spread.index` ist die Stelle im Buch und nicht die Kennung.
+ */
+export function packeMitNaechster(z: Bestand, index: number): Packbarkeit {
+  const ergebnis = verschmelzeDoppelseiten(z.spreads, index, reflowVon(z));
+  if (typeof ergebnis === 'string') return { ok: false, error: ergebnis };
+
+  z.spreads.splice(0, z.spreads.length, ...ergebnis.spreads);
+  z.spreads.forEach((s, i) => (s.index = i));
+
+  // Dieselbe Form wie die Auskunft davor, und zwar mit **allen** Feldern: Der
+  // verworfene Titel fiel hier heraus, während die Vorschau ihn nannte — die
+  // Oberfläche zeigte den Verlust also vorher an und verschwieg ihn hinterher.
+  return {
+    ok: true,
+    bilder: ergebnis.bilder,
+    ...(ergebnis.hintergrundVerworfen
+      ? { hintergrundVerworfen: ergebnis.hintergrundVerworfen }
+      : {}),
+    ...(ergebnis.texteVerworfen ? { texteVerworfen: ergebnis.texteVerworfen } : {}),
+  };
 }

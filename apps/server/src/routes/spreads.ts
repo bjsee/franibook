@@ -108,6 +108,157 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
     },
   );
 
+  // ------------------------------------------------------- Dichter setzen
+
+  /**
+   * Was ein Vergrößern je Buchseite brächte – eine Auskunft, kein Griff.
+   *
+   * Die Oberfläche beschriftet ihre Knöpfe damit („+7 %", „Seite füllen") und
+   * blendet sie ab, wo nichts zu holen ist. Je Buchseite entweder die Zahlen
+   * oder der Satz, der erklärt, warum dort nichts geht — dieselbe Absage, an der
+   * auch der Griff scheitert.
+   */
+  app.get<{ Params: { index: string } }>(
+    '/api/spreads/:index/vergroesserung',
+    async (req, reply) => {
+      const ergebnis = project.vergroesserungen(Number(req.params.index));
+      if (!ergebnis.ok) return reply.code(404).send({ error: ergebnis.error });
+      return { left: ergebnis.left, right: ergebnis.right };
+    },
+  );
+
+  /**
+   * Ob sich diese Doppelseite mit der nächsten packen lässt.
+   *
+   * Auskunft und Griff scheitern am selben Satz — die Oberfläche darf keinen
+   * Knopf zeigen, der beim Drücken etwas anderes sagt.
+   */
+  app.get<{ Params: { index: string } }>('/api/spreads/:index/packbar', async (req) => {
+    // Zwei Fragen zur selben Stelle: die beiden Doppelseiten (`seiten`) und die
+    // beiden Buchseiten dieses Blattes (`buchseiten`). Getrennt geladen zeigte
+    // die eine kurz die Lage von vorher.
+    return project.packbar(Number(req.params.index));
+  });
+
+  /**
+   * Setzt alle Bilder einer Buchseite gemeinsam größer.
+   *
+   * `faktor` ist ein Vielfaches (1,1 = zehn Prozent mehr), `'max'` das
+   * größtmögliche unter Erhalt der Form, `'einpassen'` streckt Höhe und Breite
+   * getrennt, bis die Bildgruppe ihren Satzspiegel füllt. Der Unterschied ist
+   * gemessen: proportional bringt am echten Buch im Mittel 7 %, das Einpassen ein
+   * Vielfaches davon — dafür ändern die Kästen ihre Form, und von Hand gesetzte
+   * Ausschnitte gehen auf automatisch zurück. Wie viele es waren, steht in der
+   * Antwort.
+   *
+   * Kein Neuanordnen: Die Bilder bleiben in ihren Plätzen, nur die Kästen
+   * wachsen. Ein Wunsch über dem Möglichen wird geklemmt, und die Antwort nennt
+   * das wirklich benutzte Maß.
+   */
+  app.patch<{
+    Params: { index: string };
+    Body?: { seite?: unknown; faktor?: unknown };
+  }>('/api/spreads/:index/vergroessern', async (req, reply) => {
+    const seite = req.body?.seite;
+    if (seite !== 'left' && seite !== 'right') {
+      return reply.code(400).send({ error: "seite muss 'left' oder 'right' sein" });
+    }
+
+    const rohFaktor = req.body?.faktor;
+    const faktor =
+      rohFaktor === 'max' || rohFaktor === 'einpassen'
+        ? rohFaktor
+        : typeof rohFaktor === 'number'
+          ? rohFaktor
+          : undefined;
+    if (faktor === undefined) {
+      return reply.code(400).send({ error: "faktor muss eine Zahl, 'max' oder 'einpassen' sein" });
+    }
+
+    const index = Number(req.params.index);
+    const ergebnis = project.vergroessereBuchseite(index, seite, faktor);
+    if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+
+    void project.save();
+    return {
+      ok: true,
+      faktorX: ergebnis.faktorX,
+      faktorY: ergebnis.faktorY,
+      // Verworfene Handarbeit gehört genannt, nicht gezählt und verschwiegen.
+      ausschnitte: ergebnis.ausschnitte,
+      spread: spreadAntwort(project, index),
+      report: project.lastReport,
+    };
+  });
+
+  /**
+   * Packt diese Doppelseite mit der nächsten zu einer zusammen.
+   *
+   * Alle Bilder beider Seiten werden gemeinsam neu angeordnet, das Buch wird um
+   * ein Blatt kürzer. Abgelehnt wird mit Satz, wo etwas verloren ginge: eine
+   * festgehaltene Seite, ein Auftakt als zweite Seite, eine Bilderzahl, die
+   * keine Vorlage trägt.
+   *
+   * Die Antwort nennt `spreadCount`, weil sich die Nummerierung dahinter
+   * verschiebt — die Oberfläche muss das Buch neu einlesen und nicht nur diese
+   * eine Seite.
+   */
+  app.post<{ Params: { index: string } }>('/api/spreads/:index/packen', async (req, reply) => {
+    const index = Number(req.params.index);
+    if (!Number.isFinite(index)) return reply.code(400).send({ error: 'index ist keine Zahl' });
+
+    const ergebnis = project.packeMitNaechster(index);
+    if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+
+    void project.save();
+    return {
+      ok: true,
+      bilder: ergebnis.bilder,
+      // Ein Hintergrundbild, das dabei aus dem Buch fiel, liegt jetzt im Pool.
+      ...(ergebnis.hintergrundVerworfen
+        ? { hintergrundVerworfen: ergebnis.hintergrundVerworfen }
+        : {}),
+      // Und ein Titel, für den die neue Vorlage keinen Platz hatte.
+      ...(ergebnis.texteVerworfen ? { texteVerworfen: ergebnis.texteVerworfen } : {}),
+      spreadCount: project.spreads.length,
+      spread: spreadAntwort(project, index),
+      report: project.lastReport,
+    };
+  });
+
+  /**
+   * Packt die beiden Buchseiten dieses Blattes zu einer.
+   *
+   * Der kleinere Bruder von `/packen`: Das Buch wird **eine** Seite kürzer statt
+   * zweier, und alles dahinter paart sich neu (`layout/single-page.ts`). Nicht
+   * möglich an einem Blatt, das sich nicht an der Falzachse trennen lässt —
+   * Auftakt, justierte Zeilen, Hintergrundbild über beide Seiten.
+   *
+   * Was keinen Platz mehr fand, steht in `leftover` und liegt im Fotopool; der
+   * Bericht nennt die Blätter, die dabei neu zusammengesetzt wurden.
+   */
+  app.post<{ Params: { index: string } }>(
+    '/api/spreads/:index/seiten-packen',
+    async (req, reply) => {
+      const index = Number(req.params.index);
+      if (!Number.isFinite(index)) return reply.code(400).send({ error: 'index ist keine Zahl' });
+
+      const ergebnis = project.packeBuchseiten(index);
+      if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+
+      void project.save();
+      return {
+        ok: true,
+        bilder: ergebnis.bilder,
+        leftover: ergebnis.leftover ?? [],
+        ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+        spreadCount: project.spreads.length,
+        spread: spreadAntwort(project, Math.min(index, project.spreads.length - 1)),
+        report: project.lastReport,
+      };
+    },
+  );
+
   // ------------------------------------------------------------------ Einwurf
 
   /**

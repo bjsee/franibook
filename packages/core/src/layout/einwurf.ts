@@ -22,7 +22,7 @@
  */
 import type { Photo } from '../model/photo.js';
 import { aspectRatio } from '../model/photo.js';
-import type { Spread } from '../model/spread.js';
+import type { SlotAssignment, Spread } from '../model/spread.js';
 import { FULL_CROP } from '../model/crop.js';
 import type { PrintProfile } from '../print/profile.js';
 
@@ -150,6 +150,12 @@ export function einwurfRect(punkt: { x: number; y: number }, photo: Photo, profi
  * Handarbeit am Ausschnitt, und weil der Kasten die Form des Fotos hat, gibt es
  * ohnehin nichts wegzuschneiden.
  *
+ * @param mitgebracht Was ein Bild von seinem alten Platz mitnimmt, wenn dieser
+ *   Zug es dort weggeholt hat (`bildeigenes` in `layout/move.ts`): Rahmen und
+ *   Unterschrift. Eine Datei von außen bringt nichts mit, also ist es leer.
+ *   Ohne diesen Weg verlor ein Bild seine getippte Zeile, sobald man es um fünf
+ *   Millimeter neben seinen Platz zog – derselbe Zug auf einen Nachbarplatz
+ *   behielt sie.
  * @returns die neue Doppelseite und die Kennung des Platzes – die Oberfläche
  * wählt ihn danach aus, ohne nachzufragen.
  */
@@ -158,6 +164,7 @@ export function mitEinwurf(
   photo: Photo,
   punkt: { x: number; y: number },
   profile: PrintProfile,
+  mitgebracht: Partial<SlotAssignment> = {},
 ): { spread: Spread; slotId: string } {
   const slotId = einwurfPlatzId(spread);
   const rect = einwurfRect(punkt, photo, profile);
@@ -165,7 +172,10 @@ export function mitEinwurf(
   return {
     spread: {
       ...spread,
-      slots: [...spread.slots, { slotId, photoId: photo.id, crop: { ...FULL_CROP }, rect }],
+      slots: [
+        ...spread.slots,
+        { slotId, photoId: photo.id, crop: { ...FULL_CROP }, rect, ...mitgebracht },
+      ],
     },
     slotId,
   };

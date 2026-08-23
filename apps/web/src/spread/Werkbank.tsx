@@ -18,6 +18,7 @@ import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
 import { BackgroundPicker } from '../BackgroundPicker.js';
 import { TemplatePicker } from '../TemplatePicker.js';
+import { Verdichten } from './Verdichten.js';
 import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
@@ -430,13 +431,31 @@ function SeitenKarte({
       </div>
 
       {panel === 'anordnung' && (
-        <TemplatePicker
-          index={aussen.index}
-          photoCount={imageBoxes(spread).length}
-          version={model.buchVersion}
-          onFehler={model.setNote}
-          onApplied={({ spread: neu }) => model.anordnungUebernommen(neu as RenderedSpread)}
-        />
+        <>
+          <TemplatePicker
+            index={aussen.index}
+            photoCount={imageBoxes(spread).length}
+            version={model.buchVersion}
+            onFehler={model.setNote}
+            onApplied={({ spread: neu }) => model.anordnungUebernommen(neu as RenderedSpread)}
+          />
+          {/*
+            Unter derselben Pille wie die Vorlagenwahl, weil es dieselbe Frage
+            beantwortet: wie stehen die Bilder auf dem Papier? Und in allen drei
+            Rahmen, wie jede Funktion hier.
+          */}
+          <div style={{ marginTop: 12 }}>
+            <span style={B.marke}>Dichter setzen</span>
+            <Verdichten
+              index={aussen.index}
+              version={model.buchVersion}
+              spreadCount={aussen.spreadCount}
+              onSpread={(neu) => model.anordnungUebernommen(neu)}
+              onGepackt={aussen.onNeuRendern}
+              onNote={model.setNote}
+            />
+          </div>
+        </>
       )}
 
       {panel === 'hintergrund' && (
