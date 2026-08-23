@@ -5,6 +5,12 @@
  * (Anordnung), *worauf liegen sie?* (Hintergrund), *was steht darauf und wie viele
  * Seiten sind es?* (Text, Seiten einfügen und löschen).
  *
+ * Dazwischen „Dichter setzen": zwei Griffe gegen zu viel leeres Papier — alle
+ * Bilder einer Buchseite gemeinsam größer, oder zwei Doppelseiten zu einer
+ * (`Verdichten.tsx`). Sie stehen bei der Anordnung und nicht bei den Seiten am
+ * Buchgerüst, weil sie dasselbe beantworten wie eine andere Vorlage: *wie stehen
+ * die Bilder auf dem Papier?*
+ *
  * Die drei Griffe am Buchgerüst — einfügen, löschen, festhalten — stehen absichtlich
  * hier unten und nicht bei den Bildwerkzeugen: Sie ändern nicht die Doppelseite,
  * sondern ihren Platz im Buch. „Festgehalten" ist der einzige davon, der über der
@@ -21,6 +27,7 @@ import { TextBlocks, type TextBlockData } from '../TextBlocks.js';
 import type { SpreadAussen } from './types.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
 import { Unterschriften } from './Unterschriften.js';
+import { Verdichten } from './Verdichten.js';
 import { Vorlagentexte } from './Vorlagentexte.js';
 
 interface Props {
@@ -63,6 +70,22 @@ export function SeitenPanel({ model, aussen, spread }: Props) {
                     `jetzt im Fotopool — die neue Anordnung hat weniger Plätze`,
             );
           }}
+        />
+      </div>
+
+      <div style={B.abschnitt}>
+        <span style={B.marke}>Dichter setzen</span>
+        <p style={{ ...B.leiser, marginBottom: 6 }}>
+          Gegen zu viel leeres Papier: alle Bilder einer Buchseite gemeinsam größer, oder zwei
+          Doppelseiten zu einer.
+        </p>
+        <Verdichten
+          index={aussen.index}
+          version={model.buchVersion}
+          spreadCount={aussen.spreadCount}
+          onSpread={(neu) => model.anordnungUebernommen(neu)}
+          onGepackt={aussen.onNeuRendern}
+          onNote={model.setNote}
         />
       </div>
 

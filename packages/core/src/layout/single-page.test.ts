@@ -8,6 +8,7 @@ import { chapterHalves } from '../templates/chapter-halves.js';
 import {
   insertKeptHalves,
   insertSinglePage,
+  mergeSinglePages,
   removeSinglePage,
   setChapterHalf,
   setHalfPage,
@@ -935,5 +936,88 @@ describe('insertKeptHalves', () => {
     const r = insertKeptHalves(fluss(), []);
     expect(r.ok).toBe(true);
     expect(fotos(r.spreads)).toEqual(fotos(fluss()));
+  });
+});
+
+describe('mergeSinglePages – zwei Buchseiten zu einer', () => {
+  const profile = defaultProfile();
+  const foto = (id: string): Photo =>
+    ({ id, relPath: id, fileName: id, bytes: 1_000_000, width: 4000, height: 3000 }) as Photo;
+
+  /** Der Bestand zu einem Buch, aufgelöst wie `effectivePhotos` ihn liefert. */
+  function bestand(spreads: readonly Spread[]): Map<PhotoId, Photo> {
+    return new Map(fotos(spreads).map((id) => [id, foto(id)]));
+  }
+
+  it('legt die Bilder beider Buchseiten auf eine und macht das Buch eine Seite kürzer', () => {
+    // Zwei Viererblätter: acht Buchseitenhälften à zwei Bilder. Die linke und die
+    // rechte Seite des ersten Blattes werden eine mit vier Bildern.
+    const buch = [blatt('s0', 'spread.4up.grid', 0), blatt('s1', 'spread.4up.grid', 4)];
+    const r = mergeSinglePages(buch, 0, { profile }, bestand(buch));
+
+    expect(r.ok).toBe(true);
+    expect(r.bilder).toBe(4);
+    // Kein Bild verloren: Der Fotopool ist die Differenz, und `leftover` ist leer.
+    expect(r.leftover).toEqual([]);
+    expect(fotos(r.spreads).sort()).toEqual(fotos(buch).sort());
+    // Acht Buchseiten waren es, sieben sind es – also vier Blätter minus eines.
+    expect(r.spreads.length).toBeLessThanOrEqual(buch.length);
+  });
+
+  it('lehnt ein Blatt ab, das sich nicht an der Falzachse trennen lässt', () => {
+    // Ein Auftakt trägt seinen Text über beide Hälften.
+    const buch = [auftakt('s0'), blatt('s1', 'spread.4up.grid', 0)];
+    const r = mergeSinglePages(buch, 0, { profile }, bestand(buch));
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('nicht in einzelne');
+  });
+
+  it('lehnt eine Buchseite ohne Nachbarin ab', () => {
+    const buch = [blatt('s0', 'spread.4up.grid', 0)];
+    const gross = mergeSinglePages(buch, 5, { profile }, bestand(buch));
+    expect(gross.ok).toBe(false);
+    expect(gross.error).toContain('gibt es nicht');
+
+    // Die letzte Buchseite des Buches hat keine zweite hinter sich.
+    const letzte = mergeSinglePages(buch, 1, { profile }, bestand(buch));
+    expect(letzte.ok).toBe(false);
+    expect(letzte.error).toContain('keine zweite');
+  });
+
+  it('lehnt ab, wenn auf beiden Seiten kein Bild liegt', () => {
+    const leer: Spread = { id: 's0', index: 0, templateId: 'spread.4up.grid', slots: [] };
+    const r = mergeSinglePages(
+      [leer, blatt('s1', 'spread.4up.grid', 0)],
+      0,
+      { profile },
+      new Map(),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('kein Bild');
+  });
+
+  it('lehnt ab, wenn ein Bild nicht mehr zum Bestand gehört', () => {
+    const buch = [blatt('s0', 'spread.4up.grid', 0), blatt('s1', 'spread.4up.grid', 4)];
+    const luecke = bestand(buch);
+    luecke.delete('p0');
+    const r = mergeSinglePages(buch, 0, { profile }, luecke);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Bestand');
+  });
+
+  it('lehnt ab, wenn keine Halbseite so viele Bilder trägt', () => {
+    // Die Bibliothek trägt bis vierzehn Bilder je Buchseite; zwei Hälften mit je
+    // acht ergeben sechzehn. Eine Absage mit Zahl statt verschwundener Bilder.
+    const buch = [blatt('s0', 'spread.16up.mosaic-quer', 0), blatt('s1', 'spread.4up.grid', 20)];
+    const r = mergeSinglePages(buch, 0, { profile }, bestand(buch));
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('16');
+  });
+
+  it('verändert die Eingabe nicht', () => {
+    const buch = [blatt('s0', 'spread.4up.grid', 0), blatt('s1', 'spread.4up.grid', 4)];
+    const abdruck = JSON.stringify(buch);
+    mergeSinglePages(buch, 0, { profile }, bestand(buch));
+    expect(JSON.stringify(buch)).toBe(abdruck);
   });
 });
