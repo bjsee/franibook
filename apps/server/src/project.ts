@@ -71,6 +71,7 @@ import {
   FULL_CROP,
   generateBook,
   isBackgroundColor,
+  isTextBlockColor,
   isFrameId,
   moveSlotLayer,
   movePhoto,
@@ -955,71 +956,118 @@ export class Project {
    */
   setSpreadBackground(
     index: number,
-    patch: { color?: string | null; photoId?: PhotoId | null },
+    patch: {
+      color?: string | null;
+      photoId?: PhotoId | null;
+      /** Buchseite des Bildes; `null` heißt über beide. */
+      side?: 'left' | 'right' | null;
+    },
   ): { ok: boolean; error?: string; hinweis?: string } {
     const spread = this.spreads[index];
     if (!spread) return { ok: false };
+
+    /*
+     * Erst alles prüfen, dann alles setzen.
+     *
+     * Vorher stand die Farbe schon in der Doppelseite, wenn danach die Kennung
+     * des Fotos scheiterte: Die Route antwortet dann 404 und **speichert
+     * nicht** — die halbe Änderung blieb im Speicher stehen und wäre beim
+     * nächsten Schreibvorgang mitgegangen, ohne dass jemand sie verlangt hat.
+     */
+    if (patch.color !== undefined && patch.color !== null && !isBackgroundColor(patch.color)) {
+      return { ok: false, error: 'Unbekannte Hintergrundfarbe' };
+    }
+    if (
+      patch.side !== undefined &&
+      patch.side !== null &&
+      patch.side !== 'left' &&
+      patch.side !== 'right'
+    ) {
+      return { ok: false, error: 'Unbekannte Buchseite' };
+    }
+    const neuesFoto =
+      patch.photoId !== undefined && patch.photoId !== null
+        ? this.photos.get(patch.photoId)
+        : undefined;
+    if (patch.photoId !== undefined && patch.photoId !== null && !neuesFoto) return { ok: false };
 
     if (patch.color !== undefined) {
       if (patch.color === null) delete spread.background;
       // Gegen die geschlossene Palette geprüft wie bei `tilt` und `frame`: Ein
       // freier Hexwert wäre auf Dauer ein kräftiges Blau hinter Fotos.
-      else if (isBackgroundColor(patch.color)) spread.background = patch.color;
-      else return { ok: false, error: 'Unbekannte Hintergrundfarbe' };
+      else spread.background = patch.color;
       // Ab jetzt ist es eine Entscheidung und keine Jahresfarbe mehr – auch
       // beim Zurücksetzen, denn die Automatik setzt sie erst wieder beim
       // nächsten Erzeugen.
       delete spread.backgroundAuto;
     }
 
+    // Die Seite gehört zum Bild und wird deshalb vor ihm gesetzt: Ein Aufruf,
+    // der beides mitbringt, soll die Auflösung gegen die **neue** Fläche prüfen.
+    if (patch.side !== undefined) {
+      if (patch.side === null) delete spread.backgroundPhotoSide;
+      else spread.backgroundPhotoSide = patch.side;
+    }
+
+    let ausHalbemSchloss = false;
     if (patch.photoId !== undefined) {
       if (patch.photoId === null) {
         delete spread.backgroundPhotoId;
+        // Ohne Bild ist die Seitenangabe eine Aussage über nichts.
+        delete spread.backgroundPhotoSide;
       } else {
-        const roh = this.photos.get(patch.photoId);
-        if (!roh) return { ok: false };
+        const roh = neuesFoto!;
         spread.backgroundPhotoId = patch.photoId;
+        /*
+         * Nur ein Bild über **beide** Seiten hält das Blatt zusammen
+         * (`teilbar`) — daran kann kein halbes Schloss mehr hängen. Statt den
+         * Griff abzulehnen wird das Schloss zum ganzen: Der Neuaufbau bewahrte
+         * das Blatt danach ohnehin komplett (`generateBook`), und ein Schild
+         * „nur linke Seite festgehalten" wäre dann eine Auskunft, die nicht
+         * stimmt. Ein seitenweises Bild reist dagegen mit seiner Buchseite und
+         * lässt das halbe Schloss unangetastet.
+         */
+        if (spread.lockedSide && !spread.backgroundPhotoSide) {
+          delete spread.lockedSide;
+          spread.locked = true;
+          ausHalbemSchloss = true;
+        }
         // Aufgelöst, weil die Prüfung „taugt als Hintergrund" die Pixelmaße
         // gegen die Seitenmaße stellt – bei gekippter Ausrichtung sind das
         // andere.
         const photo = effectivePhoto(roh, this.overrides[roh.id]);
-        const fit = backgroundFit(photo, this.profile);
+        const fit = backgroundFit(photo, this.profile, spread.backgroundPhotoSide);
         if (!fit.taugt) {
+          const flaeche = spread.backgroundPhotoSide ? 'die Buchseite' : 'die Doppelseite';
           return {
             ok: true,
             hinweis:
-              `Das Bild deckt die Doppelseite nur mit ${Math.round(fit.dpi)} dpi ab. ` +
-              `Für einen Hintergrund sind ${fit.benoetigtPx} px lange Kante nötig, ` +
-              `dieses hat ${Math.max(photo.width, photo.height)} px.`,
+              `Das Bild deckt ${flaeche} nur mit ${Math.round(fit.dpi)} dpi ab. ` +
+              `Dafür bräuchte es ${fit.benoetigtPx} px an der knappen Kante, ` +
+              `es hat dort ${fit.vorhandenPx} px.` +
+              (ausHalbemSchloss ? ' Die Doppelseite ist jetzt ganz festgehalten.' : ''),
           };
         }
       }
     }
 
-    return { ok: true };
+    return {
+      ok: true,
+      ...(ausHalbemSchloss
+        ? {
+            hinweis:
+              'Ein Bild hinter der Doppelseite hält beide Seiten zusammen — ' +
+              'sie ist jetzt ganz festgehalten statt halb.',
+          }
+        : {}),
+    };
   }
 
-  /**
-   * Fotos, die als Hintergrund taugen – die besten zuerst.
-   *
-   * Bei diesem Bestand ist die Liste meist leer; das ist die Antwort, nicht ein
-   * Fehler. Deshalb wird auch die Auflösung mitgeliefert: Wer trotzdem eines
-   * setzen will, sieht, wie weit es fehlt.
-   */
-  backgroundCandidates(
-    limit = 24,
-  ): { photoId: PhotoId; fileName: string; dpi: number; taugt: boolean }[] {
-    return [...this.photos.values()]
-      .map((p) => ({ photo: p, fit: backgroundFit(p, this.profile) }))
-      .sort((a, b) => b.fit.dpi - a.fit.dpi)
-      .slice(0, limit)
-      .map(({ photo, fit }) => ({
-        photoId: photo.id,
-        fileName: photo.fileName,
-        dpi: Math.round(fit.dpi),
-        taugt: fit.taugt,
-      }));
-  }
+  // Die Liste der besten Hintergrundkandidaten stand hier, solange die
+  // Oberfläche acht Kacheln zeigte. Sie wählt jetzt aus dem ganzen Bestand
+  // (`HintergrundBild.tsx`) und rechnet die Eignung je Bild mit `backgroundFit`
+  // selbst — dieselbe Funktion, die auch `setSpreadBackground` prüft. Eine
+  // vorsortierte Teilmenge daneben wäre eine zweite Antwort auf dieselbe Frage.
 
   // ------------------------------------------------------ Jahresereignisse
 
@@ -1102,7 +1150,7 @@ export class Project {
    */
   baueBuch(settings: ProjectSettings, behalten: ReadonlySet<number> = new Set()): GenerateResult {
     this.rebuildStructure();
-    const { kept } = splitKept(this.spreads);
+    const { kept, halb } = splitKept(this.spreads);
     const zusaetzlich = this.spreads
       .map((spread, index) => ({ spread, index }))
       .filter(({ spread, index }) => !spread.locked && behalten.has(index));
@@ -1117,12 +1165,19 @@ export class Project {
         return anker ? { ...ohne, anchor: anker } : ohne;
       }),
     ];
+    // Ein halb festgehaltenes Blatt, das in dieser Probe ausdrücklich behalten
+    // wird, gilt ganz: Der Wunsch des Benutzers für diesen einen Lauf schlägt
+    // das dauerhafte halbe Schloss. Ohne die Bereinigung stünde es in beiden
+    // Töpfen und käme zweimal ins Buch.
+    const halbeSeiten = halb.filter((spread) => !ausgenommen.has(spread.index));
+
     return generateBook({
       structure: this.structure,
       photos: this.photos,
       overrides: this.overrides,
       profile: profileById(settings.printProfileId) ?? this.profile,
       ...(alleKept.length > 0 ? { kept: alleKept } : {}),
+      ...(halbeSeiten.length > 0 ? { keptHalves: halbeSeiten } : {}),
       targetPages: settings.targetPages,
       chapterOpeners: settings.chapterOpeners,
       chapterOpenersDense: settings.chapterOpenersDense,
@@ -1554,8 +1609,12 @@ export class Project {
     return ergebnis;
   }
 
-  setSpreadLocked(index: number, locked: boolean): { ok: boolean; error?: string } {
-    return seiten.setSpreadLocked(this, index, locked);
+  setSpreadLocked(
+    index: number,
+    locked: boolean,
+    side?: 'left' | 'right' | null,
+  ): { ok: boolean; error?: string; unteilbar?: boolean } {
+    return seiten.setSpreadLocked(this, index, locked, side);
   }
 
   /** Nimmt einen leeren Platz von der Doppelseite oder holt ihn zurück. */
@@ -1945,8 +2004,11 @@ export class Project {
       if (block.rotateDeg === 0) delete block.rotateDeg;
     }
     if (patch.color !== undefined) {
-      if (patch.color) block.color = patch.color;
-      else delete block.color;
+      // Gegen die geschlossene Palette geprüft wie die Hintergrundfarbe: Ein
+      // fremder Wert liefe sonst bis in den Druck durch. Ein leerer heißt „wie
+      // der Grund" und löscht das Feld – dann entscheidet `textColorOn`.
+      if (!patch.color) delete block.color;
+      else if (isTextBlockColor(patch.color)) block.color = patch.color;
     }
     if (patch.rect) {
       const { x, y, w, h } = patch.rect;

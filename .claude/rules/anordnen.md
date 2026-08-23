@@ -51,6 +51,43 @@ bestimmt und ausdrücklich nicht über den Titel: Der ist editierbar. Die
 eingesparten Auftakte gehen ins Seitenbudget zurück, sonst wäre das Buch je
 festgehaltenem Auftakt zwei Seiten zu kurz.
 
+## Eine einzelne Buchseite festhalten
+
+`Spread.lockedSide` ist das halbe Schloss: Nur die genannte Buchseite wird
+bewahrt, die Gegenseite baut der Fluss neu. Der Unterschied zu `locked` ist
+genau dieser Nachbar — ein ganzes Schloss friert auch die Seite ein, die die
+Automatik gestellt hat.
+
+Der Weg durch die Engine: `splitKept` liefert einen dritten Topf (`halb`),
+`keptHalfPhotos` gibt nur die Bilder der bewahrten Hälfte als vergeben aus (über
+die **Geometrie** der Plätze, nicht über ihre Kennung — nur Paarvorlagen
+präfixen mit `l-`/`r-`), das Budget verliert **eine** Buchseite statt zweier, und
+nach dem Fluss setzt `insertKeptHalves` die Seite an ihrem Anker wieder ein und
+paart um. Scheitert das Zusammensetzen, bleibt das Buch ohne diese Seite und
+`report.keptHalfPages` steht auf 0 — ihre Bilder liegen dann im Fotopool.
+
+**Die Seite darf die Blattseite wechseln.** `paare` normiert jede Buchseite in
+Linksform und spiegelt sie zurück, wo sie landet. Der Zwang, links links zu
+lassen, verlangte vor jeder bewahrten Seite eine leere Halbseite — das Buch
+bekäme je festgehaltener Seite eine weiße dazu.
+
+**Eine eingefügte Buchseite hält seither nur sich selbst fest.** `insertSinglePage`
+markiert sie mit `own`, und `paare` macht daraus `lockedSide` statt eines
+blattweiten `locked`; sind beide Hälften eigen, bleibt es beim ganzen Schloss.
+
+Nicht möglich ist es an einem Blatt, das sich nicht an der Falzachse trennen
+lässt (`teilbar`): Auftakte, justierte Zeilen, ein Hintergrundbild **über beide
+Seiten**. Der Server antwortet dort mit 409 und einem Satz, die Oberfläche zeigt
+die Wahl gar nicht erst (`aussen.splittable`).
+
+Ein Hintergrundbild auf **einer** Buchseite hält das Blatt dagegen nicht
+zusammen: `zerlege` gibt es seiner Hälfte mit, `paare` schreibt es samt neuer
+Seite zurück, und `keptHalfPhotos` hält es fest, wenn es auf der bewahrten
+Hälfte liegt. Dieselbe Grenze gilt beim seitenweisen Anordnen (`setHalfPage`,
+`setChapterHalf`) — sonst ließe sich eine Seite festhalten, aber nicht
+gestalten. Auf der **nicht** bewahrten Hälfte geht das Bild beim Neuaufbau
+verloren wie jede andere Handarbeit dort.
+
 ## Eine einzelne Buchseite einfügen
 
 `POST /api/spreads/page`, `layout/single-page.ts`. Das kippt die Parität: Was
@@ -287,7 +324,10 @@ entchronologisierte.
 `handwork()` sagt vor einem Neuaufbau, was er kostet: Positionen (frei gesetzte
 Kästen), Ebenen, Textplätze und weggenommene Plätze überlebt er **nicht**,
 justierte Zeilen und gerechnete Ausschnitte stellt er wieder her, `locked`
-bewahrt eine ganze Doppelseite. Wer eine neue Handarbeit einführt, entscheidet zuerst diese Frage und
+bewahrt eine ganze Doppelseite und `lockedSide` eine Buchseite. Die Handarbeit
+eines halb gesicherten Blattes zählt weiter voll in die Summe: Welche Hälfte sie
+trägt, weiß die Bilanz nicht, und eine Warnung zu viel ist besser als eine
+verschwiegene (`halbFestgehalten` steht daneben). Wer eine neue Handarbeit einführt, entscheidet zuerst diese Frage und
 trägt sie dort ein.
 
 **Ein gekipptes Bild bekommt keinen neuen Platz von selbst.** `renderSpread`

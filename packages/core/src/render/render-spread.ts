@@ -26,7 +26,9 @@ import {
   BACKGROUND_MIN_DPI,
   DEFAULT_BACKGROUND,
   accentOn,
+  backgroundArea,
   backgroundFit,
+  TEXT_DEFAULT_COLOR,
   textColorOn,
 } from './background.js';
 import type { FrameId } from './frame.js';
@@ -679,29 +681,27 @@ export function renderSpread(spread: Spread, ctx: RenderContext): RenderedSpread
 
   const background = spread.background ?? ctx.background ?? DEFAULT_BACKGROUND;
 
-  // Ein Hintergrundbild ist eine gewöhnliche Bildbox über die ganze
-  // Beschnittfläche – kein neuer Kasten und kein Sonderweg in den Renderern.
-  // Es kommt zuerst, damit alles andere darüber liegt.
+  // Ein Hintergrundbild ist eine gewöhnliche Bildbox über die Beschnittfläche –
+  // kein neuer Kasten und kein Sonderweg in den Renderern. Es kommt zuerst,
+  // damit alles andere darüber liegt. Mit `backgroundPhotoSide` ist die Fläche
+  // eine Buchseite statt der Doppelseite; das ist derselbe Kasten, nur schmaler.
   const backgroundPhoto = spread.backgroundPhotoId
     ? photos.get(spread.backgroundPhotoId)
     : undefined;
   if (backgroundPhoto) {
-    const flaeche = {
-      xMm: 0,
-      yMm: 0,
-      wMm: spreadWidthMm(profile),
-      hMm: spreadHeightMm(profile),
-    };
-    const fit = backgroundFit(backgroundPhoto, profile);
+    const flaeche = backgroundArea(profile, spread.backgroundPhotoSide);
+    const fit = backgroundFit(backgroundPhoto, profile, spread.backgroundPhotoSide);
     // Auch der Hintergrund trägt die Anpassung seines Fotos: Sie hängt am Bild,
     // nicht daran, wo es liegt – und ein schwarzweißer Hintergrund unter
     // farbigen Bildern ist genau der Fall, für den man sie einstellt.
     const hintergrundMatrix = matrixVon(backgroundPhoto.id, ctx);
-    // Und auch er bekommt den Falzzuschlag. Er ist sogar der Regelfall dafür:
-    // Ein flächenfüllender Hintergrund kreuzt die Achse immer, und ohne
-    // Zuschlag reißt er an der Bindung wie jedes andere Motiv. Die Auflösung
-    // bleibt die der ganzen Fläche – der Unterschied liegt unter einem Prozent
-    // und `backgroundFit` misst das Papier, nicht den Ausschnitt.
+    // Und auch er bekommt den Falzzuschlag. Über beide Seiten ist er sogar der
+    // Regelfall dafür: Ein flächenfüllender Hintergrund kreuzt die Achse immer,
+    // und ohne Zuschlag reißt er an der Bindung wie jedes andere Motiv. Die
+    // Auflösung bleibt die der ganzen Fläche – der Unterschied liegt unter einem
+    // Prozent und `backgroundFit` misst das Papier, nicht den Ausschnitt. Auf
+    // einer einzelnen Buchseite endet die Fläche an der Achse, statt sie zu
+    // kreuzen; `falzverlustMm` gibt dort von sich aus 0 zurück.
     const hintergrundVerlust = falzverlustMm(flaeche, 0, profile);
     const hintergrund: ImageBox = {
       kind: 'image',
@@ -949,9 +949,6 @@ export function textBlockBoxes(
   }));
 }
 
-/** Farbe eines Textblocks ohne eigene Wahl: dieselbe wie im Fließtext des Buches. */
-const TEXT_DEFAULT_COLOR = '#3f3f46';
-
 /**
  * Die beiden Seitenzahlen dieser Doppelseite – oder keine.
  *
@@ -964,8 +961,9 @@ const TEXT_DEFAULT_COLOR = '#3f3f46';
  *
  * Je Seite geprüft und nicht je Doppelseite: Ein randabfallendes Bild steht
  * meist auf einer von beiden, und die Zahl der anderen soll deshalb nicht
- * mitverschwinden. Nur ein Hintergrundbild nimmt beide – es liegt über die
- * ganze Beschnittfläche und ist damit randabfallend auf jeder Seite.
+ * mitverschwinden. Das gilt seit `backgroundPhotoSide` auch für den Hintergrund:
+ * Über beide Seiten nimmt er beide Zahlen, auf einer Buchseite nur ihre — vorher
+ * verlor die unbedeckte Seite ihre Zahl mit, ohne dass etwas darüber lag.
  */
 function buildPageNumbers(
   spread: Spread,
@@ -976,7 +974,13 @@ function buildPageNumbers(
   const { profile, template } = ctx;
   if (templateMeta(template.id).chapterOnly) return [];
   if (template.tags?.includes('gruppenauftakt')) return [];
-  if (spread.backgroundPhotoId && ctx.photos.has(spread.backgroundPhotoId)) return [];
+  const hintergrundBild =
+    spread.backgroundPhotoId !== undefined && ctx.photos.has(spread.backgroundPhotoId);
+  const hintergrundDeckt = {
+    links: hintergrundBild && spread.backgroundPhotoSide !== 'right',
+    rechts: hintergrundBild && spread.backgroundPhotoSide !== 'left',
+  };
+  if (hintergrundDeckt.links && hintergrundDeckt.rechts) return [];
 
   // Die tatsächlichen Rechtecke und nicht die der Vorlage: Wer ein Bild von
   // Hand in den Fuß zieht, verdeckt die Zahl genauso. Und nur belegte Plätze —
@@ -1002,7 +1006,10 @@ function buildPageNumbers(
     );
   };
 
-  const weglassen = { links: verdeckt('links'), rechts: verdeckt('rechts') };
+  const weglassen = {
+    links: hintergrundDeckt.links || verdeckt('links'),
+    rechts: hintergrundDeckt.rechts || verdeckt('rechts'),
+  };
   if (weglassen.links && weglassen.rechts) return [];
 
   return pageNumberBoxes(

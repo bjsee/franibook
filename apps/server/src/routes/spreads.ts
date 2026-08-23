@@ -281,32 +281,40 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
   });
 
   /**
-   * Hält eine Doppelseite fest oder gibt sie frei.
+   * Hält eine Doppelseite oder eine einzelne Buchseite fest – oder gibt sie frei.
    *
    * Festgehalten heißt: Das Neuanordnen baut sie nicht neu. Für eine selbst
    * gebaute Seite ist das die Voraussetzung, dass sie den nächsten Knopfdruck
    * überlebt; für eine erzeugte ist es der Weg, eine gelungene Seite zu behalten,
    * während der Rest neu gemischt wird.
+   *
+   * `side` macht daraus das halbe Schloss: Nur diese Buchseite bleibt, die
+   * andere fließt weiter mit. Nicht jedes Blatt lässt sich so trennen – ein
+   * Auftakt, eine justierte Zeile, ein Blatt mit Hintergrundbild antwortet mit
+   * 409 und einem Satz.
    */
-  app.patch<{ Params: { index: string }; Body?: { locked?: boolean } }>(
-    '/api/spreads/:index/locked',
-    async (req, reply) => {
-      const index = Number(req.params.index);
-      const ergebnis = project.setSpreadLocked(index, req.body?.locked !== false);
-      if (!ergebnis.ok) return reply.code(404).send({ error: ergebnis.error });
+  app.patch<{
+    Params: { index: string };
+    Body?: { locked?: boolean; side?: 'left' | 'right' | null };
+  }>('/api/spreads/:index/locked', async (req, reply) => {
+    const index = Number(req.params.index);
+    const ergebnis = project.setSpreadLocked(index, req.body?.locked !== false, req.body?.side);
+    if (!ergebnis.ok) {
+      // Ein unteilbares Blatt ist kein Tippfehler des Aufrufers, sondern eine
+      // Eigenschaft dieser Seite – wie beim seitenweisen Anordnen.
+      return reply.code(ergebnis.unteilbar ? 409 : 404).send({ error: ergebnis.error });
+    }
 
-      await project.save();
-      return { ok: true, spread: spreadAntwort(project, index), handwork: project.handwork() };
-    },
-  );
+    await project.save();
+    return { ok: true, spread: spreadAntwort(project, index), handwork: project.handwork() };
+  });
 
   // ------------------------------------------------------ Hintergrund und Zeit
 
-  /** Wählbare Hintergrundfarben und die Fotos, die als Hintergrund taugen. */
+  /** Wählbare Hintergrundfarben und die Schwelle, ab der ein Bild als Grund taugt. */
   app.get('/api/background', async () => ({
     colors: BACKGROUND_COLORS,
     minDpi: BACKGROUND_MIN_DPI,
-    candidates: project.backgroundCandidates(),
   }));
 
   /**
@@ -317,7 +325,12 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
    */
   app.patch<{
     Params: { index: string };
-    Body: { color?: string | null; photoId?: string | null };
+    Body: {
+      color?: string | null;
+      photoId?: string | null;
+      /** Buchseite des Hintergrundbildes; `null` heißt über beide. */
+      side?: 'left' | 'right' | null;
+    };
   }>('/api/spreads/:index/background', async (req, reply) => {
     const ergebnis = project.setSpreadBackground(Number(req.params.index), req.body);
     if (!ergebnis.ok) {
