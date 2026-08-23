@@ -15,14 +15,70 @@
  */
 import type { PhotoId } from '../model/photo.js';
 import type { Spread, SpreadAnchor } from '../model/spread.js';
-import { groupOpenerTemplates } from '../templates/index.js';
+import { groupOpenerTemplates, templateById } from '../templates/index.js';
 
-/** Trennt die festgehaltenen Doppelseiten von denen, die neu gebaut werden. */
-export function splitKept(spreads: readonly Spread[]): { kept: Spread[]; flow: Spread[] } {
+/**
+ * Trennt die festgehaltenen Doppelseiten von denen, die neu gebaut werden.
+ *
+ * Drei Töpfe statt zwei, seit das Schloss auch an einer einzelnen Buchseite
+ * sitzen kann (`Spread.lockedSide`): `halb` läuft weder ganz mit noch ganz
+ * durch — die bewahrte Seite wird nach dem Fluss wieder eingesetzt
+ * (`insertKeptHalves`), die Gegenseite baut der Fluss neu. `locked` schlägt
+ * `lockedSide`: Beides zugleich heißt „ganz festgehalten".
+ */
+export function splitKept(spreads: readonly Spread[]): {
+  kept: Spread[];
+  halb: Spread[];
+  flow: Spread[];
+} {
   const kept: Spread[] = [];
+  const halb: Spread[] = [];
   const flow: Spread[] = [];
-  for (const spread of spreads) (spread.locked ? kept : flow).push(spread);
-  return { kept, flow };
+  for (const spread of spreads) {
+    if (spread.locked) kept.push(spread);
+    else if (spread.lockedSide) halb.push(spread);
+    else flow.push(spread);
+  }
+  return { kept, halb, flow };
+}
+
+/**
+ * Fotos auf der festgehaltenen Hälfte eines halb gesicherten Blattes.
+ *
+ * Nur diese sind vergeben — die der Gegenseite gehören dem Fluss und sollen
+ * dort wieder auftauchen. Genau das ist der Sinn des halben Schlosses.
+ *
+ * Zugeordnet wird über die **Geometrie** und nicht über die Kennung: Nur die
+ * Paarvorlagen präfixen ihre Slots mit `l-` und `r-`, jede Vorlage der
+ * Bibliothek nennt sie schlicht `a`, `b`, `c`. Am Präfix entschieden galt an
+ * einem `spread.4up.grid` kein einziges Bild als vergeben — der Fluss verteilte
+ * sie ein zweites Mal, und dasselbe Foto stand zweimal im Buch. Ein frei
+ * gesetzter Kasten trägt sein Rechteck selbst; er gehört der Buchseite, über der
+ * seine Mitte liegt, dieselbe Regel wie in `zerlege`.
+ */
+export function keptHalfPhotos(halb: readonly Spread[]): Set<PhotoId> {
+  const ids = new Set<PhotoId>();
+  for (const spread of halb) {
+    const seite = spread.lockedSide;
+    if (!seite) continue;
+    const vorlage = templateById(spread.templateId);
+    const geometrie = new Map((vorlage?.slots ?? []).map((s) => [s.id, s]));
+    for (const slot of spread.slots) {
+      if (!slot.photoId) continue;
+      const kasten = slot.rect ?? geometrie.get(slot.slotId);
+      // Ohne Geometrie bleibt nur die Kennung — besser als das Bild stumm
+      // freizugeben, denn ein doppelt gedrucktes Foto fällt erst im Buch auf.
+      const liegtLinks = kasten ? kasten.x + kasten.w / 2 < 0.5 : !slot.slotId.startsWith('r-');
+      if (liegtLinks === (seite === 'left')) ids.add(slot.photoId);
+    }
+    // Und das Hintergrundbild, wenn es auf der bewahrten Seite liegt: Es ist
+    // ebenso vergeben wie ein Bild in einem Platz — dieselbe Überlegung wie in
+    // `keptPhotos`, nur eben halbseitig.
+    if (spread.backgroundPhotoId && spread.backgroundPhotoSide === seite) {
+      ids.add(spread.backgroundPhotoId);
+    }
+  }
+  return ids;
 }
 
 /**

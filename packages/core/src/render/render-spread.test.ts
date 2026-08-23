@@ -881,6 +881,51 @@ describe('Seitenhintergrund', () => {
     expect(rsm.boxes.filter((b) => b.kind === 'image').indexOf(hintergrund)).toBe(0);
   });
 
+  it('legt ein seitenweises Hintergrundbild nur über seine Buchseite', () => {
+    const spread = {
+      ...spreadWith(['p1', 'p2', 'p3', 'p4']),
+      backgroundPhotoId: 'p1',
+      backgroundPhotoSide: 'right' as const,
+    };
+    const rsm = renderSpread(spread, ctx);
+    const hintergrund = rsm.boxes[0];
+    if (hintergrund?.kind !== 'image') throw new Error('kein Hintergrundbild');
+    expect(hintergrund.xMm).toBe(rsm.widthMm / 2);
+    expect(hintergrund.wMm).toBe(rsm.widthMm / 2);
+    expect(hintergrund.hMm).toBe(rsm.heightMm);
+  });
+
+  it('nimmt nur der bedeckten Seite ihre Seitenzahl', () => {
+    const spread = {
+      ...spreadWith(['p1', 'p2', 'p3', 'p4']),
+      index: 4,
+      backgroundPhotoId: 'p1',
+      backgroundPhotoSide: 'right' as const,
+    };
+    const rsm = renderSpread(spread, { ...ctx, pageNumbers: { startAt: 1 } });
+    const zahlen = rsm.boxes.filter((b) => b.kind === 'text' && /^\d+$/.test(b.content));
+    // Genau eine: Die linke Seite trägt nichts über sich und behält ihre Zahl.
+    expect(zahlen).toHaveLength(1);
+  });
+
+  it('rechnet die Auflösung eines seitenweisen Bildes gegen seine Buchseite', () => {
+    const ganz = renderSpread(
+      { ...spreadWith(['p1', 'p2', 'p3', 'p4']), backgroundPhotoId: 'p1' },
+      ctx,
+    ).boxes[0];
+    const halb = renderSpread(
+      {
+        ...spreadWith(['p1', 'p2', 'p3', 'p4']),
+        backgroundPhotoId: 'p1',
+        backgroundPhotoSide: 'left' as const,
+      },
+      ctx,
+    ).boxes[0];
+    if (ganz?.kind !== 'image' || halb?.kind !== 'image') throw new Error('kein Hintergrundbild');
+    // Dasselbe Foto, kleinere Fläche: Die halbe Seite ist die schärfere.
+    expect(halb.effectiveDpi).toBeGreaterThan(ganz.effectiveDpi!);
+  });
+
   it('meldet ein zu grobes Hintergrundbild, setzt es aber trotzdem', () => {
     const spread = { ...spreadWith(['p1', 'p2', 'p3', 'p4']), backgroundPhotoId: 'p1' };
     const rsm = renderSpread(spread, ctx);

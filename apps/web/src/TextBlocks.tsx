@@ -10,11 +10,26 @@
  * zweite Familie hieße eine zweite Datei, und die Parität von Vorschau und PDF
  * hängt daran, dass beide Adapter dieselbe laden.
  *
+ * **Die Farbe ist eine Palette und kein Farbwähler** (`TEXT_BLOCK_COLORS`) —
+ * dieselbe Entscheidung wie beim Hintergrund. „Wie der Grund" bleibt die
+ * Vorgabe und rechnet dunkel oder hell aus der Seitenfarbe; ein fester Ton gilt
+ * dagegen unverändert, denn auf einem Hintergrundbild kennt keine Automatik das
+ * Motiv. Genau dort kann man sich aber vergreifen, deshalb steht neben der
+ * Wahl, was sie auf diesem Grund bedeutet.
+ *
  * Verschoben und gedreht wird auf der Bühne, nicht hier: Diese Felder halten den
  * Text und seine Maße, die Lage bestimmt die Hand.
  */
 import { useEffect, useRef, useState } from 'react';
-import { FONT_FAMILIES, type FontFamilyId, fontFamily } from '@franibook/core';
+import {
+  FONT_FAMILIES,
+  type FontFamilyId,
+  fontFamily,
+  luminance,
+  TEXT_BLOCK_COLORS,
+  textColorOn,
+  TEXT_DEFAULT_COLOR,
+} from '@franibook/core';
 import { fehlertext, textAendern, textErstellen, textLoeschen } from './api.js';
 import { planeSofort } from './ausstehend.js';
 import { B, T } from './theme.js';
@@ -47,9 +62,22 @@ interface Props {
   /** Nach jeder Änderung: die neu gerenderte Doppelseite. */
   onSpread: (spread: unknown) => void;
   onFehler: (text: string) => void;
+  /** Farbe, auf der der Text steht – für die Vorschau der Farbfelder. */
+  grund: string;
+  /** Ob ein Bild dahinterliegt: Dann sagt die Farbe des Grundes nichts. */
+  bildDahinter: boolean;
 }
 
-export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFehler }: Props) {
+export function TextBlocks({
+  index,
+  blocks,
+  selectedId,
+  onSelect,
+  onSpread,
+  onFehler,
+  grund,
+  bildDahinter,
+}: Props) {
   const gewaehlt = blocks.find((b) => b.id === selectedId);
   /**
    * Der Text, solange er getippt wird.
@@ -273,6 +301,45 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
             °
           </label>
 
+          <div>
+            <span style={B.leiser}>Farbe</span>
+            <div style={S.farbreihe}>
+              {TEXT_BLOCK_COLORS.filter((f) => f.value !== 'auto').map((f) => (
+                <button
+                  key={f.value}
+                  title={f.label}
+                  onClick={() => void aendern({ color: f.value })}
+                  style={{
+                    ...S.farbfeld,
+                    background: f.value,
+                    ...(gewaehlt.color?.toLowerCase() === f.value.toLowerCase()
+                      ? S.farbfeldAn
+                      : {}),
+                  }}
+                />
+              ))}
+              <button
+                onClick={() => void aendern({ color: '' })}
+                style={gewaehlt.color ? B.knopfKlein : { ...B.knopfKlein, borderColor: T.cyan }}
+                title="Dunkel oder hell, je nach Grund der Doppelseite"
+              >
+                wie der Grund
+              </button>
+            </div>
+            {/*
+              Was die Wahl auf diesem Grund bedeutet. Über einem Hintergrundbild
+              ist die Aussage keine: Gerechnet würde gegen die Farbe darunter,
+              und die verdeckt das Motiv.
+            */}
+            {bildDahinter ? (
+              <p style={B.leiser}>Über einem Hintergrundbild — die Lesbarkeit sagt das Motiv.</p>
+            ) : (
+              kontrastsatz(gewaehlt.color, grund) && (
+                <p style={B.warnung}>{kontrastsatz(gewaehlt.color, grund)}</p>
+              )
+            )}
+          </div>
+
           <button onClick={() => void entfernen()} style={{ ...B.knopfWeg, textAlign: 'left' }}>
             Textblock entfernen
           </button>
@@ -280,6 +347,22 @@ export function TextBlocks({ index, blocks, selectedId, onSelect, onSpread, onFe
       )}
     </>
   );
+}
+
+/**
+ * Warnt, wenn Text und Grund zu nah beieinanderliegen.
+ *
+ * Der Kontrastwert nach WCAG, Schwelle 3:1 — das ist die Grenze für großen
+ * Text, und ein Textblock ist selten klein. Keine Sperre, sondern ein Satz: Wer
+ * eine Zeile bewusst nur angedeutet setzen will, darf das.
+ */
+function kontrastsatz(farbe: string | undefined, grund: string): string | null {
+  const text = farbe ?? textColorOn(grund, TEXT_DEFAULT_COLOR);
+  const hell = Math.max(luminance(text), luminance(grund));
+  const dunkel = Math.min(luminance(text), luminance(grund));
+  const kontrast = (hell + 0.05) / (dunkel + 0.05);
+  if (kontrast >= 3) return null;
+  return `Kontrast ${kontrast.toFixed(1)}:1 gegen den Grund — im Druck kaum zu lesen.`;
 }
 
 const S = {
@@ -295,6 +378,22 @@ const S = {
     textAlign: 'left' as const,
   },
   chips: { display: 'flex', gap: 6, flexWrap: 'wrap' as const },
+  farbreihe: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    margin: '4px 0 2px',
+  },
+  farbfeld: {
+    width: 22,
+    height: 22,
+    padding: 0,
+    border: `1px solid ${T.line2}`,
+    borderRadius: T.rSm,
+    cursor: 'pointer',
+  },
+  farbfeldAn: { borderColor: T.cyan, boxShadow: `0 0 0 2px ${T.cyanZart}` },
   felder: {
     display: 'flex',
     flexDirection: 'column' as const,

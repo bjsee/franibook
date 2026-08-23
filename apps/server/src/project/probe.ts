@@ -251,7 +251,14 @@ export function probeRechnen(
     // Aus dem Vergleich summiert und nicht über `handwork()` gezählt: Diese
     // Zahl soll sagen, was *diese* Anordnung kostet, und muss deshalb mit den
     // Zahlen an den einzelnen Seiten zusammengehen (siehe `handarbeitVerloren`).
-    handwork: { ...handarbeitSumme(verluste), festgehalten: vergleich.festgehalten },
+    handwork: {
+      ...handarbeitSumme(verluste),
+      festgehalten: vergleich.festgehalten,
+      // Halbseitige Schlösser zählt der Vergleich nicht mit: Sie sagen nichts
+      // darüber, wie viele Blätter dieser Lauf unangetastet lässt. Die Zahl
+      // steht in `handwork()` am Buch.
+      halbFestgehalten: result.spreads.filter((sp) => sp.lockedSide !== undefined).length,
+    },
     report: result.report,
     behalten: bleiben,
     seiten,

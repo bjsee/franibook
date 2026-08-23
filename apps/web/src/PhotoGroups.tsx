@@ -636,7 +636,21 @@ export function PhotoGroups({
 }
 
 const S = {
-  wrap: { flex: 1, display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', minHeight: 0 },
+  /**
+   * Die Zeile ist ausdrücklich `minmax(0, 1fr)`, nicht die selbstverständliche
+   * automatische Zeile: Eine `auto`-Zeile wächst mit dem höchsten Kind, und weil
+   * Rasterkinder von Haus aus `min-height: auto` haben, wurde die Zeile bei 60
+   * Fotos 3759 px hoch statt der 1134 px, die der Rahmen hergibt. Beide Spalten
+   * scrollten dann nicht mehr für sich, sondern liefen unten aus dem Bild – ohne
+   * Scrollbalken, denn die App selbst scrollt nicht (`overflow: hidden`).
+   */
+  wrap: {
+    flex: 1,
+    display: 'grid',
+    gridTemplateColumns: '280px minmax(0, 1fr)',
+    gridTemplateRows: 'minmax(0, 1fr)',
+    minHeight: 0,
+  },
   seite: {
     background: T.bg1,
     borderRight: `1px solid ${T.line}`,

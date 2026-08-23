@@ -142,13 +142,21 @@ export function coverHeightMm(profile: PrintProfile): number {
   return profile.page.trimHeightMm + 2 * overhang.topMm + 2 * bleed.topMm;
 }
 
-/** Breite einer Doppelseite einschließlich Beschnitt. */
-export function spreadWidthMm(profile: PrintProfile): number {
+/**
+ * Breite einer Doppelseite einschließlich Beschnitt.
+ *
+ * Auf die zwei Maße verengt, die sie braucht — wie `libraryOuterMarginMm`: So
+ * rechnet auch die Oberfläche damit, die vom Profil nur den Ausschnitt aus
+ * `/api/info` kennt.
+ */
+export function spreadWidthMm(profile: { page: { trimWidthMm: number; bleedMm: number } }): number {
   return 2 * profile.page.trimWidthMm + 2 * profile.page.bleedMm;
 }
 
-/** Höhe einer Doppelseite einschließlich Beschnitt. */
-export function spreadHeightMm(profile: PrintProfile): number {
+/** Höhe einer Doppelseite einschließlich Beschnitt. Ebenso verengt. */
+export function spreadHeightMm(profile: {
+  page: { trimHeightMm: number; bleedMm: number };
+}): number {
   return profile.page.trimHeightMm + 2 * profile.page.bleedMm;
 }
 

@@ -5,9 +5,13 @@ import saal from '../print/profiles/saal-28x28.json' with { type: 'json' };
 import {
   BACKGROUND_COLORS,
   BACKGROUND_MIN_DPI,
+  backgroundArea,
   backgroundFit,
   chapterBackgrounds,
   isBackgroundColor,
+  isTextBlockColor,
+  TEXT_BLOCK_COLORS,
+  TIMELINE_ACCENTS,
   luminance,
   textColorOn,
 } from './background.js';
@@ -28,11 +32,27 @@ function photo(width: number, height: number): Photo {
 
 describe('Hintergrundbild', () => {
   it('rechnet auf die Beschnittfläche, nicht auf das Endformat', () => {
-    // 546 × 276 mm brauchen bei 150 dpi 3225 px lange Kante.
+    // 546 × 276 mm brauchen bei 150 dpi 3225 × 1630 px. Ein Bild in genau
+    // diesen Maßen besteht – am Endformat (540 mm) gemessen wären es 3189, und
+    // die Prüfung ließe ein zu grobes Bild durch.
     const fit = backgroundFit(photo(3225, 1630), profile);
-    expect(fit.benoetigtPx).toBe(3225);
     expect(fit.dpi).toBeGreaterThanOrEqual(BACKGROUND_MIN_DPI);
     expect(fit.taugt).toBe(true);
+  });
+
+  it('nennt die Kante, die klemmt – und was das Bild dort hat', () => {
+    // 2048 × 1536 gegen 546 × 276: Die Breite muss stärker vergrößert werden,
+    // also ist sie der Engpass. Vorher nannte die Auskunft die lange Kante der
+    // Fläche und die lange Kante des Fotos – zwei verschiedene Kanten in einem
+    // Satz, der dadurch beruhigend klang.
+    const quer = backgroundFit(photo(2048, 1536), profile);
+    expect(quer.benoetigtPx).toBe(3225);
+    expect(quer.vorhandenPx).toBe(2048);
+
+    // Über eine Buchseite klemmt bei demselben Bild die Höhe.
+    const halb = backgroundFit(photo(2048, 1536), profile, 'left');
+    expect(halb.benoetigtPx).toBe(1630);
+    expect(halb.vorhandenPx).toBe(1536);
   });
 
   it('verwirft die Bilder des Zielbestands – 2048 px reichen nicht', () => {
@@ -47,6 +67,36 @@ describe('Hintergrundbild', () => {
     const panorama = backgroundFit(photo(6000, 1200), profile);
     expect(panorama.taugt).toBe(false);
     expect(Math.round(panorama.dpi)).toBe(Math.round((1200 / 276) * 25.4));
+  });
+});
+
+describe('Hintergrundbild auf einer einzelnen Buchseite', () => {
+  it('deckt die halbe Breite, aber dieselbe Höhe', () => {
+    const links = backgroundArea(profile, 'left');
+    const rechts = backgroundArea(profile, 'right');
+    const beide = backgroundArea(profile);
+
+    // Eine Buchseite hat nur außen Beschnitt: 270 + 3 mm.
+    expect(links).toEqual({ xMm: 0, yMm: 0, wMm: 273, hMm: 276 });
+    // Die rechte beginnt an der Falzachse und endet am äußeren Beschnitt.
+    expect(rechts).toEqual({ xMm: 273, yMm: 0, wMm: 273, hMm: 276 });
+    expect(rechts.xMm + rechts.wMm).toBe(beide.wMm);
+  });
+
+  it('verdoppelt die Auflösung eines Querformats fast', () => {
+    // 2048 × 1536 – der Median des Bestands. Über beide Seiten sind es 95 dpi,
+    // über eine Buchseite begrenzt die Höhe: 1536 px auf 276 mm.
+    const eine = backgroundFit(photo(2048, 1536), profile, 'left');
+    expect(Math.round(eine.dpi)).toBe(141);
+    // Und bleibt damit knapp unter der Schwelle – genau die Kante, an der
+    // dieser Bestand liegt (`background.ts`, Kopfkommentar).
+    expect(eine.taugt).toBe(false);
+  });
+
+  it('lässt ein Bild bestehen, dessen kurze Kante reicht', () => {
+    // 1630 px auf 276 mm sind 150 dpi; die Breite von 273 mm verlangt weniger.
+    const fit = backgroundFit(photo(2000, 1631), profile, 'right');
+    expect(fit.taugt).toBe(true);
   });
 });
 
@@ -69,6 +119,27 @@ describe('Textfarbe auf dem Hintergrund', () => {
 
   it('wiegt Grün stärker als Blau, wie das Auge', () => {
     expect(luminance('#00ff00')).toBeGreaterThan(luminance('#0000ff'));
+  });
+});
+
+describe('Farben eines Textblocks', () => {
+  it('führt `auto` voran und kennt es nicht als Farbwert', () => {
+    expect(TEXT_BLOCK_COLORS[0]?.value).toBe('auto');
+    // „Keine Farbe" ist ein fehlendes Feld und kein speicherbarer Wert.
+    expect(isTextBlockColor('auto')).toBe(false);
+  });
+
+  it('nimmt nur Töne aus der Palette', () => {
+    expect(isTextBlockColor('#ffffff')).toBe(true);
+    expect(isTextBlockColor('#FFFFFF')).toBe(true);
+    expect(isTextBlockColor('#ff00ff')).toBe(false);
+    expect(isTextBlockColor(undefined)).toBe(false);
+  });
+
+  it('teilt die Akzenttöne mit dem Zeitstrahl, statt sie zu wiederholen', () => {
+    for (const akzent of TIMELINE_ACCENTS.filter((a) => a.value !== 'auto')) {
+      expect(isTextBlockColor(akzent.value)).toBe(true);
+    }
   });
 });
 

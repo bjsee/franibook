@@ -35,6 +35,8 @@ import { useNachbarn } from './useNachbarn.js';
 import { useMiniaturSrc } from '../bildadresse.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import type { SpreadAussen } from './types.js';
+import { Festhalten } from './Festhalten.js';
+import { ZeitstrahlHaken } from './ZeitstrahlHaken.js';
 
 /** Breite einer Kachel im Filmstreifen. */
 const FILM_KACHEL = 132;
@@ -112,14 +114,8 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
             {amRand === 1 ? '1 Gesicht' : `${amRand} Gesichter`} am Rand
           </span>
         )}
-        <label style={S.hakenDunkel} title="Diese Doppelseite beim Neuanordnen unverändert lassen">
-          <input
-            type="checkbox"
-            checked={aussen.locked}
-            onChange={(e) => aussen.onLocked(e.target.checked)}
-          />
-          festgehalten
-        </label>
+        <Festhalten aussen={aussen} style={S.hakenDunkel} />
+        <ZeitstrahlHaken aussen={aussen} style={S.hakenDunkel} />
         <span style={S.zaehler}>
           {aussen.index + 1} / {aussen.spreadCount}
         </span>

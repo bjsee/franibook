@@ -231,6 +231,28 @@ export interface Spread {
    */
   locked?: boolean;
   /**
+   * Nur **eine** Buchseite dieses Blattes ist festgehalten.
+   *
+   * Der Unterschied zu `locked` ist der Nachbar: Ein festgehaltenes Blatt friert
+   * beide Seiten ein, auch die, die die Automatik gebaut hat. Wer eine einzelne
+   * Seite von Hand gestellt hat, will genau das nicht — die andere Hälfte soll
+   * weiter mitfließen und sich neu füllen.
+   *
+   * Beim Erzeugen wird das Blatt deshalb zerlegt: Die genannte Buchseite wird
+   * bewahrt und über ihren `anchor` wieder eingesetzt, ihre Bilder gelten als
+   * vergeben, **eine** Buchseite geht vom Budget ab. Die Gegenseite baut der
+   * Fluss neu.
+   *
+   * Die Seite darf dabei die Blattseite wechseln: Steht der Anker so, dass die
+   * bewahrte Hälfte rechts landet, wird sie gespiegelt — dieselbe Rechnung, mit
+   * der `zerlege` und `paare` jede Buchseite in Linksform normieren.
+   *
+   * Nur an einem Blatt möglich, das sich überhaupt trennen lässt (`teilbar`):
+   * Auftakte, justierte Zeilen und ein Blatt mit Hintergrundbild bleiben ganz.
+   * `locked` schlägt dieses Feld — beides zugleich ist „ganz festgehalten".
+   */
+  lockedSide?: 'left' | 'right';
+  /**
    * Woran diese Doppelseite hängt, wenn das Buch neu erzeugt wird.
    *
    * Ein festgehaltener Index wäre wertlos: Baut die Engine ein Jahr um zwei
@@ -272,6 +294,21 @@ export interface Spread {
    * die Engine setzt sie um und meldet, was sie davon hält.
    */
   backgroundPhotoId?: PhotoId;
+  /**
+   * Auf welcher Buchseite das Hintergrundbild liegt. Ohne Angabe: beide.
+   *
+   * Der Grund ist die Auflösung und nicht die Gestaltung: Über die ganze
+   * Doppelseite gerechnet besteht am Bestand vom 21.8.2026 **ein** Foto von 962
+   * die Prüfung, über eine Buchseite sind es vierzehn, und der Median steigt von
+   * 71 auf 141 dpi (`render/background.ts`). Ein Hintergrund, den man nie setzen
+   * kann, ist keiner.
+   *
+   * Die Seite meint die **Buchseite**, nicht die Hälfte des Motivs: Das Bild
+   * füllt seine Seite formatfüllend und hört an der Falzachse auf. Ein Bild über
+   * beide Seiten bleibt der Fall ohne Angabe — dort ist der Falzzuschlag nötig,
+   * hier nicht, weil die Fläche die Achse nicht kreuzt.
+   */
+  backgroundPhotoSide?: 'left' | 'right';
   /**
    * Zeitstrahl auf dieser Doppelseite. Ohne Angabe gilt die globale Vorgabe.
    *

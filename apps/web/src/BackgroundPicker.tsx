@@ -5,14 +5,16 @@
  * Farbwähler: Freie Farbwahl hinter Fotos geht in einem Fotobuch fast immer
  * schief, und eine Palette macht den Fehler unmöglich, statt ihn zu erlauben.
  *
- * Beim Bild steht die Auflösung dabei, mit der es die Doppelseite abdecken
- * würde. Bei diesem Bestand reicht sie praktisch nie – deshalb ist die Zahl
- * sichtbar und nicht in einer Warnung versteckt, die erst nach dem Klick kommt.
- *
  * Vorher war das ein Aufklapper über der Bühne. Jetzt ist es der Inhalt eines
  * Abschnitts: Die neun Farbfelder sind klein genug, um dauernd zu stehen, und
  * der Griff, den man selten braucht — Farbe für alle Seiten, Foto dahinter —
  * liegt hinter einem Klapper darunter.
+ *
+ * **Das Bild wählt ein eigener Dialog** (`HintergrundBild.tsx`). Hier standen
+ * acht Kacheln, und zwar die vom Server nach Auflösung sortierten besten des
+ * ganzen Bestands — eine Antwort auf „welches Bild taugt überhaupt?", aber nicht
+ * auf „ich will *dieses* Bild". Was bleibt, ist die Auskunft, was gerade liegt,
+ * und der Weg dorthin.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -23,9 +25,12 @@ import {
 } from './api.js';
 import { B, T } from './theme.js';
 import { useBildSrc } from './bildadresse.js';
+import { HintergrundBild } from './HintergrundBild.js';
 
 type Farbe = { id: string; name: string; hex: string };
-type Kandidat = { photoId: string; fileName: string; dpi: number; taugt: boolean };
+
+/** So viel vom Druckprofil braucht der Bildwähler; `/api/info` liefert genau das. */
+type Seitenmasse = { page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number } };
 
 interface BackgroundPickerProps {
   /** Doppelseite, die geändert wird. */
@@ -34,6 +39,11 @@ interface BackgroundPickerProps {
   global: string;
   /** Farbe, die auf dieser Doppelseite liegt – sie wird markiert. */
   aktuell?: string | undefined;
+  /** Bild, das hinter dieser Doppelseite liegt, samt Buchseite. */
+  bild?: { photoId: string; side: 'left' | 'right' | null } | null;
+  /** Jahrgang der Doppelseite – Vorgabe des Jahresfilters im Bildwähler. */
+  jahr?: number | undefined;
+  profil: Seitenmasse;
   onChanged: () => void;
 }
 
@@ -41,21 +51,19 @@ export function BackgroundPicker({
   spreadIndex,
   global,
   aktuell,
+  bild,
+  jahr,
+  profil,
   onChanged,
 }: BackgroundPickerProps) {
   const bildSrc = useBildSrc();
   const [farben, setFarben] = useState<Farbe[]>([]);
-  const [kandidaten, setKandidaten] = useState<Kandidat[]>([]);
-  const [minDpi, setMinDpi] = useState(150);
   const [hinweis, setHinweis] = useState<string | null>(null);
+  const [wahlOffen, setWahlOffen] = useState(false);
 
   useEffect(() => {
     hintergrundOptionenLaden()
-      .then((d) => {
-        setFarben(d.colors);
-        setKandidaten(d.candidates);
-        setMinDpi(d.minDpi);
-      })
+      .then((d) => setFarben(d.colors))
       .catch((e: unknown) => setHinweis(fehlertext(e)));
   }, []);
 
@@ -88,6 +96,8 @@ export function BackgroundPicker({
           <button
             key={f.id}
             title={f.name}
+            // Die Farbe löst das Bild ab: Ein Bild schlägt die Farbe, ein
+            // Farbklick bliebe darunter sonst folgenlos.
             onClick={() => void setzeSeite({ color: f.hex, photoId: null })}
             style={{
               ...S.feld,
@@ -125,38 +135,42 @@ export function BackgroundPicker({
         </div>
 
         <p style={{ ...B.leiser, margin: '12px 0 4px' }}>Foto als Hintergrund</p>
-        {kandidaten.length === 0 ? (
-          <p style={B.leiser}>keine Fotos vorhanden</p>
-        ) : (
-          <>
-            <p style={B.leiser}>
-              Die Doppelseite braucht {minDpi} dpi. Was der Bestand hergibt, steht dahinter — die
-              besten zuerst.
-            </p>
-            <div style={S.liste}>
-              {kandidaten.slice(0, 8).map((k) => (
-                <button
-                  key={k.photoId}
-                  onClick={() => void setzeSeite({ photoId: k.photoId })}
-                  title={k.fileName}
-                  style={S.kandidat}
-                >
-                  <img src={bildSrc(k.photoId, 'thumb')} alt="" style={S.thumb} />
-                  <span style={{ fontSize: 10, color: k.taugt ? T.ok : T.warn }}>{k.dpi} dpi</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => void setzeSeite({ photoId: null })} style={B.knopfKlein}>
-              kein Bild
-            </button>
-          </>
-        )}
+        <div style={S.bildzeile}>
+          {bild && <img src={bildSrc(bild.photoId, 'thumb')} alt="" style={S.thumb} />}
+          <span style={B.leiser}>
+            {bild ? SEITE_TEXT[bild.side ?? 'both'] : 'kein Bild — nur der farbige Grund'}
+          </span>
+        </div>
+        <button onClick={() => setWahlOffen(true)} style={B.knopfKlein}>
+          {bild ? 'Anderes Bild wählen …' : 'Bild wählen …'}
+        </button>
       </details>
 
       {hinweis && <p style={B.warnung}>{hinweis}</p>}
+
+      {wahlOffen && (
+        <HintergrundBild
+          spreadIndex={spreadIndex}
+          jahr={jahr}
+          profil={profil}
+          aktuell={bild ?? null}
+          onGesetzt={(satz) => {
+            setHinweis(satz);
+            onChanged();
+          }}
+          onSchliessen={() => setWahlOffen(false)}
+        />
+      )}
     </>
   );
 }
+
+/** Wie die Lage des Bildes im Abschnitt heißt. */
+const SEITE_TEXT = {
+  left: 'liegt auf der linken Buchseite',
+  right: 'liegt auf der rechten Buchseite',
+  both: 'liegt über beide Seiten',
+} as const;
 
 const S = {
   reihe: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' as const },
@@ -170,17 +184,18 @@ const S = {
   },
   gewaehlt: { borderColor: T.cyan, boxShadow: `0 0 0 2px ${T.cyanZart}` },
   summary: { fontSize: 12, color: T.fg3, cursor: 'pointer' },
-  liste: { display: 'flex', gap: 6, flexWrap: 'wrap' as const, margin: '4px 0 8px' },
-  kandidat: {
+  bildzeile: {
     display: 'flex',
-    flexDirection: 'column' as const,
     alignItems: 'center',
-    gap: 2,
-    border: `1px solid ${T.line}`,
-    borderRadius: T.rSm,
-    background: T.bg1,
-    padding: 2,
-    cursor: 'pointer',
+    gap: 8,
+    margin: '4px 0 8px',
   },
-  thumb: { width: 42, height: 32, objectFit: 'cover' as const, display: 'block' },
+  thumb: {
+    width: 42,
+    height: 32,
+    objectFit: 'cover' as const,
+    display: 'block',
+    borderRadius: T.rSm,
+    border: `1px solid ${T.line}`,
+  },
 } satisfies Record<string, React.CSSProperties>;
