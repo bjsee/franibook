@@ -82,6 +82,16 @@ export interface Handarbeit {
 export interface Handarbeitsbilanz extends Handarbeit {
   /** Doppelseiten, die das Neuanordnen unverändert übersteht. */
   festgehalten: number;
+  /**
+   * Einzelne Buchseiten, die es übersteht (`Spread.lockedSide`).
+   *
+   * Getrennt gezählt, weil sie nur halb schützen: Die Gegenseite baut der Fluss
+   * neu, und was an ihr von Hand gemacht wurde, ist danach fort. Die Handarbeit
+   * eines solchen Blattes zählt deshalb weiter voll in die Summe darüber — eher
+   * eine Warnung zu viel als eine verschwiegene, dieselbe Richtung wie bei
+   * `backgroundAuto`.
+   */
+  halbFestgehalten: number;
 }
 
 /** Die Arten in einer Liste – Summieren und Zählen brauchen sie beide. */
@@ -168,7 +178,8 @@ export function handarbeitVerloren(alt: Spread, nachher?: Spread): Handarbeit {
   const bleibt =
     nachher !== undefined &&
     alt.background === nachher.background &&
-    alt.backgroundPhotoId === nachher.backgroundPhotoId;
+    alt.backgroundPhotoId === nachher.backgroundPhotoId &&
+    alt.backgroundPhotoSide === nachher.backgroundPhotoSide;
   return bleibt ? { ...teile, hintergruende: 0 } : teile;
 }
 
@@ -188,13 +199,15 @@ export function handarbeitSumme(teile: readonly Handarbeit[]): Handarbeit {
 export function handarbeitsbilanz(spreads: readonly Spread[]): Handarbeitsbilanz {
   const summe = leer();
   let festgehalten = 0;
+  let halbFestgehalten = 0;
   for (const spread of spreads) {
     if (spread.locked) {
       festgehalten++;
       continue;
     }
+    if (spread.lockedSide) halbFestgehalten++;
     const teile = handarbeitAn(spread);
     for (const art of ARTEN) summe[art] += teile[art];
   }
-  return { ...summe, festgehalten };
+  return { ...summe, festgehalten, halbFestgehalten };
 }

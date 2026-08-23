@@ -21,6 +21,8 @@ import { Nachbarn } from './Nachbarn.js';
 import { SeitenPanel } from './SeitenPanel.js';
 import { SpreadStage } from './SpreadStage.js';
 import type { SpreadAussen } from './types.js';
+import { Festhalten } from './Festhalten.js';
+import { ZeitstrahlHaken } from './ZeitstrahlHaken.js';
 import type { SpreadEditorModel } from './useSpreadEditor.js';
 
 interface Props {
@@ -60,14 +62,8 @@ export function Inspektor({ model, aussen, spread, imageSrc }: Props) {
 
           <span style={B.dehner} />
 
-          <label style={B.haken} title="Diese Doppelseite beim Neuanordnen unverändert lassen">
-            <input
-              type="checkbox"
-              checked={aussen.locked}
-              onChange={(e) => aussen.onLocked(e.target.checked)}
-            />
-            festgehalten
-          </label>
+          <Festhalten aussen={aussen} />
+          <ZeitstrahlHaken aussen={aussen} />
           <Hilfslinien guides={aussen.guides} onGuides={aussen.onGuides} />
           <button
             onClick={() => model.setInfosSichtbar(!model.infosSichtbar)}

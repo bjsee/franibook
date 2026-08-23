@@ -1346,6 +1346,24 @@ describe('addTextBlock', () => {
     const block = p.addTextBlock(0, { family: 'serif' });
     expect(block!.family).toBe('serif');
   });
+
+  it('nimmt eine Farbe aus der Palette und keine andere', () => {
+    const p = projektMitSeite();
+    const block = p.addTextBlock(0, { color: '#ffffff' });
+    expect(block!.color).toBe('#ffffff');
+
+    // Ein freier Wert ist keine Wahl, sondern ein Wert von außen.
+    p.updateTextBlock(0, block!.id, { color: '#ff00ff' });
+    expect(p.spreads[0]!.blocks![0]!.color).toBe('#ffffff');
+  });
+
+  it('macht aus der leeren Farbe wieder „wie der Grund"', () => {
+    const p = projektMitSeite();
+    const block = p.addTextBlock(0, { color: '#1c1917' });
+    p.updateTextBlock(0, block!.id, { color: '' });
+    // Kein Feld heißt: `textColorOn` entscheidet beim Rendern.
+    expect(p.spreads[0]!.blocks![0]!.color).toBeUndefined();
+  });
 });
 
 describe('Import-Sperre', () => {
@@ -1658,6 +1676,90 @@ describe('Eigene Doppelseiten', () => {
   });
 });
 
+describe('Hintergrundbild einer Doppelseite', () => {
+  /** Zwei Doppelseiten aus je einem Bild – dieselbe Lage wie oben, ohne I/O. */
+  function projekt(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (const [i, id] of ['p1', 'p2'].entries()) {
+      p.photos.set(id, {
+        id,
+        sourceId: 'q',
+        relPath: `${id}.jpg`,
+        fileName: `${id}.jpg`,
+        bytes: 1_000_000,
+        // Der Median des Zielbestands: über beide Seiten zu grob, über eine
+        // Buchseite immer noch knapp – gut für beide Zweige der Prüfung.
+        width: 2048,
+        height: 1536,
+        takenAt: `2020-0${i + 1}-01T12:00:00`,
+      } as never);
+    }
+    p.spreads = [
+      {
+        id: 's0',
+        index: 0,
+        templateId: 'spread.1up.hero-left',
+        slots: [{ slotId: 'a', photoId: 'p1', crop: { ...FULL_CROP } }],
+      },
+    ];
+    return p;
+  }
+
+  it('merkt sich die Buchseite zum Bild', () => {
+    const p = projekt();
+    const r = p.setSpreadBackground(0, { photoId: 'p2', side: 'right' });
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.backgroundPhotoId).toBe('p2');
+    expect(p.spreads[0]!.backgroundPhotoSide).toBe('right');
+  });
+
+  it('warnt mit der Fläche, die tatsächlich gedeckt wird', () => {
+    const p = projekt();
+    const beide = p.setSpreadBackground(0, { photoId: 'p2', side: null });
+    expect(beide.hinweis).toContain('die Doppelseite');
+
+    const eine = p.setSpreadBackground(0, { photoId: 'p2', side: 'left' });
+    expect(eine.hinweis).toContain('die Buchseite');
+    // Dieselbe Datei, kleinere Fläche: Die Zahl im Satz muss steigen.
+    const zahl = (satz?: string) => Number(satz?.match(/(\d+) dpi/)?.[1]);
+    expect(zahl(eine.hinweis)).toBeGreaterThan(zahl(beide.hinweis));
+  });
+
+  it('macht aus dem halben Schloss ein ganzes, wenn ein Bild dahinterkommt', () => {
+    const p = projekt();
+    p.setSpreadLocked(0, true, 'left');
+    const r = p.setSpreadBackground(0, { photoId: 'p2' });
+
+    // Ein Hintergrundbild hält das Blatt zusammen (`teilbar`) – ein halbes
+    // Schloss daran wäre eine Auskunft, die der Neuaufbau nicht einlöst.
+    expect(r.ok).toBe(true);
+    expect(p.spreads[0]!.lockedSide).toBeUndefined();
+    expect(p.spreads[0]!.locked).toBe(true);
+    expect(r.hinweis).toContain('ganz festgehalten');
+  });
+
+  it('ändert nichts, wenn die Kennung des Fotos nicht stimmt', () => {
+    const p = projekt();
+    const r = p.setSpreadBackground(0, { color: '#faf7f2', photoId: 'gibt-es-nicht' });
+
+    expect(r.ok).toBe(false);
+    // Und zwar auch die Farbe nicht: Die Route speichert nach einem Fehlschlag
+    // nicht, die halbe Änderung bliebe sonst unbemerkt im Speicher stehen.
+    expect(p.spreads[0]!.background).toBeUndefined();
+  });
+
+  it('nimmt die Seitenangabe mit, wenn das Bild geht', () => {
+    const p = projekt();
+    p.setSpreadBackground(0, { photoId: 'p2', side: 'left' });
+    p.setSpreadBackground(0, { photoId: null });
+
+    expect(p.spreads[0]!.backgroundPhotoId).toBeUndefined();
+    // Sonst brächte das nächste Bild die Wahl des vorigen mit.
+    expect(p.spreads[0]!.backgroundPhotoSide).toBeUndefined();
+  });
+});
+
 describe('Eigene Einzelseiten', () => {
   /** Vier Blätter mit je zwei Bildern – genug, um die Umpaarung zu sehen. */
   function projektMitVier(): Project {
@@ -1717,7 +1819,10 @@ describe('Eigene Einzelseiten', () => {
     const r = p.insertSinglePage(3);
 
     const eigen = p.spreads[r.index]!;
-    expect(eigen.locked).toBe(true);
+    // Nur die eingefügte Buchseite, nicht das ganze Blatt: Die Nachbarin kommt
+    // aus der Automatik und soll weiter mitfließen.
+    expect(eigen.lockedSide).toBe('right');
+    expect(eigen.locked).toBeUndefined();
     expect(eigen.background).toBe('#f0f9ff');
     // Buchseite 3 ist die rechte Seite des zweiten Blattes.
     expect(r.index).toBe(1);
@@ -1768,10 +1873,12 @@ describe('Eigene Einzelseiten', () => {
 
     p.generate();
 
-    const eigen = p.spreads.find((s) => s.locked);
+    // Über das halbe Schloss: Die eingefügte Buchseite wird nach dem Fluss
+    // wieder eingesetzt (`insertKeptHalves`), samt ihrem Textblock.
+    const eigen = p.spreads.find((s) => s.lockedSide !== undefined || s.locked);
     expect(eigen?.blocks?.[0]?.content).toBe('Einschulung');
-    // Die Nachbarhälfte bleibt am Blatt: Ihre Bilder gelten als vergeben und
-    // laufen nicht zusätzlich im Fluss mit.
+    // Und kein Bild steht zweimal im Buch: Die Bilder der bewahrten Hälfte sind
+    // vergeben, die der Gegenseite laufen im Fluss – jedes genau einmal.
     const alle = p.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId)).filter(Boolean);
     expect(new Set(alle).size).toBe(alle.length);
   });
@@ -1802,6 +1909,89 @@ describe('Eigene Einzelseiten', () => {
     const p = projektMitVier();
     const r = p.insertSinglePage(2);
     expect(p.spreads[r.index]!.templateId).toContain(HALF_BLANK_ID);
+  });
+});
+
+describe('Eine einzelne Buchseite festhalten', () => {
+  /** Vier Vierer-Blätter, Bilder p0 bis p15 – dieselbe Lage wie oben. */
+  function projekt(): Project {
+    const p = new Project(null as never, null as never, null as never, '');
+    for (let i = 0; i < 16; i++) {
+      p.photos.set(`p${i}`, {
+        id: `p${i}`,
+        sourceId: 'q',
+        relPath: `p${i}.jpg`,
+        fileName: `p${i}.jpg`,
+        bytes: 1_000_000,
+        width: 4000,
+        height: 3000,
+        takenAt: `2020-01-${String(i + 1).padStart(2, '0')}T12:00:00`,
+      } as never);
+    }
+    // Die Kennungen kommen aus der Vorlage: `spread.4up.grid` nennt seine
+    // Plätze a bis d, und die Zuordnung zur Buchseite hängt an ihrer Geometrie.
+    const plaetze = requireTemplate('spread.4up.grid').slots;
+    p.spreads = [0, 1, 2, 3].map((n) => ({
+      id: `s${n}`,
+      index: n,
+      templateId: 'spread.4up.grid',
+      slots: plaetze.map((platz, i) => ({
+        slotId: platz.id,
+        photoId: `p${n * 4 + i}`,
+        crop: { ...FULL_CROP },
+      })),
+    }));
+    return p;
+  }
+
+  it('merkt sich die Buchseite und nicht das ganze Blatt', () => {
+    const p = projekt();
+    const r = p.setSpreadLocked(1, true, 'left');
+
+    expect(r.ok).toBe(true);
+    expect(p.spreads[1]!.lockedSide).toBe('left');
+    expect(p.spreads[1]!.locked).toBeUndefined();
+  });
+
+  it('gibt mit dem Häkchen beides frei', () => {
+    const p = projekt();
+    p.setSpreadLocked(1, true, 'left');
+    p.setSpreadLocked(1, false);
+
+    expect(p.spreads[1]!.lockedSide).toBeUndefined();
+    expect(p.spreads[1]!.locked).toBeUndefined();
+  });
+
+  it('lehnt ein Blatt ab, das sich nicht trennen lässt', () => {
+    const p = projekt();
+    p.spreads[1] = {
+      id: 'a1',
+      index: 1,
+      templateId: 'spread.chapter.quiet',
+      slots: [],
+      texts: [{ id: 'a1-y', role: 'year', content: '2020', slotId: 't-year' }],
+    };
+
+    const r = p.setSpreadLocked(1, true, 'left');
+    expect(r.ok).toBe(false);
+    expect(r.unteilbar).toBe(true);
+    // Und es bleibt, wie es war – kein halbes Schloss an einem ganzen Auftakt.
+    expect(p.spreads[1]!.lockedSide).toBeUndefined();
+  });
+
+  it('bewahrt die Bilder seiner Hälfte über ein Neuanordnen', () => {
+    const p = projekt();
+    p.setSpreadLocked(1, true, 'left');
+    const bewahrt = ['p4', 'p5'];
+
+    p.generate();
+
+    const imBuch = p.spreads.flatMap((s) => s.slots.map((sl) => sl.photoId));
+    for (const id of bewahrt) expect(imBuch).toContain(id);
+    // Und zwar genau einmal: Der Fluss darf sie nicht noch einmal verteilen.
+    for (const id of bewahrt) expect(imBuch.filter((x) => x === id)).toHaveLength(1);
+    // Das Schloss überlebt den Neuaufbau, sonst wäre es beim nächsten fort.
+    expect(p.spreads.some((s) => s.lockedSide !== undefined)).toBe(true);
   });
 });
 

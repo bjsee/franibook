@@ -192,6 +192,13 @@ export function spreadAntwort(project: Project, index: number) {
   return {
     ...rendered,
     timelineOverride: spread?.timeline ?? null,
+    lockedSide: spread?.lockedSide ?? null,
+    // Das Hintergrundbild samt Buchseite. Aus dem RSM allein wäre beides nur zu
+    // erraten – dort ist es eine Bildbox wie jede andere, und ob sie halb oder
+    // ganz liegt, stünde in ihrer Breite.
+    hintergrundBild: spread?.backgroundPhotoId
+      ? { photoId: spread.backgroundPhotoId, side: spread.backgroundPhotoSide ?? null }
+      : null,
     groups: project.spreadGroups(index),
     blocks: spread?.blocks ?? [],
     // Die Vorlagentexte samt Vorlage: Sie lassen sich verschieben, aufziehen und

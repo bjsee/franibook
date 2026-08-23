@@ -18,7 +18,8 @@ import { type PrintProfile, nextValidPageCount } from '../print/profile.js';
 import { chapterBackgrounds } from '../render/background.js';
 import type { Chapter, Structure } from '../structure/segment.js';
 import { isJustified } from '../templates/justified.js';
-import { insertKept, keptOpeners, keptPhotos } from './keep.js';
+import { insertKept, keptHalfPhotos, keptOpeners, keptPhotos } from './keep.js';
+import { insertKeptHalves, teilbar } from './single-page.js';
 import { justifySpread, layoutSpread } from './rebuild.js';
 import {
   chapterTemplates,
@@ -121,6 +122,16 @@ export interface GenerateOptions {
    * an ihnen nichts.
    */
   kept?: readonly Spread[];
+  /**
+   * Blätter, von denen nur **eine** Buchseite übernommen wird
+   * (`Spread.lockedSide`).
+   *
+   * Der Unterschied zu `kept` ist die Gegenseite: Sie baut der Fluss neu. Damit
+   * kostet ein solches Blatt **eine** Buchseite Budget statt zwei, und nur die
+   * Bilder der bewahrten Hälfte gelten als vergeben. Eingesetzt wird sie nach
+   * dem Fluss über `insertKeptHalves`.
+   */
+  keptHalves?: readonly Spread[];
 }
 
 export interface GenerateResult {
@@ -147,6 +158,8 @@ export interface GenerateResult {
     groupOpeners: number;
     /** Übernommene Doppelseiten, die das Erzeugen nicht angefasst hat. */
     keptSpreads: number;
+    /** Buchseiten, die halbseitig festgehalten wieder eingesetzt wurden. */
+    keptHalfPages: number;
     /** Fotos, die nicht platziert werden konnten. */
     unplaced: PhotoId[];
     worstDpi: number;
@@ -672,8 +685,23 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Festgehaltene Doppelseiten: ihre Bilder sind vergeben, bevor irgendetwas
   // verteilt wird. Sonst stünde dasselbe Foto zweimal im Buch – groß auf der
   // selbst gebauten Seite und klein im Fluss.
-  const kept = opts.kept ?? [];
-  const keptFotos = keptPhotos(kept);
+  const keptRoh = opts.kept ?? [];
+  /*
+   * Halb festgehalten, aber nicht trennbar? Dann ganz.
+   *
+   * `setSpreadLocked` prüft `teilbar`, bevor es das halbe Schloss setzt — aber
+   * das Blatt kann sich danach geändert haben: eine andere Vorlage, ein
+   * Hintergrundbild darüber. Solche Blätter wandern hier zu den ganzen
+   * Schlössern, statt herauszufallen: Die Absicht war, diese Handarbeit zu
+   * bewahren, und sie ganz zu behalten ist die vorsichtige Auslegung. Ihre
+   * Bilder gelten dann über `keptPhotos` als vergeben, ihr Budget sind zwei
+   * Seiten.
+   */
+  const halb = (opts.keptHalves ?? []).filter((spread) => teilbar(spread));
+  const kept = [...keptRoh, ...(opts.keptHalves ?? []).filter((spread) => !teilbar(spread))];
+  // Beim halben Schloss nur die Bilder der bewahrten Seite: Die der Gegenseite
+  // gehören dem Fluss und sollen dort wieder auftauchen.
+  const keptFotos = new Set([...keptPhotos(kept), ...keptHalfPhotos(halb)]);
   // Und was sie schon leisten, wird nicht doppelt gebaut: Ein festgehaltener
   // Auftakt ist ein Auftakt und bleibt einer.
   const { years: keptJahre, groups: keptGruppen } = keptOpeners(kept, groupOf);
@@ -804,9 +832,11 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   const keptJahresAuftakte = useOpeners
     ? structure.chapters.filter((c) => keptJahre.has(c.year)).length
     : 0;
+  // Ein halb festgehaltenes Blatt kostet **eine** Buchseite: Die andere baut der
+  // Fluss, sie steht also weiter im Budget.
   const budgetSeiten = Math.max(
     2,
-    zielSeiten - (auftaktSpreads + kept.length - keptJahresAuftakte) * 2,
+    zielSeiten - (auftaktSpreads + kept.length - keptJahresAuftakte) * 2 - halb.length,
   );
 
   const budgets = distributeBudget(budgetKapitel, {
@@ -1003,7 +1033,23 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
   // Die festgehaltenen Seiten kommen zurück an ihren Platz, bevor irgendetwas
   // gezählt wird: Die Kennzahlen sollen das Buch beschreiben, das entsteht,
   // nicht nur den Teil, den die Engine gebaut hat.
-  const alle = insertKept(spreads, kept);
+  const mitKept = insertKept(spreads, kept);
+  /*
+   * Und dann die halb festgehaltenen Buchseiten.
+   *
+   * Nach den ganzen Blättern, weil sie zwischen Buchseiten eingefügt werden und
+   * die Folge dafür schon vollständig sein muss. Was sich nicht zerlegen lässt,
+   * ist oben schon zu den ganzen Schlössern gewandert; scheitert das
+   * Zusammensetzen darüber hinaus, bleibt es beim Fluss ohne diese Seiten.
+   * `keptHalfPages` sagt, wie viele tatsächlich eingesetzt wurden.
+   */
+  const halbEingesetzt = insertKeptHalves(mitKept, halb);
+  const alle = halbEingesetzt.ok
+    ? halbEingesetzt.spreads
+    : mitKept.map((spread, i) => ({ ...spread, index: i }));
+  const halbGesetzt = halbEingesetzt.ok
+    ? halb.length - (halbEingesetzt.uebersprungen?.length ?? 0)
+    : 0;
 
   // Auswertung
   const allPhotoIds = structure.chapters.flatMap((c) => c.segments.flatMap((s) => s.photoIds));
@@ -1036,6 +1082,7 @@ export function generateBook(opts: GenerateOptions): GenerateResult {
       chapterOpeners: chapterOpenerCount + keptJahresAuftakte,
       groupOpeners: groupOpenerCount + keptGruppen.size,
       keptSpreads: kept.length,
+      keptHalfPages: halbGesetzt,
       unplaced,
       worstDpi: stats.worstDpi,
       belowTargetDpi: stats.belowTargetDpi,

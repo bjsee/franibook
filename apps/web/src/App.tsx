@@ -683,9 +683,9 @@ export function App() {
    * den nächsten Knopfdruck übersteht; für eine erzeugte der Weg, eine gelungene
    * Seite zu behalten, während der Rest neu gemischt wird.
    */
-  async function setSpreadLocked(locked: boolean) {
+  async function setSpreadLocked(locked: boolean, side?: 'left' | 'right' | null) {
     try {
-      const daten = await doppelseiteFesthalten(index, locked);
+      const daten = await doppelseiteFesthalten(index, locked, side);
       if (daten.spread) setSpread(daten.spread);
       loadInfo();
     } catch (e) {
@@ -910,10 +910,13 @@ export function App() {
           chapters: info.chapters,
           gruppen: spread.groups ?? [],
           locked: spread.locked ?? false,
+          lockedSide: spread.lockedSide ?? null,
           splittable: spread.splittable ?? false,
           hatZeitstrahl,
           zeitstrahlGlobal: info.settings.timeline,
           hintergrundGlobal: info.settings.background,
+          hintergrundBild: spread.hintergrundBild ?? null,
+          seitenmasse: info.profile,
           minDpi: info.profile.resolution.minDpi,
           targetDpi: info.profile.resolution.targetDpi,
           guides,
@@ -923,7 +926,7 @@ export function App() {
           poolOffen,
           onPoolOffen: setPoolOffen,
           onIndex: blaettern,
-          onLocked: (v) => void setSpreadLocked(v),
+          onLocked: (v, seite) => void setSpreadLocked(v, seite),
           onZeitstrahl: (v) => void setSpreadTimeline(v),
           onEinfuegen: setEinfuegenAn,
           onSeiteLoeschen: (seite) => void removePage(seite),

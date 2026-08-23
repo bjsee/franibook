@@ -541,6 +541,10 @@ export const ankerZurueckholen = (name: string) =>
  */
 export type SpreadResponse = RenderedSpread & {
   timelineOverride?: boolean | null;
+  /** Hintergrundbild dieser Doppelseite samt Buchseite, `null` heißt keines. */
+  hintergrundBild?: { photoId: string; side: 'left' | 'right' | null } | null;
+  /** Buchseite, die allein festgehalten ist – `null` heißt: keine oder das ganze Blatt. */
+  lockedSide?: 'left' | 'right' | null;
   groups?: SpreadGroup[];
   /** Rohdaten der von Hand gesetzten Textblöcke – zum Bearbeiten, nicht zum Zeichnen. */
   blocks?: TextBlockData[];
@@ -571,8 +575,21 @@ export interface Umpaarbericht {
 
 export const doppelseiteLaden = (index: number) => hole<SpreadResponse>(`/api/spreads/${index}`);
 
-export const doppelseiteFesthalten = (index: number, locked: boolean) =>
-  sende<{ spread?: SpreadResponse }>('PATCH', `/api/spreads/${index}/locked`, { locked });
+/**
+ * Hält eine Doppelseite fest – oder mit `side` nur eine ihrer Buchseiten.
+ *
+ * `side: null` heißt „ganzes Blatt", `locked: false` gibt beides frei. Ein
+ * Blatt, das sich nicht an der Falzachse trennen lässt, antwortet mit 409.
+ */
+export const doppelseiteFesthalten = (
+  index: number,
+  locked: boolean,
+  side?: 'left' | 'right' | null,
+) =>
+  sende<{ spread?: SpreadResponse }>('PATCH', `/api/spreads/${index}/locked`, {
+    locked,
+    ...(side !== undefined ? { side } : {}),
+  });
 
 export const doppelseiteLoeschen = (index: number) =>
   sende<{ ok: boolean; spreadCount: number; photoCount: number }>(
@@ -594,14 +611,18 @@ export const zeitstrahlSetzen = (index: number, timeline: boolean | null) =>
 
 export const hintergrundSetzen = (
   index: number,
-  patch: { color?: string | null; photoId?: string | null },
+  patch: {
+    color?: string | null;
+    photoId?: string | null;
+    /** Buchseite des Bildes; `null` heißt über beide. */
+    side?: 'left' | 'right' | null;
+  },
 ) => sende<{ hinweis?: string }>('PATCH', `/api/spreads/${index}/background`, patch);
 
-/** Papiertöne und Bildkandidaten für den Hintergrund. */
+/** Papiertöne für den Hintergrund und die Schwelle, ab der ein Bild taugt. */
 export const hintergrundOptionenLaden = () =>
   hole<{
     colors: { id: string; name: string; hex: string }[];
-    candidates: { photoId: string; fileName: string; dpi: number; taugt: boolean }[];
     minDpi: number;
   }>('/api/background');
 

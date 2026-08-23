@@ -2,13 +2,15 @@
  * Alles zur Doppelseite, wenn kein Bild ausgewählt ist.
  *
  * Dieselbe Spalte wie beim Bild, andere Fragen: *wie sind die Bilder verteilt?*
- * (Anordnung), *worauf liegen sie?* (Hintergrund, Zeitstrahl), *was steht darauf
- * und wie viele Seiten sind es?* (Text, Seiten einfügen und löschen).
+ * (Anordnung), *worauf liegen sie?* (Hintergrund), *was steht darauf und wie viele
+ * Seiten sind es?* (Text, Seiten einfügen und löschen).
  *
  * Die drei Griffe am Buchgerüst — einfügen, löschen, festhalten — stehen absichtlich
  * hier unten und nicht bei den Bildwerkzeugen: Sie ändern nicht die Doppelseite,
  * sondern ihren Platz im Buch. „Festgehalten" ist der einzige davon, der über der
- * Bühne steht, weil man ihn beim Durchblättern setzt.
+ * Bühne steht, weil man ihn beim Durchblättern setzt — und aus demselben Grund
+ * steht dort inzwischen auch der Zeitstrahl (`ZeitstrahlHaken.tsx`), der bis dahin
+ * unter „Hintergrund" saß und deshalb nicht gefunden wurde.
  */
 import { imageBoxes } from '@franibook/core';
 import type { RenderedSpread } from '@franibook/core';
@@ -70,24 +72,11 @@ export function SeitenPanel({ model, aussen, spread }: Props) {
           spreadIndex={aussen.index}
           global={aussen.hintergrundGlobal}
           aktuell={spread.background}
+          bild={aussen.hintergrundBild}
+          jahr={aussen.jahr}
+          profil={aussen.seitenmasse}
           onChanged={aussen.onNeuRendern}
         />
-        {/*
-          Der Zeitstrahl steht hier und nicht bei den Buchgriffen, weil er auf der
-          Seite liegt wie der Hintergrund: eine Darstellungssache, die keine
-          Handarbeit verwirft. Nur zu sehen, wenn er überhaupt eingeschaltet ist —
-          sonst schaltete man eine Ausnahme von etwas, das es nicht gibt.
-        */}
-        {aussen.zeitstrahlGlobal && (
-          <label style={B.haken} title="Gilt nur für diese Doppelseite">
-            <input
-              type="checkbox"
-              checked={aussen.hatZeitstrahl}
-              onChange={(e) => aussen.onZeitstrahl(e.target.checked ? null : false)}
-            />
-            Zeitstrahl auf dieser Seite
-          </label>
-        )}
       </div>
 
       <div style={{ ...B.abschnitt, borderBottom: 'none' }}>
@@ -113,6 +102,8 @@ export function SeitenPanel({ model, aussen, spread }: Props) {
         <TextBlocks
           index={aussen.index}
           blocks={spread.blocks ?? []}
+          grund={spread.background ?? aussen.hintergrundGlobal}
+          bildDahinter={aussen.hintergrundBild !== null}
           selectedId={model.textId}
           onSelect={(id) => {
             model.setTextId(id);

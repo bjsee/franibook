@@ -236,14 +236,16 @@ async function messeParitaet(
   page: Page,
   request: APIRequestContext,
   name: string,
+  /** Erwartete Bilder auf der Bühne – ein Hintergrundbild ist eines mehr. */
+  bilder = 4,
 ): Promise<{ ratio: number; diff: PNG; width: number; height: number }> {
   await page.goto(`/?bare&spread=0&width=${COMPARE_WIDTH}&original=1`);
   const stage = page.getByTestId('spread');
   await expect(stage).toBeVisible();
-  await page.waitForFunction(() => {
+  await page.waitForFunction((erwartet) => {
     const imgs = Array.from(document.images);
-    return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
-  });
+    return imgs.length === erwartet && imgs.every((i) => i.complete && i.naturalWidth > 0);
+  }, bilder);
   // Sobald ein Spread Text trägt, entscheidet die Schrift über Geometrie.
   // `fonts.ready` allein genügt dafür nicht: Ein `@font-face` wird erst geladen,
   // wenn etwas es braucht, und der Screenshot träfe sonst die Ersatzschrift
@@ -1050,6 +1052,63 @@ test.describe('Vorschau und PDF stimmen überein', () => {
         `Vorschau und PDF weichen mit der Fassung ${variant} um ${(ratio * 100).toFixed(3)} % ab. ` +
           `Vergleichsbilder in ${ARTIFACTS}`,
       ).toBeLessThan(MAX_DIFF_TIMELINE);
+    });
+  }
+
+  /**
+   * Das Hintergrundbild – über beide Seiten und über eine.
+   *
+   * Es ist die größte Fläche, die das Buch kennt, und seit `backgroundPhotoSide`
+   * gibt es sie in zwei Zuschnitten. Beide gehören hierher, weil der Ausschnitt
+   * aus der Fläche gerechnet wird (`coverCrop` gegen das Seitenverhältnis): Ein
+   * Adapter, der die halbe Breite anders auslegt, zeigt einen anderen
+   * Bildausschnitt — und das fiele an einem randabfallenden Motiv erst im
+   * gedruckten Buch auf.
+   *
+   * Die halbe Fläche prüft zugleich die Seitenzahl der **unbedeckten** Seite:
+   * Sie muss stehen bleiben, und sie steht in beiden Adaptern an derselben
+   * Stelle oder in keinem.
+   */
+  for (const seite of [null, 'right'] as const) {
+    const name = seite ?? 'beide';
+    test(`Hintergrundbild ${name === 'beide' ? 'über beide Seiten' : 'auf einer Buchseite'} deckt sich`, async ({
+      page,
+      request,
+    }) => {
+      await eineDoppelseite(request);
+      await request.patch('http://127.0.0.1:5174/api/settings', { data: { timeline: false } });
+
+      const fotos = await (await request.get('http://127.0.0.1:5174/api/photos')).json();
+      const photoId = fotos.photos[0].id;
+      const gesetzt = await request.patch('http://127.0.0.1:5174/api/spreads/0/background', {
+        data: { photoId, side: seite },
+      });
+      expect(gesetzt.ok(), await gesetzt.text()).toBe(true);
+
+      // Erst prüfen, dass die Fläche im Modell überhaupt die verlangte ist –
+      // sonst wäre ein Tippfehler im Feldnamen ein grüner Test, der nichts misst.
+      const rsm = await (await request.get('http://127.0.0.1:5174/api/spreads/0')).json();
+      const grund = rsm.boxes.find(
+        (b: { kind: string; slotId?: string }) => b.kind === 'image' && b.slotId === 'background',
+      );
+      expect(grund).toBeDefined();
+      expect(grund.wMm).toBeCloseTo(seite ? SPREAD_W_MM / 2 : SPREAD_W_MM, 1);
+
+      // Und die Seitenzahlen: Über beide Seiten verdeckt das Bild sie, auf einer
+      // Buchseite bleibt die andere stehen.
+      const zahlen = rsm.boxes.filter(
+        (b: { kind: string; slotId?: string }) =>
+          b.kind === 'text' && b.slotId?.startsWith('page-number'),
+      );
+      expect(zahlen).toHaveLength(seite ? 1 : 0);
+
+      const { ratio } = await messeParitaet(page, request, `hintergrund-${name}`, 5);
+      console.log(`Parity (Hintergrundbild ${name}): ${(ratio * 100).toFixed(3)} % abweichend`);
+      expect(
+        ratio,
+        `Vorschau und PDF weichen mit Hintergrundbild (${name}) um ${(ratio * 100).toFixed(3)} % ab. ` +
+          `Vergleichsbilder in ${ARTIFACTS}`,
+      ).toBeLessThan(MAX_DIFF_RATIO);
     });
   }
 
