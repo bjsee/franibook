@@ -29,6 +29,13 @@ export interface SpreadAussen {
   gruppen: readonly SpreadGroup[];
   /** Ob diese Doppelseite ein Neuanordnen unverändert übersteht. */
   locked: boolean;
+  /**
+   * Buchseite, die allein festgehalten ist.
+   *
+   * Der Unterschied zu `locked` ist der Nachbar: Beim halben Schloss baut der
+   * Fluss die Gegenseite neu, statt sie mit einzufrieren.
+   */
+  lockedSide: 'left' | 'right' | null;
   /** Ob sich einzelne Buchseiten daraus nehmen lassen. */
   splittable: boolean;
   /** Ob der Zeitstrahl auf dieser Seite steht. */
@@ -37,6 +44,16 @@ export interface SpreadAussen {
   zeitstrahlGlobal: boolean;
   /** Hintergrundfarbe, die als Vorgabe gilt. */
   hintergrundGlobal: string;
+  /** Bild hinter dieser Doppelseite samt Buchseite, `null` heißt keines. */
+  hintergrundBild: { photoId: string; side: 'left' | 'right' | null } | null;
+  /**
+   * Die Seitenmaße des Druckprofils.
+   *
+   * Der Bildwähler rechnet damit die Eignung jedes Fotos als Hintergrund aus —
+   * mit `backgroundFit` aus dem Kern, derselben Funktion, mit der der Server
+   * beim Setzen warnt.
+   */
+  seitenmasse: { page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number } };
   minDpi: number;
   targetDpi: number;
 
@@ -67,7 +84,8 @@ export interface SpreadAussen {
   onPoolOffen: (offen: boolean) => void;
 
   onIndex: (index: number) => void;
-  onLocked: (locked: boolean) => void;
+  /** `side` hält nur diese Buchseite fest; `null` das ganze Blatt. */
+  onLocked: (locked: boolean, side?: 'left' | 'right' | null) => void;
   onZeitstrahl: (wert: boolean | null) => void;
   onEinfuegen: (at: number) => void;
   onSeiteLoeschen: (seite: 'left' | 'right') => void;

@@ -210,6 +210,9 @@ export function vergessen(
     let betroffen = slots > 0;
     if (spread.backgroundPhotoId && menge.has(spread.backgroundPhotoId)) {
       delete spread.backgroundPhotoId;
+      // Die Seitenangabe geht mit: Ohne Bild ist sie eine Aussage über nichts,
+      // und das nächste Bild brächte sonst die Wahl des vorigen mit.
+      delete spread.backgroundPhotoSide;
       betroffen = true;
     }
     if (betroffen) spreads.push(i);

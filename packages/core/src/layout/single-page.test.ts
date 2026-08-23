@@ -6,6 +6,7 @@ import { HALF_BLANK_ID, HALF_ONE_ID, halvesOfTemplate } from '../templates/halve
 import { requireTemplate, templateMeta } from '../templates/index.js';
 import { chapterHalves } from '../templates/chapter-halves.js';
 import {
+  insertKeptHalves,
   insertSinglePage,
   removeSinglePage,
   setChapterHalf,
@@ -51,6 +52,28 @@ function fotos(spreads: readonly Spread[]): PhotoId[] {
 describe('zerlegbar', () => {
   it('erkennt eine gewöhnliche Doppelseite als zerlegbar', () => {
     expect(zerlegbar(blatt('s0', 'spread.4up.grid', 0))).toBe(true);
+  });
+
+  it('trennt ein Blatt mit seitenweisem Hintergrundbild und lässt das Bild bei seiner Seite', () => {
+    const mitBild: Spread = {
+      ...blatt('s0', 'spread.4up.grid', 0),
+      backgroundPhotoId: 'pBG',
+      backgroundPhotoSide: 'left',
+    };
+    // Ein Bild auf einer Buchseite kreuzt den Falz nicht – es hält das Blatt
+    // nicht zusammen.
+    expect(zerlegbar(mitBild)).toBe(true);
+
+    // Und es überlebt Zerlegen und Paaren: Wandert die linke Hälfte beim
+    // Umpaaren nach rechts, wandert das Bild mit.
+    const r = insertSinglePage([mitBild, blatt('s1', 'spread.4up.grid', 4)], {
+      atPage: 0,
+      halfId: HALF_BLANK_ID,
+      id: 'eigen-1',
+    });
+    const traeger = r.spreads.find((sp) => sp.backgroundPhotoId === 'pBG');
+    expect(traeger).toBeDefined();
+    expect(traeger!.backgroundPhotoSide).toBe('right');
   });
 
   it('lässt Auftakte, justierte Zeilen und Hintergrundbilder ganz', () => {
@@ -103,9 +126,14 @@ describe('insertSinglePage', () => {
     expect(r.bericht?.leerseiten).toBe(1);
   });
 
-  it('hält die neue Seite fest', () => {
+  it('hält die neue Buchseite fest – und nur sie', () => {
     const r = insertSinglePage(buch(), { atPage: 2, halfId: HALF_BLANK_ID, id: 'eigen-1' });
-    expect(r.spreads.find((s) => s.id === 'eigen-1')?.locked).toBe(true);
+    const blatt = r.spreads.find((s) => s.id === 'eigen-1');
+    // Vorher stand hier `locked: true`: Die eingefügte Seite fror auch ihre
+    // Nachbarin ein, die die Automatik gestellt hatte. Das halbe Schloss ist so
+    // eng wie die Handarbeit, die es schützt.
+    expect(blatt?.lockedSide).toBe('left');
+    expect(blatt?.locked).toBeUndefined();
   });
 
   it('nimmt Textblöcke der neuen Seite mit', () => {
@@ -586,6 +614,21 @@ describe('setHalfPage', () => {
     expect(nein({ ...raster(), backgroundPhotoId: 'p99' }).ok).toBe(false);
   });
 
+  it('ordnet eine Seite auch dann an, wenn nur die andere ein Hintergrundbild trägt', () => {
+    // Ein Bild auf einer Buchseite macht das Blatt nicht zur Einheit – dieselbe
+    // Grenze wie in `teilbar`, sonst könnte man eine Seite festhalten, aber
+    // nicht anordnen.
+    const r = setHalfPage(
+      { ...raster(), backgroundPhotoId: 'p99', backgroundPhotoSide: 'left' },
+      { side: 'right', halfId: HALF_ONE_ID, photos: [], profile },
+    );
+
+    expect(r.ok).toBe(true);
+    // Und das Bild bleibt, wo es lag.
+    expect(r.spread!.backgroundPhotoId).toBe('p99');
+    expect(r.spread!.backgroundPhotoSide).toBe('left');
+  });
+
   /** Justierte Zeilen: vier Rechtecke, zwei je Buchseite, keines über dem Falz. */
   function justiert(): Spread {
     const rects = [
@@ -789,5 +832,108 @@ describe('setChapterHalf', () => {
 
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/anderen Seite/);
+  });
+});
+
+describe('insertKeptHalves', () => {
+  /** Ein Fluss aus drei Vierer-Blättern, Bilder p0 bis p11. */
+  const fluss = (): Spread[] => [
+    { ...blatt('f0', 'spread.4up.grid', 0), index: 0 },
+    { ...blatt('f1', 'spread.4up.grid', 4), index: 1 },
+    { ...blatt('f2', 'spread.4up.grid', 8), index: 2 },
+  ];
+
+  /** Ein Blatt, dessen linke Buchseite festgehalten ist. */
+  const halbGehalten = (
+    index: number,
+    anchor?: { photoId: string; where: 'before' | 'after' },
+  ) => ({
+    ...blatt('h0', 'spread.4up.grid', 100),
+    index,
+    lockedSide: 'left' as const,
+    ...(anchor ? { anchor } : {}),
+  });
+
+  it('setzt die bewahrte Buchseite an ihren Anker und paart sie neu', () => {
+    const r = insertKeptHalves(fluss(), [halbGehalten(1, { photoId: 'p4', where: 'before' })]);
+
+    expect(r.ok).toBe(true);
+    // Die Bilder der bewahrten linken Hälfte (p100, p101 im Vierer-Raster)
+    // stehen jetzt vor p4 im Buch.
+    const reihe = fotos(r.spreads);
+    expect(reihe.indexOf('p100')).toBeLessThan(reihe.indexOf('p4'));
+    // Und die Bilder des Flusses sind vollzählig geblieben.
+    for (const id of ['p0', 'p4', 'p8', 'p11']) expect(reihe).toContain(id);
+  });
+
+  it('bringt nur die festgehaltene Hälfte mit, nicht die Gegenseite', () => {
+    const r = insertKeptHalves(fluss(), [halbGehalten(1, { photoId: 'p4', where: 'before' })]);
+    const reihe = fotos(r.spreads);
+    // p102 und p103 liegen auf der rechten Hälfte – sie gehören dem Fluss und
+    // sind hier nicht dabei.
+    expect(reihe).toContain('p100');
+    expect(reihe).not.toContain('p102');
+  });
+
+  it('behält das Schloss an der Buchseite, auch wenn sie die Blattseite wechselt', () => {
+    const r = insertKeptHalves(fluss(), [halbGehalten(1, { photoId: 'p4', where: 'before' })]);
+    const mitSchloss = r.spreads.filter((sp) => sp.lockedSide !== undefined);
+    expect(mitSchloss).toHaveLength(1);
+    // Auf welcher Seite sie landet, entscheidet die Parität – festgehalten
+    // bleibt sie in jedem Fall.
+    expect(['left', 'right']).toContain(mitSchloss[0]!.lockedSide);
+  });
+
+  it('nimmt ohne Anker den alten Platz als Notnagel', () => {
+    const r = insertKeptHalves(fluss(), [halbGehalten(2)]);
+    expect(r.ok).toBe(true);
+    const reihe = fotos(r.spreads);
+    expect(reihe.indexOf('p100')).toBeGreaterThan(reihe.indexOf('p0'));
+  });
+
+  it('setzt auch die zweite Seite an ihren Anker und nicht eine Seite zu früh', () => {
+    // Jede Einfügung verschiebt alles dahinter um eine Buchseite. Wird die
+    // Position einmal vorab gerechnet, landet die zweite Seite zu früh.
+    const erste = { ...halbGehalten(0, { photoId: 'p0', where: 'before' }), id: 'h1' };
+    const zweite = {
+      ...blatt('h2', 'spread.4up.grid', 200),
+      index: 2,
+      lockedSide: 'left' as const,
+      anchor: { photoId: 'p8', where: 'before' as const },
+    };
+
+    const r = insertKeptHalves(fluss(), [erste, zweite]);
+    const reihe = fotos(r.spreads);
+    // Die zweite bewahrte Seite steht vor p8 – und hinter p4, das im Fluss
+    // davor liegt.
+    expect(reihe.indexOf('p200')).toBeLessThan(reihe.indexOf('p8'));
+    expect(reihe.indexOf('p200')).toBeGreaterThan(reihe.indexOf('p4'));
+  });
+
+  it('rettet den Anker über das Zerlegen und Paaren', () => {
+    const r = insertKeptHalves(fluss(), [halbGehalten(1, { photoId: 'p4', where: 'before' })]);
+    const bewahrt = r.spreads.find((sp) => sp.lockedSide !== undefined);
+    // Ohne den Anker fiele die Seite beim nächsten Neuaufbau auf ihre alte
+    // Blattnummer zurück – eine Stelle im Buch von gestern.
+    expect(bewahrt?.anchor).toEqual({ photoId: 'p4', where: 'before' });
+  });
+
+  it('überspringt ein unzerlegbares Blatt und setzt die übrigen trotzdem', () => {
+    const kaputt = { ...auftakt('a1'), index: 1, lockedSide: 'left' as const };
+    const r = insertKeptHalves(fluss(), [
+      kaputt,
+      halbGehalten(2, { photoId: 'p8', where: 'before' }),
+    ]);
+
+    expect(r.ok).toBe(true);
+    expect(r.uebersprungen).toEqual(['a1']);
+    // Die zerlegbare Seite steht trotzdem im Buch.
+    expect(fotos(r.spreads)).toContain('p100');
+  });
+
+  it('lässt den Fluss unangetastet, wenn nichts festgehalten ist', () => {
+    const r = insertKeptHalves(fluss(), []);
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toEqual(fotos(fluss()));
   });
 });

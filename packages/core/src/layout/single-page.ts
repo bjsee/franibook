@@ -28,6 +28,7 @@ import {
   hiddenSlotsNachWechsel,
   type SlotAssignment,
   type Spread,
+  type SpreadAnchor,
   type TextBlock,
 } from '../model/spread.js';
 import type { Template, TemplateSlot } from '../model/template.js';
@@ -74,6 +75,23 @@ interface BookPage {
   from?: string;
   /** Ob diese Buchseite von Hand gebaut ist und festgehalten werden soll. */
   own?: boolean;
+  /**
+   * Hintergrundbild dieser Buchseite, falls eines nur auf ihr liegt.
+   *
+   * Über beide Seiten gibt es das hier nicht: Ein solches Blatt zerfällt gar
+   * nicht erst (`teilbar`).
+   */
+  backgroundPhotoId?: PhotoId;
+  /**
+   * Woran die festgehaltene Buchseite hängt, wenn das Buch neu erzeugt wird.
+   *
+   * Reist mit `own` mit: Ein ganzes Schloss geht als Objekt durch `insertKept`
+   * und behält seinen Anker von selbst, eine Halbseite wird dagegen zerlegt und
+   * neu zusammengesetzt. Ohne ihn hier verlöre sie ihn beim ersten Neuaufbau und
+   * fiele fortan auf ihre alte Blattnummer zurück — eine Stelle im Buch von
+   * gestern.
+   */
+  anchor?: SpreadAnchor;
 }
 
 /** Geometrischer Schlüssel, um Slots einer Hälfte ihren Halbseitenslots zuzuordnen. */
@@ -116,7 +134,11 @@ export function teilbar(spread: Spread): boolean {
   if (!template) return false;
   if (templateMeta(template.id).chapterOnly) return false;
   if (template.tags?.includes('gruppenauftakt')) return false;
-  if (spread.backgroundPhotoId) return false; // ein randabfallendes Bild über beide Seiten
+  // Ein Hintergrundbild über **beide** Seiten hält das Blatt zusammen: Es
+  // kreuzt den Falz, und eine halbe Fläche davon beschreibt kein Motiv. Liegt
+  // es dagegen auf einer Buchseite, reist es mit ihr — `zerlege` gibt es ihrer
+  // Hälfte mit, `paare` schreibt es samt neuer Seite zurück.
+  if (spread.backgroundPhotoId && !spread.backgroundPhotoSide) return false;
 
   return halbseitenVon(template) !== undefined;
 }
@@ -226,6 +248,18 @@ function zerlege(spread: Spread): [BookPage, BookPage] | undefined {
       blocks,
       ...(spread.background !== undefined ? { background: spread.background } : {}),
       ...(spread.timeline !== undefined ? { timeline: spread.timeline } : {}),
+      // Das Hintergrundbild gehört der Buchseite, auf der es liegt – und nur
+      // ihr. Auf der Gegenseite lag ohnehin keines, sonst wäre das Blatt nicht
+      // zerlegbar.
+      ...(spread.backgroundPhotoId !== undefined && spread.backgroundPhotoSide === which
+        ? { backgroundPhotoId: spread.backgroundPhotoId }
+        : {}),
+      // Das halbseitige Schloss reist mit seiner Buchseite: Zerlegt und wieder
+      // gepaart soll dieselbe Seite festgehalten sein, auch wenn sie dabei die
+      // Blattseite wechselt. Der Anker gehört dazu — er sagt, wohin sie gehört.
+      ...(spread.lockedSide === which
+        ? { own: true as const, ...(spread.anchor ? { anchor: spread.anchor } : {}) }
+        : {}),
       from: spread.id,
     };
   };
@@ -290,6 +324,22 @@ function paare(links: BookPage, rechts: BookPage, index: number): Spread | undef
   const background = links.background ?? rechts.background;
   const timeline = links.timeline ?? rechts.timeline;
 
+  /*
+   * Das Hintergrundbild dagegen gehört seiner Buchseite und wandert mit ihr auf
+   * die Seite, auf der sie landet.
+   *
+   * Bringen beide Hälften eines mit, gewinnt aus demselben Grund die linke: Das
+   * Modell kennt **ein** Bild je Blatt, und zwei nebeneinander wären zwei
+   * randabfallende Motive auf einer aufgeschlagenen Doppelseite — eher ein
+   * Versehen als eine Gestaltung. Der Fall entsteht nur durch Umpaaren, nie
+   * durch eine Wahl.
+   */
+  const hintergrundBild = links.backgroundPhotoId
+    ? { photoId: links.backgroundPhotoId, side: 'left' as const }
+    : rechts.backgroundPhotoId
+      ? { photoId: rechts.backgroundPhotoId, side: 'right' as const }
+      : undefined;
+
   // Die eigene Seite gibt dem Blatt ihre Kennung, damit `keep` und `anchor`
   // weiter auf dasselbe Blatt zeigen. Sonst zählt das Blatt durch.
   const eigen = links.own ? links : rechts.own ? rechts : undefined;
@@ -302,7 +352,31 @@ function paare(links: BookPage, rechts: BookPage, index: number): Spread | undef
     ...(blocks.length > 0 ? { blocks } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(timeline !== undefined ? { timeline } : {}),
-    ...(links.own || rechts.own ? { locked: true as const } : {}),
+    ...(hintergrundBild
+      ? {
+          backgroundPhotoId: hintergrundBild.photoId,
+          backgroundPhotoSide: hintergrundBild.side,
+        }
+      : {}),
+    /*
+     * Das Schloss so eng wie die Handarbeit, die es schützt.
+     *
+     * Vorher stand hier `locked: true`, sobald **eine** der beiden Seiten von
+     * Hand gebaut war — und damit fror eine eingefügte Buchseite auch ihre
+     * Nachbarin ein, die die Automatik gestellt hatte. Sind beide eigen, ist es
+     * ein ganzes Blatt Handarbeit und `locked` weiter das Richtige.
+     */
+    ...(links.own && rechts.own
+      ? { locked: true as const }
+      : links.own
+        ? { lockedSide: 'left' as const }
+        : rechts.own
+          ? { lockedSide: 'right' as const }
+          : {}),
+    // Und der Anker der eigenen Seite: Ohne ihn stünde die bewahrte Buchseite
+    // beim nächsten Neuaufbau auf ihrer alten Blattnummer statt bei ihren
+    // Nachbarbildern.
+    ...(eigen?.anchor ? { anchor: eigen.anchor } : {}),
   };
 }
 
@@ -364,7 +438,10 @@ function alsFreieKaesten(
         'seitenweise verlöre sie ihre Textplätze',
     );
   }
-  if (spread.backgroundPhotoId) {
+  // Nur ein Bild über **beide** Seiten macht das Blatt zur Einheit; eines auf
+  // einer Buchseite bleibt liegen, wo es liegt — der Spread wird unten aus dem
+  // alten zusammengesetzt und trägt es mit. Dieselbe Grenze wie in `teilbar`.
+  if (spread.backgroundPhotoId && !spread.backgroundPhotoSide) {
     return nein(
       'Auf dieser Doppelseite liegt ein Bild über beide Seiten – sie lässt sich nur als Ganzes anordnen',
     );
@@ -467,7 +544,10 @@ export function setChapterHalf(
   if (!jetzt) {
     return nein('Diese Jahresseite lässt sich nicht in zwei Buchseiten zerlegen');
   }
-  if (spread.backgroundPhotoId) {
+  // Nur ein Bild über **beide** Seiten macht das Blatt zur Einheit; eines auf
+  // einer Buchseite bleibt liegen, wo es liegt — der Spread wird unten aus dem
+  // alten zusammengesetzt und trägt es mit. Dieselbe Grenze wie in `teilbar`.
+  if (spread.backgroundPhotoId && !spread.backgroundPhotoSide) {
     return nein(
       'Auf dieser Doppelseite liegt ein Bild über beide Seiten – sie lässt sich nur als Ganzes anordnen',
     );
@@ -854,6 +934,122 @@ export function insertSinglePage(
   }
 
   return paareNeu(folge, spreads, verbraucht);
+}
+
+/**
+ * Setzt halbseitig festgehaltene Buchseiten in den neu erzeugten Fluss zurück.
+ *
+ * Das Gegenstück zu `insertKept` für Blätter — mit demselben Anker und
+ * derselben Absicht, nur eine Buchseite statt zwei: Die bewahrte Seite kommt
+ * dorthin, wo ihr Ankerfoto gelandet ist, und bekommt die Nachbarin, die der
+ * Fluss dort ohnehin baut. Genau darin liegt der Unterschied zum ganzen Schloss:
+ * Die Gegenseite ist neu, nicht eingefroren.
+ *
+ * Die Seite darf dabei die Blattseite wechseln — `paare` normiert jede Buchseite
+ * in Linksform und spiegelt sie zurück, wo sie landet. Das ist die Entscheidung
+ * gegen einen Paritätszwang: Eine bewahrte linke Seite, die nur links stehen
+ * dürfte, verlangte vor sich eine leere Halbseite, und das Buch bekäme je
+ * festgehaltener Seite eine weiße dazu.
+ *
+ * Wie beim Einfügen wird eine leere Halbseite dahinter verbraucht, statt das
+ * Buch wachsen zu lassen: Das Budget hat für diese Seite schon bezahlt
+ * (`generateBook`, `budgetSeiten`).
+ */
+export function insertKeptHalves(
+  flow: readonly Spread[],
+  gehalten: readonly Spread[],
+): SinglePageResult & { uebersprungen?: string[] } {
+  if (gehalten.length === 0) {
+    return { ok: true, spreads: flow.map((spread, i) => ({ ...spread, index: i })) };
+  }
+
+  const folge = buchseitenfolge(flow);
+
+  /**
+   * Buchseitenposition je Foto — **jedes Mal neu gerechnet**.
+   *
+   * Gezählt wird über die Folge und nicht über die Blätter: Der Anker nennt ein
+   * Foto, eingefügt wird aber zwischen Buchseiten, und ein unzerlegtes Blatt
+   * belegt deren zwei.
+   *
+   * Einmal vorab gerechnet wäre die Karte ab der zweiten eingesetzten Seite
+   * falsch: Jede Einfügung verschiebt alles dahinter um eine Buchseite, und die
+   * zweite Seite landete dann eine Position zu früh — bei drei Seiten zwei.
+   * Die Folge ist kurz, das Neurechnen kostet nichts gegen einen Fehler, den
+   * man erst im gedruckten Buch sieht.
+   */
+  const positionen = (): { seiteVonFoto: Map<PhotoId, number>; seitenzahl: number } => {
+    const seiteVonFoto = new Map<PhotoId, number>();
+    let gezaehlt = 0;
+    for (const eintrag of folge) {
+      const slots = eintrag.span === 2 ? (eintrag.spread?.slots ?? []) : (eintrag.slots ?? []);
+      for (const slot of slots) {
+        if (slot.photoId !== null && !seiteVonFoto.has(slot.photoId)) {
+          seiteVonFoto.set(slot.photoId, gezaehlt);
+        }
+      }
+      gezaehlt += eintrag.span;
+    }
+    return { seiteVonFoto, seitenzahl: gezaehlt };
+  };
+
+  // In der bisherigen Reihenfolge einsetzen: Treffen zwei auf dieselbe Stelle,
+  // entscheidet sie – dieselbe Regel wie in `insertKept`.
+  const sortiert = [...gehalten].sort((a, b) => a.index - b.index);
+
+  const uebersprungen: Spread[] = [];
+
+  for (const spread of sortiert) {
+    const seite = spread.lockedSide;
+    if (!seite) continue;
+    /*
+     * Erst `teilbar`, dann `zerlege`.
+     *
+     * `zerlege` fragt nur die Geometrie der Vorlage und trennt deshalb auch, was
+     * nicht getrennt werden darf: Ein Auftakt verlöre dabei seine Textplätze,
+     * ein Blatt mit Hintergrundbild das Bild — beides kennt eine Buchseite
+     * nicht. `teilbar` ist die Bedingung, unter der das halbe Schloss überhaupt
+     * gesetzt werden darf (`setSpreadLocked`); hat sich das Blatt seither
+     * geändert, fällt es hier heraus statt beschädigt zu werden.
+     */
+    const teile = teilbar(spread) ? zerlege(spread) : undefined;
+    if (!teile) {
+      uebersprungen.push(spread);
+      continue;
+    }
+
+    const { seiteVonFoto, seitenzahl } = positionen();
+    const halbseite = seite === 'left' ? teile[0] : teile[1];
+    const anchor = spread.anchor;
+    const treffer = anchor ? seiteVonFoto.get(anchor.photoId) : undefined;
+    const stelle =
+      treffer !== undefined
+        ? anchor!.where === 'after'
+          ? treffer + 1
+          : treffer
+        : Math.min(Math.max(0, spread.index * 2), seitenzahl);
+
+    const einfuegeIndex = folgeIndexVon(folge, stelle);
+    folge.splice(einfuegeIndex, 0, halbseite);
+
+    // Dieselbe Suche wie beim Einfügen von Hand: Eine leere Halbseite dahinter
+    // stellt den Platz, sonst wächst das Buch um eine Seite.
+    for (let i = einfuegeIndex + 1; i < folge.length; i++) {
+      const eintrag = folge[i]!;
+      if (eintrag.span === 2) break;
+      const traegt =
+        (eintrag.slots ?? []).some((sl) => sl.photoId) || (eintrag.blocks ?? []).length > 0;
+      if (eintrag.halfId === HALF_BLANK_ID && !traegt && !eintrag.own) {
+        folge.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  const ergebnis = paareNeu(folge, flow, false);
+  return uebersprungen.length > 0
+    ? { ...ergebnis, uebersprungen: uebersprungen.map((sp) => sp.id) }
+    : ergebnis;
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   insertTemplates,
   ownHalves,
   removeSinglePage as removeSinglePageFromBook,
+  teilbar,
   templateById,
 } from '@franibook/core';
 
@@ -315,18 +316,46 @@ export function setSpreadLocked(
   buch: Buch,
   index: number,
   locked: boolean,
-): { ok: boolean; error?: string } {
+  /** Nur diese Buchseite festhalten; ohne Angabe das ganze Blatt. */
+  side?: 'left' | 'right' | null,
+): { ok: boolean; error?: string; unteilbar?: boolean } {
   const spread = buch.spreads[index];
   if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
 
   if (!locked) {
     delete spread.locked;
+    delete spread.lockedSide;
     return { ok: true };
   }
 
-  spread.locked = true;
+  if (side) {
+    // Dasselbe Kriterium wie beim seitenweisen Anordnen und beim Einfügen einer
+    // Buchseite: Was sich nicht an der Falzachse trennen lässt, lässt sich auch
+    // nicht halb festhalten.
+    if (!teilbar(spread)) {
+      return {
+        ok: false,
+        unteilbar: true,
+        error:
+          'Diese Doppelseite lässt sich nicht an der Falzachse trennen – ' +
+          'festhalten geht hier nur als ganzes Blatt',
+      };
+    }
+    delete spread.locked;
+    spread.lockedSide = side;
+  } else {
+    delete spread.lockedSide;
+    spread.locked = true;
+  }
+
   // Der eigene Anker darf nicht auf ein Bild dieser Seite zeigen: Beim
   // Erzeugen liegt es dann auf keiner Flussseite, und der Anker fände nichts.
+  // Beim halben Schloss gilt das nur für die bewahrte Hälfte — die Bilder der
+  // Gegenseite laufen im Fluss mit und sind gerade die brauchbaren Anker. Der
+  // Einfachheit halber bleiben trotzdem alle Bilder des Blattes ausgenommen:
+  // Welche Hälfte ein Bild trägt, hängt an der Slotkennung, und ein Anker auf
+  // die Gegenseite zeigte nach dem Neuaufbau auf ein Blatt, das es so nicht
+  // mehr gibt.
   const eigene = new Set(spread.slots.map((s) => s.photoId));
   const anker = ankerFuer(buch, index + 1);
   if (anker && !eigene.has(anker.anchor.photoId)) spread.anchor = anker.anchor;

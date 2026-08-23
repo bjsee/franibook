@@ -13,9 +13,15 @@
  * erreicht 240 dpi, zwei erreichen 150 dpi, 106 erreichen 96 dpi. Die Funktion
  * gibt es trotzdem – aber sie prüft, und die Prüfung wird meist abraten. Das ist
  * der Sinn: Der Fehler soll vor dem Druck auffallen, nicht danach.
+ *
+ * **Und deshalb gibt es ihn auch je Buchseite** (`backgroundArea`): Über eine
+ * halbe Doppelseite gerechnet verdoppelt sich die Auflösung fast — am Bestand
+ * vom 21.8.2026 (962 Fotos) steigt der Median von 71 auf 141 dpi. Die Schwelle
+ * von 150 dpi bleibt davon unberührt und wird auch knapp verfehlt: 14 Fotos
+ * bestehen sie statt einem. Bei 140 dpi wären es 869 — die Kante liegt also
+ * genau dort, wo dieser Bestand liegt, und das ist der Grund, die Zahl am Bild
+ * zu zeigen, statt sie zu verschieben.
  */
-import type { Photo } from '../model/photo.js';
-import type { PrintProfile } from '../print/profile.js';
 import { spreadHeightMm, spreadWidthMm } from '../print/profile.js';
 
 export interface BackgroundColor {
@@ -75,8 +81,45 @@ export interface BackgroundFit {
   dpi: number;
   /** Ob sie für einen Hintergrund reicht. */
   taugt: boolean;
-  /** Pixel, die das Bild für `BACKGROUND_MIN_DPI` bräuchte. */
+  /**
+   * Pixel, die das Bild für `BACKGROUND_MIN_DPI` bräuchte — an der Kante, die
+   * **klemmt**.
+   *
+   * Nicht an der langen Kante der Fläche: Welche Seite stärker vergrößert
+   * werden muss, hängt am Foto. Über eine Buchseite ist es fast immer die Höhe,
+   * und der Satz „1630 px nötig, dieses hat 2048" nannte dann zwei Zahlen zu
+   * verschiedenen Kanten — er las sich, als wäre alles in Ordnung.
+   */
   benoetigtPx: number;
+  /** Was das Foto an genau dieser Kante mitbringt. */
+  vorhandenPx: number;
+}
+
+/** So viel vom Profil braucht die Hintergrundrechnung – und die Oberfläche hat es. */
+type Seitenmasse = { page: { trimWidthMm: number; trimHeightMm: number; bleedMm: number } };
+
+/**
+ * Die Fläche, die ein Hintergrundbild deckt – ganze Doppelseite oder eine
+ * Buchseite.
+ *
+ * Eine Buchseite reicht bis an die Falzachse und hat nur **außen** Beschnitt;
+ * innen stößt sie an ihre Nachbarin, und ein Zuschlag dort wäre ein Streifen,
+ * den niemand druckt. In der Höhe ändert sich nichts, und genau das ist der
+ * Grund, warum die halbe Fläche die Auflösung nicht verdoppelt: Bei diesem
+ * Bestand ist die kurze Kante der Engpass, nicht die lange.
+ */
+export function backgroundArea(
+  profile: Seitenmasse,
+  side?: 'left' | 'right',
+): { xMm: number; yMm: number; wMm: number; hMm: number } {
+  const hMm = spreadHeightMm(profile);
+  if (!side) return { xMm: 0, yMm: 0, wMm: spreadWidthMm(profile), hMm };
+
+  const halb = profile.page.trimWidthMm + profile.page.bleedMm;
+  const achse = profile.page.bleedMm + profile.page.trimWidthMm;
+  return side === 'left'
+    ? { xMm: 0, yMm: 0, wMm: halb, hMm }
+    : { xMm: achse, yMm: 0, wMm: halb, hMm };
 }
 
 /**
@@ -84,17 +127,33 @@ export interface BackgroundFit {
  *
  * Gerechnet wird auf die Beschnittfläche und formatfüllend: Maßgeblich ist die
  * Kante, die stärker vergrößert werden muss – ein Panorama scheitert an der
- * Höhe, ein Hochformat an der Breite.
+ * Höhe, ein Hochformat an der Breite. Mit `side` gilt die Rechnung für eine
+ * einzelne Buchseite; ohne sie für die ganze Doppelseite.
+ *
+ * Profil und Foto sind auf das verengt, was die Rechnung braucht — wie bei
+ * `sideAxisPasst`: So rechnet die Oberfläche im Bildwähler mit **dieser**
+ * Funktion und nicht mit einer zweiten, die dasselbe anders ergibt. Sie hat dort
+ * nur die Fotoliste aus `/api/photos`, kein `Photo` des Modells; die Maße darin
+ * sind bereits die aufgelösten (`effectivePhoto`), also die richtigen.
  */
-export function backgroundFit(photo: Photo, profile: PrintProfile): BackgroundFit {
-  const wMm = spreadWidthMm(profile);
-  const hMm = spreadHeightMm(profile);
-  const skala = Math.max(wMm / photo.width, hMm / photo.height);
+export function backgroundFit(
+  photo: { width: number; height: number },
+  profile: Seitenmasse,
+  side?: 'left' | 'right',
+): BackgroundFit {
+  const { wMm, hMm } = backgroundArea(profile, side);
+  const skalaBreite = wMm / photo.width;
+  const skalaHoehe = hMm / photo.height;
+  const skala = Math.max(skalaBreite, skalaHoehe);
   const dpi = 25.4 / skala;
+  // Die klemmende Kante ist die mit der größeren Skala – sie bestimmt die
+  // Auflösung, und nur über sie ist die Auskunft „so viel fehlt" wahr.
+  const engpassMm = skalaBreite >= skalaHoehe ? wMm : hMm;
   return {
     dpi,
     taugt: dpi >= BACKGROUND_MIN_DPI,
-    benoetigtPx: Math.ceil((Math.max(wMm, hMm) / 25.4) * BACKGROUND_MIN_DPI),
+    benoetigtPx: Math.ceil((engpassMm / 25.4) * BACKGROUND_MIN_DPI),
+    vorhandenPx: skalaBreite >= skalaHoehe ? photo.width : photo.height,
   };
 }
 
@@ -214,6 +273,67 @@ export const TIMELINE_ACCENTS: readonly TimelineAccent[] = [
   // Kommt in keinem Jahreszeitband vor und ist deshalb unverwechselbar.
   { value: '#6b4696', label: 'Lila' },
 ];
+
+/**
+ * Farbe eines Textblocks ohne eigene Wahl: dieselbe wie im Fließtext des Buches.
+ *
+ * Steht hier und nicht mehr im Renderer, seit sie auch in der Palette darunter
+ * auftaucht: Zwei Stellen mit demselben Hexwert wären zwei Vorgaben, sobald eine
+ * davon geändert wird.
+ */
+export const TEXT_DEFAULT_COLOR = '#3f3f46';
+
+export interface TextBlockColor {
+  /** `auto` heißt: keine eigene Farbe, `textColorOn` entscheidet. */
+  value: string;
+  label: string;
+}
+
+/**
+ * Die Farben, die ein eigener Textblock tragen darf.
+ *
+ * Wieder eine geschlossene Liste, aus demselben Grund wie bei den Hintergründen
+ * und beim Marker des Zeitstrahls: Ein freier Farbwähler produziert im Fotobuch
+ * irgendwann Neonrosa, und dagegen hilft keine Warnung, sondern nur eine Wahl,
+ * die ihn nicht anbietet.
+ *
+ * `auto` steht voran und ist die Vorgabe — dann rechnet `textColorOn` aus dem
+ * Hintergrund, ob dunkel oder hell gesetzt wird. Wer einen festen Ton wählt,
+ * bekommt ihn dagegen unverändert: Auf einem Hintergrundbild ist Weiß genau die
+ * Entscheidung, die keine Automatik treffen kann, weil sie das Motiv nicht
+ * kennt.
+ *
+ * Die vier Akzente sind dieselben wie beim Zeitstrahl und keine zweiten Werte —
+ * sie sind gegen Creme und gegen Anthrazit geprüft, und ein Buch mit zwei
+ * ähnlichen, aber verschiedenen Rottönen ist ein Buch mit einem Fehler darin.
+ */
+export const TEXT_BLOCK_COLORS: readonly TextBlockColor[] = [
+  { value: 'auto', label: 'wie der Grund' },
+  { value: TEXT_DEFAULT_COLOR, label: 'Graphit' },
+  { value: '#1c1917', label: 'Tinte' },
+  // Für Text auf einem Hintergrundbild: Dort ist der „Grund" ein Motiv, und
+  // `textColorOn` liest nur die Farbe darunter, die davon verdeckt ist.
+  { value: '#ffffff', label: 'Weiß' },
+  ...TIMELINE_ACCENTS.filter((a) => a.value !== 'auto').map((a) => ({
+    value: a.value,
+    label: a.label,
+  })),
+];
+
+/**
+ * Ob ein Wert eine wählbare Textfarbe ist – `auto` zählt nicht dazu.
+ *
+ * Analog zu `isBackgroundColor`: Der Server prüft damit, was er speichert,
+ * statt einen fremden Wert bis in den Druck durchzureichen. „Keine Farbe" ist
+ * kein Wert, sondern ein fehlendes Feld.
+ */
+export function isTextBlockColor(wert: unknown): wert is string {
+  return (
+    typeof wert === 'string' &&
+    wert !== 'auto' &&
+    TEXT_BLOCK_COLORS.some((c) => c.value.toLowerCase() === wert.toLowerCase())
+  );
+}
 
 function toHsl(hex: string): { h: number; s: number; l: number } {
   const n = hex.replace('#', '');

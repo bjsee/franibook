@@ -33,6 +33,8 @@ import { useSpreadTiles } from './useSpreadTiles.js';
 import { ZOOM_SCHRITT, type SpreadEditorModel } from './useSpreadEditor.js';
 import { Vorlagentexte } from './Vorlagentexte.js';
 import type { SpreadAussen } from './types.js';
+import { Festhalten } from './Festhalten.js';
+import { ZeitstrahlHaken } from './ZeitstrahlHaken.js';
 
 /**
  * Breite einer Kachel im Buchnavigator.
@@ -92,14 +94,8 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
             </span>
           )}
           <span style={B.dehner} />
-          <label style={B.haken} title="Diese Doppelseite beim Neuanordnen unverändert lassen">
-            <input
-              type="checkbox"
-              checked={aussen.locked}
-              onChange={(e) => aussen.onLocked(e.target.checked)}
-            />
-            festgehalten
-          </label>
+          <Festhalten aussen={aussen} />
+          <ZeitstrahlHaken aussen={aussen} />
         </div>
 
         <div ref={model.platzRef} style={S.buehnenPlatz}>
@@ -444,24 +440,15 @@ function SeitenKarte({
       )}
 
       {panel === 'hintergrund' && (
-        <>
-          <BackgroundPicker
-            spreadIndex={aussen.index}
-            global={aussen.hintergrundGlobal}
-            aktuell={spread.background}
-            onChanged={aussen.onNeuRendern}
-          />
-          {aussen.zeitstrahlGlobal && (
-            <label style={{ ...B.haken, marginTop: 12 }} title="Gilt nur für diese Doppelseite">
-              <input
-                type="checkbox"
-                checked={aussen.hatZeitstrahl}
-                onChange={(e) => aussen.onZeitstrahl(e.target.checked ? null : false)}
-              />
-              Zeitstrahl auf dieser Seite
-            </label>
-          )}
-        </>
+        <BackgroundPicker
+          spreadIndex={aussen.index}
+          global={aussen.hintergrundGlobal}
+          aktuell={spread.background}
+          bild={aussen.hintergrundBild}
+          jahr={aussen.jahr}
+          profil={aussen.seitenmasse}
+          onChanged={aussen.onNeuRendern}
+        />
       )}
 
       {panel === 'text' && (
@@ -475,6 +462,8 @@ function SeitenKarte({
           <TextBlocks
             index={aussen.index}
             blocks={spread.blocks ?? []}
+            grund={spread.background ?? aussen.hintergrundGlobal}
+            bildDahinter={aussen.hintergrundBild !== null}
             selectedId={model.textId}
             onSelect={(id) => {
               model.setTextId(id);
