@@ -28,7 +28,8 @@ import { FULL_CROP } from '../model/crop.js';
 import type { PhotoOverride, PhotoWeight } from '../model/date.js';
 import { effectivePhoto, effectivePhotos } from '../model/effective-photo.js';
 import type { Photo, PhotoId } from '../model/photo.js';
-import type { Spread } from '../model/spread.js';
+import type { SlotAssignment, Spread } from '../model/spread.js';
+import { hiddenSlotsNachWechsel } from '../model/spread.js';
 import type { PrintProfile } from '../print/profile.js';
 import type { Template } from '../model/template.js';
 import {
@@ -107,17 +108,88 @@ export interface MoveResult {
 }
 
 /**
+ * Was die **Gestalt eines Platzes** ausmacht und einen Bildwechsel übersteht:
+ * seine Lage und seine Neigung.
+ *
+ * Ein Zug tauscht Bilder, nicht Kästen – „beide Bilder in der jeweils anderen
+ * Größe" ist genau das. Ohne diese Übernahme war der Tausch auf einer
+ * **justierten** Doppelseite ein Bruch: Dort trägt jeder Platz sein Rechteck
+ * selbst (`layout/justify.ts`), und ein Platz ohne `rect` fällt auf das
+ * Rückfallgitter der Trägervorlage (`templates/justified.ts`). Die zwei
+ * getauschten Bilder landeten damit in zwei gleich großen Gitterzellen mitten in
+ * einer Seite, deren übrige Kästen ihre gerechneten Rechtecke behielten – sie
+ * überdeckten ihre Nachbarn, und die Seite sah aus wie zerschossen. Am freien
+ * Platz eines eingeworfenen Bildes wäre es noch stiller ausgegangen: Seine
+ * Kennung steht in keiner Vorlage, also gibt `wirksamePlaetze` ihn ohne `rect`
+ * überhaupt nicht mehr aus.
+ *
+ * **Die Neigung bleibt hier und wandert nicht mit dem Bild**, anders als bei der
+ * Zerlegung eines Blattes (`layout/single-page.ts`), wo dasselbe Bild in
+ * denselben Kasten unter neuer Kennung zieht. Eine von Hand gesetzte Neigung ist
+ * fast immer die Antwort auf die Stelle – ein Bild am Falz, ein Bild neben einem
+ * schiefen Nachbarn –, und die Automatik gibt einem getauschten Bild ohnehin
+ * einen neuen Winkel: Ihr Schlüssel ist `slotId:photoId` (`render/tilt.ts`),
+ * ausdrücklich damit zwei getauschte Bilder nicht identisch schief stehen.
+ */
+function platzgestalt(slot: SlotAssignment): Partial<SlotAssignment> {
+  return {
+    ...(slot.rect ? { rect: slot.rect } : {}),
+    ...(slot.rotateDeg !== undefined ? { rotateDeg: slot.rotateDeg } : {}),
+  };
+}
+
+/**
+ * Was mit dem **Bild** wandert: Rahmen, Unterschrift und Ebene.
+ *
+ * „Rahmen, Bildunterschrift und Ebene gehören zum Bild und nicht zum Platz" ist
+ * schon die Regel der Blattzerlegung (`layout/single-page.ts`), und beim Tausch
+ * wird daraus eine Rechnung. Bei der Unterschrift ist sie am deutlichsten: Der
+ * Text nennt Ort oder Anlass dieses einen Fotos und stünde am Platz gelassen
+ * unter dem falschen. Verworfen wurde beides – am Platz gelassen lügt er, ganz
+ * fallen gelassen verliert ein Tausch eine getippte Zeile.
+ *
+ * Der Rahmen muss deshalb mitgehen: Nur das Polaroid hat einen Fuß, in dem eine
+ * Unterschrift erscheint. Blieben Rahmen und Text getrennt, wäre nach dem Tausch
+ * eines Polaroids gegen ein rahmenloses Bild die Zeile geschrieben und
+ * unsichtbar – und im leeren Fuß daneben stünde nichts.
+ */
+function bildeigenes(slot: SlotAssignment, mitEbene = true): Partial<SlotAssignment> {
+  return {
+    ...(slot.frame !== undefined ? { frame: slot.frame } : {}),
+    ...(slot.caption !== undefined ? { caption: slot.caption } : {}),
+    ...(slot.captionAuto ? { captionAuto: true } : {}),
+    ...(mitEbene && slot.layer !== undefined ? { layer: slot.layer } : {}),
+  };
+}
+
+/**
  * Setzt einen Slot neu und stellt seinen Ausschnitt auf automatisch.
  *
  * Ein manuell gesetzter Ausschnitt war auf das Seitenverhältnis des alten
  * Slots zugeschnitten; im neuen wäre er schlicht falsch. Ihn zu behalten wäre
  * die schlechtere Überraschung als ein neu berechneter.
+ *
+ * Die Gestalt des Platzes bleibt stehen (`platzgestalt`); `mitgebracht` ist, was
+ * das Bild von seinem alten Platz mitnimmt (`bildeigenes`).
  */
-function withSlot(spread: Spread, slotId: string, photoId: PhotoId | null): Spread {
+function withSlot(
+  spread: Spread,
+  slotId: string,
+  photoId: PhotoId | null,
+  mitgebracht: Partial<SlotAssignment> = {},
+): Spread {
   return {
     ...spread,
     slots: spread.slots.map((slot) =>
-      slot.slotId === slotId ? { slotId: slot.slotId, photoId, crop: { ...FULL_CROP } } : slot,
+      slot.slotId === slotId
+        ? {
+            slotId: slot.slotId,
+            photoId,
+            crop: { ...FULL_CROP },
+            ...platzgestalt(slot),
+            ...(photoId ? mitgebracht : {}),
+          }
+        : slot,
     ),
   };
 }
@@ -174,9 +246,14 @@ function auftaktKandidaten(spread: Spread, anzahl: number): Template[] | undefin
  * Bei einer Seite mit Textplätzen ohne Auftaktfamilie genügt `withText` – sonst
  * wählte die Rechnung eine Vorlage ganz ohne Textplatz.
  *
+ * Öffentlich, weil das Verschmelzen zweier Doppelseiten
+ * (`layout/verschmelzen.ts`) dieselbe Frage stellt: Diese Bilder, diese Seite,
+ * welche Vorlage? Die Auftaktregel darf dafür nicht ein zweites Mal geschrieben
+ * werden.
+ *
  * @returns die neue Doppelseite oder eine deutsche Fehlermeldung.
  */
-function anordnen(
+export function ordneSpreadAn(
   spread: Spread,
   ids: readonly PhotoId[],
   reflow: ReflowContext,
@@ -208,7 +285,22 @@ function anordnen(
   });
   if (!ergebnis) return `Für ${photos.length} Bilder gibt es keine Vorlage`;
 
-  return { ...spread, templateId: ergebnis.templateId, slots: ergebnis.slots };
+  // Die weggenommenen Plätze mit umtragen, statt sie mitzuschleppen: Eine
+  // Kennung meint in der neuen Vorlage einen anderen Kasten, und der wäre danach
+  // unsichtbar, ohne dass etwas davon berichtet — `a` steht in 65 der 117
+  // Vorlagen. Dieselbe Rechnung wie beim Vorlagenwechsel im Server
+  // (`project/anordnung.ts`); nach einer Neuanordnung bleibt in aller Regel
+  // nichts übrig, und das ist richtig so.
+  const uebrig = hiddenSlotsNachWechsel(
+    spread.hiddenSlots,
+    templateById(spread.templateId),
+    templateById(ergebnis.templateId),
+  );
+
+  const neu: Spread = { ...spread, templateId: ergebnis.templateId, slots: ergebnis.slots };
+  if (uebrig.length > 0) neu.hiddenSlots = uebrig;
+  else delete neu.hiddenSlots;
+  return neu;
 }
 
 /**
@@ -248,10 +340,13 @@ export function movePhoto(
 
   // --- Quelle auflösen ---------------------------------------------------
   let photoId: PhotoId;
+  /** Der Ausgangsplatz, für das, was das Bild von dort mitnimmt. */
+  let quellplatz: SlotAssignment | undefined;
   if (source.kind === 'slot') {
     const gefunden = slotOf(spreads, source);
     if ('error' in gefunden) return unveraendert(gefunden.error);
     if (!gefunden.slot.photoId) return unveraendert('Der Ausgangsslot ist leer');
+    quellplatz = gefunden.slot;
     photoId = gefunden.slot.photoId;
   } else {
     const liegtAuf = findSpreadIndex(spreads, source.photoId);
@@ -267,7 +362,7 @@ export function movePhoto(
   if (target.kind === 'pool') {
     if (source.kind !== 'slot') return unveraendert('Quelle und Ziel sind beide der Fotopool');
     const kopie = [...spreads];
-    kopie[source.spreadIndex] = withSlot(kopie[source.spreadIndex]!, source.slotId, null);
+    kopie[source.spreadIndex] = ohneQuelle(kopie[source.spreadIndex]!, source.slotId);
     return { ok: true, spreads: kopie, touched: [source.spreadIndex] };
   }
 
@@ -285,16 +380,21 @@ export function movePhoto(
 
   const verdraengt = zielSlot.slot.photoId;
   const kopie = [...spreads];
-  kopie[target.spreadIndex] = withSlot(kopie[target.spreadIndex]!, target.slotId, photoId);
+  kopie[target.spreadIndex] = withSlot(
+    kopie[target.spreadIndex]!,
+    target.slotId,
+    photoId,
+    quellplatz ? bildeigenes(quellplatz) : {},
+  );
 
   if (source.kind === 'slot') {
-    // Tausch: Das verdrängte Foto nimmt den Platz des verschobenen ein. Ist
-    // das Ziel leer, bleibt der Ausgangsslot leer stehen.
-    kopie[source.spreadIndex] = withSlot(
-      kopie[source.spreadIndex]!,
-      source.slotId,
-      verdraengt ?? null,
-    );
+    // Tausch: Das verdrängte Foto nimmt den Platz des verschobenen ein, samt
+    // seiner Unterschrift. Ist das Ziel leer, wird der Ausgangsplatz geräumt –
+    // ein Vorlagenplatz bleibt leer stehen, ein frei gesetzter fällt weg
+    // (`ohneQuelle`), wie beim Zug auf eine Stelle des Papiers.
+    kopie[source.spreadIndex] = verdraengt
+      ? withSlot(kopie[source.spreadIndex]!, source.slotId, verdraengt, bildeigenes(zielSlot.slot))
+      : ohneQuelle(kopie[source.spreadIndex]!, source.slotId);
   }
 
   const touched =
@@ -313,32 +413,17 @@ export function movePhoto(
  * Bild dort lag, und bliebe sonst als leerer Rahmen genau an der Stelle
  * stehen, von der man das Bild eben weggezogen hat.
  *
- * Nicht über `withSlot`, und der Unterschied ist eine eigene Lage: Der baut den
- * Platz als `{ slotId, photoId, crop }` neu und lässt dabei `rect` fallen. Für
- * einen Platz aus der Vorlage ist das richtig, für die beiden Fälle, die ihre
- * Lage selbst tragen, nicht – justierte Zeilen (`justiert.n`) und die wörtlich
- * übernommene Gegenseite einer einzeln umgestellten Buchseite
- * (`paar:<x>+halb:leer`). Dort steht die Kennung in keiner Vorlage: Ohne `rect`
- * gibt `wirksamePlaetze` den Kasten nicht mehr aus, und der leere Platz, den
- * dieser Zug zusagt, verschwände einfach.
+ * Der Unterschied zu `withSlot(…, null)` ist allein dieser eine Fall. Die Lage
+ * behält beides – justierte Zeilen (`justiert.n`) und die wörtlich übernommene
+ * Gegenseite einer einzeln umgestellten Buchseite (`paar:<x>+halb:leer`) tragen
+ * ihr Rechteck selbst, und ohne es gäbe `wirksamePlaetze` den Kasten nicht mehr
+ * aus: Der leere Platz, den dieser Zug zusagt, verschwände einfach.
  */
 function ohneQuelle(spread: Spread, slotId: string): Spread {
   if (istEinwurfPlatz(slotId)) {
     return { ...spread, slots: spread.slots.filter((s) => s.slotId !== slotId) };
   }
-  return {
-    ...spread,
-    slots: spread.slots.map((s) =>
-      s.slotId === slotId
-        ? {
-            slotId: s.slotId,
-            photoId: null,
-            crop: { ...FULL_CROP },
-            ...(s.rect ? { rect: s.rect } : {}),
-          }
-        : s,
-    ),
-  };
+  return withSlot(spread, slotId, null);
 }
 
 /**
@@ -369,11 +454,19 @@ function moveToFrei(
   }
 
   let photoId: PhotoId;
+  /**
+   * Was das Bild von seinem alten Platz mitnimmt – Rahmen und Unterschrift,
+   * aber **nicht** die Ebene: Der freie Platz kommt hinten dazu und liegt damit
+   * obenauf, und das ist die Zusage dieses Zuges. Eine mitgenommene Ebene legte
+   * ein eben hingelegtes Bild unter seine Nachbarn.
+   */
+  let mitgenommen: Partial<SlotAssignment> = {};
   if (source.kind === 'slot') {
     const gefunden = slotOf(spreads, source);
     if ('error' in gefunden) return unveraendert(gefunden.error);
     if (!gefunden.slot.photoId) return unveraendert('Der Ausgangsslot ist leer');
     photoId = gefunden.slot.photoId;
+    mitgenommen = bildeigenes(gefunden.slot, false);
   } else {
     const liegtAuf = findSpreadIndex(spreads, source.photoId);
     if (liegtAuf >= 0) return unveraendert(`Das Foto liegt schon auf Doppelseite ${liegtAuf + 1}`);
@@ -401,6 +494,7 @@ function moveToFrei(
     effectivePhoto(photo, reflow.overrides?.[photoId]),
     target.punkt,
     reflow.profile,
+    mitgenommen,
   );
   kopie[target.spreadIndex] = neu;
 
@@ -503,13 +597,13 @@ function moveToSpread(
           `Zieh zuerst ein anderes Bild dorthin.`,
       );
     }
-    const neu = anordnen(quelle, uebrig, reflow, bestand);
+    const neu = ordneSpreadAn(quelle, uebrig, reflow, bestand);
     if (typeof neu === 'string')
       return unveraendert(`Doppelseite ${source.spreadIndex + 1}: ${neu}`);
     kopie[source.spreadIndex] = neu;
   }
 
-  const neuesZiel = anordnen(ziel, [...fotosVon(ziel), photoId], reflow, bestand);
+  const neuesZiel = ordneSpreadAn(ziel, [...fotosVon(ziel), photoId], reflow, bestand);
   if (typeof neuesZiel === 'string')
     return unveraendert(`Doppelseite ${zielIndex + 1}: ${neuesZiel}`);
   kopie[zielIndex] = neuesZiel;
@@ -699,7 +793,7 @@ export function movePhotos(
       continue;
     }
 
-    const neu = anordnen(seite, ids, reflow, bestand);
+    const neu = ordneSpreadAn(seite, ids, reflow, bestand);
     if (typeof neu === 'string') return unveraendert(`Doppelseite ${i + 1}: ${neu}`);
     kopie[i] = neu;
   }
