@@ -37,6 +37,7 @@ import {
   HALF_BLANK_ID,
   type HalfPage,
   halfPageById,
+  halfPages,
   halvesOfTemplate,
   pairId,
   splitPairId,
@@ -50,7 +51,7 @@ import {
 import { isJustified } from '../templates/justified.js';
 import { templateById, templateMeta } from '../templates/index.js';
 import { einwurfPlatzId } from './einwurf.js';
-import { layoutHalf } from './rebuild.js';
+import { chooseHalf, layoutHalf } from './rebuild.js';
 
 /**
  * Eine Buchseite als Baustein der Folge.
@@ -1214,4 +1215,127 @@ function paareNeu(
     spreads: ergebnis,
     bericht: { neuGepaart, leerseiten, leereBlaetter, leerseiteVerbraucht },
   };
+}
+
+/**
+ * Packt zwei benachbarte Buchseiten zu einer zusammen.
+ *
+ * Der kleine Bruder von `verschmelzeDoppelseiten` (`layout/verschmelzen.ts`):
+ * Dort werden zwei Blätter eines, hier zwei Buchseiten eine, und das Buch wird
+ * **eine** Seite kürzer statt zweier. Gebraucht für den häufigen Fall, dass nur
+ * eine Seite zu luftig steht — ihre Nachbarin dazu, und beide zusammen füllen
+ * eine.
+ *
+ * Gerechnet wird mit denselben Bausteinen wie das Einfügen und Herausnehmen
+ * einer Seite: Die Blätter zerfallen in Buchseiten, die beiden Einträge werden
+ * durch einen ersetzt, und die Folge wird neu gepaart. Die Anordnung wählt
+ * `chooseHalf` — dieselbe Kostenrechnung, mit der die Automatik eine Vorlage
+ * wählt, denn eine neue Bilderzahl braucht eine neue Halbseite und die von Hand
+ * zu verlangen hieße, für einen Griff zwei zu brauchen.
+ *
+ * Drei Absagen, und jede nennt ihren Grund: ein unzerlegbares Blatt (Auftakt,
+ * justierte Zeilen, Hintergrund über beide Seiten), eine festgehaltene eigene
+ * Seite, und eine Bilderzahl, für die es keine Halbseite gibt — die Bibliothek
+ * trägt bis vierzehn.
+ */
+export function mergeSinglePages(
+  spreads: readonly Spread[],
+  atPage: number,
+  reflow: { profile: PrintProfile; weightOf?: (photoId: PhotoId) => PhotoWeight },
+  /**
+   * Die Fotos **aufgelöst** (`effectivePhotos`), wie `layoutSpread` sie erwartet:
+   * Eine korrigierte Ausrichtung tauscht Breite und Höhe, und danach wird die
+   * Anordnung gewählt.
+   */
+  bestand: ReadonlyMap<PhotoId, Photo>,
+): SinglePageResult & { bilder: number; leftover: PhotoId[] } {
+  const nein = (error: string): SinglePageResult & { bilder: number; leftover: PhotoId[] } => ({
+    ok: false,
+    error,
+    spreads: [...spreads],
+    bilder: 0,
+    leftover: [],
+  });
+
+  const folge = buchseitenfolge(spreads);
+  const seitenzahl = folge.reduce((n, e) => n + e.span, 0);
+  const stelle = Math.trunc(atPage);
+  if (stelle < 0 || stelle >= seitenzahl) return nein(`Buchseite ${stelle + 1} gibt es nicht`);
+
+  const index = eintragAn(folge, stelle);
+  const erste = folge[index];
+  const zweite = folge[index + 1];
+  if (!erste) return nein('Buchseite nicht gefunden');
+  if (!zweite) return nein(`Hinter Buchseite ${stelle + 1} kommt keine zweite`);
+
+  // Ein unzerlegbares Blatt hat keine einzelne Seite, die man packen könnte –
+  // derselbe Satz wie beim Herausnehmen, und aus demselben Grund.
+  if (erste.span === 2 || zweite.span === 2) {
+    return nein(
+      'Eine der beiden Seiten gehört zu einer Doppelseite, die sich nicht in einzelne ' +
+        'Seiten trennen lässt – pack die ganzen Doppelseiten zusammen.',
+    );
+  }
+  if (erste.own || zweite.own) {
+    return nein('Eine der beiden Buchseiten ist festgehalten – erst lösen, dann packen');
+  }
+
+  const ids = [...(erste.slots ?? []), ...(zweite.slots ?? [])]
+    .map((s) => s.photoId)
+    .filter((id): id is PhotoId => id !== null);
+  if (ids.length === 0) return nein('Auf diesen beiden Buchseiten liegt kein Bild');
+
+  const photos = ids.map((id) => bestand.get(id)).filter((p): p is Photo => p !== undefined);
+  if (photos.length < ids.length) {
+    return nein(`${ids.length - photos.length} Bild(er) gehören nicht mehr zum Bestand`);
+  }
+
+  const kandidaten = halfPages().filter((h) => h.slots.length === photos.length);
+  if (kandidaten.length === 0) {
+    return nein(`Für ${photos.length} Bilder auf einer Buchseite gibt es keine Anordnung`);
+  }
+
+  const gewaehlt = chooseHalf({
+    photos,
+    halves: kandidaten,
+    profile: reflow.profile,
+    ...(reflow.weightOf ? { weightOf: reflow.weightOf } : {}),
+  });
+  if (!gewaehlt) return nein(`Für ${photos.length} Bilder gibt es keine Anordnung`);
+
+  // Die erste Seite bleibt und nimmt auf: ihre Kennung, ihre Farbe, ihr
+  // Zeitstrahl. Dieselbe Regel wie beim Paaren („bei ungleichen Werten gewinnt
+  // die linke") und beim Packen zweier Doppelseiten.
+  const gepackt: BookPage = {
+    span: 1,
+    halfId: gewaehlt.halfId,
+    slots: gewaehlt.slots,
+    ...(erste.from ? { from: erste.from } : {}),
+    ...(erste.background !== undefined ? { background: erste.background } : {}),
+    ...(erste.timeline !== undefined ? { timeline: erste.timeline } : {}),
+    // Die Textblöcke beider Seiten wandern mit; ihre Lage ist in Linksform
+    // normiert und gilt auf der gepackten Seite unverändert.
+    ...((erste.blocks ?? []).length + (zweite.blocks ?? []).length > 0
+      ? { blocks: [...(erste.blocks ?? []), ...(zweite.blocks ?? [])] }
+      : {}),
+    // Ein Hintergrundbild kann nur eine Seite haben. Die erste gewinnt; das
+    // andere Foto liegt danach im Fotopool und wird als `leftover` gemeldet.
+    ...(erste.backgroundPhotoId
+      ? { backgroundPhotoId: erste.backgroundPhotoId }
+      : zweite.backgroundPhotoId
+        ? { backgroundPhotoId: zweite.backgroundPhotoId }
+        : {}),
+  };
+
+  const neueFolge = [...folge];
+  neueFolge.splice(index, 2, gepackt);
+
+  const ergebnis = paareNeu(neueFolge, spreads, false);
+  if (!ergebnis.ok) return { ...ergebnis, bilder: 0, leftover: [] };
+
+  const verworfen = [
+    ...gewaehlt.leftover,
+    ...(erste.backgroundPhotoId && zweite.backgroundPhotoId ? [zweite.backgroundPhotoId] : []),
+  ];
+  return { ...ergebnis, bilder: photos.length, leftover: verworfen };
 }

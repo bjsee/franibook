@@ -23,6 +23,7 @@ import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import { B, T, dpiFarbe } from '../theme.js';
 import { TemplatePicker } from '../TemplatePicker.js';
+import { Verdichten } from './Verdichten.js';
 import type { TextBlockData } from '../TextBlocks.js';
 import { Bildanpassung } from './Bildanpassung.js';
 import { Bilddaten } from './Bilddaten.js';
@@ -184,6 +185,18 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
             onFehler={model.setNote}
             onApplied={({ spread: neu }) => model.anordnungUebernommen(neu as RenderedSpread)}
           />
+          {/* Dieselbe Frage, dasselbe Blatt – und in allen drei Rahmen. */}
+          <div style={{ marginTop: 12 }}>
+            <span style={B.marke}>Dichter setzen</span>
+            <Verdichten
+              index={aussen.index}
+              version={model.buchVersion}
+              spreadCount={aussen.spreadCount}
+              onSpread={(neu) => model.anordnungUebernommen(neu)}
+              onGepackt={aussen.onNeuRendern}
+              onNote={model.setNote}
+            />
+          </div>
         </div>
       )}
     </div>

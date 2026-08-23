@@ -117,6 +117,120 @@ describe('movePhoto', () => {
   });
 });
 
+describe('movePhoto tauscht die Bilder und nicht die Kästen', () => {
+  /**
+   * Eine justierte Doppelseite: Dort trägt **jeder** Platz sein Rechteck
+   * selbst, und die Trägervorlage hält nur ein Rückfallgitter bereit.
+   */
+  function justiert(): Spread[] {
+    const s = buch();
+    s[0]!.templateId = 'justiert.2';
+    s[0]!.slots[0]!.rect = { x: 0.05, y: 0.1, w: 0.6, h: 0.5 };
+    s[0]!.slots[1]!.rect = { x: 0.7, y: 0.1, w: 0.2, h: 0.2 };
+    return s;
+  }
+
+  it('lässt jedem Platz sein Rechteck – die zwei Bilder tauschen die Größe', () => {
+    // Der Fehler, der das gebracht hat: Ohne `rect` fiel der Platz auf das
+    // Rückfallgitter der Trägervorlage zurück, während die übrigen Kästen der
+    // Seite ihre gerechneten Rechtecke behielten. Die zwei getauschten Bilder
+    // standen danach gleich groß mitten in der Seite und überdeckten ihre
+    // Nachbarn.
+    const vorher = justiert();
+    const r = movePhoto(vorher, slot(0, 'a'), slot(0, 'b'));
+
+    expect(r.spreads[0]!.slots[0]!.photoId).toBe('p2');
+    expect(r.spreads[0]!.slots[1]!.photoId).toBe('p1');
+    expect(r.spreads[0]!.slots[0]!.rect).toEqual(vorher[0]!.slots[0]!.rect);
+    expect(r.spreads[0]!.slots[1]!.rect).toEqual(vorher[0]!.slots[1]!.rect);
+  });
+
+  it('lässt die Neigung am Platz und schickt Rahmen und Ebene mit dem Bild', () => {
+    // Die Neigung ist die Antwort auf die Stelle – ein Bild am Falz, ein Bild
+    // neben einem schiefen Nachbarn –, und die Automatik gibt einem getauschten
+    // Bild ohnehin einen neuen Winkel (`slotId:photoId` in `render/tilt.ts`).
+    // Rahmen und Ebene gehören dagegen zum Bild, wie bei der Blattzerlegung.
+    const vorher = buch();
+    vorher[0]!.slots[0]! = { ...vorher[0]!.slots[0]!, rotateDeg: 0, frame: 'polaroid', layer: 3 };
+    const r = movePhoto(vorher, slot(0, 'a'), slot(1, 'a'));
+
+    const ausgang = r.spreads[0]!.slots[0]!;
+    expect(ausgang.photoId).toBe('p3');
+    expect(ausgang.rotateDeg).toBe(0);
+    expect(ausgang.frame).toBeUndefined();
+    expect(ausgang.layer).toBeUndefined();
+
+    const ziel = r.spreads[1]!.slots[0]!;
+    expect(ziel.photoId).toBe('p1');
+    expect(ziel.frame).toBe('polaroid');
+    expect(ziel.layer).toBe(3);
+    expect(ziel.rotateDeg).toBeUndefined();
+  });
+
+  it('hält Rahmen und Unterschrift zusammen – nur das Polaroid hat einen Fuß', () => {
+    // Getrennt wäre die Zeile nach dem Tausch geschrieben und unsichtbar, und im
+    // Fuß daneben stünde nichts.
+    const vorher = buch();
+    vorher[0]!.slots[0]! = { ...vorher[0]!.slots[0]!, frame: 'polaroid', caption: 'Sylt' };
+    const r = movePhoto(vorher, slot(0, 'a'), slot(1, 'a'));
+
+    expect(r.spreads[1]!.slots[0]!.frame).toBe('polaroid');
+    expect(r.spreads[1]!.slots[0]!.caption).toBe('Sylt');
+    expect(r.spreads[0]!.slots[0]!.frame).toBeUndefined();
+    expect(r.spreads[0]!.slots[0]!.caption).toBeUndefined();
+  });
+
+  it('nimmt die Unterschrift mit dem Bild mit', () => {
+    // Sie nennt Ort oder Anlass dieses einen Fotos: am Platz gelassen stünde
+    // sie unter dem falschen.
+    const vorher = buch();
+    vorher[0]!.slots[0]! = { ...vorher[0]!.slots[0]!, caption: 'Sylt' };
+    vorher[1]!.slots[0]! = { ...vorher[1]!.slots[0]!, caption: 'Garrel', captionAuto: true };
+    const r = movePhoto(vorher, slot(0, 'a'), slot(1, 'a'));
+
+    expect(r.spreads[1]!.slots[0]!.caption).toBe('Sylt');
+    expect(r.spreads[1]!.slots[0]!.captionAuto).toBeUndefined();
+    expect(r.spreads[0]!.slots[0]!.caption).toBe('Garrel');
+    expect(r.spreads[0]!.slots[0]!.captionAuto).toBe(true);
+  });
+
+  it('lässt keine Unterschrift an einem leer gewordenen Platz stehen', () => {
+    const vorher = buch();
+    vorher[0]!.slots[1]! = { ...vorher[0]!.slots[1]!, caption: 'Sylt' };
+    const r = movePhoto(vorher, slot(0, 'b'), slot(1, 'b'));
+
+    expect(r.spreads[1]!.slots[1]!.caption).toBe('Sylt');
+    expect(r.spreads[0]!.slots[1]!.photoId).toBeNull();
+    expect(r.spreads[0]!.slots[1]!.caption).toBeUndefined();
+  });
+
+  it('lässt dem Platz sein Rechteck, wenn das Bild in den Fotopool geht', () => {
+    const r = movePhoto(justiert(), slot(0, 'a'), { kind: 'pool' });
+    expect(r.spreads[0]!.slots[0]!.photoId).toBeNull();
+    expect(r.spreads[0]!.slots[0]!.rect).toEqual({ x: 0.05, y: 0.1, w: 0.6, h: 0.5 });
+  });
+
+  it('nimmt einen frei gesetzten Platz weg, sobald er sein Bild verliert', () => {
+    // Ohne sein Bild beschreibt er nichts – dieselbe Regel wie beim Zug auf eine
+    // Stelle des Papiers (`ohneQuelle`).
+    const vorher = buch();
+    vorher[0]!.slots.push({
+      slotId: 'frei.1',
+      photoId: 'p9',
+      crop: { x: 0, y: 0, w: 1, h: 1, mode: 'auto-cover' },
+      rect: { x: 0.4, y: 0.4, w: 0.2, h: 0.2 },
+    });
+
+    const inDenPool = movePhoto(vorher, slot(0, 'frei.1'), { kind: 'pool' });
+    expect(inDenPool.spreads[0]!.slots.map((s) => s.slotId)).not.toContain('frei.1');
+
+    // Und ebenso, wenn er sein Bild an einen leeren Platz abgibt.
+    const abgegeben = movePhoto(vorher, slot(0, 'frei.1'), slot(1, 'b'));
+    expect(abgegeben.spreads[1]!.slots[1]!.photoId).toBe('p9');
+    expect(abgegeben.spreads[0]!.slots.map((s) => s.slotId)).not.toContain('frei.1');
+  });
+});
+
 describe('movePhoto auf eine ganze Doppelseite', () => {
   /** Ein Bestand, in dem jedes Foto dieselbe Form hat – die Zuordnung soll hier nicht die Aussage sein. */
   function bestand(ids: readonly string[]): ReadonlyMap<PhotoId, Photo> {
@@ -304,6 +418,27 @@ describe('movePhoto auf eine Stelle des Papiers', () => {
     expect(r.ok).toBe(true);
     expect(r.spreads[0]!.slots.map((s) => s.slotId)).not.toContain(frei);
     expect(r.spreads[1]!.slots.at(-1)!.photoId).toBe('p9');
+  });
+
+  it('nimmt Rahmen und Unterschrift mit, die Ebene bleibt zurück', () => {
+    // Fünf Millimeter neben seinen Platz gezogen verlor ein Bild seine getippte
+    // Zeile, während derselbe Zug auf einen Nachbarplatz sie behielt. Die Ebene
+    // bleibt dagegen: Der freie Platz kommt hinten dazu und liegt obenauf – das
+    // ist die Zusage dieses Zuges.
+    const vorher = buch();
+    vorher[0]!.slots[0]! = {
+      ...vorher[0]!.slots[0]!,
+      frame: 'polaroid',
+      caption: 'Sylt',
+      layer: 2,
+    };
+    const r = movePhoto(vorher, slot(0, 'a'), stelle(0, 0.7, 0.7), reflow);
+
+    const neu = r.spreads[0]!.slots.at(-1)!;
+    expect(neu.photoId).toBe('p1');
+    expect(neu.frame).toBe('polaroid');
+    expect(neu.caption).toBe('Sylt');
+    expect(neu.layer).toBeUndefined();
   });
 
   it('verweigert ein Foto, das schon im Buch liegt', () => {

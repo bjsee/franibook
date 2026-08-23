@@ -189,6 +189,31 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     spreadIndex: ausSeite,
   },
   'DELETE /api/spreads/:index': { label: 'Doppelseite herausgenommen', spreadIndex: ausIndex },
+  // Der Schlüssel hängt an Seite **und** Buchseite: Wer zweimal auf „größer"
+  // drückt, hat einmal etwas gewollt – aber links und rechts sind zwei
+  // Entscheidungen, und die dürfen nicht zu einer verschmelzen.
+  'PATCH /api/spreads/:index/vergroessern': {
+    label: 'Bilder größer gesetzt',
+    spreadIndex: ausIndex,
+    schluessel: (p, body) =>
+      `vergroessern:${p['index'] ?? '?'}:${(body as { seite?: string } | null)?.seite ?? '?'}`,
+  },
+  // Wie das Herausnehmen einer Buchseite verschiebt das jede Nummer dahinter,
+  // also ein Anker: Ein Absturz mitten darin nähme den Verlauf mit.
+  'GET /api/spreads/:index/packbar': null,
+  'GET /api/spreads/:index/vergroesserung': null,
+  'POST /api/spreads/:index/packen': {
+    label: 'Doppelseiten zusammengepackt',
+    anker: true,
+    spreadIndex: ausIndex,
+  },
+  // Dasselbe eine Ebene feiner: Zwei Buchseiten werden eine, das Buch wird
+  // **eine** Seite kürzer, und jedes Blatt dahinter paart sich neu.
+  'POST /api/spreads/:index/seiten-packen': {
+    label: 'Buchseiten zusammengepackt',
+    anker: true,
+    spreadIndex: ausIndex,
+  },
   'PATCH /api/spreads/:index/locked': { label: 'Doppelseite festgehalten', spreadIndex: ausIndex },
   'PATCH /api/spreads/:index/background': {
     label: 'Hintergrund gesetzt',
