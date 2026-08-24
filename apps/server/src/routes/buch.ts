@@ -8,11 +8,19 @@ import { createReadStream } from 'node:fs';
 import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { CAPTION_FORMEN, abzugsblatt, kontaktboegen, linkeSeitenzahl } from '@franibook/core';
+import {
+  CAPTION_FORMEN,
+  abzugsblatt,
+  coverWarningText,
+  istMosaikId,
+  kontaktboegen,
+  linkeSeitenzahl,
+} from '@franibook/core';
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import type { Unterschriftenbereich } from '../project/unterschriften.js';
 import { renderPdf } from '@franibook/render-pdf';
 import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
+import { coverFotosAufloesen } from './umschlag.js';
 
 /**
  * Ob eine Fallstelle brauchbar ist: zwei Zahlen im Endformatbereich.
@@ -66,7 +74,7 @@ function bereichAus(
 
 export function buchRouten(
   app: FastifyInstance,
-  { project, sources, previews, decodes, outDir }: Kontext,
+  { project, sources, previews, decodes, outDir, cacheDir }: Kontext,
 ): void {
   /**
    * Die Buchaufteilung als lesbares JSON.
@@ -452,6 +460,94 @@ export function buchRouten(
       }
     },
   );
+
+  /**
+   * Umschlag und Innenteil in einer Datei, mit dem Umschlag als erster Seite.
+   *
+   * Ein eigener Endpunkt und kein Schalter an `/api/export/pdf`: Der normale
+   * Weg mit zwei getrennten Dateien (diese Route daneben, `/api/export/cover`)
+   * bleibt bestehen, weil der Druckdienstleister ihn normalerweise verlangt
+   * (`render-cover.ts`). Diese Route ist der Sonderfall für den einen
+   * Uploadweg, der stattdessen eine einzige Datei erwartet, in der die erste
+   * Seite Rückseite, Rücken und Vorderseite des Umschlags trägt — ohne sie
+   * landete die erste Innenteil-Doppelseite dort, wo dieser Uploadweg den
+   * Umschlag vermutet, und jede folgende Buchseite zählte sich um eins
+   * verschoben.
+   */
+  app.post<{ Body?: { fileName?: string } }>('/api/export/pdf-mit-umschlag', async (req, reply) => {
+    const spreads = project.renderAll();
+    if (spreads.length === 0) {
+      return reply.code(404).send({ error: 'Keine Doppelseite zum Exportieren' });
+    }
+
+    const fileName = req.body?.fileName ?? 'buch-mit-umschlag.pdf';
+    if (!EXPORT_DATEINAME.test(fileName)) {
+      return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+    }
+
+    const aufgeloest = await coverFotosAufloesen({ project, previews, cacheDir, sources });
+    if (!aufgeloest.ok) {
+      return reply.code(409).send({
+        ok: false,
+        error: `Ein Umschlagmosaik ließ sich nicht bauen: ${aufgeloest.error}`,
+      });
+    }
+
+    await mkdir(outDir, { recursive: true });
+    const outputPath = join(outDir, fileName);
+    const cover = project.renderCover();
+
+    try {
+      const result = await renderPdf({
+        spreads,
+        profile: project.profile,
+        cover,
+        outputPath,
+        resolvePhoto: (photoId) => {
+          // Mosaik-Kennungen kommen nur am Umschlag vor und brauchen den
+          // Auflöser von dort; jede andere Kennung – Innenteil wie ein von
+          // Hand gewähltes Deckelbild – nimmt denselben Weg wie
+          // `/api/export/pdf`, inklusive Vierteldrehung.
+          if (istMosaikId(photoId)) return aufgeloest.resolvePhoto(photoId);
+          const photo = project.photo(photoId);
+          if (!photo) return undefined;
+          return {
+            path: sources.pfad(photo),
+            orientation: photo.orientation,
+            ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+          };
+        },
+        // Dieselbe Rückfallebene wie `/api/export/pdf` – nur für den
+        // Innenteil, der Umschlag hat sie auch dort nicht.
+        recoverPhoto: async (photoId) => {
+          const photo = project.photo(photoId);
+          if (!photo) return undefined;
+          const path = await decodes.rescue(photo);
+          return path
+            ? {
+                path,
+                orientation: photo.orientation,
+                ...(photo.quarterTurns ? { quarterTurns: photo.quarterTurns } : {}),
+              }
+            : undefined;
+        },
+      });
+
+      return {
+        outputPath,
+        fileName,
+        ...result,
+        coverHints: cover.warnings.map(coverWarningText),
+      };
+    } catch (err) {
+      if (istDateiFehler(err)) {
+        return reply.code(503).send({
+          error: 'Eine Bilddatei ist gerade nicht erreichbar – ist die Bildquelle eingehängt?',
+        });
+      }
+      throw err;
+    }
+  });
 
   /**
    * Der Korrekturabzug: dasselbe Buch zum Durchsehen statt zum Drucken.

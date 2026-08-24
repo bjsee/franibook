@@ -2,11 +2,16 @@
  * PDF-Renderer für den Umschlag.
  *
  * Eigene Datei und eigene Datei*ausgabe*: Der Druckdienstleister verlangt Cover
- * und Innenteil als zwei getrennte PDFs (das ist einer der wenigen verifizierten
- * Punkte des Profils, siehe `provenance.notes`). Ein zweites Dokument im
- * selben Aufruf zu erzeugen hätte bedeutet, `renderPdf` um einen Sonderfall zu
- * erweitern, der mit Doppelseiten nichts zu tun hat: Der Coverbogen hat eine
- * andere Größe, keine Falzachse in der Mitte, keine Seitenaufteilung.
+ * und Innenteil normalerweise als zwei getrennte PDFs (das ist einer der
+ * wenigen verifizierten Punkte des Profils, siehe `provenance.notes`), und das
+ * bleibt hier der Weg dafür.
+ *
+ * Ein Uploadweg des Anbieters verlangt stattdessen eine einzige Datei mit dem
+ * Umschlag als erster Seite – dafür hat `renderPdf` (`render-pdf.ts`) die
+ * optionale `cover`-Angabe, die dieselbe Zeichenroutine (`setCoverBoxes`,
+ * `zeichneBoxen`) in derselben `PDFDocument`-Instanz wie den Innenteil benutzt.
+ * Diese Datei bleibt trotzdem bestehen: Wer die getrennte Auslieferung braucht,
+ * die der Anbieter normalerweise verlangt, ruft weiterhin `renderCoverPdf` auf.
  *
  * Wie beim Innenteil trifft dieser Adapter keine Layoutentscheidung. Jede
  * Position kommt aus dem Rendered Cover Model, das `@franibook/core` gerechnet
@@ -62,8 +67,15 @@ export interface RenderCoverPdfResult {
  * Anders als beim Innenteil ist die TrimBox **nicht** die sichtbare Fläche: Der
  * Umschlag (`cover.overhang`) wird nicht abgeschnitten, sondern um die Deckel
  * gefalzt. Geschnitten wird ausschließlich der Beschnitt.
+ *
+ * Exportiert, weil `render-pdf.ts` sie für die eine Seite braucht, die den
+ * Umschlag als erste Seite derselben Datei voranstellt (`RenderPdfOptions.cover`).
  */
-function setCoverBoxes(doc: PDFKit.PDFDocument, profile: PrintProfile, cover: RenderedCover): void {
+export function setCoverBoxes(
+  doc: PDFKit.PDFDocument,
+  profile: PrintProfile,
+  cover: RenderedCover,
+): void {
   // Seitlich und oben/unten getrennt: Der Anbieter gibt für den Umschlagbogen
   // zwei verschiedene Beschnittzugaben an (28×28: 9,31 mm gegen 7,03 mm).
   const seite = profile.cover.bleed.sideMm;
