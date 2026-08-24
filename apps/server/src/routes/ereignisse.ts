@@ -83,6 +83,7 @@ const MELDET_OHNE_SCHRITT: Record<string, string> = {
 const MELDET_NICHT = new Set([
   // Erzeugen eine Datei, keinen Projektzustand.
   'POST /api/export/pdf',
+  'POST /api/export/pdf-mit-umschlag',
   'POST /api/export/abzug',
   'POST /api/export/cover',
   // Die Probe ist eine Frage, keine Entscheidung (`project/probe.ts`) – wer sie

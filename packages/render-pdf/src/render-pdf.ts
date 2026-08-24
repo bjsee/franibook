@@ -21,6 +21,7 @@ import {
   type PhotoId,
   type PrintProfile,
   type RenderBox,
+  type RenderedCover,
   type RenderedSpread,
   mmToPt,
   textBaselineOffsetMm,
@@ -28,6 +29,7 @@ import {
 import { setzeAusgabeIntent } from './farbe.js';
 import { fontKey, registerFonts } from './fonts.js';
 import { prepareImage } from './prepare-image.js';
+import { setCoverBoxes } from './render-cover.js';
 
 export interface PhotoSource {
   /** Absoluter Pfad zur Bilddatei. */
@@ -79,6 +81,22 @@ export interface RenderPdfOptions {
    * Mal rechnete, zeigte ein anderes Buch als die Datei, die zur Druckerei geht.
    */
   abzug?: (spread: RenderedSpread, spreadIndex: number) => Abzugsblatt;
+
+  /**
+   * Der Umschlag, vorangestellt als erste Seite derselben Datei.
+   *
+   * Der Normalfall bleibt die getrennte Ausgabe über `renderCoverPdf` — der
+   * Druckdienstleister verlangt sie normalerweise so (`render-cover.ts`). Diese
+   * Angabe ist der Sonderfall für den einen Uploadweg, der stattdessen eine
+   * einzige Datei mit dem Umschlag als erster Seite erwartet: Ohne sie landete
+   * die erste Innenteil-Doppelseite dort, wo der Anbieter den Umschlag
+   * vermutet, und jede folgende Seite zählte sich um eins verschoben.
+   *
+   * `resolvePhoto` muss dafür sowohl Innenteil- als auch Umschlagbildkennungen
+   * auflösen (beim Umschlag auch Mosaik-Kennungen) — derselbe Aufrufer wie für
+   * `spreads`, denn beide zeichnen in dasselbe Dokument.
+   */
+  cover?: RenderedCover;
 }
 
 /**
@@ -158,7 +176,8 @@ function pageSlices(spread: RenderedSpread, profile: PrintProfile): PageSlice[] 
 }
 
 export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult> {
-  const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress, abzug } = opts;
+  const { spreads, profile, resolvePhoto, recoverPhoto, outputPath, onProgress, abzug, cover } =
+    opts;
 
   const doc = new PDFDocument({ autoFirstPage: false, margin: 0, compress: true });
   // Vor dem ersten Bild: `setzeAusgabeIntent` prüft über `iccProfil` mit, dass
@@ -182,6 +201,10 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
     // deshalb mit eingebettet werden – sonst fehlte der Schnitt auf einem Blatt,
     // dessen Doppelseite selbst keinen Text trägt.
     ...blaetter.flatMap((b) => b.boxen.filter((box) => box.kind === 'text')),
+    // Der Rückentext des Umschlags steht in derselben Buchschrift wie der
+    // Innenteil, muss hier aber eigens angefragt werden: `registerFonts` sieht
+    // sonst nur, was in `spreads` vorkommt.
+    ...(cover ? cover.boxes.filter((b) => b.kind === 'text') : []),
   ]);
   const written = pipeline(doc as unknown as NodeJS.ReadableStream, createWriteStream(outputPath));
 
@@ -189,10 +212,9 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
   let images = 0;
   let pages = 0;
 
-  const totalImages = spreads.reduce(
-    (n, s) => n + s.boxes.filter((b) => b.kind === 'image').length,
-    0,
-  );
+  const totalImages =
+    spreads.reduce((n, s) => n + s.boxes.filter((b) => b.kind === 'image').length, 0) +
+    (cover ? cover.boxes.filter((b) => b.kind === 'image').length : 0);
 
   const ctx: Zeichenkontext = {
     profile,
@@ -204,6 +226,26 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
       onProgress?.(images, totalImages);
     },
   };
+
+  if (cover) {
+    doc.addPage({ size: [mmToPt(cover.widthMm), mmToPt(cover.heightMm)], margin: 0 });
+    setCoverBoxes(doc, profile, cover);
+    pages++;
+
+    doc.rect(0, 0, mmToPt(cover.widthMm), mmToPt(cover.heightMm)).fill(cover.background);
+
+    // Derselbe Griff wie unten bei den Innenteilseiten: ein Rückentext dicht am
+    // Rand des Bogens darf pdfkit nicht zum Nachlegen einer leeren Seite
+    // bringen.
+    doc.page.height = mmToPt(cover.heightMm) * 2;
+
+    await zeichneBoxen(
+      doc,
+      cover.boxes,
+      { offsetXMm: 0, widthMm: cover.widthMm, heightMm: cover.heightMm },
+      ctx,
+    );
+  }
 
   for (const [index, spread] of spreads.entries()) {
     const blatt = blaetter[index];

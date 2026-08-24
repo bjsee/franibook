@@ -474,6 +474,7 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   // Route mit `null` einträgt, sagt in `routes/ereignisse.ts`, ob die anderen
   // Fenster davon erfahren müssen – ein Test dort verlangt die Entscheidung.
   'POST /api/export/pdf': null,
+  'POST /api/export/pdf-mit-umschlag': null,
   'POST /api/export/abzug': null,
   'POST /api/export/cover': null,
   // Zurücknehmen und Wiederholen führen den Verlauf selbst – ein Schritt darauf

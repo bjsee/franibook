@@ -21,6 +21,7 @@ import {
   type Mosaikfortschritt,
   mosaikFortschrittLaden,
   type UmschlagPatch,
+  pdfMitUmschlagExportieren,
   umschlagExportieren,
   umschlagLaden,
 } from './api.js';
@@ -216,6 +217,27 @@ export function Cover({
     }
   }
 
+  /**
+   * Für den einen Uploadweg des Anbieters, der eine einzige Datei mit dem
+   * Umschlag als erster Seite erwartet, statt der beiden getrennten Dateien
+   * von `exportCover` und dem „Buch als PDF"-Knopf.
+   */
+  async function exportPdfMitUmschlag() {
+    setBusy('Exportiere Buch mit Umschlag …');
+    setNote(null);
+    try {
+      const r = await pdfMitUmschlagExportieren();
+      setNotiz({
+        text: `${r.outputPath} — ${r.pages} Seiten, ${r.images} Bilder`,
+        datei: r.fileName,
+      });
+    } catch (e) {
+      setNote(`Fehler: ${fehlertext(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (error) {
     return (
       <div style={S.flaeche}>
@@ -245,6 +267,9 @@ export function Cover({
         <Kennzahl label="Falzbereich" wert={`${geo.hingeSafeMm} mm je Seite`} />
         <Kennzahl label="Überstand" wert={`${geo.overhangSideMm} mm`} />
         <span style={B.dehner} />
+        <button onClick={() => void exportPdfMitUmschlag()} disabled={!!busy} style={B.knopf}>
+          Buch mit Umschlag (eine Datei)
+        </button>
         <button onClick={() => void exportCover()} disabled={!!busy} style={B.knopfPrimaer}>
           Umschlag als PDF
         </button>
