@@ -14,10 +14,14 @@
  */
 import { useMemo, useState } from 'react';
 import { imageBoxes } from '@franibook/core';
-import { SpreadView } from '@franibook/render-dom';
+import { dragBild, SpreadView } from '@franibook/render-dom';
 import { B, T } from './theme.js';
 import { Link } from './router.js';
 import { useSpreadTiles } from './spread/useSpreadTiles.js';
+
+/** Die eigenen MIME-Typen der beiden Züge, damit ein Datei- oder Fotozug sie nicht trifft. */
+const SPREAD_ZUG = 'application/x-franibook-spread';
+const SEITE_ZUG = 'application/x-franibook-seite';
 
 interface OverviewProps {
   spreadCount: number;
@@ -34,6 +38,16 @@ interface OverviewProps {
    * einer einzelnen Seite.
    */
   onInsert?: (at: number) => void;
+  /**
+   * Verschiebt die Doppelseite `von` an die Lücke `nach` – dieselbe Zählung wie
+   * bei `onInsert`: `0` ganz vorn, `spreadCount` ganz hinten.
+   */
+  onSpreadVerschoben?: (von: number, nach: number) => void;
+  /**
+   * Verschiebt die einzelne Buchseite `atPage` an die Lücke `nach` – beide in
+   * Buchseiten gezählt, `atPage` nullbasiert wie bei `buchseiteEinfuegen`.
+   */
+  onSeiteVerschoben?: (atPage: number, nach: number) => void;
 }
 
 const KACHEL_PX = 248;
@@ -45,10 +59,25 @@ export function Overview({
   imageSrc,
   onOpen,
   onInsert,
+  onSpreadVerschoben,
+  onSeiteVerschoben,
 }: OverviewProps) {
   const { containerRef, geladen } = useSpreadTiles(spreadCount);
   /** Kachel unter dem Zeiger – nur damit ihr Einfügeknopf hervortritt. */
   const [beruehrt, setBeruehrt] = useState<number | null>(null);
+  /** Was gerade gezogen wird – die ganze Doppelseite oder eine ihrer Seiten. */
+  const [gezogen, setGezogen] = useState<{ index: number } | { atPage: number } | null>(null);
+  /** Die Lücke unter dem Zeiger, während etwas darüber gezogen wird. */
+  const [zielLuecke, setZielLuecke] = useState<number | null>(null);
+
+  /**
+   * Ob die Lücke `i` beim Loslassen eine Doppelseite bewegen würde.
+   *
+   * Direkt davor oder direkt danach ist dieselbe Stelle, an der sie schon
+   * steht – die Marke soll dort nicht aufblitzen, als gäbe es etwas zu tun.
+   */
+  const wirksameLuecke = (i: number) =>
+    !(gezogen && 'index' in gezogen) || (i !== gezogen.index && i !== gezogen.index + 1);
 
   const jahrAn = useMemo(() => {
     const map = new Map<number, number>();
@@ -80,6 +109,49 @@ export function Overview({
             style={S.zelle}
             onMouseEnter={() => setBeruehrt(i)}
             onMouseLeave={() => setBeruehrt((b) => (b === i ? null : b))}
+            // Ziehbar ist die ganze Kachel – der Link darin verzichtet über
+            // `WebkitUserDrag` auf sein eigenes Standard-Ziehen (Browser bieten
+            // für Verweise sonst „als Lesezeichen ablegen" an), sonst griffe der
+            // Zeiger den Link statt der Kachel.
+            draggable={!!onSpreadVerschoben}
+            onDragStart={(e) => {
+              if (!onSpreadVerschoben) return;
+              e.dataTransfer.setData(SPREAD_ZUG, String(i));
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setDragImage(dragBild(), 14, 14);
+              setGezogen({ index: i });
+            }}
+            onDragEnd={() => {
+              setGezogen(null);
+              setZielLuecke(null);
+            }}
+            onDragOver={(e) => {
+              if (e.dataTransfer.types.includes(SPREAD_ZUG)) {
+                if (!onSpreadVerschoben) return;
+                e.preventDefault();
+                if (wirksameLuecke(i)) setZielLuecke(i);
+              } else if (e.dataTransfer.types.includes(SEITE_ZUG)) {
+                if (!onSeiteVerschoben) return;
+                e.preventDefault();
+                setZielLuecke(i);
+              }
+            }}
+            onDragLeave={() => setZielLuecke((v) => (v === i ? null : v))}
+            onDrop={(e) => {
+              if (onSpreadVerschoben && e.dataTransfer.types.includes(SPREAD_ZUG)) {
+                e.preventDefault();
+                const von = Number(e.dataTransfer.getData(SPREAD_ZUG));
+                setZielLuecke(null);
+                setGezogen(null);
+                if (Number.isFinite(von)) onSpreadVerschoben(von, i);
+              } else if (onSeiteVerschoben && e.dataTransfer.types.includes(SEITE_ZUG)) {
+                e.preventDefault();
+                const atPage = Number(e.dataTransfer.getData(SEITE_ZUG));
+                setZielLuecke(null);
+                setGezogen(null);
+                if (Number.isFinite(atPage)) onSeiteVerschoben(atPage, i * 2);
+              }
+            }}
           >
             <div style={S.marken}>
               {jahr !== undefined && <span style={S.jahr}>{jahr}</span>}
@@ -103,6 +175,59 @@ export function Overview({
             )}
 
             {/*
+              Zwei schmale Ziehgriffe am oberen Rand, je zur Hälfte – nur wenn
+              sich das Blatt an der Falzachse trennen lässt (`splittable`).
+              Getrennt vom Zug der ganzen Kachel: ein eigener MIME-Typ, damit
+              `onDrop` weiß, was gemeint ist, und `stopPropagation`, damit der
+              Griff nicht zugleich die ganze Doppelseite mitzieht.
+            */}
+            {spread?.splittable && onSeiteVerschoben && (
+              <>
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData(SEITE_ZUG, String(i * 2));
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setDragImage(dragBild(), 14, 14);
+                    setGezogen({ atPage: i * 2 });
+                  }}
+                  onDragEnd={(e) => {
+                    e.stopPropagation();
+                    setGezogen(null);
+                    setZielLuecke(null);
+                  }}
+                  style={{ ...S.seitengriff, left: 0, opacity: beruehrt === i ? 1 : 0 }}
+                  title={`Linke Seite von Doppelseite ${i + 1} ziehen, um nur sie zu verschieben`}
+                />
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData(SEITE_ZUG, String(i * 2 + 1));
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setDragImage(dragBild(), 14, 14);
+                    setGezogen({ atPage: i * 2 + 1 });
+                  }}
+                  onDragEnd={(e) => {
+                    e.stopPropagation();
+                    setGezogen(null);
+                    setZielLuecke(null);
+                  }}
+                  style={{ ...S.seitengriff, right: 0, opacity: beruehrt === i ? 1 : 0 }}
+                  title={`Rechte Seite von Doppelseite ${i + 1} ziehen, um nur sie zu verschieben`}
+                />
+              </>
+            )}
+
+            {/*
+              Dieselbe Kante zeigt beim Ziehen einer anderen Doppelseite, wo sie
+              landen würde – die Zahl der Lücke ist dieselbe wie beim
+              Einfügeknopf, nur als Antwort auf einen Zug statt auf einen Klick.
+            */}
+            {zielLuecke === i && <div style={S.zielmarke} />}
+
+            {/*
               Die Kachel ist ein Link und kein Knopf, damit ⌘-Klick die
               Doppelseite in einem neuen Tab öffnet – beim Durchsehen von achtzig
               Seiten der Handgriff, der zwei Stellen vergleichbar macht. Was beim
@@ -111,7 +236,12 @@ export function Overview({
             <Link
               route={{ view: 'spread', index: i }}
               onNavigieren={() => onOpen(i)}
-              style={{ ...B.kachel, width: KACHEL_PX, ...(spread?.locked ? S.fest : {}) }}
+              style={{
+                ...B.kachel,
+                width: KACHEL_PX,
+                ...(spread?.locked ? S.fest : {}),
+                ...(onSpreadVerschoben ? S.keinLinkZug : {}),
+              }}
               title={`Doppelseite ${i + 1} öffnen`}
             >
               {spread ? (
@@ -144,19 +274,51 @@ export function Overview({
         Buch noch leer ist: Ohne eine einzige Doppelseite gäbe es sonst gar
         keinen Weg, eine erste einzufügen.
       */}
-      {onInsert && (
-        <div style={S.zelle}>
-          <button
-            onClick={() => onInsert(spreadCount)}
-            style={{ ...S.endKachel, width: KACHEL_PX, height: KACHEL_PX / 2 }}
-            title={
-              spreadCount === 0
-                ? 'Erste eigene Doppelseite einfügen'
-                : 'Eigene Doppelseite am Ende des Buches einfügen'
+      {(onInsert || onSpreadVerschoben || onSeiteVerschoben) && (
+        <div
+          style={S.zelle}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes(SPREAD_ZUG)) {
+              if (!onSpreadVerschoben) return;
+              e.preventDefault();
+              if (wirksameLuecke(spreadCount)) setZielLuecke(spreadCount);
+            } else if (e.dataTransfer.types.includes(SEITE_ZUG)) {
+              if (!onSeiteVerschoben) return;
+              e.preventDefault();
+              setZielLuecke(spreadCount);
             }
-          >
-            {spreadCount === 0 ? '＋ erste Seite' : '＋ eigene Seite'}
-          </button>
+          }}
+          onDragLeave={() => setZielLuecke((v) => (v === spreadCount ? null : v))}
+          onDrop={(e) => {
+            if (onSpreadVerschoben && e.dataTransfer.types.includes(SPREAD_ZUG)) {
+              e.preventDefault();
+              const von = Number(e.dataTransfer.getData(SPREAD_ZUG));
+              setZielLuecke(null);
+              setGezogen(null);
+              if (Number.isFinite(von)) onSpreadVerschoben(von, spreadCount);
+            } else if (onSeiteVerschoben && e.dataTransfer.types.includes(SEITE_ZUG)) {
+              e.preventDefault();
+              const atPage = Number(e.dataTransfer.getData(SEITE_ZUG));
+              setZielLuecke(null);
+              setGezogen(null);
+              if (Number.isFinite(atPage)) onSeiteVerschoben(atPage, spreadCount * 2);
+            }
+          }}
+        >
+          {zielLuecke === spreadCount && <div style={{ ...S.zielmarke, left: -8 }} />}
+          {onInsert && (
+            <button
+              onClick={() => onInsert(spreadCount)}
+              style={{ ...S.endKachel, width: KACHEL_PX, height: KACHEL_PX / 2 }}
+              title={
+                spreadCount === 0
+                  ? 'Erste eigene Doppelseite einfügen'
+                  : 'Eigene Doppelseite am Ende des Buches einfügen'
+              }
+            >
+              {spreadCount === 0 ? '＋ erste Seite' : '＋ eigene Seite'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -205,6 +367,41 @@ const S = {
   },
   /** Festgehaltene Seiten stehen sichtbar für sich – sie sind Handarbeit. */
   fest: { borderColor: T.cyan, boxShadow: `0 0 0 2px ${T.cyanZart}` },
+  /**
+   * Der Link verzichtet auf sein eigenes Standard-Ziehen, wenn die Kachel
+   * selbst ziehbar ist – sonst griffe der Browser den Verweis statt der
+   * Kachel. Als Feld und nicht am `Link` selbst: Die Komponente kennt keinen
+   * Zug, nur diese eine Ansicht braucht ihn.
+   */
+  keinLinkZug: { WebkitUserDrag: 'none' } as React.CSSProperties,
+  /**
+   * Ein Ziehgriff für eine einzelne Buchseite – die Hälfte der oberen Kante.
+   *
+   * Erst beim Überfahren der Kachel sichtbar, wie der Einfügeknopf: Zwei
+   * dauerhaft sichtbare Streifen über jeder Kachel wären mehr Lärm als
+   * Auskunft.
+   */
+  seitengriff: {
+    position: 'absolute' as const,
+    top: 0,
+    width: '50%',
+    height: 8,
+    background: T.cyanZart,
+    cursor: 'grab',
+    zIndex: 3,
+    transition: 'opacity 0.1s',
+  },
+  /** Zeigt beim Ziehen einer Doppelseite, wo sie landen würde. */
+  zielmarke: {
+    position: 'absolute' as const,
+    left: -9,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    borderRadius: 2,
+    background: T.cyan,
+    zIndex: 2,
+  },
   einfuegen: {
     position: 'absolute' as const,
     left: -13,

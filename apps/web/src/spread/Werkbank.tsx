@@ -27,6 +27,7 @@ import { Bildbefunde } from './Bildbefunde.js';
 import { Ebene } from './Ebene.js';
 import { Unterschriften } from './Unterschriften.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
+import { Mehrfachauswahl } from './Mehrfachauswahl.js';
 import { SpreadStage } from './SpreadStage.js';
 import { DATUMSQUELLE, zeitpunkt } from './SpreadStage.js';
 import { useMiniaturSrc } from '../bildadresse.js';
@@ -166,7 +167,16 @@ export function Werkbank({ model, aussen, spread, imageSrc }: Props) {
           </button>
         </div>
 
-        {model.gewaehlteBox && <BildKarte model={model} />}
+        {model.auswahlMenge.size > 1 ? (
+          // Padding 0: `Mehrfachauswahl` bringt es über `B.abschnitt` selbst
+          // mit, wie `BildPanel` es im Inspektor auch tut – zwei Ränder
+          // übereinander wären mehr Abstand, als die Karte hier verträgt.
+          <div style={{ ...S.karte, padding: 0 }}>
+            <Mehrfachauswahl model={model} />
+          </div>
+        ) : (
+          model.gewaehlteBox && <BildKarte model={model} />
+        )}
         {panel && (
           <SeitenKarte
             panel={panel}

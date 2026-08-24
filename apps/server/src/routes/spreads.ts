@@ -315,6 +315,66 @@ export function spreadRouten(app: FastifyInstance, { project }: Kontext): void {
     };
   });
 
+  // ------------------------------------------------------------- Reihenfolge
+
+  /**
+   * Verschiebt eine Doppelseite an eine andere Stelle im Buch.
+   *
+   * `nach` ist eine Lücke zwischen zwei Doppelseiten, gezählt vor dem
+   * Herausnehmen – dieselbe Zählung wie `at` beim Einfügen. Reines
+   * Umsortieren: Kein Bild wechselt seinen Platz auf der Seite, nur die Seite
+   * ihren Platz im Buch.
+   */
+  app.patch<{ Params: { index: string }; Body?: { nach?: number } }>(
+    '/api/spreads/:index/position',
+    async (req, reply) => {
+      const nach = req.body?.nach;
+      if (typeof nach !== 'number' || !Number.isFinite(nach)) {
+        return reply.code(400).send({ error: 'nach ist keine Zahl' });
+      }
+      const von = Number(req.params.index);
+      if (!Number.isFinite(von)) return reply.code(400).send({ error: 'index ist keine Zahl' });
+
+      const ergebnis = project.moveSpread(von, nach);
+      if (!ergebnis.ok) return reply.code(404).send({ error: ergebnis.error });
+
+      void project.save();
+      return { ok: true, index: ergebnis.index, spreadCount: project.spreads.length };
+    },
+  );
+
+  /**
+   * Verschiebt eine einzelne Buchseite an eine andere Stelle im Buch.
+   *
+   * `nachPage` ist eine Lücke in der Buchseitenfolge, gezählt vor dem
+   * Herausnehmen – dieselbe Zählung wie `atPage` beim Einfügen. Nicht möglich
+   * an einem Blatt, das sich nicht an der Falzachse trennen lässt (409).
+   */
+  app.patch<{ Params: { atPage: string }; Body?: { nach?: number } }>(
+    '/api/spreads/page/:atPage/position',
+    async (req, reply) => {
+      const nach = req.body?.nach;
+      if (typeof nach !== 'number' || !Number.isFinite(nach)) {
+        return reply.code(400).send({ error: 'nach ist keine Zahl' });
+      }
+      const atPage = Number(req.params.atPage);
+      if (!Number.isFinite(atPage)) {
+        return reply.code(400).send({ error: 'atPage ist keine Zahl' });
+      }
+
+      const ergebnis = project.moveSinglePage(atPage, nach);
+      if (!ergebnis.ok) return reply.code(409).send({ ok: false, error: ergebnis.error });
+
+      void project.save();
+      return {
+        ok: true,
+        index: ergebnis.index,
+        spreadCount: project.spreads.length,
+        ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+      };
+    },
+  );
+
   // -------------------------------------------------------------- Eigene Seiten
 
   /**

@@ -9,6 +9,7 @@ import {
   insertKeptHalves,
   insertSinglePage,
   mergeSinglePages,
+  moveSinglePage,
   removeSinglePage,
   setChapterHalf,
   setHalfPage,
@@ -383,6 +384,103 @@ describe('removeSinglePage', () => {
 
     expect(r.ok).toBe(true);
     expect(r.spreads.find((s) => s.id === 'eigen-1')?.blocks?.[0]?.content).toBe('Einschulung');
+  });
+});
+
+describe('moveSinglePage', () => {
+  const buch = () => [
+    blatt('s0', 'spread.2up.pair', 0),
+    blatt('s1', 'spread.2up.pair', 2),
+    blatt('s2', 'spread.2up.pair', 4),
+  ];
+
+  it('verschiebt eine Buchseite an eine spätere Stelle und lässt den Rest aufrücken', () => {
+    // p1 ist Buchseite 1 (rechte Seite von s0); nachPage 4 heißt: vor der Seite,
+    // die heute an Stelle 4 steht (p4, linke Seite von s2).
+    const r = moveSinglePage(buch(), 1, 4);
+
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toEqual(['p0', 'p2', 'p3', 'p1', 'p4', 'p5']);
+    expect(r.spreads).toHaveLength(3);
+  });
+
+  it('verschiebt eine Buchseite an eine frühere Stelle', () => {
+    const r = moveSinglePage(buch(), 4, 0);
+
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toEqual(['p4', 'p0', 'p1', 'p2', 'p3', 'p5']);
+  });
+
+  it('ist wirkungslos, wenn die Lücke die heutige Stelle der Seite trifft', () => {
+    // Davor oder danach ist für eine einzelne Seite dieselbe Stelle.
+    const vorher = buch();
+    expect(fotos(moveSinglePage(vorher, 1, 1).spreads)).toEqual(fotos(vorher));
+    expect(fotos(moveSinglePage(vorher, 1, 2).spreads)).toEqual(fotos(vorher));
+  });
+
+  it('lehnt eine Seite ab, die sich nicht einzeln trennen lässt', () => {
+    const r = moveSinglePage([blatt('s0', 'spread.2up.pair', 0), auftakt('a1')], 2, 0);
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('nicht in einzelne Seiten trennen');
+  });
+
+  it('weist eine Buchseite ab, die es nicht gibt', () => {
+    expect(moveSinglePage(buch(), 99, 0).ok).toBe(false);
+    expect(moveSinglePage(buch(), -1, 0).ok).toBe(false);
+  });
+
+  it('gibt einer verschobenen halb festgehaltenen Seite einen frischen Anker', () => {
+    const mitSchloss: Spread = {
+      ...blatt('s1', 'spread.2up.pair', 2),
+      lockedSide: 'left',
+      anchor: { photoId: 'p99', where: 'before' },
+    };
+    const r = moveSinglePage(
+      [blatt('s0', 'spread.2up.pair', 0), mitSchloss, blatt('s2', 'spread.2up.pair', 4)],
+      2,
+      0,
+    );
+
+    expect(r.ok).toBe(true);
+    // p2 (die festgehaltene linke Seite von s1) steht jetzt vorn.
+    expect(fotos(r.spreads)).toEqual(['p2', 'p0', 'p1', 'p3', 'p4', 'p5']);
+
+    const ziel = r.spreads.find((s) => s.id === 's1');
+    expect(ziel?.lockedSide).toBe('left');
+    // Der alte Anker (p99) ist weg; der neue zeigt auf den jetzigen Nachbarn.
+    expect(ziel?.anchor).toEqual({ photoId: 'p1', where: 'before' });
+  });
+
+  it('findet den vorherigen Nachbarn, wenn nach dem Zug kein Nachbar mehr im Fluss folgt', () => {
+    // Regressionstest: Die Rückwärtssuche darf nicht die verschobene Seite
+    // selbst treffen (sie ist nur `lockedSide`, nicht `locked`, also von der
+    // eingebauten `spread.locked`-Ausnahme in `ankerNeben` nicht geschützt) —
+    // sonst bricht sie am eigenen Bild ab, statt beim wirklichen Vorgänger
+    // weiterzusuchen, und die Seite bekäme gar keinen Anker.
+    const mitSchloss: Spread = {
+      ...blatt('s1', 'spread.2up.pair', 2),
+      lockedSide: 'left',
+      anchor: { photoId: 'p99', where: 'before' },
+    };
+    const r = moveSinglePage([blatt('s0', 'spread.2up.pair', 0), mitSchloss], 2, 4);
+
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toEqual(['p0', 'p1', 'p3', 'p2']);
+
+    const ziel = r.spreads.find((s) => s.id === 's1');
+    expect(ziel?.anchor).toEqual({ photoId: 'p1', where: 'after' });
+  });
+
+  it('verliert das Schloss, wenn dafür ein ganz festgehaltenes Blatt getrennt werden muss', () => {
+    // Dieselbe Ausnahme wie beim Herausnehmen: Ein ganzes Schloss kennt keine
+    // `own`-Halbseite, an der es hängen bleiben könnte.
+    const eigen: Spread = { ...blatt('e1', 'spread.2up.pair', 2), locked: true };
+    const r = moveSinglePage([blatt('s0', 'spread.2up.pair', 0), eigen], 2, 0);
+
+    expect(r.ok).toBe(true);
+    expect(fotos(r.spreads)).toEqual(['p2', 'p0', 'p1', 'p3']);
+    expect(r.spreads.every((s) => !s.locked)).toBe(true);
   });
 });
 

@@ -2,10 +2,11 @@
  * Die vier Texte des Umschlags und wie sie gesetzt werden.
  *
  * Ein eigenes Panel und keine vier Eingabefelder mehr in `Cover.tsx`: Jeder der
- * vier Texte beantwortet dieselben fünf Fragen — Wortlaut, Schrift, Größe,
- * Farbe, Grund —, und nebeneinander in einer Tabelle sieht man, was gleich und
- * was verschieden gesetzt ist. Untereinander als fünf Felder je Text wären es
- * zwanzig Kästen, in denen sich derselbe Vergleich nicht anstellen lässt.
+ * vier Texte beantwortet dieselben sechs Fragen — Wortlaut, Schrift,
+ * Ausrichtung, Größe, Farbe, Grund —, und nebeneinander in einer Tabelle sieht
+ * man, was gleich und was verschieden gesetzt ist. Untereinander als sechs
+ * Felder je Text wären es vierundzwanzig Kästen, in denen sich derselbe
+ * Vergleich nicht anstellen lässt.
  *
  * **Eine Zeile je Text, eine Spalte je Frage.** Der Wortlaut steht dabei zuerst,
  * denn er ist die einzige Angabe, die es geben *muss* — alle übrigen dürfen leer
@@ -106,6 +107,7 @@ export function CoverTexte({
         <span />
         <span style={B.marke}>Text</span>
         <span style={B.marke}>Schrift</span>
+        <span style={B.marke}>Ausrichtung</span>
         <span style={B.marke}>Größe</span>
         <span style={B.marke}>Schriftfarbe</span>
         <span style={B.marke}>Grundfarbe</span>
@@ -143,6 +145,21 @@ export function CoverTexte({
                     {f.label}
                   </option>
                 ))}
+              </select>
+              <select
+                value={stil.align ?? ''}
+                disabled={laeuft}
+                onChange={(e) => setzeStil(z.stil, 'align', e.target.value)}
+                style={{ ...B.feld, fontSize: 14 }}
+                title={
+                  z.stil === 'spine'
+                    ? 'Gilt entlang der gedrehten Zeile auf dem Rücken.'
+                    : undefined
+                }
+              >
+                <option value="">Links (Vorgabe)</option>
+                <option value="center">Mittig</option>
+                <option value="right">Rechts</option>
               </select>
               <Punktfeld
                 wert={stil.sizePt}
@@ -241,7 +258,8 @@ const S = {
    */
   gitter: {
     display: 'grid',
-    gridTemplateColumns: '7rem minmax(12rem, 2fr) minmax(9rem, 1fr) 6rem 7.5rem 7.5rem',
+    gridTemplateColumns:
+      '7rem minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) 6rem 7.5rem 7.5rem',
     gap: '10px 12px',
     alignItems: 'end',
     overflowX: 'auto' as const,

@@ -15,7 +15,7 @@ import type { RenderedSpread } from '@franibook/core';
 import { doppelseiteLaden } from '../api.js';
 
 /** Was die Kacheln über eine Doppelseite hinaus brauchen. */
-export type Kachel = RenderedSpread & { locked?: boolean };
+export type Kachel = RenderedSpread & { locked?: boolean; splittable?: boolean };
 
 export function useSpreadTiles(spreadCount: number, version = 0) {
   const containerRef = useRef<HTMLDivElement>(null);

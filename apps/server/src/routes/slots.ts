@@ -130,6 +130,38 @@ export function slotRouten(app: FastifyInstance, { project }: Kontext): void {
   });
 
   /**
+   * Setzt Position und Größe mehrerer Bilder derselben Doppelseite in einem Zug.
+   *
+   * Für eine Mehrfachauswahl auf der Bühne: gemeinsam verschoben oder an der
+   * Hülle skaliert, ist das ein Aufruf statt n einzelner – und damit ein
+   * Cmd+Z statt n.
+   */
+  app.patch<{
+    Params: { index: string };
+    Body?: {
+      rects?: { slotId?: unknown; rect?: { x: number; y: number; w: number; h: number } | null }[];
+    };
+  }>('/api/spreads/:index/slots/rects', async (req, reply) => {
+    const rects = req.body?.rects;
+    if (!Array.isArray(rects) || rects.length === 0) {
+      return reply.code(400).send({ error: 'rects fehlt oder ist leer' });
+    }
+    if (!rects.every((r) => typeof r.slotId === 'string')) {
+      return reply.code(400).send({ error: 'Jeder Eintrag braucht eine slotId' });
+    }
+
+    const index = Number(req.params.index);
+    // `rect` fehlt statt ausdrücklich `null` zu sein: derselbe Rückfall wie bei
+    // der einzelnen Route, nur je Eintrag.
+    const bereinigt = rects.map((r) => ({ slotId: r.slotId as string, rect: r.rect ?? null }));
+    const result = project.setSlotRects(index, bereinigt);
+    if (!result.ok) return reply.code(404).send({ error: result.error });
+
+    void project.save();
+    return { ok: true, spread: spreadAntwort(project, index) };
+  });
+
+  /**
    * Verschiebt ein Bild im Stapel der Doppelseite.
    *
    * Vier Züge statt einer Ebenennummer: `vorn`, `vor`, `zurueck`, `hinten`. Eine

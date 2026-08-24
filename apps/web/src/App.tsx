@@ -23,6 +23,7 @@ import { SpreadView, type GuideVisibility } from '@franibook/render-dom';
 import {
   abnahmeLaden,
   buchseiteLoeschen,
+  buchseiteVerschieben,
   ApiFehler,
   doppelLaden,
   doppelseiteFesthalten,
@@ -37,6 +38,7 @@ import {
   type ProjectInfo,
   projektLaden,
   type SpreadResponse,
+  spreadVerschieben,
   type UndoErgebnis,
   wiederholen,
   zeitstrahlSetzen,
@@ -724,6 +726,33 @@ export function App() {
   }
 
   /**
+   * Verschiebt eine Doppelseite in der Übersicht an eine andere Stelle.
+   *
+   * Reines Umsortieren, kein Neuanordnen – die Miniaturen holt `neuRendern`
+   * nach, weil sich für jede Seite zwischen `von` und `nach` die Nummer ändert.
+   */
+  async function spreadInUebersichtVerschieben(von: number, nach: number) {
+    try {
+      await spreadVerschieben(von, nach);
+      loadInfo();
+      neuRendern();
+    } catch (e) {
+      setNote(`Nicht verschoben: ${fehlertext(e)}`);
+    }
+  }
+
+  /** Verschiebt eine einzelne Buchseite in der Übersicht an eine andere Stelle. */
+  async function seiteInUebersichtVerschieben(atPage: number, nach: number) {
+    try {
+      await buchseiteVerschieben(atPage, nach);
+      loadInfo();
+      neuRendern();
+    } catch (e) {
+      setNote(`Nicht verschoben: ${fehlertext(e)}`);
+    }
+  }
+
+  /**
    * Nimmt eine einzelne Buchseite aus dem Buch.
    *
    * Das Gegenstück zum Einfügen: Alles dahinter rückt eine Halbseite auf, und
@@ -1150,6 +1179,10 @@ export function App() {
                 imageSrc={imageSrc}
                 onOpen={(i) => zeigeSpread(i)}
                 onInsert={setEinfuegenAn}
+                onSpreadVerschoben={(von, nach) => void spreadInUebersichtVerschieben(von, nach)}
+                onSeiteVerschoben={(atPage, nach) =>
+                  void seiteInUebersichtVerschieben(atPage, nach)
+                }
               />
             </div>
             <BuchPanel

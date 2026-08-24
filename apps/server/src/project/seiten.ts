@@ -17,6 +17,7 @@ import {
   HALF_BLANK_ID,
   insertSinglePage as insertSinglePageIntoBook,
   insertTemplates,
+  moveSinglePage as moveSinglePageInBook,
   ownHalves,
   removeSinglePage as removeSinglePageFromBook,
   teilbar,
@@ -43,8 +44,18 @@ export interface Buch {
  * ins Leere — sie standen alle nebeneinander und ankerten aufeinander —, und
  * das Neuanordnen warf die Jahresfolge durcheinander.
  */
-export function ankerFuer(buch: Buch, stelle: number): { anchor: SpreadAnchor } | undefined {
-  const anchor = ankerNeben(buch.spreads, stelle);
+export function ankerFuer(
+  buch: Buch,
+  stelle: number,
+  /**
+   * Seiten, deren Bilder nicht im Fluss laufen – etwa die Seite, für die der
+   * Anker gerade gesucht wird. `ankerNeben` schließt sonst nur `locked`
+   * aus, nicht `lockedSide`, und eine halb festgehaltene Seite fände beim
+   * Rückwärtssuchen sich selbst.
+   */
+  ausgenommen?: ReadonlySet<number>,
+): { anchor: SpreadAnchor } | undefined {
+  const anchor = ankerNeben(buch.spreads, stelle, ausgenommen);
   return anchor ? { anchor } : undefined;
 }
 
@@ -183,6 +194,39 @@ export function insertSinglePage(
 }
 
 /**
+ * Verschiebt eine einzelne Buchseite an eine andere Stelle im Buch.
+ *
+ * `nachPage` ist eine Lücke in der Buchseitenfolge, gezählt vor dem
+ * Herausnehmen – dieselbe Zählung wie `atPage` beim Einfügen. Der Inhalt der
+ * Seite bleibt, wie er war; nur ihre Stelle im Buch ändert sich. Der
+ * zurückgegebene `index` ist die Doppelseite, in der die Seite jetzt liegt –
+ * geschätzt aus `atPage`, denn ein genauer Treffer bräuchte eine Suche über
+ * eine Kennung, die eine gewöhnliche (nicht festgehaltene) Seite gar nicht hat.
+ */
+export function moveSinglePage(
+  buch: Buch,
+  vonPage: number,
+  nachPage: number,
+): { ok: boolean; error?: string; index: number; bericht?: SinglePageResult['bericht'] } {
+  const ergebnis = moveSinglePageInBook(buch.spreads, vonPage, nachPage);
+  if (!ergebnis.ok) {
+    return { ok: false, ...(ergebnis.error ? { error: ergebnis.error } : {}), index: -1 };
+  }
+
+  buch.spreads = ergebnis.spreads;
+  const index = Math.min(
+    Math.max(0, Math.floor(Math.trunc(nachPage) / 2)),
+    Math.max(0, buch.spreads.length - 1),
+  );
+
+  return {
+    ok: true,
+    index,
+    ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
+  };
+}
+
+/**
  * Nimmt eine einzelne Buchseite aus dem Buch.
  *
  * Das Gegenstück zum Einfügen: Die Seite fällt heraus, alles danach rückt eine
@@ -219,6 +263,48 @@ export function removeSinglePage(
     photoCount: ergebnis.photoCount,
     ...(ergebnis.bericht ? { bericht: ergebnis.bericht } : {}),
   };
+}
+
+/**
+ * Verschiebt eine Doppelseite an eine andere Stelle im Buch.
+ *
+ * Reines Umsortieren der Liste – keine Neuanordnung, kein Bild wechselt seinen
+ * Platz auf der Seite. `nach` ist eine Lücke, gezählt **vor** dem Herausnehmen
+ * (dieselbe Zählung wie `at` bei `insertSpread`: `0` ganz vorn, `spreads.length`
+ * ganz hinten) – das ist die Zahl, die eine Ablagestelle zwischen zwei Kacheln
+ * der Übersicht ohnehin hat, und erspart der Oberfläche eine Umrechnung.
+ *
+ * Ist die Seite festgehalten, wandert ihr Anker mit an die neue Stelle
+ * (dieselbe Rechnung wie beim Festhalten selbst, `setSpreadLocked`) – sonst
+ * überlebt der Zug kein künftiges Neuanordnen. Für eine Fluss-Seite ohne Anker
+ * gilt dieselbe Ehrlichkeit wie bei jeder anderen Handarbeit (`rect`, Ebene,
+ * …): Der Zug bleibt bis zum nächsten Neuaufbau, dort baut der Kalender die
+ * Reihenfolge neu.
+ */
+export function moveSpread(
+  buch: Buch,
+  von: number,
+  nach: number,
+): { ok: boolean; error?: string; index: number } {
+  const spread = buch.spreads[von];
+  if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden', index: -1 };
+
+  const luecke = Math.min(Math.max(0, Math.trunc(nach)), buch.spreads.length);
+  const stelle = luecke > von ? luecke - 1 : luecke;
+  if (stelle === von) return { ok: true, index: von };
+
+  buch.spreads.splice(von, 1);
+  buch.spreads.splice(stelle, 0, spread);
+  buch.spreads.forEach((s, i) => (s.index = i));
+
+  if (spread.locked || spread.lockedSide) {
+    const anker = ankerFuer(buch, stelle + 1, new Set([stelle]));
+    const eigene = new Set(spread.slots.map((s) => s.photoId));
+    if (anker && !eigene.has(anker.anchor.photoId)) spread.anchor = anker.anchor;
+    else delete spread.anchor;
+  }
+
+  return { ok: true, index: stelle };
 }
 
 /**
