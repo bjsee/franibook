@@ -101,6 +101,14 @@ describe('Umschlaggestaltung prüfen', () => {
     ).toMatch(/Schrift/);
   });
 
+  it('kennt nur die drei Ausrichtungen', () => {
+    expect(pruefeCoverGestaltung({ texts: { title: { align: 'center' } } })).toBeUndefined();
+    expect(pruefeCoverGestaltung({ texts: { spine: { align: 'right' } } })).toBeUndefined();
+    expect(pruefeCoverGestaltung({ texts: { title: { align: 'justify' as never } } })).toMatch(
+      /Ausrichtung/,
+    );
+  });
+
   it('lässt das Zurücknehmen durch', () => {
     // `null` und der leere Text heißen „zurück zur Vorgabe" und kommen beim
     // Rendern nie an. Sie hier abzuweisen hieße, eine gesetzte Farbe ließe sich
@@ -108,7 +116,7 @@ describe('Umschlaggestaltung prüfen', () => {
     expect(
       pruefeCoverGestaltung({
         frontBackground: null as never,
-        texts: { title: { color: '' as never, sizePt: null as never } },
+        texts: { title: { color: '' as never, sizePt: null as never, align: null as never } },
       }),
     ).toBeUndefined();
   });

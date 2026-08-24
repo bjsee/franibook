@@ -224,6 +224,30 @@ describe('Umschlag gestalten', () => {
     expect(box(cover, 'back-text')).toMatchObject({ family: 'hand', fontSizePt: 9 });
   });
 
+  it('setzt die Ausrichtung je Text, ohne Angabe bleibt es bei links', () => {
+    const vorgabe = renderCover(VOLL, ctx);
+    for (const slotId of ['front-title', 'front-subtitle', 'spine-text', 'back-text']) {
+      expect(box(vorgabe, slotId)).toMatchObject({ align: 'left' });
+    }
+
+    const cover = renderCover(
+      {
+        ...VOLL,
+        texts: {
+          title: { align: 'center' },
+          subtitle: { align: 'right' },
+          spine: { align: 'center' },
+          backText: { align: 'right' },
+        },
+      },
+      ctx,
+    );
+    expect(box(cover, 'front-title')).toMatchObject({ align: 'center' });
+    expect(box(cover, 'front-subtitle')).toMatchObject({ align: 'right' });
+    expect(box(cover, 'spine-text')).toMatchObject({ align: 'center' });
+    expect(box(cover, 'back-text')).toMatchObject({ align: 'right' });
+  });
+
   it('lässt einen größeren Titel den Untertitel nach unten nicht verschieben', () => {
     // Beide hängen an der Unterkante des Sicherheitsbereichs: Der Untertitel
     // steht dort, der Titel wächst nach oben. Ein Titel, der seinen Untertitel

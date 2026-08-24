@@ -334,6 +334,31 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
 
   'DELETE /api/spreads/:index': () => ({ method: 'DELETE', url: '/api/spreads/1' }),
 
+  'PATCH /api/spreads/:index/position': ({ project }) => {
+    if (project.spreads.length < 2) throw new Error('Zu wenige Doppelseiten zum Verschieben');
+    return {
+      method: 'PATCH',
+      url: '/api/spreads/0/position',
+      payload: { nach: project.spreads.length },
+    };
+  },
+
+  'PATCH /api/spreads/page/:atPage/position': async ({ app, project }) => {
+    // Erst eine eigene Seite einfügen: Sie ist garantiert an der Falzachse
+    // trennbar, eine beliebige Seite des generierten Buches nicht unbedingt.
+    const antwort = await app.inject({
+      method: 'POST',
+      url: '/api/spreads/page',
+      payload: { atPage: 2 },
+    });
+    expect(antwort.statusCode).toBe(200);
+    return {
+      method: 'PATCH',
+      url: '/api/spreads/page/2/position',
+      payload: { nach: project.spreads.length * 2 },
+    };
+  },
+
   'PATCH /api/spreads/:index/vergroessern': ({ project }) => {
     // Die Buchseite suchen, an der wirklich etwas zu holen ist: Auf einer, die
     // ihren Satzspiegel schon füllt, wäre der Aufruf wirkungslos und der Test
@@ -482,6 +507,24 @@ const FAELLE: Record<string, (p: Probe) => Promise<Anfrage> | Anfrage> = {
       method: 'PATCH',
       url: `/api/spreads/${index}/slots/${slotId}/rect`,
       payload: { rect: { x: 0.1, y: 0.1, w: 0.3, h: 0.25 } },
+    };
+  },
+
+  'PATCH /api/spreads/:index/slots/rects': ({ project }) => {
+    // Eine Doppelseite mit mindestens zwei Plätzen – die mengenwertige Fassung
+    // braucht eine echte Menge, um etwas über den Einzelfall hinaus zu prüfen.
+    const treffer = project.spreads.find((s) => s.slots.length >= 2);
+    if (!treffer) throw new Error('Keine Doppelseite mit zwei Plätzen – die Probe taugt nicht');
+    const [a, b] = treffer.slots;
+    return {
+      method: 'PATCH',
+      url: `/api/spreads/${treffer.index}/slots/rects`,
+      payload: {
+        rects: [
+          { slotId: a!.slotId, rect: { x: 0.1, y: 0.1, w: 0.25, h: 0.2 } },
+          { slotId: b!.slotId, rect: { x: 0.4, y: 0.1, w: 0.25, h: 0.2 } },
+        ],
+      },
     };
   },
 

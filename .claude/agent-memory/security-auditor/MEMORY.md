@@ -5,3 +5,8 @@
 - [PDF renderer streaming](render_pdf_streaming.md) — renderPdf streams images one at a time (4.9GB→495MB spike finding); more spreads/images isn't a memory-DoS on its own
 - [Kontaktbogen feature review](kontaktbogen_review.md) — no findings on POST /api/export/abzug contact-sheet addition; why each candidate concern was ruled out
 - [Mosaik feature review](mosaik_feature_review.md) — frontMosaic font/SVG/path handling ruled safe; one istDateiFehler gap in titelmosaik.ts error path (low severity)
+- [Export/reroot review](export_and_reroot.md) — GET /api/export/:fileName and PATCH /api/sources/:id root are hardened, not path-traversal findings
+- [Freihand-Platzieren move review](frei-platzieren-move.md) — kind:'frei' moveToFrei, stelleGueltig, locked-bypass in einwurf.ts: no new finding, spreadIndex type-confusion crashes not pollutes
+- [Video-Einwurf review](video_einwurf_review.md) — ffmpeg/path/address handling all clean; global video content-type parser in app.ts bypasses other routes' body limits (low real impact)
+- [Seiten-sortieren/Mehrfachauswahl review](seiten_sortieren_mehrfachauswahl_review.md) — moveSpread/moveSinglePage/setSlotRects all in UNDO_ROUTEN, index bounds safe on NaN; one LOW gap, see [[rects-undefined-gap]]
+- [Rects undefined gap](rects_undefined_gap.md) — setSlotRects skips singular route's `?? null` normalization per array element, missing `rect` key throws TypeError (500) instead of 400

@@ -70,6 +70,7 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
     minDpi,
     targetDpi,
     selectedSlotId,
+    auswahlMenge,
     zug,
     ueberSlot,
     infosSichtbar,
@@ -163,20 +164,33 @@ export function SpreadStage({ model, imageSrc, guides }: Props) {
           Slot vollständig ab. Am leeren Platz fiel das nicht auf, am belegten
           war die Auswahl unsichtbar.
         */}
-        {slotId === selectedSlotId && <span style={S.ring} />}
+        {auswahlMenge.has(slotId) && <span style={S.ring} />}
         {/*
           Die Zeigerflächen liegen über dem Ring und unter den Marken: Sie
           fangen das Ziehen ab, und was sie sagen (Rand oder Inneres), soll die
           Auflösungsmarke nicht verdecken.
+
+          Bei einer Mehrfachauswahl bekommt nur der Anker die volle Ausstattung
+          (Ausschnitt-Ziehen, Zoomknöpfe) – die trifft ohnehin nur ihn, siehe
+          `ausschnittZiehen`. Die übrigen Mitglieder bekommen nur die Fläche,
+          die die ganze Gruppe verschiebt.
         */}
-        {slotId === selectedSlotId && box?.kind === 'image' && (
-          <Bildgriffe
-            model={model}
-            slotId={slotId}
-            breitePx={box.wMm * pxPerMm}
-            hoehePx={box.hMm * pxPerMm}
-          />
-        )}
+        {auswahlMenge.has(slotId) &&
+          box?.kind === 'image' &&
+          (slotId === selectedSlotId ? (
+            <Bildgriffe
+              model={model}
+              slotId={slotId}
+              breitePx={box.wMm * pxPerMm}
+              hoehePx={box.hMm * pxPerMm}
+            />
+          ) : (
+            <div
+              onPointerDown={(e) => model.kastenZiehen(slotId, e)}
+              title="Am Rand oder im Bild ziehen verschiebt die ganze Auswahl"
+              style={{ position: 'absolute', inset: 0, cursor: 'move', touchAction: 'none' }}
+            />
+          ))}
         {zuKlein && box.kind === 'image' && (
           <span style={S.zuKlein}>zu klein · {Math.round(box.effectiveDpi)} dpi</span>
         )}
