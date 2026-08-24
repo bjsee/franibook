@@ -70,6 +70,7 @@ import {
   type FotoInfo as PhotoInfo,
   fotopoolLaden,
   fotosDerSeiteLaden,
+  fotosVerschieben,
   fotoVerschieben,
   gewichtSetzen as apiGewichtSetzen,
   platzWegnehmen as apiPlatzWegnehmen,
@@ -79,6 +80,7 @@ import {
   rahmenSetzen,
   unterschriftSetzen,
   type PoolFoto as PoolPhoto,
+  rechteckeSetzen,
   rechteckSetzen,
   type SpreadResponse,
   textAendern,
@@ -248,6 +250,18 @@ export function useSpreadEditor({
   /** Position und Größe, solange sie noch nicht beim Server sind. */
   const [pendingRect, setPendingRect] = useState<NormRect | null>(null);
   /**
+   * Mehrfachauswahl: weitere gewählte Bilder neben `selectedSlotId`.
+   *
+   * `selectedSlotId` bleibt der Anker – aus der Adresse, weiter die
+   * Primärauswahl für Bildpanels, Zoomknöpfe und Tastaturkürzel. Diese Menge
+   * ist lokal und additiv (der Anker steht nie selbst darin): So gibt es für
+   * jedes Mitglied genau eine Stelle, an der seine Zugehörigkeit steht, statt
+   * zweier Wahrheiten. Die wirksame Auswahl ist `auswahlMenge` weiter unten.
+   */
+  const [mehrfachAuswahl, setMehrfachAuswahl] = useState<Set<string>>(new Set());
+  /** Position und Größe mehrerer Bilder, solange sie noch nicht beim Server sind. */
+  const [pendingRects, setPendingRects] = useState<Map<string, NormRect>>(new Map());
+  /**
    * Was die Griffe am gewählten Element anbieten: nichts, Größe oder Drehung.
    *
    * Umgeschaltet durch einen Klick auf das schon gewählte Element – die Geste
@@ -273,12 +287,35 @@ export function useSpreadEditor({
     setPendingCrop(null);
     setPendingTilt(null);
     setPendingRect(null);
+    setPendingRects(new Map());
     // Ein frisch gewähltes Bild trägt keine Griffe: Verschieben und Ausschnitt
     // gehen ohne, und wer wirklich die Größe meint, sagt es mit einem zweiten
     // Klick. Ein Text dagegen kann ohne Griffe nichts – er beginnt bei der
     // Größe.
     setGriffModus(textId ? 'groesse' : 'keine');
   }, [index, selectedSlotId, textId]);
+
+  // Die Mehrfachauswahl hängt nicht an diesem Effekt: Ein Klick auf ihren
+  // Anker (Mitglied verlässt die Auswahl, ein anderes rückt nach) ändert
+  // `selectedSlotId` selbst und liefe hier sonst sofort wieder leer. Sie fällt
+  // stattdessen genau dann weg, wenn gar nichts mehr gewählt ist, oder beim
+  // Wechsel der Doppelseite.
+  useEffect(() => {
+    if (!selectedSlotId) setMehrfachAuswahl(new Set());
+  }, [selectedSlotId]);
+  useEffect(() => setMehrfachAuswahl(new Set()), [index]);
+
+  /**
+   * Die wirksame Auswahl: der Anker plus die Mehrfachauswahl.
+   *
+   * Eine abgeleitete Menge und kein eigener Zustand – so gibt es für „ist
+   * dieses Bild gewählt" nur eine Antwort, nie zwei Felder, die auseinanderlaufen
+   * könnten.
+   */
+  const auswahlMenge = useMemo(
+    () => (selectedSlotId ? new Set([selectedSlotId, ...mehrfachAuswahl]) : new Set<string>()),
+    [selectedSlotId, mehrfachAuswahl],
+  );
 
   const poolLaden = useCallback(() => {
     fotopoolLaden()
@@ -338,6 +375,32 @@ export function useSpreadEditor({
     // Vorkommen dieses Bildes auf der Doppelseite, auch das im Hintergrund.
     if (pendingAdjust) s = withAdjust(s, pendingAdjust.photoId, pendingAdjust.adjust);
 
+    // Die Mehrfachauswahl beim gemeinsamen Verschieben oder Skalieren: dieselbe
+    // Rechnung wie unten für ein einzelnes Bild, nur je Mitglied. Unabhängig von
+    // `selectedSlotId`, damit sie auch dann gilt, wenn der Anker selbst nicht
+    // unter den gezogenen Kästen ist.
+    for (const [slotId, rect] of pendingRects) {
+      s = withRect(s, slotId, {
+        xMm: beschnittMm + rect.x * trimBreiteMm,
+        yMm: beschnittMm + rect.y * trimHoeheMm,
+        wMm: rect.w * trimBreiteMm,
+        hMm: rect.h * trimHoeheMm,
+      });
+      const vomServer = bildBoxVon(spread, slotId);
+      const px = vomServer ? photoPixelsOf(vomServer) : undefined;
+      const neu = bildBoxVon(s, slotId);
+      if (px && neu) {
+        const ar = neu.wMm / neu.hMm;
+        s = withCrop(
+          s,
+          slotId,
+          neu.crop.mode === 'manual'
+            ? fitCropToAspect(neu.crop, px.width / px.height, ar)
+            : coverCrop(px.width / px.height, ar, neu.crop.focal),
+        );
+      }
+    }
+
     if (!selectedSlotId) return s;
     if (pendingCrop) s = withCrop(s, selectedSlotId, pendingCrop);
     if (pendingTilt !== null) s = withRotation(s, selectedSlotId, pendingTilt);
@@ -376,6 +439,7 @@ export function useSpreadEditor({
     pendingTilt,
     pendingAdjust,
     pendingRect,
+    pendingRects,
     pendingText,
     texte,
     selectedSlotId,
@@ -767,7 +831,15 @@ export function useSpreadEditor({
    * der Sekunde.
    */
   function kastenZiehen(slotId: string, e: React.PointerEvent<HTMLDivElement>) {
-    if (slotId !== selectedSlotId || e.button !== 0) return;
+    if (e.button !== 0) return;
+    // Der Rand eines beliebigen Mitglieds der Mehrfachauswahl bewegt die ganze
+    // Gruppe – der Griff an einem Bild außerhalb der Auswahl bliebe dagegen
+    // einslottig (siehe unten, `slotId !== selectedSlotId`).
+    if (auswahlMenge.size > 1 && auswahlMenge.has(slotId)) {
+      gruppeZiehen(e);
+      return;
+    }
+    if (slotId !== selectedSlotId) return;
     const box = bildBox(slotId);
     if (!box) return;
 
@@ -792,6 +864,54 @@ export function useSpreadEditor({
       window.removeEventListener('pointerup', onUp);
       setPendingRect((r) => {
         if (r) void rechteckSpeichern(slotId, r);
+        return r;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Den Bildkasten mehrerer gewählter Bilder gemeinsam verschieben.
+   *
+   * Dieselbe Rechnung wie `kastenZiehen`, nur über alle Mitglieder statt eines
+   * Rechtecks angewandt – jedes behält seinen Abstand zu den anderen. Das
+   * Hintergrundbild ist ausgenommen wie überall: Es deckt die ganze Seite, ein
+   * „Verschieben" ergäbe für die Gruppe keinen Sinn.
+   */
+  function gruppeZiehen(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    gezogen.current = false;
+
+    const startBoxen = new Map(
+      [...auswahlMenge]
+        .filter((id) => id !== BACKGROUND_SLOT_ID)
+        .map((id) => [id, bildBox(id)] as const)
+        .filter((paar): paar is [string, NonNullable<(typeof paar)[1]>] => !!paar[1])
+        .map(([id, box]) => [id, normiert(box)] as const),
+    );
+    if (startBoxen.size === 0) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 3) {
+        gezogen.current = true;
+      }
+      const dx = (ev.clientX - startX) / pxPerMm / trimBreiteMm;
+      const dy = (ev.clientY - startY) / pxPerMm / trimHoeheMm;
+      setPendingRects(
+        new Map([...startBoxen].map(([id, r]) => [id, { ...r, x: r.x + dx, y: r.y + dy }])),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setPendingRects((r) => {
+        if (r.size > 0) {
+          void rechteckeSpeichern([...r].map(([slotId, rect]) => ({ slotId, rect })));
+        }
         return r;
       });
     };
@@ -895,6 +1015,85 @@ export function useSpreadEditor({
       setGriffAnzeige(null);
       setPendingRect((r) => {
         if (r) void rechteckSpeichern(box.slotId, r);
+        return r;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Größe der ganzen Mehrfachauswahl an der Hülle ziehen.
+   *
+   * Dieselbe Idee wie `griffZiehen` – ein fester Gegenpunkt, das Maß wächst vom
+   * Zeiger her –, aber ohne Drehung: Der Hüllrahmen steht immer gerade, ein
+   * Gruppendrehen ist bewusst nicht im Umfang (`rotateDeg` ist pro Bild um die
+   * eigene Mitte, und `undefined` heißt „automatisch" – das einer ganzen Gruppe
+   * zu nehmen wäre ein anderer Griff). Jedes Mitglied bleibt im selben Abstand
+   * zum festen Eckpunkt der Hülle, skaliert um denselben Faktor wie die Hülle
+   * selbst.
+   */
+  function gruppeSkalieren(sx: -1 | 0 | 1, sy: -1 | 0 | 1, e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startBoxen = new Map(
+      [...auswahlMenge]
+        .filter((id) => id !== BACKGROUND_SLOT_ID)
+        .map((id) => [id, bildBox(id)] as const)
+        .filter((paar): paar is [string, NonNullable<(typeof paar)[1]>] => !!paar[1]),
+    );
+    if (startBoxen.size === 0) return;
+
+    const boxen = [...startBoxen.values()];
+    const huelleX0 = Math.min(...boxen.map((b) => b.xMm));
+    const huelleY0 = Math.min(...boxen.map((b) => b.yMm));
+    const huelleX1 = Math.max(...boxen.map((b) => b.xMm + b.wMm));
+    const huelleY1 = Math.max(...boxen.map((b) => b.yMm + b.hMm));
+    const w0 = huelleX1 - huelleX0;
+    const h0 = huelleY1 - huelleY0;
+    // Der Punkt, der liegen bleibt: die dem Griff gegenüberliegende Ecke der
+    // Hülle. Ohne Drehung genügt die einfache Abstandsrechnung – kein `dreh`
+    // und `zurueck` wie bei `griffZiehen`.
+    const fest = { xMm: sx === 1 ? huelleX0 : huelleX1, yMm: sy === 1 ? huelleY0 : huelleY1 };
+
+    const onMove = (ev: PointerEvent) => {
+      const p = zeigerMm(ev);
+      let w = sx === 0 ? w0 : Math.max(MIN_KANTE_MM, Math.abs(p.xMm - fest.xMm));
+      let h = sy === 0 ? h0 : Math.max(MIN_KANTE_MM, Math.abs(p.yMm - fest.yMm));
+
+      if (ev.shiftKey && sx !== 0 && sy !== 0) {
+        const f = (w / w0 + h / h0) / 2;
+        w = Math.max(MIN_KANTE_MM, w0 * f);
+        h = Math.max(MIN_KANTE_MM, h0 * f);
+      }
+
+      const faktorX = w / w0;
+      const faktorY = h / h0;
+      setGriffAnzeige(`${Math.round(w)} × ${Math.round(h)} mm`);
+      setPendingRects(
+        new Map(
+          [...startBoxen].map(([id, box]) => {
+            const neuX = fest.xMm + (box.xMm - fest.xMm) * faktorX;
+            const neuY = fest.yMm + (box.yMm - fest.yMm) * faktorY;
+            return [
+              id,
+              normiert({ xMm: neuX, yMm: neuY, wMm: box.wMm * faktorX, hMm: box.hMm * faktorY }),
+            ];
+          }),
+        ),
+      );
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setGriffAnzeige(null);
+      setPendingRects((r) => {
+        if (r.size > 0) {
+          void rechteckeSpeichern([...r].map(([slotId, rect]) => ({ slotId, rect })));
+        }
         return r;
       });
     };
@@ -1265,6 +1464,64 @@ export function useSpreadEditor({
   }
 
   /**
+   * Position und Größe mehrerer Bilder in einem Zug speichern.
+   *
+   * Der mengenwertige Zwilling zu `rechteckSpeichern`: ein Aufruf für die ganze
+   * Mehrfachauswahl, damit auch das Zurücknehmen ein Schritt ist und nicht n.
+   */
+  async function rechteckeSpeichern(entries: { slotId: string; rect: NormRect | null }[]) {
+    if (entries.length === 0) return;
+    try {
+      const data = await rechteckeSetzen(index, entries);
+      if (data.spread) {
+        onSpread(data.spread);
+        setPendingRects(new Map());
+        setBuchVersion((v) => v + 1);
+        onChanged();
+      }
+    } catch (e) {
+      setNote(`Position nicht gespeichert: ${fehlertext(e)}`);
+    }
+  }
+
+  /** Die Mehrfachauswahl gemeinsam auf den Platz aus der Vorlage zurücksetzen. */
+  async function gruppeInsRaster() {
+    const mitglieder = [...auswahlMenge].filter((id) => id !== BACKGROUND_SLOT_ID);
+    await rechteckeSpeichern(mitglieder.map((slotId) => ({ slotId, rect: null })));
+  }
+
+  /**
+   * Die Mehrfachauswahl gemeinsam aus dem Buch nehmen.
+   *
+   * Der mengenwertige Zug (`POST /api/book/move` mit `moves`) statt n
+   * Einzelzügen: ein Aufruf, ein Verlaufsschritt.
+   */
+  async function gruppeAusDemBuch() {
+    const mitglieder = [...auswahlMenge].filter((id) => id !== BACKGROUND_SLOT_ID);
+    if (mitglieder.length === 0) return;
+    setNote(null);
+    try {
+      const data = await fotosVerschieben(
+        mitglieder.map((slotId) => ({
+          source: { kind: 'slot' as const, spreadIndex: index, slotId },
+          target: { kind: 'pool' as const },
+        })),
+      );
+      const k = data.touched.indexOf(index);
+      const neu = k >= 0 ? data.spreads[k] : undefined;
+      if (neu) onSpread(neu);
+      setPendingCrop(null);
+      setMehrfachAuswahl(new Set());
+      if (data.touched.includes(index)) onSelect(null);
+      setBuchVersion((v) => v + 1);
+      poolLaden();
+      onChanged();
+    } catch (e) {
+      setNote(`Nicht entfernt: ${fehlertext(e)}`);
+    }
+  }
+
+  /**
    * War der letzte Zeigerweg ein Ziehen?
    *
    * Nach jedem Ziehen folgt ein Klick auf denselben Slot – der hätte die Griffe
@@ -1285,12 +1542,49 @@ export function useSpreadEditor({
    * Randabfallende Bilder überspringen die Drehung: Sie wäre kein
    * Gestaltungsmittel, sondern ein weißer Zwickel an der Papierkante. Gesagt
    * wird das dabei auch – ein Klick, der nur nichts tut, sähe wie ein Fehler aus.
+   *
+   * **Cmd/Ctrl-Klick fügt zur Auswahl hinzu oder nimmt heraus** – dieselbe
+   * Geste wie in der Gruppenliste und im Baum (`auswahl.ts`), nur ohne
+   * Umschalt-Bereich: Im freien Raum der Bühne gibt es keine sichtbare
+   * Reihenfolge, an der ein Bereich etwas Sinnvolles meinte. Trifft der Klick
+   * den Anker selbst, übernimmt ein anderes Mitglied den Anker; bleibt keines
+   * übrig, ist die Auswahl leer. Das Hintergrundbild bleibt außen vor, gleich
+   * ob als Anker oder als Ziel – es deckt die ganze Seite, eine Gruppe mit ihm
+   * ergäbe weder beim Verschieben noch bei der Hülle einen Sinn.
    */
-  function slotClick(slotId: string) {
+  function slotClick(slotId: string, e?: { metaKey: boolean; ctrlKey: boolean }) {
     if (gezogen.current) {
       gezogen.current = false;
       return;
     }
+
+    const mehrfach = !!e && (e.metaKey || e.ctrlKey);
+    if (
+      mehrfach &&
+      selectedSlotId &&
+      selectedSlotId !== BACKGROUND_SLOT_ID &&
+      slotId !== BACKGROUND_SLOT_ID
+    ) {
+      if (slotId === selectedSlotId) {
+        const rest = [...mehrfachAuswahl];
+        const naechster = rest.shift();
+        setMehrfachAuswahl(new Set(rest));
+        onSelect(naechster ?? null);
+        return;
+      }
+      setMehrfachAuswahl((bisher) => {
+        const next = new Set(bisher);
+        if (next.has(slotId)) next.delete(slotId);
+        else next.add(slotId);
+        return next;
+      });
+      return;
+    }
+
+    // Ein schlichter Klick verwirft die Mehrfachauswahl, wie überall sonst in
+    // der Oberfläche: Sonst sammelte sich beim Durchsehen unbemerkt an, was man
+    // längst nicht mehr meint.
+    setMehrfachAuswahl(new Set());
     if (slotId !== selectedSlotId) {
       onSelect(slotId);
       return;
@@ -2253,6 +2547,7 @@ export function useSpreadEditor({
     selectedSlotId,
     auswahlAufheben: () => onSelect(null),
     gewaehlteBox,
+    bildBox,
     istFreiGesetzt,
     infoVon,
     dateiname,
@@ -2264,6 +2559,15 @@ export function useSpreadEditor({
     anpassungStellen,
     ausschnittHinweis,
     kastenHinweis,
+
+    /**
+     * Mehrfachauswahl: der Anker plus zusätzlich per Cmd/Ctrl-Klick gewählte
+     * Bilder. `size <= 1` heißt „wie eine gewöhnliche Einzelauswahl".
+     */
+    auswahlMenge,
+    gruppeSkalieren,
+    gruppeInsRaster,
+    gruppeAusDemBuch,
 
     // Abnahme
     befundeVon,

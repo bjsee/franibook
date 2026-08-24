@@ -101,6 +101,16 @@ export const COVER_TEXT_NAMES: readonly CoverTextName[] = [
 export interface CoverTextStyle {
   family?: FontFamilyId;
   /**
+   * Ausrichtung innerhalb des Textkastens. Ohne Angabe `left` — bitgleich zu
+   * jedem Umschlag von vor dieser Angabe.
+   *
+   * Gilt im **eigenen** Koordinatensystem des Kastens, vor einer Drehung –
+   * derselbe Begriff, den `TextBox.align` im Innenteil für einen Textblock
+   * schon kennt. Am Rückentext (gedreht auf dem Rücken) verschiebt „rechts"
+   * deshalb das Ende der gedrehten Zeile, nicht die rechte Kante des Bogens.
+   */
+  align?: 'left' | 'center' | 'right';
+  /**
    * Schriftgröße in Punkt.
    *
    * Absolut und nicht als Faktor auf die gerechnete Größe: Punkt ist das Maß,
@@ -288,6 +298,7 @@ export const MAX_COVER_TEXT_PT = 240;
 const FARBE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const FONT_IDS: readonly string[] = ['sans', 'serif', 'hand', 'display'];
+const ALIGN_WERTE: readonly string[] = ['left', 'center', 'right'];
 
 /**
  * Ob eine Umschlaggestaltung brauchbar ist — und wenn nicht, warum.
@@ -322,6 +333,9 @@ export function pruefeCoverGestaltung(d: Partial<CoverDesign>): string | undefin
     if (!stil) continue;
     if (gesetzt(stil.family) && !FONT_IDS.includes(stil.family as string)) {
       return `Unbekannte Schrift für ${name}`;
+    }
+    if (gesetzt(stil.align) && !ALIGN_WERTE.includes(stil.align as string)) {
+      return `Unbekannte Ausrichtung für ${name}`;
     }
     if (gesetzt(stil.sizePt)) {
       const pt = stil.sizePt as number;

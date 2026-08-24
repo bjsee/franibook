@@ -181,6 +181,8 @@ function textBox(
     /** Textstil aus `render/typography.ts`. */
     styleName?: TextStyleName;
     family?: FontFamilyId;
+    /** Ohne Angabe `left` — wie vor `CoverTextStyle.align`. */
+    align?: 'left' | 'center' | 'right';
   } = {},
 ): CoverTextBox {
   // Größe und Schnitt kommen aus demselben Stilsatz wie im Innenteil – zwei
@@ -198,7 +200,7 @@ function textBox(
     // wären zwei Gelegenheiten, dass Zeile und Kasten auseinanderstehen.
     fontSizePt: textFontSizePt(rect.hMm, style),
     weight: style.weight,
-    align: 'left',
+    align: opt.align ?? 'left',
     color,
     ...(opt.family ? { family: opt.family } : {}),
     ...(opt.rotateDeg !== undefined ? { rotateDeg: opt.rotateDeg } : {}),
@@ -372,7 +374,11 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
           { xMm, yMm: titelY, wMm, hMm: titelH },
           d.title,
           farbeVon(titelStil, !!titelBalken),
-          { styleName: 'groupTitle', ...(titelStil.family ? { family: titelStil.family } : {}) },
+          {
+            styleName: 'groupTitle',
+            ...(titelStil.family ? { family: titelStil.family } : {}),
+            ...(titelStil.align ? { align: titelStil.align } : {}),
+          },
         ),
       );
     }
@@ -384,7 +390,10 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
           { xMm, yMm, wMm, hMm: subH },
           d.subtitle,
           farbeVon(subStil, !!subBalken),
-          subStil.family ? { family: subStil.family } : {},
+          {
+            ...(subStil.family ? { family: subStil.family } : {}),
+            ...(subStil.align ? { align: subStil.align } : {}),
+          },
         ),
       );
     }
@@ -418,7 +427,10 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
         { xMm: sicher.xMm, yMm, wMm: sicher.wMm, hMm },
         d.backText,
         backStil.color ?? (mitBalken ? d.accentText : d.accent) ?? '#1a1a1a',
-        backStil.family ? { family: backStil.family } : {},
+        {
+          ...(backStil.family ? { family: backStil.family } : {}),
+          ...(backStil.align ? { align: backStil.align } : {}),
+        },
       ),
     );
   }
@@ -464,7 +476,11 @@ export function renderCover(design: CoverDesign, ctx: CoverRenderContext): Rende
           },
           d.spineText,
           spineStil.color ?? d.accentText ?? '#ffffff',
-          { rotateDeg: 90, ...(spineStil.family ? { family: spineStil.family } : {}) },
+          {
+            rotateDeg: 90,
+            ...(spineStil.family ? { family: spineStil.family } : {}),
+            ...(spineStil.align ? { align: spineStil.align } : {}),
+          },
         ),
       );
     }
