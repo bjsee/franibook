@@ -10,7 +10,7 @@
  * könnte. Fehlt es, zeigt die Vorschau eine Systemschrift – auffällig genug,
  * und der Parity-Test schlägt an.
  */
-import { type CSSProperties, type DragEvent, type ReactNode, useId } from 'react';
+import { type CSSProperties, type DragEvent, type MouseEvent, type ReactNode, useId } from 'react';
 import {
   CSS_FONT_WEIGHT,
   type Crop,
@@ -70,7 +70,12 @@ export interface SpreadViewProps {
   /** Liefert die Bildquelle zu einer Foto-Kennung. */
   imageSrc: (photoId: string) => string;
   guides?: GuideVisibility;
-  onSlotClick?: (slotId: string) => void;
+  /**
+   * Reicht das Klickereignis mit durch – reine Weiterreichung, keine
+   * Bedienungsentscheidung: Ob ein Cmd/Ctrl-Klick eine Mehrfachauswahl meint,
+   * entscheidet der Aufrufer.
+   */
+  onSlotClick?: (slotId: string, e: MouseEvent<HTMLDivElement>) => void;
   /** Kennzeichnet den ausgewählten Slot. */
   selectedSlotId?: string;
   slotDrag?: SlotDragHandlers;
@@ -309,7 +314,7 @@ export function SpreadView({
             key={box.gutterPart ? `${box.slotId}:${box.gutterPart}` : box.slotId}
             data-testid={`slot-${box.slotId}`}
             data-dpi={Math.round(box.effectiveDpi)}
-            onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
+            onClick={onSlotClick ? (e) => onSlotClick(box.slotId, e) : undefined}
             {...dragProps(box.slotId, true)}
             style={{
               ...rect(box),
@@ -380,7 +385,7 @@ export function SpreadView({
           <div
             key={box.slotId}
             data-testid={`slot-${box.slotId}`}
-            onClick={onSlotClick ? () => onSlotClick(box.slotId) : undefined}
+            onClick={onSlotClick ? (e) => onSlotClick(box.slotId, e) : undefined}
             {...dragProps(box.slotId, false)}
             style={{
               ...rect(box),

@@ -597,6 +597,19 @@ export const doppelseiteLoeschen = (index: number) =>
     `/api/spreads/${index}`,
   );
 
+/**
+ * Verschiebt eine Doppelseite an eine andere Stelle im Buch.
+ *
+ * `nach` ist eine Lücke zwischen zwei Doppelseiten – dieselbe Zählung wie
+ * `at` beim Einfügen (`doppelseiteEinfuegen`).
+ */
+export const spreadVerschieben = (von: number, nach: number) =>
+  sende<{ ok: boolean; index: number; spreadCount: number }>(
+    'PATCH',
+    `/api/spreads/${von}/position`,
+    { nach },
+  );
+
 export const buchseiteLoeschen = (atPage: number) =>
   sende<{
     ok: boolean;
@@ -604,6 +617,19 @@ export const buchseiteLoeschen = (atPage: number) =>
     photoCount: number;
     bericht?: Umpaarbericht;
   }>('DELETE', `/api/spreads/page/${atPage}`);
+
+/**
+ * Verschiebt eine einzelne Buchseite an eine andere Stelle im Buch.
+ *
+ * `nach` ist eine Lücke in der Buchseitenfolge – dieselbe Zählung wie `atPage`
+ * beim Einfügen (`buchseiteEinfuegen`).
+ */
+export const buchseiteVerschieben = (atPage: number, nach: number) =>
+  sende<{ ok: boolean; index: number; spreadCount: number; bericht?: Umpaarbericht }>(
+    'PATCH',
+    `/api/spreads/page/${atPage}/position`,
+    { nach },
+  );
 
 /** Zeitstrahl dieser einen Doppelseite, abweichend von der Vorgabe. */
 export const zeitstrahlSetzen = (index: number, timeline: boolean | null) =>
@@ -838,6 +864,16 @@ export const neigungSetzen = (index: number, slotId: string, deg: number | null)
 
 export const rechteckSetzen = (index: number, slotId: string, rect: NormRect | null) =>
   sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/${slotId}/rect`, { rect });
+
+/**
+ * Setzt Position und Größe mehrerer Bilder derselben Doppelseite in einem Zug –
+ * für eine Mehrfachauswahl gemeinsam verschoben oder skaliert. Ein Aufruf, ein
+ * Verlaufsschritt, statt einem je Bild.
+ */
+export const rechteckeSetzen = (
+  index: number,
+  rects: { slotId: string; rect: NormRect | null }[],
+) => sende<SpreadAntwort>('PATCH', `/api/spreads/${index}/slots/rects`, { rects });
 
 /** `frame: null` heißt „wie das Buch", `'keiner'` heißt „ausdrücklich ohne". */
 export const rahmenSetzen = (index: number, slotId: string, frame: FrameId | null) =>

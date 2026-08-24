@@ -64,6 +64,7 @@ const HINWEIS = {
     'Höhe ändert die Schriftgröße, Breite nur den Kasten · Klick auf den Text schaltet aufs Drehen',
   textDrehen:
     'Ziehen dreht den Text · Umschalt rastet auf 15° · Klick auf den Text schaltet zurück',
+  gruppeGroesse: 'Ziehen ändert die Größe der ganzen Auswahl · Umschalt hält das Seitenverhältnis',
 };
 
 interface RahmenProps {
@@ -133,7 +134,7 @@ function GriffRahmen({
 }
 
 export function Griffe({ model }: { model: SpreadEditorModel }) {
-  const { gewaehlteBox, pxPerMm, griffModus, griffAnzeige, neigungGesperrt } = model;
+  const { gewaehlteBox, pxPerMm, griffModus, griffAnzeige, neigungGesperrt, auswahlMenge } = model;
 
   /** Der Text, an dem gerade gearbeitet wird – Block oder Vorlagentext. */
   const text = model.textId ? model.texte.find((t) => t.id === model.textId) : undefined;
@@ -142,7 +143,32 @@ export function Griffe({ model }: { model: SpreadEditorModel }) {
   // Bildauswahl auf und umgekehrt.
   let rahmen: RahmenProps | undefined;
 
-  if (gewaehlteBox) {
+  if (auswahlMenge.size > 1) {
+    /*
+     * Die Hülle um mehrere gewählte Bilder – immer gerade, nie die drei Stufen
+     * des Einzelbilds: Ein Gruppendrehen ist bewusst nicht im Umfang (siehe
+     * `gruppeSkalieren`), also gibt es hier auch keinen Klickzyklus, der eines
+     * anböte.
+     */
+    const boxen = [...auswahlMenge].map((id) => model.bildBox(id)).filter((b) => !!b);
+    if (boxen.length > 1) {
+      const x0 = Math.min(...boxen.map((b) => b.xMm));
+      const y0 = Math.min(...boxen.map((b) => b.yMm));
+      const x1 = Math.max(...boxen.map((b) => b.xMm + b.wMm));
+      const y1 = Math.max(...boxen.map((b) => b.yMm + b.hMm));
+      rahmen = {
+        links: x0 * pxPerMm,
+        oben: y0 * pxPerMm,
+        breite: (x1 - x0) * pxPerMm,
+        hoehe: (y1 - y0) * pxPerMm,
+        rotateDeg: 0,
+        drehen: false,
+        titel: HINWEIS.gruppeGroesse,
+        onGriff: model.gruppeSkalieren,
+        onDreh: () => {},
+      };
+    }
+  } else if (gewaehlteBox) {
     // Erste Stufe: nur gewählt. Der blaue Rand steht, die Hand kann schieben und
     // den Ausschnitt fassen – Griffe hätte man dabei nur im Weg.
     if (griffModus === 'keine') return null;

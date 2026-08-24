@@ -17,6 +17,7 @@ import { B, MASSE, T } from '../theme.js';
 import type { TextBlockData } from '../TextBlocks.js';
 import { BildPanel } from './BildPanel.js';
 import { Fotopool, poolZahl } from './Fotopool.js';
+import { Mehrfachauswahl } from './Mehrfachauswahl.js';
 import { Nachbarn } from './Nachbarn.js';
 import { SeitenPanel } from './SeitenPanel.js';
 import { SpreadStage } from './SpreadStage.js';
@@ -125,7 +126,9 @@ export function Inspektor({ model, aussen, spread, imageSrc }: Props) {
       </div>
 
       <aside style={S.spalte}>
-        {model.gewaehlteBox ? (
+        {model.auswahlMenge.size > 1 ? (
+          <Mehrfachauswahl model={model} />
+        ) : model.gewaehlteBox ? (
           <BildPanel model={model} />
         ) : model.selectedSlotId ? (
           <div style={{ ...B.abschnitt, borderBottom: 'none' }}>

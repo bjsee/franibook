@@ -142,6 +142,15 @@ export function dreheAusschnitte(
  * Arbeit ist. **Eine namentlich gewählte Vorlage bleibt erlaubt**, und das ist
  * der Unterschied: Jede eingefügte Doppelseite ist `locked` (`.claude/rules/
  * anordnen.md`), also wäre sie sonst die einzige, die man nie gestalten könnte.
+ *
+ * **Ein von Hand gesetzter Vorlagentext wird beim Vorlagenwechsel
+ * zurückgesetzt**, wenn sein Textplatz auch in der neuen Vorlage steht. Ohne
+ * das bliebe die Jahreszahl eines Auftakts an ihrer alten Stelle hängen, selbst
+ * wenn die neue Vorlage sie auf die andere Buchseite legt — der Griff
+ * verspricht „diese Vorlage", nicht „diese Vorlage, außer wo schon einmal
+ * gezogen wurde". Nur bei einem echten Wechsel, nicht bei `auto` auf derselben
+ * Vorlage: Dort hätte niemand etwas verlangt, das die Handarbeit rechtfertigt,
+ * sie zu verwerfen.
  */
 export function setSpreadTemplate(
   z: Bestand,
@@ -195,10 +204,28 @@ export function setSpreadTemplate(
     templateById(spread.templateId),
     templateById(angeordnet.templateId),
   );
+  const templateWechselt = angeordnet.templateId !== spread.templateId;
   spread.templateId = angeordnet.templateId;
   spread.slots = angeordnet.slots;
   if (uebrig.length > 0) spread.hiddenSlots = uebrig;
   else delete spread.hiddenSlots;
+
+  // Ein von Hand gesetzter Vorlagentext gehört zur Geometrie der alten Vorlage
+  // – seine rohen Koordinaten sagen in der neuen etwas anderes, bei einem
+  // gespiegelten Auftakt sogar die falsche Buchseite. Existiert sein Textplatz
+  // dort weiter, fällt er auf den Platz der neuen Vorlage zurück, statt an
+  // seiner alten Rohposition hängenzubleiben.
+  if (templateWechselt && spread.texts) {
+    const neueTextSlots = new Set(
+      (templateById(angeordnet.templateId)?.textSlots ?? []).map((t) => t.id),
+    );
+    for (const text of spread.texts) {
+      if (!neueTextSlots.has(text.slotId)) continue;
+      delete text.rect;
+      delete text.rotateDeg;
+    }
+  }
+
   return { ok: true, leftover: angeordnet.leftover };
 }
 

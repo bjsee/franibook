@@ -38,6 +38,7 @@ import {
   type RenderedCover,
   type RenderedSpread,
   type SinglePageResult,
+  type SlotAssignment,
   type Spread,
   type Buchseite,
   type Wunsch,
@@ -1605,8 +1606,25 @@ export class Project {
     return ergebnis;
   }
 
+  /** Verschiebt eine einzelne Buchseite an eine andere Stelle im Buch. */
+  moveSinglePage(
+    vonPage: number,
+    nachPage: number,
+  ): { ok: boolean; error?: string; index: number; bericht?: SinglePageResult['bericht'] } {
+    const ergebnis = seiten.moveSinglePage(this, vonPage, nachPage);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
+  }
+
   removeSpread(index: number): { ok: boolean; error?: string; photoCount: number } {
     const ergebnis = seiten.removeSpread(this, index);
+    if (ergebnis.ok) this.refreshReport();
+    return ergebnis;
+  }
+
+  /** Verschiebt eine Doppelseite an eine andere Stelle im Buch. */
+  moveSpread(von: number, nach: number): { ok: boolean; error?: string; index: number } {
+    const ergebnis = seiten.moveSpread(this, von, nach);
     if (ergebnis.ok) this.refreshReport();
     return ergebnis;
   }
@@ -1798,14 +1816,32 @@ export class Project {
   }
 
   /**
-   * Setzt Position und Größe eines Bildes von Hand – oder zurück auf die Vorlage.
+   * Klemmt ein von Hand gesetztes Rechteck auf die Beschnittfläche – oder
+   * meldet, warum es das nicht ist.
    *
-   * `rect === null` heißt zurück ins Raster. Die Werte sind normiert wie ein
-   * Templateslot und werden auf die Beschnittfläche geklemmt: Ein Bild ganz
-   * außerhalb der Seite wäre kein Gestaltungsmittel, sondern ein verlorenes
-   * Foto. Über die Endformatkante hinaus darf es sehr wohl – randabfallend ist
-   * gewollt, dafür ist der Beschnitt da.
+   * `rect === null` heißt zurück ins Raster. Über die Endformatkante hinaus
+   * darf ein Bild sehr wohl liegen – randabfallend ist gewollt, dafür ist der
+   * Beschnitt da; ganz außerhalb der Seite wäre dagegen kein Gestaltungsmittel,
+   * sondern ein verlorenes Foto. Geteilt von `setSlotRect` und `setSlotRects`,
+   * damit ein Bild und eine Mehrfachauswahl an derselben Grenze scheitern.
    */
+  private klemmeRect(
+    rect: { x: number; y: number; w: number; h: number } | null,
+  ):
+    | { ok: true; rect: { x: number; y: number; w: number; h: number } | null }
+    | { ok: false; error: string } {
+    if (rect === null) return { ok: true, rect: null };
+
+    const zahlen = [rect.x, rect.y, rect.w, rect.h];
+    if (!zahlen.every((v) => Number.isFinite(v))) {
+      return { ok: false, error: 'Position ist keine Zahl' };
+    }
+    if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
+
+    return { ok: true, rect: aufsBlatt(rect, this.profile) };
+  }
+
+  /** Setzt Position und Größe eines Bildes von Hand – oder zurück auf die Vorlage. */
   setSlotRect(
     index: number,
     slotId: string,
@@ -1817,18 +1853,51 @@ export class Project {
     const slot = spread.slots.find((s) => s.slotId === slotId);
     if (!slot) return { ok: false, error: 'Slot nicht gefunden' };
 
-    if (rect === null) {
-      delete slot.rect;
-      return { ok: true };
+    const geklemmt = this.klemmeRect(rect);
+    if (!geklemmt.ok) return geklemmt;
+
+    if (geklemmt.rect === null) delete slot.rect;
+    else slot.rect = geklemmt.rect;
+    return { ok: true };
+  }
+
+  /**
+   * Setzt Position und Größe mehrerer Bilder derselben Doppelseite in einem Zug.
+   *
+   * Dieselbe Klemmung wie `setSlotRect`, nur für eine Menge: eine Mehrfachauswahl
+   * gemeinsam verschoben oder skaliert ist ein Aufruf und ein Cmd+Z, nicht n
+   * davon. Ein unbekannter Slot bricht die ganze Menge ab – teilweise
+   * angewendet wäre die Auswahl danach nicht mehr die, die man gezogen hat.
+   * Deshalb erst alle Einträge prüfen und die Slots dabei gleich auflösen,
+   * dann erst schreiben.
+   */
+  setSlotRects(
+    index: number,
+    rects: readonly {
+      slotId: string;
+      rect: { x: number; y: number; w: number; h: number } | null;
+    }[],
+  ): { ok: boolean; error?: string } {
+    const spread = this.spreads[index];
+    if (!spread) return { ok: false, error: 'Doppelseite nicht gefunden' };
+
+    const geplant: {
+      slot: SlotAssignment;
+      rect: { x: number; y: number; w: number; h: number } | null;
+    }[] = [];
+    for (const { slotId, rect } of rects) {
+      const slot = spread.slots.find((s) => s.slotId === slotId);
+      if (!slot) return { ok: false, error: `Slot ${slotId} nicht gefunden` };
+
+      const geklemmt = this.klemmeRect(rect);
+      if (!geklemmt.ok) return geklemmt;
+      geplant.push({ slot, rect: geklemmt.rect });
     }
 
-    const zahlen = [rect.x, rect.y, rect.w, rect.h];
-    if (!zahlen.every((v) => Number.isFinite(v))) {
-      return { ok: false, error: 'Position ist keine Zahl' };
+    for (const { slot, rect } of geplant) {
+      if (rect === null) delete slot.rect;
+      else slot.rect = rect;
     }
-    if (rect.w <= 0 || rect.h <= 0) return { ok: false, error: 'Größe muss positiv sein' };
-
-    slot.rect = aufsBlatt(rect, this.profile);
     return { ok: true };
   }
 

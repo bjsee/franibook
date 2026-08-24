@@ -88,6 +88,27 @@ function amSlot(was: string): Ausleser<string> {
 }
 
 /**
+ * Ein Schlüssel je Bildmenge: `<was>:<doppelseite>:<slots sortiert>`.
+ *
+ * Sortiert, damit dieselbe Auswahl denselben Schlüssel ergibt, gleich in
+ * welcher Reihenfolge die Kennungen im Rumpf standen – sonst verschmölze ein
+ * Zug, der zufällig zweimal dieselbe Menge in derselben Klick-Reihenfolge
+ * trifft, aber nicht der, der sie in anderer Reihenfolge trifft.
+ */
+function amSlots(was: string): Ausleser<string> {
+  return (p, body) => {
+    const rects = (body as { rects?: { slotId?: unknown }[] } | null)?.rects;
+    const slots = Array.isArray(rects)
+      ? rects
+          .map((r) => r.slotId)
+          .filter((id): id is string => typeof id === 'string')
+          .sort()
+      : [];
+    return `${was}:${p['index'] ?? '?'}:${slots.join(',')}`;
+  };
+}
+
+/**
  * Welche Route was ändert.
  *
  * Schlüssel ist `METHODE /pfad/mit/:parametern`, genau wie die Route angemeldet
@@ -189,6 +210,17 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     spreadIndex: ausSeite,
   },
   'DELETE /api/spreads/:index': { label: 'Doppelseite herausgenommen', spreadIndex: ausIndex },
+  'PATCH /api/spreads/:index/position': {
+    label: 'Doppelseite verschoben',
+    spreadIndex: ausIndex,
+  },
+  // Kann jedes Blatt dahinter neu paaren, wie beim Einfügen und Herausnehmen
+  // einer einzelnen Seite – dieselbe Einstufung als Anker.
+  'PATCH /api/spreads/page/:atPage/position': {
+    label: 'Buchseite verschoben',
+    anker: true,
+    spreadIndex: ausSeite,
+  },
   // Der Schlüssel hängt an Seite **und** Buchseite: Wer zweimal auf „größer"
   // drückt, hat einmal etwas gewollt – aber links und rechts sind zwei
   // Entscheidungen, und die dürfen nicht zu einer verschmelzen.
@@ -284,6 +316,16 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
     label: 'Bild gesetzt',
     spreadIndex: ausIndex,
     schluessel: amSlot('platz'),
+  },
+  // Die mengenwertige Fassung, für eine Mehrfachauswahl auf der Bühne: ein
+  // Aufruf für n Bilder, also auch ein Verschmelzschlüssel für n Bilder.
+  'PATCH /api/spreads/:index/slots/rects': {
+    label: (_p, body) => {
+      const n = ((body as { rects?: unknown[] } | null)?.rects ?? []).length;
+      return n > 1 ? `${n} Bilder gesetzt` : 'Bild gesetzt';
+    },
+    spreadIndex: ausIndex,
+    schluessel: amSlots('platz-mehrfach'),
   },
   'PATCH /api/spreads/:index/slots/:slotId/layer': {
     label: 'Ebene geändert',

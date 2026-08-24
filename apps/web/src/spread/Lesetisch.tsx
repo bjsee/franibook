@@ -149,7 +149,11 @@ export function Lesetisch({ model, aussen, spread, imageSrc }: Props) {
         </span>
       </div>
 
-      {model.gewaehlteBox && <BildLeiste model={model} />}
+      {model.auswahlMenge.size > 1 ? (
+        <MehrfachauswahlLeiste model={model} />
+      ) : (
+        model.gewaehlteBox && <BildLeiste model={model} />
+      )}
 
       {poolOffen && (
         <div
@@ -244,6 +248,46 @@ function Filmstreifen({ model, aussen }: { model: SpreadEditorModel; aussen: Spr
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Die Werkzeuge der Mehrfachauswahl als eine Zeile über der Bühne.
+ *
+ * Verschieben und Skalieren laufen über die Griffe auf der Bühne selbst
+ * (`Griffe.tsx`); hier stehen nur die beiden Griffe, die einen eigenen Ort
+ * brauchen. Dieselbe Handlung wie `Mehrfachauswahl.tsx` im Inspektor, nur als
+ * Zeile statt als Spalte – der Lesetisch kennt keine feste Spalte.
+ */
+function MehrfachauswahlLeiste({ model }: { model: SpreadEditorModel }) {
+  const n = model.auswahlMenge.size;
+
+  return (
+    <div style={S.leiste}>
+      <strong style={B.dateiname}>{n} Bilder ausgewählt</strong>
+      <span style={B.trenner} />
+      <button onClick={() => void model.gruppeInsRaster()} style={B.pilleAus}>
+        Auf Raster zurücksetzen
+      </button>
+      <button
+        onClick={() => {
+          if (
+            window.confirm(
+              `${n} Bilder aus dem Buch nehmen?\n\nSie wandern in den Fotopool, verloren ist keines.`,
+            )
+          ) {
+            void model.gruppeAusDemBuch();
+          }
+        }}
+        style={{ ...B.pilleAus, color: T.fehler }}
+      >
+        Aus dem Buch entfernen
+      </button>
+      <span style={B.trenner} />
+      <button onClick={model.auswahlAufheben} style={S.rundKlein} title="Auswahl aufheben (Esc)">
+        ×
+      </button>
     </div>
   );
 }

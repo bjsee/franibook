@@ -51,6 +51,7 @@ import {
 import { isJustified } from '../templates/justified.js';
 import { templateById, templateMeta } from '../templates/index.js';
 import { einwurfPlatzId } from './einwurf.js';
+import { ankerNeben } from './keep.js';
 import { chooseHalf, layoutHalf } from './rebuild.js';
 
 /**
@@ -935,6 +936,122 @@ export function insertSinglePage(
   }
 
   return paareNeu(folge, spreads, verbraucht);
+}
+
+/**
+ * Verschiebt eine einzelne Buchseite an eine andere Stelle im Buch.
+ *
+ * Dieselbe Zerlegung wie beim Einfügen und Herausnehmen: Die Seite fällt aus
+ * der Folge und wird an der neuen Stelle wieder eingesetzt, mit genau dem
+ * Inhalt, den sie schon trug – Ausschnitt, Rahmen, Unterschrift, Ebene, freie
+ * Kästen und Textblöcke reisen mit, denn es ist dieselbe `BookPage`, nicht eine
+ * neue. Die Folge wird danach neu zu Blättern gepaart; anders als beim
+ * Einfügen wächst das Buch dabei nicht zwangsläufig, aber die Parität kann an
+ * beiden berührten Stellen kippen, und `paareNeu` schafft wie gewohnt eine
+ * leere Halbseite, wo eine fehlt.
+ *
+ * `nachPage` ist eine Lücke in der Buchseitenfolge **vor** dem Herausnehmen –
+ * dieselbe Zählung wie `atPage` beim Einfügen (`insertSinglePage`).
+ *
+ * Nicht möglich an einem Blatt, das sich nicht an der Falzachse trennen lässt
+ * (Auftakt, justierte Zeile, Hintergrundbild über beide Seiten) – dieselbe
+ * Absage wie beim Herausnehmen. Ein festgehaltenes Blatt wird für diesen einen
+ * Griff getrennt, wie beim Herausnehmen auch: Wer eine seiner Seiten
+ * verschiebt, verlangt genau das – und verliert damit das Schloss für beide
+ * Hälften, denn ein ganzes Schloss kennt keine `own`-Halbseite, an der es
+ * hängen bleiben könnte. War die verschobene Seite dagegen schon halb für sich
+ * festgehalten (`lockedSide`), bleibt sie es und bekommt einen frischen Anker
+ * auf ihren neuen Nachbarn – wie beim Festhalten selbst.
+ */
+export function moveSinglePage(
+  spreads: readonly Spread[],
+  vonPage: number,
+  nachPage: number,
+): SinglePageResult {
+  let folge = buchseitenfolge(spreads);
+  const seitenzahl = folge.reduce((n, e) => n + e.span, 0);
+  const von = Math.trunc(vonPage);
+  if (von < 0 || von >= seitenzahl) {
+    return { ok: false, error: `Buchseite ${von + 1} gibt es nicht`, spreads: [...spreads] };
+  }
+
+  let quelle = eintragAn(folge, von);
+
+  // Trifft es ein festgehaltenes Blatt, wird es für diesen einen Griff
+  // getrennt – dieselbe Ausnahme wie beim Herausnehmen einer einzelnen Seite.
+  const getroffen = folge[quelle];
+  if (getroffen?.span === 2 && getroffen.spread?.locked && teilbar(getroffen.spread)) {
+    folge = buchseitenfolge(spreads, new Set([getroffen.spread.id]));
+    quelle = eintragAn(folge, von);
+  }
+
+  const eintrag = folge[quelle];
+  if (!eintrag) return { ok: false, error: 'Buchseite nicht gefunden', spreads: [...spreads] };
+  if (eintrag.span === 2) {
+    return {
+      ok: false,
+      error:
+        'Diese Doppelseite lässt sich nicht in einzelne Seiten trennen – ' +
+        'verschiebe die ganze Doppelseite in der Übersicht.',
+      spreads: [...spreads],
+    };
+  }
+
+  // Dieselbe Lücken-Rechnung wie bei einer verschobenen Doppelseite: `nachPage`
+  // zählt vor dem Herausnehmen, `zielStelle` danach. Trifft die Lücke die alte
+  // Stelle der Seite genau, ist der Zug wirkungslos – ohne diese Abkürzung
+  // suchte die Ersparnis weiter unten nach einer leeren Halbseite, die es gar
+  // nicht zu verbrauchen gab.
+  const zielLuecke = Math.min(Math.max(0, Math.trunc(nachPage)), seitenzahl);
+  const zielStelle = zielLuecke > von ? zielLuecke - 1 : zielLuecke;
+  if (zielStelle === von) return { ok: true, spreads: [...spreads] };
+
+  folge.splice(quelle, 1);
+  const einfuegeIndex = folgeIndexVon(folge, zielStelle);
+  folge.splice(einfuegeIndex, 0, eintrag);
+
+  // Dieselbe Ersparnis wie beim Einfügen: eine ohnehin leere Halbseite hinter
+  // der neuen Stelle wird verbraucht, statt das Buch wachsen zu lassen.
+  let verbraucht = false;
+  for (let i = einfuegeIndex + 1; i < folge.length; i++) {
+    const kandidat = folge[i]!;
+    if (kandidat.span === 2) break;
+    const traegt =
+      (kandidat.slots ?? []).some((s) => s.photoId) || (kandidat.blocks ?? []).length > 0;
+    if (kandidat.halfId === HALF_BLANK_ID && !traegt && !kandidat.own) {
+      folge.splice(i, 1);
+      verbraucht = true;
+      break;
+    }
+  }
+
+  const ergebnis = paareNeu(folge, spreads, verbraucht);
+  if (!ergebnis.ok || !eintrag.own) return ergebnis;
+
+  // Die verschobene Seite war für sich festgehalten – ihr Anker muss auf den
+  // Nachbarn zeigen, den sie jetzt hat, sonst fiele sie beim nächsten
+  // Neuaufbau auf die Stelle von vorhin zurück.
+  const zielIndex = ergebnis.spreads.findIndex((s) => s.id === eintrag.from);
+  if (zielIndex < 0) return ergebnis;
+
+  const ziel = ergebnis.spreads[zielIndex]!;
+  const eigenePhotos = new Set(ziel.slots.map((s) => s.photoId));
+  // `zielIndex` selbst ausgenommen: Ohne das fände die Rückwärtssuche, wenn
+  // vorwärts kein Nachbar mehr im Fluss läuft, das eigene Bild dieser Seite –
+  // `ausgenommen` sonst prüft nur `spread.locked`, ein `lockedSide` schützt
+  // sich hier nicht selbst.
+  const anker = ankerNeben(ergebnis.spreads, zielIndex + 1, new Set([zielIndex]));
+  const neuerAnker = anker && !eigenePhotos.has(anker.photoId) ? anker : undefined;
+
+  return {
+    ...ergebnis,
+    spreads: ergebnis.spreads.map((s, i) => {
+      if (i !== zielIndex) return s;
+      if (neuerAnker) return { ...s, anchor: neuerAnker };
+      const { anchor: _weg, ...ohne } = s;
+      return ohne;
+    }),
+  };
 }
 
 /**
