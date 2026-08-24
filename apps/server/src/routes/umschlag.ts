@@ -12,14 +12,66 @@ import {
   pruefeCoverGestaltung,
   pruefeCoverMosaic,
   type CoverDesign,
+  type PhotoId,
 } from '@franibook/core';
-import { renderCoverPdf } from '@franibook/render-pdf';
+import { renderCoverPdf, type PhotoSource } from '@franibook/render-pdf';
 import type { CoverPatch } from '../project/umschlag.js';
 import { MOSAIK_VORSCHAU_PX } from '../project/umschlagmosaik.js';
 import { coverAntwort, EXPORT_DATEINAME, istDateiFehler, type Kontext } from './kontext.js';
 
 /** Ein Abdruck ist eine Base-36-Zahl — nichts, was in einem Pfad etwas bedeutet. */
 const MOSAIK_ABDRUCK = /^[a-z0-9]{1,16}$/;
+
+/**
+ * Löst eine Bildkennung des Umschlags auf – Foto oder gebackenes Mosaik.
+ *
+ * Backt dafür zuerst in Zielauflösung nach (`umschlagmosaikeSicherstellen(…,
+ * true)`): Der Export ist die eine Gelegenheit, bei der die Wartezeit
+ * gerechtfertigt ist, anders als die Vorschaugröße der Oberfläche.
+ *
+ * Eigene Funktion und nicht Teil von `/api/export/cover`, weil auch der
+ * kombinierte Export (`buch.ts`, `/api/export/pdf-mit-umschlag`) denselben
+ * Umschlag auflösen muss – dieselbe `resolvePhoto` für zwei Aufrufer wäre sonst
+ * zweimal geschrieben und irgendwann zweimal verschieden.
+ */
+export async function coverFotosAufloesen({
+  project,
+  previews,
+  cacheDir,
+  sources,
+}: Pick<Kontext, 'project' | 'previews' | 'cacheDir' | 'sources'>): Promise<
+  | { ok: true; resolvePhoto: (photoId: PhotoId) => PhotoSource | undefined }
+  | { ok: false; error: string }
+> {
+  const mosaik = await project.umschlagmosaikeSicherstellen(previews, cacheDir, true);
+  if (!mosaik.ok) return { ok: false, error: mosaik.error };
+
+  // Nach Kennung und nicht nach Deckel nachgeschlagen: Der Auflöser bekommt
+  // eine `photoId` und weiß nicht, auf welcher Seite sie liegt — und beide
+  // Mosaike können dieselbe sein, wenn zufällig derselbe Plan herauskam.
+  const gebacken = new Map(
+    [project.titelmosaik, project.rueckmosaik]
+      .filter((m) => m !== undefined)
+      .map((m) => [m.photoId, m] as const),
+  );
+
+  return {
+    ok: true,
+    resolvePhoto: (photoId) => {
+      // Das Mosaik ist kein Foto des Bestands und hat keine Quelle — es liegt
+      // fertig im Cache. Beide Fälle hier und nicht in `Sources`: Dort geht es
+      // um Bildquellen auf der Platte, und ein abgeleitetes Bild ist keine.
+      if (istMosaikId(photoId)) {
+        const datei = gebacken.get(photoId)?.druckDatei;
+        if (!datei) return undefined;
+        return { path: join(cacheDir, 'mosaik', datei), orientation: 1 };
+      }
+      const photo = project.photo(photoId);
+      if (!photo) return undefined;
+      return { path: sources.pfad(photo), orientation: photo.orientation };
+    },
+  };
+}
 
 export function umschlagRouten(
   app: FastifyInstance,
@@ -115,42 +167,20 @@ export function umschlagRouten(
     await mkdir(outDir, { recursive: true });
     const outputPath = join(outDir, fileName);
 
-    // Jetzt in Zielauflösung, nicht in Vorschaugröße: Der Export ist die eine
-    // Gelegenheit, bei der die Wartezeit gerechtfertigt ist.
-    const mosaik = await project.umschlagmosaikeSicherstellen(previews, cacheDir, true);
-    if (!mosaik.ok) {
-      return reply
-        .code(409)
-        .send({ ok: false, error: `Ein Umschlagmosaik ließ sich nicht bauen: ${mosaik.error}` });
+    const aufgeloest = await coverFotosAufloesen({ project, previews, cacheDir, sources });
+    if (!aufgeloest.ok) {
+      return reply.code(409).send({
+        ok: false,
+        error: `Ein Umschlagmosaik ließ sich nicht bauen: ${aufgeloest.error}`,
+      });
     }
-    // Nach Kennung und nicht nach Deckel nachgeschlagen: Der Auflöser bekommt
-    // eine `photoId` und weiß nicht, auf welcher Seite sie liegt — und beide
-    // Mosaike können dieselbe sein, wenn zufällig derselbe Plan herauskam.
-    const gebacken = new Map(
-      [project.titelmosaik, project.rueckmosaik]
-        .filter((m) => m !== undefined)
-        .map((m) => [m.photoId, m] as const),
-    );
 
     try {
       const result = await renderCoverPdf({
         cover: project.renderCover(),
         profile: project.profile,
         outputPath,
-        resolvePhoto: (photoId) => {
-          // Das Mosaik ist kein Foto des Bestands und hat keine Quelle — es
-          // liegt fertig im Cache. Beide Fälle hier und nicht in `Sources`:
-          // Dort geht es um Bildquellen auf der Platte, und ein abgeleitetes
-          // Bild ist keine.
-          if (istMosaikId(photoId)) {
-            const datei = gebacken.get(photoId)?.druckDatei;
-            if (!datei) return undefined;
-            return { path: join(cacheDir, 'mosaik', datei), orientation: 1 };
-          }
-          const photo = project.photo(photoId);
-          if (!photo) return undefined;
-          return { path: sources.pfad(photo), orientation: photo.orientation };
-        },
+        resolvePhoto: aufgeloest.resolvePhoto,
       });
 
       // `fileName` neben `outputPath`, wie beim Innenteil: Er ist die Adresse

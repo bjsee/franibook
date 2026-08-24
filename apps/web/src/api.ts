@@ -1801,6 +1801,16 @@ export const pdfExportieren = (spreadIndex?: number) =>
   );
 
 /**
+ * Umschlag und Innenteil in einer Datei, mit dem Umschlag als erster Seite.
+ *
+ * Für den einen Uploadweg des Anbieters, der eine einzige Datei erwartet —
+ * der normale Weg mit zwei getrennten Dateien (`pdfExportieren`,
+ * `umschlagExportieren`) bleibt daneben bestehen.
+ */
+export const pdfMitUmschlagExportieren = () =>
+  sende<ExportErgebnis & { coverHints: string[] }>('POST', '/api/export/pdf-mit-umschlag', {});
+
+/**
  * Der Korrekturabzug — immer das ganze Buch.
  *
  * Ohne Doppelseitenwahl, anders als beim Druck-PDF: Eine einzelne Seite sieht

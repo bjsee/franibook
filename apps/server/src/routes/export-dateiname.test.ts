@@ -69,6 +69,18 @@ describe('Export-Dateiname', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('lehnt einen Pfad-Traversal-Namen beim kombinierten Export ab', async () => {
+    const { app } = await probe();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/export/pdf-mit-umschlag',
+      payload: { fileName: '../../../evil.pdf' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('lehnt einen Pfad-Traversal-Namen beim Korrekturabzug ab', async () => {
     const { app } = await probe();
 
