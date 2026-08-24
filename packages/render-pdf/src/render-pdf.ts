@@ -222,6 +222,16 @@ export async function renderPdf(opts: RenderPdfOptions): Promise<RenderPdfResult
       // transparent, was im Druck zu unvorhersehbaren Ergebnissen führt.
       doc.rect(0, 0, mmToPt(slice.widthMm), mmToPt(slice.heightMm)).fill(spread.background);
 
+      // Derselbe Griff wie in `zeichneAbzugsblatt`: pdfkit legt selbsttätig
+      // eine neue, hier unbemalte Seite an, sobald eine Textzeile nach seiner
+      // eigenen Zeilenhöhe (Ascender + LineGap + Descender, nicht die
+      // schmalere `capHeightMm` des Modells) über den unteren Rand
+      // hinausragt — auch wenn die Box selbst innerhalb der Seite liegt. Bei
+      // einer Textbox dicht am unteren Rand (Seitenzahl, Zeitstrahl) reicht
+      // das schon. Angehoben wird nur die Zahl, an der pdfkit den Umbruch
+      // misst; die MediaBox aus `addPage` bleibt unberührt.
+      doc.page.height = mmToPt(slice.heightMm) * 2;
+
       await zeichneBoxen(doc, spread.boxes, slice, ctx);
     }
   }
