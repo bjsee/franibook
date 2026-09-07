@@ -25,7 +25,7 @@ import {
   defaultProfile,
 } from '@franibook/core';
 import type { PreviewSize } from '../previews.js';
-import { backeUmschlagmosaik } from './umschlagmosaik.js';
+import { backePosterMosaik, backeUmschlagmosaik } from './umschlagmosaik.js';
 
 /** Ein Foto mit Farbwerten — mehr braucht die Zuordnung nicht. */
 function foto(id: string, farbe: Rgb): Photo {
@@ -150,5 +150,30 @@ describe('Titelmosaik backen', () => {
         join(ordner, 'cache-4'),
       ),
     ).rejects.toThrow(/nicht mehr im Bestand/);
+  });
+});
+
+describe('Poster-Mosaik backen', () => {
+  const profile = defaultProfile();
+
+  // Derselbe Fehler wie oben, an einer zweiten Stelle: `backePosterMosaik`
+  // teilt sich mit `backeUmschlagmosaik` dieselbe Bildauflösung
+  // (`effectivePhotos` + `bilder.get`), hat aber keinen eigenen Test dafür —
+  // ein Refactor, das nur den Poster-Pfad bricht, fiele sonst nicht auf.
+  it('holt die Kacheln in der Fassung, für die der Plan gerechnet ist', async () => {
+    const photos = new Map<PhotoId, Photo>([['a', foto('a', [200, 60, 60])]]);
+    const overrides: Record<PhotoId, PhotoOverride> = { a: { orientationTurns: 1 } };
+    const quelle = protokollquelle(bildpfad);
+
+    await backePosterMosaik(
+      { photos, overrides, profile },
+      { cols: 6 },
+      quelle,
+      join(ordner, 'cache-poster-1'),
+      'poster',
+    );
+
+    expect(quelle.angefragt.length).toBeGreaterThan(0);
+    expect(quelle.angefragt.every((a) => a.turns === 1)).toBe(true);
   });
 });

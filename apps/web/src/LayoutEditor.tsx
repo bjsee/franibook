@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RenderedSpread } from '@franibook/core';
 import { SpreadView } from '@franibook/render-dom';
 import {
+  blobHerunterladen,
   doppelseiteLaden,
   fehlertext,
   type LayoutErgebnis as ApplyResult,
@@ -126,13 +127,7 @@ export function LayoutEditor({ imageSrc, onApplied, onNavigieren }: Props) {
   }
 
   function download() {
-    const blob = new Blob([text], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'franibook-layout.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    blobHerunterladen(new Blob([text], { type: 'application/json' }), 'franibook-layout.json');
   }
 
   async function uploadFile(file: File) {
