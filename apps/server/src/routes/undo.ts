@@ -477,6 +477,7 @@ export const UNDO_ROUTEN: Record<string, UndoEintrag | null> = {
   'POST /api/export/pdf-mit-umschlag': null,
   'POST /api/export/abzug': null,
   'POST /api/export/cover': null,
+  'POST /api/export/cover-mosaik-poster': null,
   // Zurücknehmen und Wiederholen führen den Verlauf selbst – ein Schritt darauf
   // wäre eine Schleife.
   'POST /api/undo': null,

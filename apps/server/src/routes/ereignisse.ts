@@ -86,6 +86,7 @@ const MELDET_NICHT = new Set([
   'POST /api/export/pdf-mit-umschlag',
   'POST /api/export/abzug',
   'POST /api/export/cover',
+  'POST /api/export/cover-mosaik-poster',
   // Die Probe ist eine Frage, keine Entscheidung (`project/probe.ts`) – wer sie
   // nicht gestellt hat, hat auch keine Ansicht, die davon veraltet.
   'POST /api/anordnung/probe',

@@ -33,6 +33,9 @@ import type { Zuletzt } from '../zuletzt.js';
  */
 export const EXPORT_DATEINAME = /^[a-zA-Z0-9_-]+\.pdf$/;
 
+/** Dasselbe für den Poster-Export — ein JPEG statt eines PDF. */
+export const EXPORT_DATEINAME_JPG = /^[a-zA-Z0-9_-]+\.jpg$/;
+
 /**
  * Ob ein Fehler von einer nicht lesbaren Datei stammt – ein ausgehängtes
  * Netzlaufwerk etwa, oder eine Quelle, die zwischen Anfrage und Zugriff

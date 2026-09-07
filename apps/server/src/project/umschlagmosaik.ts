@@ -127,25 +127,37 @@ export interface Umschlagmosaik {
 export type Deckel = 'front' | 'back';
 
 /**
- * Rechnet den Plan für ein Umschlagmosaik.
+ * Eine physische Fläche in Millimetern, für die ein Mosaik geplant wird.
+ *
+ * Beim Umschlag kommt sie aus `coverImageArea`, beim Poster ist sie fest
+ * vorgegeben (`POSTER_BREITE_MM` × `POSTER_HOEHE_MM`) — dieselbe Rechnung,
+ * nur mit einer anderen Fläche.
+ */
+export interface Mosaikflaeche {
+  wMm: number;
+  hMm: number;
+}
+
+/**
+ * Rechnet den Plan für ein Mosaik über einer gegebenen Fläche.
  *
  * Getrennt vom Backen, weil der Plan billig ist (Millisekunden) und das Backen
  * nicht: Über den Abdruck des Plans lässt sich entscheiden, ob überhaupt neu
  * gebacken werden muss.
+ *
+ * Gemeinsamer Kern für `planeUmschlagmosaik` und `planePosterMosaik` — beide
+ * unterscheiden sich einzig in der Fläche, über der geplant wird. Eine zweite
+ * Fassung dieser Rechnung wäre die Stelle, an der Rasterweite und Druckauflösung
+ * für den Poster-Export unbemerkt von der des Umschlags abwichen.
  */
-export async function planeUmschlagmosaik(
+async function planeMosaikFuerFlaeche(
   stand: Umschlagmosaikstand,
   mosaik: CoverMosaic,
-  panel: Deckel,
-  pageCount: number,
+  flaeche: Mosaikflaeche,
   bilder: Bildquelle,
+  targetDpi: number,
   melde?: (f: Mosaikfortschritt) => void,
 ): Promise<{ plan: MosaicPlan; areaAspect: number; druckBreitePx: number }> {
-  const geo = coverGeometry(stand.profile, pageCount);
-  // Beide Deckel sind gleich groß, aber die Fläche wird trotzdem erfragt und
-  // nicht angenommen: Ein Profil mit ungleichen Beschnittzugaben links und
-  // rechts machte aus der Annahme eine gestauchte Ziffer, und zwar lautlos.
-  const flaeche = coverImageArea(geo, panel);
   const areaAspect = flaeche.wMm / flaeche.hMm;
 
   const cols = Math.max(4, Math.round(mosaik.cols));
@@ -191,16 +203,87 @@ export async function planeUmschlagmosaik(
     ...(mosaik.seed !== undefined ? { seed: mosaik.seed } : {}),
   });
 
-  // Die Druckbreite folgt aus der Zielauflösung des Profils und der Fläche in
-  // Millimetern — nicht aus einer runden Zahl: Das Mosaik ist das eine Bild des
-  // Umschlags, und es soll genau so scharf sein, wie das Profil verlangt.
+  // Die Druckbreite folgt aus der Zielauflösung und der Fläche in Millimetern
+  // — nicht aus einer runden Zahl: Das Mosaik soll genau so scharf sein, wie
+  // die Zielauflösung verlangt.
   //
   // **Aufgerundet, nicht gerundet.** Abgerundet fehlt ein halber Bildpunkt, und
   // `renderCover` rechnet daraus 299,97 dpi — der Umschlag meldete „300 dpi,
   // Zielauflösung 300 dpi" und sah nach einem Fehler aus, den es nicht gibt.
-  const druckBreitePx = Math.ceil((flaeche.wMm / 25.4) * stand.profile.resolution.targetDpi);
+  const druckBreitePx = Math.ceil((flaeche.wMm / 25.4) * targetDpi);
 
   return { plan, areaAspect, druckBreitePx };
+}
+
+/** Rechnet den Plan für ein Umschlagmosaik — die Fläche kommt aus `coverImageArea`. */
+export async function planeUmschlagmosaik(
+  stand: Umschlagmosaikstand,
+  mosaik: CoverMosaic,
+  panel: Deckel,
+  pageCount: number,
+  bilder: Bildquelle,
+  melde?: (f: Mosaikfortschritt) => void,
+): Promise<{ plan: MosaicPlan; areaAspect: number; druckBreitePx: number }> {
+  const geo = coverGeometry(stand.profile, pageCount);
+  // Beide Deckel sind gleich groß, aber die Fläche wird trotzdem erfragt und
+  // nicht angenommen: Ein Profil mit ungleichen Beschnittzugaben links und
+  // rechts machte aus der Annahme eine gestauchte Ziffer, und zwar lautlos.
+  const flaeche = coverImageArea(geo, panel);
+  return planeMosaikFuerFlaeche(
+    stand,
+    mosaik,
+    flaeche,
+    bilder,
+    stand.profile.resolution.targetDpi,
+    melde,
+  );
+}
+
+/**
+ * Format eines Leinwandposters — quer, 4:3.
+ *
+ * Fest vorgegeben und nicht einstellbar: Der Export ist für einen
+ * Standard-Poster- bzw. Leinwanddruck gedacht, kein zweites Gestaltungsfeld
+ * für Maße, die ohnehin vom Anbieter vorgegeben sind.
+ */
+export const POSTER_BREITE_MM = 800;
+export const POSTER_HOEHE_MM = 600;
+
+/** Welches Medium bedruckt wird — entscheidet nur über die Auflösung, nicht über das Motiv. */
+export type Postermedium = 'poster' | 'leinwand';
+
+/**
+ * Zielauflösung je Medium.
+ *
+ * **Gemessen, nicht geraten, aber begründet:** Fotopapier zeigt 300 dpi noch
+ * scharf, Leinwand nicht — ihre Gewebestruktur schluckt die zusätzliche
+ * Schärfe, und 300 dpi wären nur eine größere Datei und ein langsamerer
+ * Backvorgang für nichts. 150 dpi ist die verbreitete Vorgabe von
+ * Leinwanddruckereien für großformatige Motive; die Kachelgröße in Zentimetern
+ * — die eigentliche Frage beim Rasterregler — bleibt in beiden Fällen gleich,
+ * denn sie hängt an der Fläche und der Spaltenzahl, nicht an der Auflösung.
+ */
+const POSTER_DPI: Record<Postermedium, number> = {
+  poster: 300,
+  leinwand: 150,
+};
+
+/** Rechnet den Plan für ein Poster-Mosaik — feste Fläche, unabhängig vom Umschlagformat. */
+export async function planePosterMosaik(
+  stand: Umschlagmosaikstand,
+  mosaik: CoverMosaic,
+  bilder: Bildquelle,
+  medium: Postermedium,
+  melde?: (f: Mosaikfortschritt) => void,
+): Promise<{ plan: MosaicPlan; areaAspect: number; druckBreitePx: number }> {
+  return planeMosaikFuerFlaeche(
+    stand,
+    mosaik,
+    { wMm: POSTER_BREITE_MM, hMm: POSTER_HOEHE_MM },
+    bilder,
+    POSTER_DPI[medium],
+    melde,
+  );
 }
 
 /**
@@ -283,6 +366,67 @@ export async function backeUmschlagmosaik(
     plan,
     druckBreitePx,
     druckHoehePx,
+  };
+}
+
+/** Ergebnis eines Poster-Exports — eine fertige JPEG-Datei, kein Deckelbild. */
+export interface Postermosaik {
+  /** Dateiname im Cache-Ordner `mosaik/`. */
+  dateiname: string;
+  breitePx: number;
+  hoehePx: number;
+  /**
+   * Wie groß eine Kachel im gehängten Poster ausfällt — die Fläche geteilt
+   * durch Spalten bzw. Zeilen des Rasters, nicht die Pixelbreite. Wer eine
+   * Rasterweite wählt, will wissen, wie klein ein einzelnes Foto an der Wand
+   * wird, nicht wie viele Pixel es im Druck belegt.
+   */
+  kachelBreiteMm: number;
+  kachelHoeheMm: number;
+}
+
+/**
+ * Bäckt ein Mosaik für den Poster- oder Leinwanddruck (80 × 60 cm) — dieselbe
+ * Anweisung wie am gewählten Deckel, aber mit einem eigenen, dafür geplanten
+ * Raster (`planePosterMosaik`): Das Seitenverhältnis eines Umschlagdeckels ist
+ * so gut wie nie 4:3, ein gestrecktes oder zugeschnittenes Deckelbild wäre die
+ * schlechtere Wahl gegenüber einem eigens dafür gerechneten Mosaik.
+ *
+ * Anders als `backeUmschlagmosaik` gibt es hier keine Vorschaufassung — der
+ * Export ist ein einmaliger Griff, keine Ansicht, die im Sekundentakt neu
+ * gebacken wird.
+ */
+export async function backePosterMosaik(
+  stand: Umschlagmosaikstand,
+  mosaik: CoverMosaic,
+  bilder: Bildquelle,
+  cacheDir: string,
+  medium: Postermedium,
+  melde?: (f: Mosaikfortschritt) => void,
+): Promise<Postermosaik> {
+  const { plan, druckBreitePx } = await planePosterMosaik(stand, mosaik, bilder, medium, melde);
+  const wirksam = effectivePhotos(stand.photos, stand.overrides);
+
+  const gebacken = await backeMosaik(plan, wirksam, bilder, cacheDir, {
+    breitePx: druckBreitePx,
+    ...(melde
+      ? {
+          onProgress: (fertig, gesamt) =>
+            melde({ phase: 'In Druckauflösung backen', fertig, gesamt }),
+        }
+      : {}),
+  });
+
+  return {
+    dateiname: gebacken.dateiname,
+    // Maße aus dem Backergebnis und nicht neu gerechnet: `backeMosaik` kennt
+    // dieselbe Formel schon (`plan.cellAspect`, `plan.cols`/`plan.rows`) — eine
+    // zweite Fassung davon wäre die Stelle, an der beide auseinanderlaufen,
+    // sobald jemand nur eine von beiden anpasst.
+    breitePx: gebacken.breitePx,
+    hoehePx: gebacken.hoehePx,
+    kachelBreiteMm: POSTER_BREITE_MM / plan.cols,
+    kachelHoeheMm: POSTER_HOEHE_MM / plan.rows,
   };
 }
 

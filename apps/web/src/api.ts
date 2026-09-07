@@ -1730,6 +1730,82 @@ export const umschlagExportieren = () =>
     pageCount: number;
   }>('POST', '/api/export/cover', {});
 
+/**
+ * Woran der Poster-Export dieses Deckels gerade backt — dasselbe Prinzip wie
+ * `mosaikFortschrittLaden`, aber ein eigener Endpunkt: Der Poster bäckt ein
+ * eigenes, viel größeres Bild und hängt an keinem Deckel.
+ *
+ * Nach `panel` gefragt, weil Vorder- und Rückseite unabhängig voneinander
+ * exportiert werden — ohne den Bezug zeigte das Panel, das gerade wartet,
+ * möglicherweise den Fortschritt des jeweils anderen.
+ */
+export const posterFortschrittLaden = (panel: 'front' | 'back') =>
+  hole<{ fortschritt: Mosaikfortschritt | null }>(`/api/cover/poster-fortschritt?panel=${panel}`);
+
+/**
+ * Das Mosaik eines Deckels als Poster- oder Leinwand-JPEG (80 × 60 cm)
+ * exportieren. `medium` wählt nur die Auflösung, nicht das Motiv oder die
+ * Kachelgröße — siehe `Postermedium` in `umschlagmosaik.ts`.
+ */
+export const posterMosaikExportieren = (panel: 'front' | 'back', medium: 'poster' | 'leinwand') =>
+  sende<{
+    outputPath: string;
+    fileName: string;
+    breitePx: number;
+    hoehePx: number;
+    /** Wie groß eine Kachel im gehängten Poster ausfällt, in Millimetern. */
+    kachelBreiteMm: number;
+    kachelHoeheMm: number;
+  }>('POST', '/api/export/cover-mosaik-poster', { panel, medium });
+
+/**
+ * Ein Blob im Browser speichern — der gemeinsame Kern von
+ * `exportDateiHerunterladen` und dem Rohtext-Download in `LayoutEditor.tsx`.
+ *
+ * Kein Serveraufruf, aber hier und nicht in einer eigenen Datei: Der einzige
+ * andere Aufrufer bräuchte sonst ein zweites Modul für zwei Zeilen.
+ *
+ * `URL.revokeObjectURL` erst einen Takt später: Ein sofortiger Aufruf lief in
+ * mindestens einem Browser dem Sichern des Downloads den Rang ab, und die
+ * Datei blieb leer. Ein `setTimeout(…, 0)` reicht, weil der Download selbst
+ * synchron mit `anker.click()` beginnt — nur das Freigeben der Adresse soll
+ * warten.
+ */
+export function blobHerunterladen(blob: Blob, dateiname: string): void {
+  const href = URL.createObjectURL(blob);
+  const anker = document.createElement('a');
+  anker.href = href;
+  anker.download = dateiname;
+  document.body.appendChild(anker);
+  anker.click();
+  anker.remove();
+  window.setTimeout(() => URL.revokeObjectURL(href), 0);
+}
+
+/**
+ * Eine erzeugte Exportdatei herunterladen, statt sie nur zu verlinken.
+ *
+ * Als Blob geholt und über einen unsichtbaren Anker mit `download` ausgelöst,
+ * nicht per `<a target="_blank">`: Ein Klick darauf öffnet nur einen leeren
+ * Tab und verlässt sich auf `Content-Disposition` des Servers — eine große
+ * Datei, die weit unten auf einer gescrollten Seite entsteht, soll ohne
+ * weiteren Klick im Download-Ordner landen.
+ *
+ * Der Fehlertext kommt aus dem Rumpf, genau wie in `antwort()` — sonst zeigte
+ * ein 404 (die Datei wurde noch nicht erzeugt) nur „HTTP 404 Not Found" statt
+ * des deutschen Satzes, den die Route dafür schreibt.
+ */
+export async function exportDateiHerunterladen(pfad: string, dateiname: string): Promise<void> {
+  const res = await fetch(pfad);
+  if (!res.ok) {
+    const roh = await res.text();
+    const daten: unknown = roh ? JSON.parse(roh) : {};
+    const satz = (daten as { error?: string } | null)?.error;
+    throw new ApiFehler(satz ?? `HTTP ${res.status} ${res.statusText}`.trim(), res.status);
+  }
+  blobHerunterladen(await res.blob(), dateiname);
+}
+
 // ─── Layout-Dokument und Export ─────────────────────────────────────────────
 
 export interface LayoutProblem {

@@ -2560,6 +2560,32 @@ export class Project {
   private mosaikLauf = 0;
 
   /**
+   * Woran der Poster-Export gerade backt, je Deckel.
+   *
+   * Ein eigenes Feld statt `mosaikFortschritt`: Der Poster-Export bäckt ein
+   * eigenes, viel größeres Bild und hängt an keinem Deckel — ihn über dasselbe
+   * Feld zu melden, ließe seinen Balken verschwinden, sobald nebenher der
+   * Umschlag neu gebacken wird (oder umgekehrt).
+   *
+   * **Je Deckel ein eigenes Feld**, nicht eines für beide: Vorder- und
+   * Rückseite lassen sich unabhängig voneinander exportieren, und ohne die
+   * Trennung überschriebe der jüngere Export den Fortschritt des älteren —
+   * die Oberfläche zeigte dann im falschen Panel die Zahlen des anderen.
+   */
+  private readonly posterFortschritte: Record<
+    umschlagmosaik.Deckel,
+    umschlagmosaik.Mosaikfortschritt | null
+  > = { front: null, back: null };
+
+  /** Dieselbe Sorge wie `mosaikLauf`, nur für den Poster-Export — je Deckel. */
+  private readonly posterLaeufe: Record<umschlagmosaik.Deckel, number> = { front: 0, back: 0 };
+
+  /** Woran der Poster-Export dieses Deckels gerade backt, oder `null`. */
+  posterFortschrittFuer(panel: umschlagmosaik.Deckel): umschlagmosaik.Mosaikfortschritt | null {
+    return this.posterFortschritte[panel];
+  }
+
+  /**
    * Sorgt dafür, dass die Bilder zu den gesetzten Mosaiken im Cache liegen.
    *
    * Muss vor jeder Antwort laufen, die den Umschlag zeigt oder exportiert.
@@ -2642,6 +2668,58 @@ export class Project {
       // langen `PATCH` löschte sonst dessen Fortschritt, und der Balken bliebe
       // bis zum Ende ohne Zahlen stehen.
       if (lauf === this.mosaikLauf) this.mosaikFortschritt = null;
+    }
+  }
+
+  /**
+   * Bäckt das Mosaik eines Deckels als eigenständiges Poster- oder
+   * Leinwand-JPEG (80 × 60 cm) — `medium` entscheidet nur über die Auflösung
+   * (`Postermedium` in `umschlagmosaik.ts`), nicht über das Motiv.
+   *
+   * Anders als `umschlagmosaikeSicherstellen` schreibt das Ergebnis nirgends in
+   * den Zustand — es ist ein einmaliger Export und kein Bild, das der Umschlag
+   * zeigt. Ein Deckel ohne gesetztes Mosaik ist ein fachlicher Konflikt (`409`
+   * in der Route), keine leere Antwort: Ohne Anweisung gibt es kein Motiv, das
+   * sich als Poster exportieren ließe.
+   */
+  async posterMosaikBacken(
+    panel: umschlagmosaik.Deckel,
+    medium: umschlagmosaik.Postermedium,
+    previews: PreviewCache,
+    cacheDir: string,
+  ): Promise<{ ok: true; ergebnis: umschlagmosaik.Postermosaik } | { ok: false; error: string }> {
+    const anweisung = panel === 'front' ? this.cover.frontMosaic : this.cover.backMosaic;
+    if (!anweisung) {
+      const wo = panel === 'front' ? 'Vorderseite' : 'Rückseite';
+      return { ok: false, error: `Für die ${wo} ist kein Mosaik gesetzt` };
+    }
+
+    const lauf = ++this.posterLaeufe[panel];
+    try {
+      const ergebnis = await umschlagmosaik.backePosterMosaik(
+        this,
+        anweisung,
+        previews,
+        cacheDir,
+        medium,
+        (f) => {
+          if (lauf === this.posterLaeufe[panel]) this.posterFortschritte[panel] = f;
+        },
+      );
+      return { ok: true, ergebnis };
+    } catch (err) {
+      // Dieselbe Sorge wie in `umschlagmosaikeSicherstellen`: Nur selbst
+      // formulierte Sätze gehen nach außen.
+      const satz =
+        err instanceof umschlagmosaik.MosaikFehler
+          ? err.message
+          : 'Beim Bauen ist etwas schiefgegangen (Näheres im Serverlog)';
+      if (!(err instanceof umschlagmosaik.MosaikFehler)) {
+        process.stdout.write(`Poster-Mosaik gescheitert: ${String(err)}\n`);
+      }
+      return { ok: false, error: satz };
+    } finally {
+      if (lauf === this.posterLaeufe[panel]) this.posterFortschritte[panel] = null;
     }
   }
 
