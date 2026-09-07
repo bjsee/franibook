@@ -19,7 +19,13 @@ import {
 import type { MoveSource, MoveTarget, PhotoMove } from '@franibook/core';
 import type { Unterschriftenbereich } from '../project/unterschriften.js';
 import { renderPdf } from '@franibook/render-pdf';
-import { EXPORT_DATEINAME, istDateiFehler, type Kontext, spreadAntwort } from './kontext.js';
+import {
+  EXPORT_DATEINAME,
+  EXPORT_DATEINAME_JPG,
+  istDateiFehler,
+  type Kontext,
+  spreadAntwort,
+} from './kontext.js';
 import { coverFotosAufloesen } from './umschlag.js';
 
 /**
@@ -348,15 +354,21 @@ export function buchRouten(
    * Hand in den Finder tippt. Mit ihr wird die Meldung ein Link, und der Abzug
    * lässt sich sofort durchblättern und drucken; genau dafür ist er da.
    *
-   * `inline` und nicht `attachment`: Der Browser zeigt das PDF in seinem eigenen
-   * Betrachter, statt es in den Download-Ordner zu legen. Speichern kann man von
-   * dort immer noch, umgekehrt nicht.
+   * `inline` und nicht `attachment` — beim PDF: Der Browser zeigt es in seinem
+   * eigenen Betrachter, statt es in den Download-Ordner zu legen. Speichern kann
+   * man von dort immer noch, umgekehrt nicht.
    *
-   * **Nur aus `outDir` und nur nach `EXPORT_DATEINAME`** — dieselbe Prüfung wie
-   * beim Schreiben, aus demselben Grund: Der Name kommt aus einer Adresse und
-   * landet in `join(outDir, name)`. Ein `..` darin läse jede Datei, die der
-   * Serverprozess lesen darf. Kein `Cache-Control: immutable` wie bei den
-   * Bildern: Derselbe Name trägt nach jedem Export einen anderen Inhalt.
+   * **Nur aus `outDir` und nur nach `EXPORT_DATEINAME` oder
+   * `EXPORT_DATEINAME_JPG`** — dieselbe Prüfung wie beim Schreiben, aus
+   * demselben Grund: Der Name kommt aus einer Adresse und landet in
+   * `join(outDir, name)`. Ein `..` darin läse jede Datei, die der Serverprozess
+   * lesen darf. Kein `Cache-Control: immutable` wie bei den Bildern: Derselbe
+   * Name trägt nach jedem Export einen anderen Inhalt.
+   *
+   * **Das Poster-JPEG dagegen als `attachment`.** Anders als ein PDF, das man
+   * durchblättern will, ist das Poster eine Datei, die man weitergibt — an
+   * einen Leinwanddrucker etwa. Der Browser legt sie darum gleich in den
+   * Download-Ordner, statt sie nur im Tab zu zeigen.
    *
    * Der Ursprungshaken (`ursprungHaken`) greift hier nicht, weil er nur
    * mutierende Routen prüft — und das ist richtig: Eine fremde Seite kann die
@@ -365,7 +377,8 @@ export function buchRouten(
    */
   app.get<{ Params: { fileName: string } }>('/api/export/:fileName', async (req, reply) => {
     const { fileName } = req.params;
-    if (!EXPORT_DATEINAME.test(fileName)) {
+    const istJpg = EXPORT_DATEINAME_JPG.test(fileName);
+    if (!istJpg && !EXPORT_DATEINAME.test(fileName)) {
       return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
     }
 
@@ -380,8 +393,8 @@ export function buchRouten(
     }
 
     return reply
-      .type('application/pdf')
-      .header('Content-Disposition', `inline; filename="${fileName}"`)
+      .type(istJpg ? 'image/jpeg' : 'application/pdf')
+      .header('Content-Disposition', `${istJpg ? 'attachment' : 'inline'}; filename="${fileName}"`)
       .header('Cache-Control', 'no-store')
       .send(createReadStream(pfad));
   });
