@@ -26,6 +26,7 @@ import {
   umschlagLaden,
 } from './api.js';
 import { Bildwahl } from './Bildwahl.js';
+import { useBackvorgang } from './useBackvorgang.js';
 import { CoverMosaik } from './CoverMosaik.js';
 import { CoverTexte } from './CoverTexte.js';
 import { Farbwahl } from './Farbwahl.js';
@@ -117,8 +118,8 @@ export function Cover({
    */
   const [arbeit, setArbeit] = useState<Mosaikfortschritt | null>(null);
 
-  /** Laufende Nummer der jüngsten Mosaikänderung — siehe `mosaikAendern`. */
-  const mosaikLauf = useRef(0);
+  /** Der Rahmen um Backvorgänge mit Fortschrittsanzeige — siehe `mosaikAendern`. */
+  const starteBackvorgang = useBackvorgang();
 
   const stageRef = useRef<HTMLDivElement>(null);
   const [stageWidth, setStageWidth] = useState(1000);
@@ -165,38 +166,24 @@ export function Cover({
     // Cursor steht im Feld „Form", die Hand greift zum Regler — `onBlur`
     // schickt das eine, `onPointerUp` das andere. Käme das ältere zuletzt
     // zurück, überschriebe sein `setData` den neueren Stand, und die Ansicht
-    // zeigte ein Mosaik, das nicht mehr gespeichert ist. Aus demselben Grund
-    // räumt nur der jüngste Lauf die Anzeige auf — sonst verschwände der
-    // Balken, während noch gebacken wird.
-    const lauf = ++mosaikLauf.current;
-    setBusy('Baue das Mosaik …');
-    setNote(null);
-    // Solange gewartet wird, im Sekundentakt nachfragen, woran gearbeitet wird.
-    // Der Takt ist grob genug, um nicht ins Gewicht zu fallen, und fein genug,
-    // dass sich der Balken sichtbar bewegt.
-    const takt = window.setInterval(() => {
-      mosaikFortschrittLaden()
-        .then((f) => {
-          if (lauf === mosaikLauf.current) setArbeit(f.fortschritt);
-        })
-        // Ein verlorener Takt ist kein Fehler, den jemand sehen müsste — er
-        // fehlt einfach, und der nächste kommt.
-        .catch(() => undefined);
-    }, MOSAIK_TAKT_MS);
-    try {
-      // Das Patch geht unverändert weiter: Welcher Deckel gemeint ist und ob er
-      // ein Mosaik bekommt oder verliert (`null`), hat das Panel schon gesagt.
-      const antwort = await umschlagAendern(patch);
-      if (lauf === mosaikLauf.current) setData(antwort);
-    } catch (e) {
-      if (lauf === mosaikLauf.current) setNote(`Fehler: ${fehlertext(e)}`);
-    } finally {
-      window.clearInterval(takt);
-      if (lauf === mosaikLauf.current) {
-        setArbeit(null);
-        setBusy(null);
-      }
-    }
+    // zeigte ein Mosaik, das nicht mehr gespeichert ist. Der Haken sichert das
+    // über `istAktuell` ab — dieselbe Absicherung, mit der er selbst Fehler und
+    // Aufräumen gegen einen überholten Lauf schützt.
+    await starteBackvorgang({
+      fortschrittLaden: mosaikFortschrittLaden,
+      taktMs: MOSAIK_TAKT_MS,
+      setArbeit,
+      setBusy,
+      setNote,
+      busyText: 'Baue das Mosaik …',
+      aktion: async ({ istAktuell }) => {
+        // Das Patch geht unverändert weiter: Welcher Deckel gemeint ist und ob
+        // er ein Mosaik bekommt oder verliert (`null`), hat das Panel schon
+        // gesagt.
+        const antwort = await umschlagAendern(patch);
+        if (istAktuell()) setData(antwort);
+      },
+    });
   }
 
   async function exportCover() {

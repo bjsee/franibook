@@ -4,7 +4,7 @@
  * Er wird getrennt vom Innenteil exportiert, weil der Druckdienstleister es so
  * verlangt – einer der wenigen verifizierten Punkte des Profils.
  */
-import { mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -16,8 +16,14 @@ import {
 } from '@franibook/core';
 import { renderCoverPdf, type PhotoSource } from '@franibook/render-pdf';
 import type { CoverPatch } from '../project/umschlag.js';
-import { MOSAIK_VORSCHAU_PX } from '../project/umschlagmosaik.js';
-import { coverAntwort, EXPORT_DATEINAME, istDateiFehler, type Kontext } from './kontext.js';
+import { MOSAIK_VORSCHAU_PX, type Deckel } from '../project/umschlagmosaik.js';
+import {
+  coverAntwort,
+  EXPORT_DATEINAME,
+  EXPORT_DATEINAME_JPG,
+  istDateiFehler,
+  type Kontext,
+} from './kontext.js';
 
 /** Ein Abdruck ist eine Base-36-Zahl — nichts, was in einem Pfad etwas bedeutet. */
 const MOSAIK_ABDRUCK = /^[a-z0-9]{1,16}$/;
@@ -125,6 +131,24 @@ export function umschlagRouten(
   }));
 
   /**
+   * Woran der Poster-Export gerade backt — eigener Endpunkt, siehe oben.
+   *
+   * Nach Deckel gefragt, weil Vorder- und Rückseite unabhängig voneinander
+   * exportiert werden können: Ohne `panel` bekäme die Oberfläche irgendeines
+   * der beiden Fortschritte, nicht den des Panels, in dem gerade gewartet wird.
+   */
+  app.get<{ Querystring: { panel?: string } }>(
+    '/api/cover/poster-fortschritt',
+    async (req, reply) => {
+      const { panel } = req.query;
+      if (panel !== 'front' && panel !== 'back') {
+        return reply.code(400).send({ error: 'panel muss "front" oder "back" sein' });
+      }
+      return { fortschritt: project.posterFortschrittFuer(panel) };
+    },
+  );
+
+  /**
    * Ein gebackenes Titelmosaik ausliefern.
    *
    * Eigener Endpunkt und nicht `GET /api/photos/:id`: Das Mosaik ist kein Foto
@@ -195,4 +219,68 @@ export function umschlagRouten(
       throw err;
     }
   });
+
+  /**
+   * Das Mosaik eines Deckels als Poster- oder Leinwand-JPEG (80 × 60 cm).
+   *
+   * Kein Umschlagexport: Die Anweisung (`frontMosaic`/`backMosaic`) bleibt
+   * gleich, aber geplant wird eigens für das Posterformat
+   * (`planePosterMosaik`) — das Seitenverhältnis eines Umschlagdeckels ist so
+   * gut wie nie 4:3. `medium` wählt nur die Auflösung (`Postermedium`,
+   * `umschlagmosaik.ts`): Leinwand braucht keine 300 dpi, ihre Gewebestruktur
+   * schluckt die zusätzliche Schärfe ohnehin.
+   */
+  app.post<{ Body?: { panel?: string; medium?: string; fileName?: string } }>(
+    '/api/export/cover-mosaik-poster',
+    async (req, reply) => {
+      const panel = req.body?.panel;
+      if (panel !== 'front' && panel !== 'back') {
+        return reply.code(400).send({ error: 'panel muss "front" oder "back" sein' });
+      }
+      const medium = req.body?.medium;
+      if (medium !== 'poster' && medium !== 'leinwand') {
+        return reply.code(400).send({ error: 'medium muss "poster" oder "leinwand" sein' });
+      }
+
+      const fileName = req.body?.fileName ?? `mosaik-${medium}-${panel}.jpg`;
+      if (!EXPORT_DATEINAME_JPG.test(fileName)) {
+        return reply.code(400).send({ error: 'Kein brauchbarer Dateiname' });
+      }
+
+      const gebacken = await project.posterMosaikBacken(
+        panel as Deckel,
+        medium,
+        previews,
+        cacheDir,
+      );
+      if (!gebacken.ok) {
+        return reply.code(409).send({ ok: false, error: gebacken.error });
+      }
+
+      try {
+        await mkdir(outDir, { recursive: true });
+        const outputPath = join(outDir, fileName);
+        await copyFile(join(cacheDir, 'mosaik', gebacken.ergebnis.dateiname), outputPath);
+
+        // `fileName` neben `outputPath`, wie bei jedem Export: Der Pfad ist die
+        // Auskunft für den Menschen, der Name die Adresse für
+        // `GET /api/export/:fileName`.
+        return {
+          outputPath,
+          fileName,
+          breitePx: gebacken.ergebnis.breitePx,
+          hoehePx: gebacken.ergebnis.hoehePx,
+          kachelBreiteMm: gebacken.ergebnis.kachelBreiteMm,
+          kachelHoeheMm: gebacken.ergebnis.kachelHoeheMm,
+        };
+      } catch (err) {
+        if (istDateiFehler(err)) {
+          return reply.code(503).send({
+            error: 'Das gebackene Mosaik ließ sich gerade nicht in die Ausgabe kopieren',
+          });
+        }
+        throw err;
+      }
+    },
+  );
 }

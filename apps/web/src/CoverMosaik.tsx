@@ -29,9 +29,25 @@ import {
   type CoverMosaic,
   type FontFamilyId,
 } from '@franibook/core';
-import type { Mosaikfortschritt, Umschlag } from './api.js';
+import {
+  exportDateiHerunterladen,
+  posterFortschrittLaden,
+  posterMosaikExportieren,
+  type Mosaikfortschritt,
+  type Umschlag,
+} from './api.js';
+import { useBackvorgang } from './useBackvorgang.js';
 import { Bildwahl } from './Bildwahl.js';
 import { B, T } from './theme.js';
+
+/**
+ * Wie oft nachgefragt wird, während das Poster-Mosaik entsteht.
+ *
+ * Derselbe Wert wie `MOSAIK_TAKT_MS` in `Cover.tsx` — nicht geteilt, weil er
+ * an keiner Stelle etwas anderes bedeuten müsste als „grob genug, um nicht
+ * ins Gewicht zu fallen, fein genug, dass sich der Balken sichtbar bewegt".
+ */
+const POSTER_TAKT_MS = 700;
 
 /** Welche Werte ein Regler stellt. */
 type Reglerfeld = 'cols' | 'gap' | 'tint' | 'reuseCost';
@@ -109,6 +125,21 @@ const DECKEL = {
   back: { feld: 'backMosaic', stand: 'rueckmosaik', titel: 'Rückseite aus vielen Fotos' },
 } as const;
 
+/**
+ * Die beiden Ausgabemedien für den 80×60-cm-Export — gleiches Motiv, gleiche
+ * Kachelgröße, nur die Auflösung unterscheidet sie (`Postermedium` im Server).
+ */
+const MEDIEN: Record<'poster' | 'leinwand', { label: string; hinweis: string }> = {
+  poster: {
+    label: 'Poster',
+    hinweis: 'Für Fotopapier — 300 dpi, zeigt jedes Detail scharf.',
+  },
+  leinwand: {
+    label: 'Leinwand',
+    hinweis: 'Für Leinwanddruck — 150 dpi, die Gewebestruktur schluckt mehr ohnehin nicht.',
+  },
+};
+
 export function CoverMosaik({
   data,
   panel,
@@ -141,6 +172,53 @@ export function CoverMosaik({
   /** Der Stand am Regler, während gezogen wird. Danach gilt wieder der Server. */
   const [entwurf, setEntwurf] = useState<CoverMosaic | null>(null);
   const wert = entwurf ?? gesetzt ?? DEFAULT_COVER_MOSAIC;
+
+  /**
+   * Der Poster-Export — lokal in diesem Panel, nicht in `Cover.tsx`.
+   *
+   * Dieselbe Begründung wie beim Fortschrittsbalken weiter unten: Wer hier auf
+   * „Als Poster exportieren" klickt, schaut auf dieses Panel — eine Meldung
+   * oben bei den Kennzahlen der Seite wäre leicht zu übersehen, gerade weil der
+   * Export oft in ein paar Sekunden durch ist.
+   */
+  const [posterBusy, setPosterBusy] = useState<string | null>(null);
+  const [posterNote, setPosterNote] = useState<string | null>(null);
+  const [posterFortschritt, setPosterFortschritt] = useState<Mosaikfortschritt | null>(null);
+  const starteBackvorgang = useBackvorgang();
+
+  async function exportPoster(medium: 'poster' | 'leinwand') {
+    await starteBackvorgang({
+      fortschrittLaden: () => posterFortschrittLaden(panel),
+      taktMs: POSTER_TAKT_MS,
+      setArbeit: setPosterFortschritt,
+      setBusy: setPosterBusy,
+      setNote: setPosterNote,
+      busyText: `Baue das ${MEDIEN[medium].label}-Mosaik`,
+      aktion: async ({ istAktuell, stoppeTakt }) => {
+        const r = await posterMosaikExportieren(panel, medium);
+        if (!istAktuell()) return;
+        // Das Bild ist gebacken — ab hier lädt nur noch der Browser eine
+        // Datei herunter, danach fragt niemand mehr einen Fortschritt ab.
+        stoppeTakt();
+        // Nicht nur ein Link zum Anklicken: Die Datei ist groß, entsteht weit
+        // unten auf einer gescrollten Seite, und ein Griff, den man erst
+        // suchen muss, ist leicht ein Griff, den man verpasst.
+        await exportDateiHerunterladen(`/api/export/${r.fileName}`, r.fileName);
+        if (!istAktuell()) return;
+        // Wie groß eine Kachel an der Wand wird, nicht wie viele Pixel sie im
+        // Druck belegt — das ist die Frage, die man beim Rasterregler hat.
+        // Sie ist für Poster und Leinwand gleich: Nur die Auflösung
+        // unterscheidet die beiden Medien, nicht die Fläche oder das Raster.
+        const breiteCm = (r.kachelBreiteMm / 10).toFixed(1);
+        const hoeheCm = (r.kachelHoeheMm / 10).toFixed(1);
+        const kachelText = breiteCm === hoeheCm ? `${breiteCm} cm` : `${breiteCm} × ${hoeheCm} cm`;
+        setPosterNote(
+          `Heruntergeladen: ${r.fileName} — ${r.breitePx} × ${r.hoehePx} px ` +
+            `(80 × 60 cm als ${MEDIEN[medium].label}), eine Kachel entspricht dort ${kachelText}.`,
+        );
+      },
+    });
+  }
 
   // Ein Zurücknehmen oder ein Wechsel der Anweisung wirft den Entwurf weg —
   // sonst zeigte der Regler weiter, was gerade nicht mehr gilt.
@@ -219,6 +297,17 @@ export function CoverMosaik({
             {stand.druckHoehePx} px im Druck
           </span>
         )}
+        {(['poster', 'leinwand'] as const).map((medium) => (
+          <button
+            key={medium}
+            onClick={() => void exportPoster(medium)}
+            disabled={laeuft || posterBusy !== null}
+            style={B.knopf}
+            title={`${MEDIEN[medium].hinweis} Baut dasselbe Motiv eigens für 80 × 60 cm und lädt es als JPEG herunter.`}
+          >
+            Als {MEDIEN[medium].label} (80×60 cm) exportieren
+          </button>
+        ))}
         <button
           onClick={() => void onAendern({ [deckel.feld]: null })}
           style={B.knopf}
@@ -234,6 +323,8 @@ export function CoverMosaik({
         gescrollten Seite ist keine.
       */}
       {laeuft && <Fortschritt arbeit={arbeit} />}
+      {posterBusy && <Fortschritt arbeit={posterFortschritt} label={posterBusy} />}
+      {posterNote && <p style={B.leiser}>{posterNote}</p>}
 
       <div style={S.vorlage}>
         <label style={S.feldWrap}>
@@ -360,12 +451,19 @@ export function CoverMosaik({
  * der allgemeine Satz: Es soll nie ein Augenblick geben, in dem nichts zu sehen
  * ist und trotzdem gerechnet wird.
  */
-function Fortschritt({ arbeit }: { arbeit: Mosaikfortschritt | null | undefined }) {
+function Fortschritt({
+  arbeit,
+  label = 'Baue das Titelmosaik',
+}: {
+  arbeit: Mosaikfortschritt | null | undefined;
+  /** Der Satz, solange der Server noch nichts Genaueres gemeldet hat. */
+  label?: string;
+}) {
   const anteil = arbeit && arbeit.gesamt > 0 ? arbeit.fertig / arbeit.gesamt : null;
   return (
     <div style={S.arbeit}>
       <span style={B.leise}>
-        {arbeit?.phase ?? 'Baue das Titelmosaik'} …
+        {arbeit?.phase ?? label} …
         {anteil !== null && (
           <span style={{ color: T.fg3 }}>
             {' '}
