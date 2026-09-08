@@ -16,7 +16,7 @@ import { baueApp } from '../app.js';
 import { Project } from '../project.js';
 import { Sources } from '../sources.js';
 import { Zuletzt } from '../zuletzt.js';
-import { EXPORT_DATEINAME, type Kontext } from './kontext.js';
+import { EXPORT_DATEINAME, EXPORT_DATEINAME_JPG, type Kontext } from './kontext.js';
 
 async function probe(): Promise<{ app: FastifyInstance; outDir: string }> {
   const dir = await mkdtemp(join(tmpdir(), 'franibook-export-'));
@@ -154,5 +154,39 @@ describe('Export-Dateiname', () => {
     expect(EXPORT_DATEINAME.test('../../etc/evil.pdf')).toBe(false);
     expect(EXPORT_DATEINAME.test('/etc/evil.pdf')).toBe(false);
     expect(EXPORT_DATEINAME.test('evil.pdf/../x')).toBe(false);
+  });
+
+  it('lehnt einen Pfad-Traversal-Namen beim Mosaik-Poster-Export ab', async () => {
+    const { app } = await probe();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/export/cover-mosaik-poster',
+      payload: { panel: 'front', medium: 'poster', fileName: '../../../evil.jpg' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('liefert ein JPG mit Content-Disposition: attachment aus', async () => {
+    const { app, outDir } = await probe();
+    await writeFile(join(outDir, 'mosaik-poster-front.jpg'), 'kein echtes JPEG');
+
+    const res = await app.inject({ method: 'GET', url: '/api/export/mosaik-poster-front.jpg' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('image/jpeg');
+    // `attachment`, damit der Browser das Mosaik gleich speichert – anders als
+    // beim PDF gibt es hier keinen Öffnen-Link, der das übernehmen könnte.
+    expect(res.headers['content-disposition']).toContain('attachment');
+  });
+
+  it('lässt unverfängliche JPG-Dateinamen weiterhin durch, lehnt Traversal ab', () => {
+    expect(EXPORT_DATEINAME_JPG.test('mosaik-poster-front.jpg')).toBe(true);
+    expect(EXPORT_DATEINAME_JPG.test('../../etc/evil.jpg')).toBe(false);
+    expect(EXPORT_DATEINAME_JPG.test('/etc/evil.jpg')).toBe(false);
+    expect(EXPORT_DATEINAME_JPG.test('evil.jpg/../x')).toBe(false);
+    // Eine PDF-Datei ist über diese Prüfung kein brauchbarer JPG-Name.
+    expect(EXPORT_DATEINAME_JPG.test('buch.pdf')).toBe(false);
   });
 });

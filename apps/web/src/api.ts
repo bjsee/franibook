@@ -1731,16 +1731,20 @@ export const umschlagExportieren = () =>
   }>('POST', '/api/export/cover', {});
 
 /**
- * Woran der Poster-Export dieses Deckels gerade backt — dasselbe Prinzip wie
- * `mosaikFortschrittLaden`, aber ein eigener Endpunkt: Der Poster bäckt ein
- * eigenes, viel größeres Bild und hängt an keinem Deckel.
+ * Woran der Poster-Export dieses Deckels und Mediums gerade backt — dasselbe
+ * Prinzip wie `mosaikFortschrittLaden`, aber ein eigener Endpunkt: Der Poster
+ * bäckt ein eigenes, viel größeres Bild und hängt an keinem Deckel.
  *
- * Nach `panel` gefragt, weil Vorder- und Rückseite unabhängig voneinander
- * exportiert werden — ohne den Bezug zeigte das Panel, das gerade wartet,
- * möglicherweise den Fortschritt des jeweils anderen.
+ * Nach `panel` **und** `medium` gefragt, weil Vorder- und Rückseite unabhängig
+ * voneinander exportiert werden — und dasselbe gilt für Poster und Leinwand
+ * desselben Deckels: Ohne den Bezug zeigte das Panel, das gerade wartet,
+ * möglicherweise den Fortschritt eines anderen Mediums oder eines zweiten
+ * Fensters.
  */
-export const posterFortschrittLaden = (panel: 'front' | 'back') =>
-  hole<{ fortschritt: Mosaikfortschritt | null }>(`/api/cover/poster-fortschritt?panel=${panel}`);
+export const posterFortschrittLaden = (panel: 'front' | 'back', medium: 'poster' | 'leinwand') =>
+  hole<{ fortschritt: Mosaikfortschritt | null }>(
+    `/api/cover/poster-fortschritt?panel=${panel}&medium=${medium}`,
+  );
 
 /**
  * Das Mosaik eines Deckels als Poster- oder Leinwand-JPEG (80 × 60 cm)
@@ -1785,15 +1789,22 @@ export function blobHerunterladen(blob: Blob, dateiname: string): void {
 /**
  * Eine erzeugte Exportdatei herunterladen, statt sie nur zu verlinken.
  *
- * Als Blob geholt und über einen unsichtbaren Anker mit `download` ausgelöst,
- * nicht per `<a target="_blank">`: Ein Klick darauf öffnet nur einen leeren
- * Tab und verlässt sich auf `Content-Disposition` des Servers — eine große
- * Datei, die weit unten auf einer gescrollten Seite entsteht, soll ohne
- * weiteren Klick im Download-Ordner landen.
+ * Über einen unsichtbaren Anker mit `download` ausgelöst, nicht per
+ * `<a target="_blank">`: Ein Klick darauf öffnet nur einen leeren Tab und
+ * verlässt sich auf `Content-Disposition` des Servers — eine große Datei, die
+ * weit unten auf einer gescrollten Seite entsteht, soll ohne weiteren Klick im
+ * Download-Ordner landen.
  *
- * Der Fehlertext kommt aus dem Rumpf, genau wie in `antwort()` — sonst zeigte
- * ein 404 (die Datei wurde noch nicht erzeugt) nur „HTTP 404 Not Found" statt
- * des deutschen Satzes, den die Route dafür schreibt.
+ * Der erste Aufruf holt nur den Kopf und prüft ihn, der Rumpf wird sofort
+ * verworfen (`cancel`). Der Fehlertext kommt dabei aus dem Rumpf, genau wie in
+ * `antwort()` — sonst zeigte ein 404 (die Datei wurde noch nicht erzeugt) nur
+ * „HTTP 404 Not Found" statt des deutschen Satzes, den die Route dafür
+ * schreibt. Erst danach lädt ein zweiter, echter Anker-Klick dieselbe
+ * (same-origin) Adresse: **kein `res.blob()`** — das läse ein Buch-PDF in
+ * Vollauflösung (mehrere hundert Megabyte möglich) vollständig ins Speicher
+ * des Tabs, bevor überhaupt etwas auf der Platte landet. Der Anker-Klick
+ * dagegen lässt den Browser die Datei nativ und gestreamt speichern, wie er es
+ * für jeden anderen Download auch täte.
  */
 export async function exportDateiHerunterladen(pfad: string, dateiname: string): Promise<void> {
   const res = await fetch(pfad);
@@ -1803,7 +1814,13 @@ export async function exportDateiHerunterladen(pfad: string, dateiname: string):
     const satz = (daten as { error?: string } | null)?.error;
     throw new ApiFehler(satz ?? `HTTP ${res.status} ${res.statusText}`.trim(), res.status);
   }
-  blobHerunterladen(await res.blob(), dateiname);
+  await res.body?.cancel();
+  const anker = document.createElement('a');
+  anker.href = pfad;
+  anker.download = dateiname;
+  document.body.appendChild(anker);
+  anker.click();
+  anker.remove();
 }
 
 // ─── Layout-Dokument und Export ─────────────────────────────────────────────
@@ -1860,7 +1877,10 @@ async function layoutAnwendenAnfrage(rohtext: string): Promise<LayoutErgebnis> {
  * Was ein Export zurückgibt.
  *
  * `outputPath` ist die Auskunft für den Menschen, `fileName` die Adresse für
- * `GET /api/export/:fileName` — daran hängt der Öffnen-Link an der Meldung.
+ * `GET /api/export/:fileName` — von dort holt `exportDateiHerunterladen` die
+ * Datei in den Download-Ordner. Der Abzug hängt daran stattdessen einen
+ * Öffnen-Link (`App.tsx`): Er soll sofort im Tab durchgesehen werden, nicht
+ * heruntergeladen.
  */
 export interface ExportErgebnis {
   outputPath: string;

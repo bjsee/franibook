@@ -133,18 +133,22 @@ export function umschlagRouten(
   /**
    * Woran der Poster-Export gerade backt — eigener Endpunkt, siehe oben.
    *
-   * Nach Deckel gefragt, weil Vorder- und Rückseite unabhängig voneinander
-   * exportiert werden können: Ohne `panel` bekäme die Oberfläche irgendeines
-   * der beiden Fortschritte, nicht den des Panels, in dem gerade gewartet wird.
+   * Nach Deckel **und** Medium gefragt, weil beides unabhängig voneinander
+   * exportiert werden kann: Ohne `medium` bekäme ein Fenster, das gerade den
+   * Poster-Export der Vorderseite verfolgt, die Zahlen eines zweiten Fensters,
+   * das zufällig zur selben Zeit die Vorderseite als Leinwand exportiert.
    */
-  app.get<{ Querystring: { panel?: string } }>(
+  app.get<{ Querystring: { panel?: string; medium?: string } }>(
     '/api/cover/poster-fortschritt',
     async (req, reply) => {
-      const { panel } = req.query;
+      const { panel, medium } = req.query;
       if (panel !== 'front' && panel !== 'back') {
         return reply.code(400).send({ error: 'panel muss "front" oder "back" sein' });
       }
-      return { fortschritt: project.posterFortschrittFuer(panel) };
+      if (medium !== 'poster' && medium !== 'leinwand') {
+        return reply.code(400).send({ error: 'medium muss "poster" oder "leinwand" sein' });
+      }
+      return { fortschritt: project.posterFortschrittFuer(panel, medium) };
     },
   );
 
