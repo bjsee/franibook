@@ -448,11 +448,20 @@ Filterleiste (`fotosFiltern({ platziert: false })`). Er ist kein Buchblatt und
 trägt deshalb einen Titel statt Seitenzahlen. `kontaktbogen: false` im Rumpf
 lässt ihn weg — 830 übrige Fotos sind vierzehn Bögen und ebenso viele Sekunden.
 
-Angesehen wird das Ergebnis über **`GET /api/export/:fileName`** — dieselbe
-Namensprüfung wie beim Schreiben, nur in Leserichtung, und `Content-Disposition:
-inline`, damit der Browser das PDF zeigt statt es abzulegen. Jede Export-Route gibt
+Geholt wird das Ergebnis über **`GET /api/export/:fileName`** — dieselbe
+Namensprüfung wie beim Schreiben, nur in Leserichtung. Jede Export-Route gibt
 dafür `fileName` neben `outputPath` zurück: Der Pfad ist die Auskunft für den
-Menschen, der Name die Adresse.
+Menschen, der Name die Adresse. `Content-Disposition: inline` (PDF) bzw.
+`attachment` (JPG) ist dabei nur die Vorgabe des Servers — was der Browser
+tatsächlich tut, entscheidet die Oberfläche. Buch-PDF, Umschlag-PDF, die
+kombinierte Datei und das Poster-/Leinwand-Mosaik-JPEG (`CoverMosaik.tsx`) holen
+sie als Blob und lösen per `download`-Anker einen echten Download aus
+(`exportDateiHerunterladen`, `api.ts`): Ein generiertes Artefakt
+soll im Download-Ordner landen, nicht nur als Pfad auf der Serverplatte stehen,
+den man von Hand suchen müsste. Einzige Ausnahme ist der **Korrekturabzug**: Er
+öffnet weiter inline in einem neuen Tab (`<a target="_blank">` in `App.tsx`),
+weil er zum sofortigen Durchsehen da ist und man danach in der Oberfläche
+weitermachen will, wo man war.
 
 Der Vorschau-Cache trägt die Fassung eines Fotos im Namen (Drehung), und die
 Oberfläche hängt sie als `?q=` an jede Adresse — die Karte dafür kommt aus

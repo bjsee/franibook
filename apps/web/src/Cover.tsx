@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoverDesign, CoverMosaic } from '@franibook/core';
 import { CoverView, type CoverGuideVisibility } from '@franibook/render-dom';
 import {
+  exportDateiHerunterladen,
   fehlertext,
   type Umschlag as CoverAntwort,
   umschlagAendern,
@@ -105,9 +106,7 @@ export function Cover({
    * `setNote` löscht die Datei mit, damit kein Öffnen-Link einer abgelösten
    * Meldung stehen bleibt.
    */
-  const [notiz, setNotiz] = useState<{ text: string; datei?: string } | null>(null);
-  const note = notiz?.text ?? null;
-  const setNote = (text: string | null) => setNotiz(text === null ? null : { text });
+  const [note, setNote] = useState<string | null>(null);
   const [guides, setGuides] = useState<CoverGuideVisibility>({ hinge: true, diagnostics: true });
   /**
    * Woran der Server gerade backt.
@@ -191,12 +190,11 @@ export function Cover({
     setNote(null);
     try {
       const r = await umschlagExportieren();
-      setNotiz({
-        text:
-          `${r.outputPath} — ${r.widthMm.toFixed(1)} × ${r.heightMm.toFixed(1)} mm, ` +
+      await exportDateiHerunterladen(`/api/export/${r.fileName}`, r.fileName);
+      setNote(
+        `Heruntergeladen: ${r.fileName} — ${r.widthMm.toFixed(1)} × ${r.heightMm.toFixed(1)} mm, ` +
           `Rücken ${r.spineMm.toFixed(1)} mm bei ${r.pageCount} Seiten`,
-        datei: r.fileName,
-      });
+      );
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
@@ -214,10 +212,8 @@ export function Cover({
     setNote(null);
     try {
       const r = await pdfMitUmschlagExportieren();
-      setNotiz({
-        text: `${r.outputPath} — ${r.pages} Seiten, ${r.images} Bilder`,
-        datei: r.fileName,
-      });
+      await exportDateiHerunterladen(`/api/export/${r.fileName}`, r.fileName);
+      setNote(`Heruntergeladen: ${r.fileName} — ${r.pages} Seiten, ${r.images} Bilder`);
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {
@@ -275,21 +271,7 @@ export function Cover({
         </ul>
       )}
 
-      {(busy || note) && (
-        <p style={S.status}>
-          {busy ?? note}
-          {!busy && notiz?.datei && (
-            <a
-              href={`/api/export/${notiz.datei}`}
-              target="_blank"
-              rel="noreferrer"
-              style={S.oeffnen}
-            >
-              Öffnen
-            </a>
-          )}
-        </p>
-      )}
+      {(busy || note) && <p style={S.status}>{busy ?? note}</p>}
 
       <div style={S.schalter}>
         {SCHALTER.map((s) => (
@@ -489,13 +471,6 @@ const S = {
     background: T.bg3,
     borderRadius: T.rMd,
     fontFamily: T.mono,
-  },
-  /** Der Öffnen-Link am Ende der Statuszeile — der Weg vom Pfad zur Datei. */
-  oeffnen: {
-    marginLeft: 10,
-    color: T.cyan,
-    textDecoration: 'none',
-    whiteSpace: 'nowrap' as const,
   },
   schalter: {
     display: 'flex',
