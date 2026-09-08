@@ -2560,29 +2560,42 @@ export class Project {
   private mosaikLauf = 0;
 
   /**
-   * Woran der Poster-Export gerade backt, je Deckel.
+   * Woran der Poster-Export gerade backt, je Deckel **und** Medium.
    *
    * Ein eigenes Feld statt `mosaikFortschritt`: Der Poster-Export bäckt ein
    * eigenes, viel größeres Bild und hängt an keinem Deckel — ihn über dasselbe
    * Feld zu melden, ließe seinen Balken verschwinden, sobald nebenher der
    * Umschlag neu gebacken wird (oder umgekehrt).
    *
-   * **Je Deckel ein eigenes Feld**, nicht eines für beide: Vorder- und
-   * Rückseite lassen sich unabhängig voneinander exportieren, und ohne die
-   * Trennung überschriebe der jüngere Export den Fortschritt des älteren —
-   * die Oberfläche zeigte dann im falschen Panel die Zahlen des anderen.
+   * **Je Deckel und Medium ein eigenes Feld.** Vorder- und Rückseite lassen
+   * sich unabhängig voneinander exportieren, und dasselbe gilt für Poster und
+   * Leinwand desselben Deckels — zwei Fenster am selben Projekt exportieren
+   * sonst leicht denselben Deckel in verschiedenen Medien gleichzeitig. Ohne
+   * die Trennung überschriebe der jüngere Export den Fortschritt des älteren,
+   * und ein Fenster zeigte die Zahlen eines fremden Exports.
    */
   private readonly posterFortschritte: Record<
-    umschlagmosaik.Deckel,
+    `${umschlagmosaik.Deckel}:${umschlagmosaik.Postermedium}`,
     umschlagmosaik.Mosaikfortschritt | null
-  > = { front: null, back: null };
+  > = {
+    'front:poster': null,
+    'front:leinwand': null,
+    'back:poster': null,
+    'back:leinwand': null,
+  };
 
-  /** Dieselbe Sorge wie `mosaikLauf`, nur für den Poster-Export — je Deckel. */
-  private readonly posterLaeufe: Record<umschlagmosaik.Deckel, number> = { front: 0, back: 0 };
+  /** Dieselbe Sorge wie `mosaikLauf`, nur für den Poster-Export — je Deckel und Medium. */
+  private readonly posterLaeufe: Record<
+    `${umschlagmosaik.Deckel}:${umschlagmosaik.Postermedium}`,
+    number
+  > = { 'front:poster': 0, 'front:leinwand': 0, 'back:poster': 0, 'back:leinwand': 0 };
 
-  /** Woran der Poster-Export dieses Deckels gerade backt, oder `null`. */
-  posterFortschrittFuer(panel: umschlagmosaik.Deckel): umschlagmosaik.Mosaikfortschritt | null {
-    return this.posterFortschritte[panel];
+  /** Woran der Poster-Export dieses Deckels und Mediums gerade backt, oder `null`. */
+  posterFortschrittFuer(
+    panel: umschlagmosaik.Deckel,
+    medium: umschlagmosaik.Postermedium,
+  ): umschlagmosaik.Mosaikfortschritt | null {
+    return this.posterFortschritte[`${panel}:${medium}`];
   }
 
   /**
@@ -2694,7 +2707,8 @@ export class Project {
       return { ok: false, error: `Für die ${wo} ist kein Mosaik gesetzt` };
     }
 
-    const lauf = ++this.posterLaeufe[panel];
+    const schluessel = `${panel}:${medium}` as const;
+    const lauf = ++this.posterLaeufe[schluessel];
     try {
       const ergebnis = await umschlagmosaik.backePosterMosaik(
         this,
@@ -2703,7 +2717,7 @@ export class Project {
         cacheDir,
         medium,
         (f) => {
-          if (lauf === this.posterLaeufe[panel]) this.posterFortschritte[panel] = f;
+          if (lauf === this.posterLaeufe[schluessel]) this.posterFortschritte[schluessel] = f;
         },
       );
       return { ok: true, ergebnis };
@@ -2719,7 +2733,7 @@ export class Project {
       }
       return { ok: false, error: satz };
     } finally {
-      if (lauf === this.posterLaeufe[panel]) this.posterFortschritte[panel] = null;
+      if (lauf === this.posterLaeufe[schluessel]) this.posterFortschritte[schluessel] = null;
     }
   }
 

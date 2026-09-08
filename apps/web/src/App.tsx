@@ -34,6 +34,7 @@ import {
   fehlertext,
   neuEinlesen,
   abzugExportieren,
+  exportDateiHerunterladen,
   pdfExportieren,
   type ProjectInfo,
   projektLaden,
@@ -864,7 +865,11 @@ export function App() {
     setNote(null);
     try {
       const data = await pdfExportieren(all ? undefined : index);
-      meldeDatei(`${data.outputPath} — ${data.pages} Seiten, ${data.images} Bilder`, data.fileName);
+      // Herunterladen statt nur zu verlinken: Das PDF geht in den
+      // Download-Ordner, kein Umweg über einen Serverpfad, den man von Hand
+      // im Finder suchen müsste.
+      await exportDateiHerunterladen(`/api/export/${data.fileName}`, data.fileName);
+      setNote(`Heruntergeladen: ${data.fileName} — ${data.pages} Seiten, ${data.images} Bilder`);
     } catch (e) {
       setNote(`Fehler: ${fehlertext(e)}`);
     } finally {

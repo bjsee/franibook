@@ -188,7 +188,7 @@ export function CoverMosaik({
 
   async function exportPoster(medium: 'poster' | 'leinwand') {
     await starteBackvorgang({
-      fortschrittLaden: () => posterFortschrittLaden(panel),
+      fortschrittLaden: () => posterFortschrittLaden(panel, medium),
       taktMs: POSTER_TAKT_MS,
       setArbeit: setPosterFortschritt,
       setBusy: setPosterBusy,

@@ -25,7 +25,12 @@ import {
   defaultProfile,
 } from '@franibook/core';
 import type { PreviewSize } from '../previews.js';
-import { backePosterMosaik, backeUmschlagmosaik } from './umschlagmosaik.js';
+import {
+  backePosterMosaik,
+  backeUmschlagmosaik,
+  POSTER_BREITE_MM,
+  POSTER_HOEHE_MM,
+} from './umschlagmosaik.js';
 
 /** Ein Foto mit Farbwerten — mehr braucht die Zuordnung nicht. */
 function foto(id: string, farbe: Rgb): Photo {
@@ -175,5 +180,46 @@ describe('Poster-Mosaik backen', () => {
 
     expect(quelle.angefragt.length).toBeGreaterThan(0);
     expect(quelle.angefragt.every((a) => a.turns === 1)).toBe(true);
+  });
+
+  // Deckt die Zahlen ab, die das Panel dem Benutzer als physische Tatsache
+  // zeigt: die Ziel-DPI je Medium (`POSTER_DPI`) und die Kachelgröße in
+  // Millimetern. Bisher war „leinwand" in keinem Test aufgerufen worden — ein
+  // Tippfehler in `POSTER_DPI.leinwand` oder in der `kachelBreiteMm`/
+  // `kachelHoeheMm`-Formel wäre durch die ganze Testsuite gelaufen, ohne dass
+  // etwas rot geworden wäre.
+  it('backt Leinwand mit halb so vielen Pixeln wie Poster, bei gleicher Kachelgröße', async () => {
+    const photos = new Map<PhotoId, Photo>([['a', foto('a', [200, 60, 60])]]);
+    const quelle = protokollquelle(bildpfad);
+
+    const poster = await backePosterMosaik(
+      { photos, overrides: {}, profile },
+      { cols: 6 },
+      quelle,
+      join(ordner, 'cache-poster-2'),
+      'poster',
+    );
+    const leinwand = await backePosterMosaik(
+      { photos, overrides: {}, profile },
+      { cols: 6 },
+      quelle,
+      join(ordner, 'cache-poster-3'),
+      'leinwand',
+    );
+
+    // 300 dpi fürs Poster, 150 dpi für die Leinwand — siehe Modulkopf von
+    // `backePosterMosaik`: Fotopapier zeigt 300 dpi noch scharf, die
+    // Gewebestruktur der Leinwand schluckt die zusätzliche Schärfe.
+    expect(poster.breitePx).toBe(Math.ceil((POSTER_BREITE_MM / 25.4) * 300));
+    expect(leinwand.breitePx).toBe(Math.ceil((POSTER_BREITE_MM / 25.4) * 150));
+
+    // Die Kachelgröße an der Wand hängt an Fläche und Spaltenzahl, nicht an
+    // der Auflösung — für beide Medien also gleich.
+    expect(poster.kachelBreiteMm).toBe(leinwand.kachelBreiteMm);
+    expect(poster.kachelHoeheMm).toBe(leinwand.kachelHoeheMm);
+    const cols = 6;
+    const rows = Math.max(4, Math.round(cols / (POSTER_BREITE_MM / POSTER_HOEHE_MM)));
+    expect(poster.kachelBreiteMm).toBeCloseTo(POSTER_BREITE_MM / cols, 9);
+    expect(poster.kachelHoeheMm).toBeCloseTo(POSTER_HOEHE_MM / rows, 9);
   });
 });
