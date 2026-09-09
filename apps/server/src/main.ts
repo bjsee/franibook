@@ -27,9 +27,7 @@ import { shutdownImport } from './import.js';
 import type { Kontext } from './routes/kontext.js';
 
 const PORT = Number(process.env['PORT'] ?? 5174);
-const SOURCE_ROOT = resolve(
-  process.env['FRANIBOOK_SOURCE'] ?? '/Users/nutzer/fotos/buch',
-);
+const SOURCE_ROOT = resolve(process.env['FRANIBOOK_SOURCE'] ?? '/Users/nutzer/fotos/buch');
 const CACHE_DIR = resolve(process.env['FRANIBOOK_CACHE'] ?? '.franibook-cache');
 const OUT_DIR = resolve(process.env['FRANIBOOK_OUT'] ?? '.franibook-out');
 /** Begrenzt den Import beim Start. Ohne Angabe: alles. */

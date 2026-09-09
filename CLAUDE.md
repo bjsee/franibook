@@ -67,7 +67,7 @@ ein bereits laufender `pnpm dev` muss dafür beendet sein (`reuseExistingServer:
 
 | Variable              | Vorgabe                                        | Wirkung                                           |
 | --------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| `FRANIBOOK_SOURCE`    | `/Users/nutzer/fotos/buch`      | Erste Bildquelle beim allerersten Start           |
+| `FRANIBOOK_SOURCE`    | `/Users/nutzer/fotos/buch`                     | Erste Bildquelle beim allerersten Start           |
 | `FRANIBOOK_PROJECT`   | zuletzt geöffnetes, sonst `.franibook-project` | Projektdatei beim Start (siehe unten)             |
 | `FRANIBOOK_ZULETZT`   | `~/.franibook/zuletzt.json`                    | Liste der zuletzt geöffneten Projekte             |
 | `FRANIBOOK_CACHE`     | `.franibook-cache`                             | WebP-Vorschauen                                   |
