@@ -90,15 +90,14 @@ aus dem Produktnamen. Details zur Herleitung der Werte stehen in
 
 ## Stand
 
-Der Durchstich steht: 820 Fotos werden importiert, chronologisch nach Jahren und
-Fotogruppen gegliedert und zu genau 80 Doppelseiten gesetzt — die 160 Seiten, die
-Saal bindet —, die sich im Browser durchblättern und über ein Layout-JSON umbauen
-lassen. Der Innenteil wird als PDF exportiert (819 Bilder in 31 s), und der
-Parity-Test belegt, dass Vorschau und Druck übereinstimmen.
+Das Buch ist fertig und gedruckt: 820 Fotos importiert, chronologisch nach Jahren und
+Fotogruppen gegliedert, zu 80 Doppelseiten gesetzt — die 160 Seiten, die Saal bindet —,
+als PDF exportiert und bei Saal in Auftrag gegeben. Das gedruckte Exemplar ist da.
 
-Bis zum ersten Druckauftrag fehlen drei Dinge, alle als
-[Issue](https://github.com/bjsee/franibook/issues) erfasst: verifizierte Maße von
-Saal, ein Cover und eine kleinere PDF-Datei. Ausführlich in
+Offene Punkte sind jetzt Erweiterungen, keine Blocker mehr — etwa ein Register mit
+Seitenzahlen, Titelvorschläge für Gruppen aus Metadaten oder semantische Bildsuche.
+Der volle Stand je Issue steht unter
+[Issues](https://github.com/bjsee/franibook/issues), die Herleitung der Phasen in
 [docs/implementierungsphasen.md](docs/implementierungsphasen.md).
 
 ## Dokumentation
