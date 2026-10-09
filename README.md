@@ -7,6 +7,38 @@ und daraus ein druckfertiges PDF exportieren.
 Konkreter Anlass: ein Fotobuch zum 18. Geburtstag mit rund 900 Fotos aus den Jahren
 2008 bis 2026, Druck über PrintPartner.
 
+## So sieht es aus
+
+Die Bilder zeigen ein Demo-Projekt mit 78 frei lizenzierten Fotos von
+[Lorem Picsum](https://picsum.photos) (Unsplash-Lizenz) — nicht das echte Buch.
+
+**Übersicht:** das ganze Buch auf einen Blick, gegliedert nach Jahren und Gruppen.
+
+![Übersicht über alle Doppelseiten, gegliedert nach Jahren und Anlässen](docs/screenshots/uebersicht.png)
+
+**Doppelseite:** Vorlage, Ausschnitt und Reihenfolge lassen sich von Hand korrigieren; am
+Fuß der Seite zeigt der Zeitstrahl, wo im Buch man gerade ist.
+
+![Eine Doppelseite mit vier Bildern, Zeitstrahl und Inspektor](docs/screenshots/doppelseite.png)
+
+**Gruppen:** erkannte Anlässe lassen sich umbenennen, zusammenführen oder auflösen.
+
+![Gruppenansicht mit der Gruppe „Franis 18. Geburtstag"](docs/screenshots/gruppen.png)
+
+**Umschlag:** Rückseite als Fotomosaik, Vorderseite mit einer aus Bildern geformten „18".
+
+![Umschlag mit Fotomosaik auf der Rückseite und einer „18" aus Fotos vorn](docs/screenshots/umschlag.jpg)
+
+**Mosaik aus einem Foto:** Dasselbe Verfahren baut auch ein vorhandenes Foto aus
+Tausenden kleinen Aufnahmen nach — hier der Mops im Plaid auf der Vorderseite, die „18"
+hinten (1301 Fotos, 8280 Kacheln).
+
+![Umschlag, dessen Vorderseite ein Foto aus vielen kleinen Fotos nachbaut](docs/screenshots/umschlag-foto.jpg)
+
+**Prüfung:** was dem Druck im Weg steht, bevor eine Seite zum Drucker geht.
+
+![Prüfbericht mit Funden nach Schwere](docs/screenshots/pruefung.png)
+
 ## Features
 
 - **Automatischer Entwurf statt leerer Seite.** Fotos werden anhand ihrer Aufnahmedaten
